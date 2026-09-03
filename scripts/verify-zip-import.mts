@@ -161,8 +161,13 @@ async function checkPlan() {
   assert.equal(projects.parentKey, null, "a root page has no parent");
   assert.equal(projects.notebookKey, "nb:Trabalho", "root page lands in its folder's notebook");
   assert.equal(meeting.parentKey, projects.key, "the mirrored folder nests the child page");
-  assert.equal(meeting.notebookKey, null, "children inherit the notebook via the parent");
+  assert.equal(
+    meeting.notebookKey,
+    "nb:Trabalho",
+    "a nested page keeps its notebook — the sidebar tree scopes by notebookId"
+  );
   assert.equal(row.parentKey, tasks.key, "database rows nest under the database page");
+  assert.equal(row.notebookKey, "nb:Trabalho", "database rows keep the notebook too");
 
   // The `_all.csv` duplicate must not have produced a second database.
   assert.equal(

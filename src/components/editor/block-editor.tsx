@@ -5,7 +5,6 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Highlight from "@tiptap/extension-highlight";
-import Underline from "@tiptap/extension-underline";
 import Mention from "@tiptap/extension-mention";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
@@ -72,8 +71,9 @@ export function BlockEditor({
             : "Escreva, cole ou digite / para inserir um bloco",
         includeChildren: true,
       }),
+      // StarterKit already registers Underline and Link; registering them again
+      // makes TipTap warn about duplicate extension names and drop one copy.
       Highlight.configure({ multicolor: false }),
-      Underline,
       TaskList,
       TaskItem.configure({ nested: true }),
       CodeBlockLowlight.configure({ lowlight, defaultLanguage: "typescript" }),

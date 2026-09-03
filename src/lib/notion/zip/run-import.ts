@@ -165,11 +165,14 @@ export async function buildImportPlan(file: Blob): Promise<ImportPlan> {
     }
 
     const parentKey = parentKeyFor(document);
+    const notebookKey = notebookKeyFor(document.parentSegments);
     const draft: PageDraft = {
       key: document.key,
-      // Sub-pages inherit their ancestor's notebook via `parentKey`; only roots
-      // need one assigned.
-      notebookKey: parentKey ? null : notebookKeyFor(document.parentSegments),
+      // Every page carries a notebook, sub-pages included: the sidebar tree
+      // scopes by notebookId, so a nested page with a null notebook would show
+      // up under "Sem caderno" instead of inside its own notebook. The first
+      // path segment resolves to the same notebook for a page and its children.
+      notebookKey,
       parentKey,
       title,
       icon: document.kind === "database" ? "🗂️" : "📄",
@@ -185,12 +188,7 @@ export async function buildImportPlan(file: Blob): Promise<ImportPlan> {
     if (mediaPaths.length) pendingMedia.set(document.key, mediaPaths);
     if (documentLinks.length) pendingLinks.set(document.key, documentLinks);
 
-    if (draft.notebookKey) {
-      notebookPageCounts.set(
-        draft.notebookKey,
-        (notebookPageCounts.get(draft.notebookKey) ?? 0) + 1
-      );
-    }
+    notebookPageCounts.set(notebookKey, (notebookPageCounts.get(notebookKey) ?? 0) + 1);
   }
 
   // Roots that landed outside any folder need somewhere to live.

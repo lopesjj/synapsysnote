@@ -160,7 +160,7 @@ export function ZipImportDialog({
                   >
                     <span className="truncate text-ink">📓 {notebook.name}</span>
                     <span className="shrink-0 text-[11px] text-faint">
-                      {notebook.pages} na raiz
+                      {notebook.pages} {notebook.pages === 1 ? "nota" : "notas"}
                     </span>
                   </li>
                 ))}
