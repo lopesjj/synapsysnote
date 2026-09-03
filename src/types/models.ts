@@ -103,6 +103,50 @@ export interface AppBlock {
 }
 
 /* ------------------------------------------------------------------ */
+/* User profile + preferences                                          */
+/* ------------------------------------------------------------------ */
+
+export type ThemePreference = "dark" | "light";
+export type NotesLayoutPreference = "list" | "cards" | "split";
+export type NotesSortPreference = "updated" | "created" | "title";
+export type NotesDensityPreference = "comfortable" | "compact";
+export type EditorWidthPreference = "narrow" | "normal" | "wide";
+
+/**
+ * Interface preferences, stored on the profile document so the workspace looks
+ * identical on every device. Every field is optional: an older client that does
+ * not know a key must be able to write the document back without erasing it.
+ */
+export interface UserPreferences {
+  theme?: ThemePreference;
+  sidebarCollapsed?: boolean;
+  sidebarWidth?: number;
+  notesLayout?: NotesLayoutPreference;
+  notesSort?: NotesSortPreference;
+  notesSortDirection?: "asc" | "desc";
+  notesDensity?: NotesDensityPreference;
+  /** Id from `EDITOR_FONTS` in `src/lib/typography.ts`. */
+  editorFontId?: string;
+  editorFontSize?: number;
+  editorWidth?: EditorWidthPreference;
+  showSaveIndicator?: boolean;
+}
+
+/** `users/{userId}` — identity shown in the UI plus cross-device preferences. */
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL?: string | null;
+  /** Provider ids that can sign this account in (`password`, `google.com`, `github.com`). */
+  providers?: string[];
+  preferences: UserPreferences;
+  createdAt: ISOTimestamp;
+  updatedAt: ISOTimestamp;
+  lastSeenAt?: ISOTimestamp;
+}
+
+/* ------------------------------------------------------------------ */
 /* Workspace + membership                                              */
 /* ------------------------------------------------------------------ */
 

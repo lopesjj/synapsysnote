@@ -10,17 +10,22 @@ import {
   type ReactNode,
 } from "react";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
+import { createAuthError, toAuthError } from "@/lib/auth/errors";
 
 async function firebaseAuth() {
   const { getFirebaseAuth } = await import("@/lib/firebase/client");
   return getFirebaseAuth();
 }
 
+export type OAuthProviderId = "google" | "github";
+
 export interface AppUser {
   uid: string;
   email: string;
   displayName: string;
   photoURL: string | null;
+  /** Provider ids linked to the account (`password`, `google.com`, `github.com`). */
+  providers: string[];
 }
 
 interface AuthContextValue {
@@ -28,7 +33,7 @@ interface AuthContextValue {
   loading: boolean;
   /** "firebase" when credentials are present, "demo" for the local fallback. */
   mode: "firebase" | "demo";
-  signInWithGoogle: () => Promise<void>;
+  signInWithProvider: (provider: OAuthProviderId) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (name: string, email: string, password: string) => Promise<void>;
   continueAsGuest: () => Promise<void>;
@@ -45,6 +50,7 @@ const DEMO_USER: AppUser = {
   email: "voce@synapsys.note",
   displayName: "Você",
   photoURL: null,
+  providers: ["demo"],
 };
 
 /** `useSyncExternalStore` requires a stable snapshot reference between store updates. */
@@ -107,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 email: fbUser.email ?? "",
                 displayName: fbUser.displayName ?? fbUser.email?.split("@")[0] ?? "Sem nome",
                 photoURL: fbUser.photoURL,
+                providers: fbUser.providerData.map((entry) => entry.providerId),
               }
             : null
         );
@@ -119,27 +126,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [configured]);
 
-  const user = configured ? firebaseUser : demoUser;
-  const loading = configured ? firebaseLoading : false;
+  // A signed-in Firebase account always wins; the demo user is the fallback so
+  // "explore without an account" keeps working even on a configured deployment
+  // (the data provider then routes writes to the local adapter).
+  const user = configured ? firebaseUser ?? demoUser : demoUser;
+  const loading = configured ? firebaseLoading && !demoUser : false;
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       loading,
       mode: configured ? "firebase" : "demo",
-      async signInWithGoogle() {
+
+      async signInWithProvider(providerId) {
         if (!configured) {
           writeDemoUser(DEMO_USER);
           return;
         }
-        const [{ GoogleAuthProvider, signInWithPopup }, auth] = await Promise.all([
-          import("firebase/auth"),
-          firebaseAuth(),
-        ]);
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: "select_account" });
-        await signInWithPopup(auth, provider);
+
+        const [
+          { GoogleAuthProvider, GithubAuthProvider, signInWithPopup, getAdditionalUserInfo, deleteUser, signOut },
+          auth,
+        ] = await Promise.all([import("firebase/auth"), firebaseAuth()]);
+
+        const provider =
+          providerId === "github" ? new GithubAuthProvider() : new GoogleAuthProvider();
+        if (providerId === "google") {
+          provider.setCustomParameters({ prompt: "select_account" });
+        } else {
+          provider.addScope("user:email");
+        }
+
+        try {
+          const credential = await signInWithPopup(auth, provider);
+
+          /**
+           * Federated sign-in must not silently provision accounts: the product
+           * rule is that an e-mail has to exist in Authentication before any
+           * OAuth provider can be used with it. Firebase creates the account as
+           * part of the popup, so the only reliable signal is `isNewUser` — when
+           * it is set we roll the account back and refuse the session.
+           */
+          if (getAdditionalUserInfo(credential)?.isNewUser) {
+            try {
+              await deleteUser(credential.user);
+            } catch {
+              // Deletion can require a fresh token; signing out still denies access.
+              await signOut(auth);
+            }
+            throw createAuthError("oauth-unregistered");
+          }
+        } catch (error) {
+          throw toAuthError(error);
+        }
       },
+
       async signInWithEmail(email, password) {
         if (!configured) {
           writeDemoUser({ ...DEMO_USER, email, displayName: email.split("@")[0] });
@@ -149,8 +190,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           import("firebase/auth"),
           firebaseAuth(),
         ]);
-        await signInWithEmailAndPassword(auth, email, password);
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+          throw toAuthError(error);
+        }
       },
+
       async signUpWithEmail(name, email, password) {
         if (!configured) {
           writeDemoUser({ ...DEMO_USER, email, displayName: name });
@@ -160,12 +206,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           import("firebase/auth"),
           firebaseAuth(),
         ]);
-        const cred = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(cred.user, { displayName: name });
+        try {
+          const cred = await createUserWithEmailAndPassword(auth, email, password);
+          // Written before the first render of /app so the greeting has a name.
+          await updateProfile(cred.user, { displayName: name });
+          setFirebaseUser((previous) =>
+            previous ? { ...previous, displayName: name } : previous
+          );
+        } catch (error) {
+          throw toAuthError(error);
+        }
       },
+
       async continueAsGuest() {
         writeDemoUser(DEMO_USER);
       },
+
       async signOut() {
         if (configured) {
           const [{ signOut }, auth] = await Promise.all([import("firebase/auth"), firebaseAuth()]);

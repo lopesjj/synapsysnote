@@ -1,17 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/hooks/use-auth";
+import { QueryProvider } from "@/lib/query/query-provider";
 import { ThemeProvider, themeScript } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/primitives";
+import { fontVariables } from "./fonts";
 import "./globals.css";
-
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"], display: "swap" });
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
-  subsets: ["latin"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "Synapsys Note — Conhecimento que se conecta",
@@ -30,27 +24,29 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${geistSans.variable} ${jetbrainsMono.variable} h-full`} suppressHydrationWarning>
+    <html lang="pt-BR" className={`${fontVariables} h-full`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-full antialiased">
         <ThemeProvider>
-          <AuthProvider>
-            <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
-            <Toaster
-              position="bottom-right"
-              toastOptions={{
-                style: {
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  color: "var(--text)",
-                  borderRadius: "10px",
-                  fontSize: "13px",
-                },
-              }}
-            />
-          </AuthProvider>
+          <QueryProvider>
+            <AuthProvider>
+              <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
+              <Toaster
+                position="bottom-right"
+                toastOptions={{
+                  style: {
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text)",
+                    borderRadius: "10px",
+                    fontSize: "13px",
+                  },
+                }}
+              />
+            </AuthProvider>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

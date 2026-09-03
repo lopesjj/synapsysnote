@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, type OAuthProviderId } from "@/hooks/use-auth";
 import { SynapsysLockup } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/primitives";
@@ -38,14 +38,22 @@ const FEATURES = [
 
 export default function LandingPage() {
   const router = useRouter();
-  const { user, loading, mode, signInWithGoogle, signInWithEmail, signUpWithEmail, continueAsGuest } =
-    useAuth();
+  const {
+    user,
+    loading,
+    mode,
+    signInWithProvider,
+    signInWithEmail,
+    signUpWithEmail,
+    continueAsGuest,
+  } = useAuth();
 
   const [tab, setTab] = useState<"signin" | "signup">("signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState<OAuthProviderId | null>(null);
 
   useEffect(() => {
     if (!loading && user) router.replace("/app");
@@ -62,6 +70,23 @@ export default function LandingPage() {
       toast.error(error instanceof Error ? error.message : "Não foi possível entrar");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const oauth = async (provider: OAuthProviderId) => {
+    setOauthBusy(provider);
+    try {
+      await signInWithProvider(provider);
+      router.push("/app");
+    } catch (error) {
+      // The OAuth guard rejects e-mails without an account; that needs an
+      // explanation rather than a generic failure toast.
+      toast.error(error instanceof Error ? error.message : "Falha na autenticação", {
+        duration: 7000,
+      });
+      setTab("signup");
+    } finally {
+      setOauthBusy(null);
     }
   };
 
@@ -156,22 +181,33 @@ export default function LandingPage() {
             <span className="h-px flex-1 bg-[var(--border)]" />
           </div>
 
-          <Button
-            variant="secondary"
-            size="lg"
-            className="w-full"
-            onClick={async () => {
-              try {
-                await signInWithGoogle();
-                router.push("/app");
-              } catch (error) {
-                toast.error(error instanceof Error ? error.message : "Falha no login com Google");
-              }
-            }}
-          >
-            <GoogleGlyph />
-            Continuar com Google
-          </Button>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Button
+              variant="secondary"
+              size="lg"
+              className="w-full"
+              disabled={oauthBusy !== null}
+              onClick={() => void oauth("google")}
+            >
+              {oauthBusy === "google" ? <Loader2 className="animate-spin" /> : <GoogleGlyph />}
+              Google
+            </Button>
+            <Button
+              variant="secondary"
+              size="lg"
+              className="w-full"
+              disabled={oauthBusy !== null}
+              onClick={() => void oauth("github")}
+            >
+              {oauthBusy === "github" ? <Loader2 className="animate-spin" /> : <GithubGlyph />}
+              GitHub
+            </Button>
+          </div>
+
+          <p className="mt-3 text-[11px] leading-relaxed text-faint">
+            Google e GitHub só entram com e-mails já cadastrados na autenticação. Se ainda não tem
+            conta, use <strong className="font-medium text-muted">Criar conta</strong> primeiro.
+          </p>
 
           <button
             onClick={async () => {
@@ -223,6 +259,14 @@ function GoogleGlyph() {
         fill="#EA4335"
         d="M12 4.7c2.3 0 3.8 1 4.7 1.8l3.4-3.3C18 1.2 15.3 0 12 0 7.3 0 3.2 2.7 1.3 6.6l3.8 3c1-2.9 3.7-4.9 6.9-4.9"
       />
+    </svg>
+  );
+}
+
+function GithubGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" fill="currentColor" aria-hidden>
+      <path d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.55v-1.95c-3.2.7-3.88-1.54-3.88-1.54-.52-1.34-1.28-1.7-1.28-1.7-1.05-.71.08-.7.08-.7 1.16.09 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .96-.3 3.15 1.18a10.9 10.9 0 0 1 5.74 0c2.18-1.48 3.14-1.18 3.14-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.13v3.15c0 .3.2.66.8.55A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" />
     </svg>
   );
 }
