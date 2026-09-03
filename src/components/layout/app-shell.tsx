@@ -1,30 +1,55 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Menu as MenuIcon } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Loader2, Menu as MenuIcon, Minimize2 } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { useUserPreferencesSync } from "@/hooks/use-user-profile";
 import { useWorkspace } from "@/lib/data/provider";
+import {
+  SIDEBAR_MAX_WIDTH,
+  SIDEBAR_MIN_WIDTH,
+  useRehydrateUiStore,
+  useUiStore,
+} from "@/lib/store/ui-store";
+import { EDITOR_WIDTHS, fontById } from "@/lib/typography";
 import { Sidebar } from "./sidebar";
 import { CommandPalette } from "./command-palette";
+import { PreferencesDialog } from "./preferences-dialog";
 import { ImportWizard } from "@/components/notion/import-wizard";
+import { ZipImportDialog } from "@/components/notion/zip-import-dialog";
 import { Button } from "@/components/ui/button";
 import { SynapsysWordmark } from "@/components/brand/logo";
-import { cn } from "@/lib/utils";
+import { Tooltip } from "@/components/ui/primitives";
+import { cn, isMac } from "@/lib/utils";
 
 /**
- * Application chrome: sidebar, palette, import wizard and global shortcuts.
- * Mobile gets an overlay sidebar; desktop keeps it docked and collapsible.
+ * Application chrome: sidebar, palette, dialogs and global shortcuts.
+ *
+ * Mobile gets an overlay sidebar; desktop keeps it docked, collapsible and
+ * resizable. Zen mode hides every piece of chrome so only the page remains.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, loading } = useAuth();
   const { mode, activeImportJob, adapter } = useWorkspace();
 
-  const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
+  useRehydrateUiStore();
+  useUserPreferencesSync();
+
+  const sidebarCollapsed = useUiStore((state) => state.sidebarCollapsed);
+  const sidebarWidth = useUiStore((state) => state.sidebarWidth);
+  const zenMode = useUiStore((state) => state.zenMode);
+  const mobileSidebarOpen = useUiStore((state) => state.mobileSidebarOpen);
+  const paletteOpen = useUiStore((state) => state.paletteOpen);
+  const importOpen = useUiStore((state) => state.importOpen);
+  const zipImportOpen = useUiStore((state) => state.zipImportOpen);
+  const preferencesOpen = useUiStore((state) => state.preferencesOpen);
+  const editorFontId = useUiStore((state) => state.editorFontId);
+  const editorFontSize = useUiStore((state) => state.editorFontSize);
+  const editorWidth = useUiStore((state) => state.editorWidth);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/");
@@ -33,18 +58,57 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const onKeyDown = useCallback(
     async (event: KeyboardEvent) => {
       const meta = event.metaKey || event.ctrlKey;
-      if (meta && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setPaletteOpen((prev) => !prev);
+      const store = useUiStore.getState();
+
+      if (event.key === "Escape" && store.zenMode) {
+        store.setZenMode(false);
+        return;
       }
-      if (meta && event.key.toLowerCase() === "n" && !event.shiftKey) {
+      if (!meta) return;
+
+      const key = event.key.toLowerCase();
+
+      if (key === "k") {
         event.preventDefault();
+        store.setPaletteOpen(!store.paletteOpen);
+        return;
+      }
+
+      if (key === "n") {
+        event.preventDefault();
+        if (event.shiftKey) {
+          await adapter.createNotebook({ name: "Novo caderno" });
+          toast.success("Caderno criado");
+          return;
+        }
         const page = await adapter.createPage({ title: "Sem título" });
         router.push(`/app/p/${page.id}`);
+        return;
       }
-      if (meta && event.key === "\\") {
+
+      if (key === "," ) {
         event.preventDefault();
-        setCollapsed((prev) => !prev);
+        store.setPreferencesOpen(true);
+        return;
+      }
+
+      if (key === "f" && event.shiftKey) {
+        event.preventDefault();
+        store.toggleZenMode();
+        return;
+      }
+
+      // ⌘B is the spec'd sidebar shortcut but it is also "bold" inside the
+      // editor, so it only reaches the sidebar when nothing editable has focus.
+      // ⌘\ always works, for people typing with the editor focused.
+      if (key === "b" && !isEditingText(event.target)) {
+        event.preventDefault();
+        store.toggleSidebar();
+        return;
+      }
+      if (event.key === "\\") {
+        event.preventDefault();
+        store.toggleSidebar();
       }
     },
     [adapter, router]
@@ -63,54 +127,87 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return (
-    <div className="flex h-dvh overflow-hidden bg-[var(--canvas)]">
-      {/* Desktop sidebar */}
-      <div className="hidden md:flex">
-        <Sidebar
-          collapsed={collapsed}
-          onToggle={() => setCollapsed((prev) => !prev)}
-          onOpenPalette={() => setPaletteOpen(true)}
-          onOpenImport={() => setImportOpen(true)}
-        />
-      </div>
+  const chromeHidden = zenMode;
 
-      {/* Mobile sidebar */}
-      {mobileOpen ? (
-        <div className="fixed inset-0 z-60 md:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
-          <div className="absolute inset-y-0 left-0 w-[268px]" onClick={() => setMobileOpen(false)}>
-            <Sidebar
-              collapsed={false}
-              onToggle={() => setMobileOpen(false)}
-              onOpenPalette={() => {
-                setMobileOpen(false);
-                setPaletteOpen(true);
-              }}
-              onOpenImport={() => {
-                setMobileOpen(false);
-                setImportOpen(true);
-              }}
-            />
-          </div>
+  return (
+    <div
+      className="flex h-dvh overflow-hidden bg-[var(--canvas)]"
+      style={
+        {
+          "--font-editor": fontById(editorFontId).stack,
+          "--font-editor-size": `${editorFontSize}px`,
+          "--reading-width": EDITOR_WIDTHS[editorWidth],
+        } as React.CSSProperties
+      }
+    >
+      {chromeHidden ? null : (
+        <div className="hidden md:flex">
+          <Sidebar collapsed={sidebarCollapsed} width={sidebarWidth} />
+          {sidebarCollapsed ? null : <SidebarResizer />}
         </div>
-      ) : null}
+      )}
+
+      <AnimatePresence>
+        {mobileSidebarOpen ? (
+          <motion.div
+            className="fixed inset-0 z-60 md:hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div
+              className="absolute inset-0 bg-black/50"
+              onClick={() => useUiStore.getState().setMobileSidebarOpen(false)}
+            />
+            <motion.div
+              className="absolute inset-y-0 left-0"
+              initial={{ x: -280 }}
+              animate={{ x: 0 }}
+              exit={{ x: -280 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <Sidebar collapsed={false} width={280} />
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2 md:hidden">
-          <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)} aria-label="Menu">
-            <MenuIcon />
-          </Button>
-          <SynapsysWordmark size={28} />
-        </div>
+        {chromeHidden ? null : (
+          <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2 md:hidden">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => useUiStore.getState().setMobileSidebarOpen(true)}
+              aria-label="Menu"
+            >
+              <MenuIcon />
+            </Button>
+            <SynapsysWordmark size={28} />
+          </div>
+        )}
 
-        {mode === "local" ? <DemoBanner /> : null}
+        {mode === "local" && !chromeHidden ? <DemoBanner /> : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
 
-        {activeImportJob ? (
+        {zenMode ? (
+          <Tooltip label="Sair do modo foco" shortcut="Esc" side="left">
+            <button
+              onClick={() => useUiStore.getState().setZenMode(false)}
+              className={cn(
+                "fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border border-[var(--border)]",
+                "bg-[var(--surface)] px-3 py-2 text-[12px] text-muted opacity-40 shadow-[var(--shadow-float)]",
+                "transition hover:opacity-100 hover:text-ink"
+              )}
+            >
+              <Minimize2 className="size-3.5" />
+              Modo foco
+            </button>
+          </Tooltip>
+        ) : activeImportJob ? (
           <button
-            onClick={() => setImportOpen(true)}
+            onClick={() => useUiStore.getState().setImportOpen(true)}
             className={cn(
               "fixed bottom-4 right-4 z-40 flex items-center gap-2.5 rounded-full border border-[var(--border)]",
               "bg-[var(--surface)] py-2 pl-3 pr-4 text-[12px] shadow-[var(--shadow-float)] transition hover:border-[var(--accent)]"
@@ -126,10 +223,92 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <CommandPalette
         open={paletteOpen}
-        onOpenChange={setPaletteOpen}
-        onOpenImport={() => setImportOpen(true)}
+        onOpenChange={(open) => useUiStore.getState().setPaletteOpen(open)}
       />
-      <ImportWizard open={importOpen} onOpenChange={setImportOpen} />
+      <ImportWizard
+        open={importOpen}
+        onOpenChange={(open) => useUiStore.getState().setImportOpen(open)}
+      />
+      <ZipImportDialog
+        open={zipImportOpen}
+        onOpenChange={(open) => useUiStore.getState().setZipImportOpen(open)}
+      />
+      <PreferencesDialog
+        open={preferencesOpen}
+        onOpenChange={(open) => useUiStore.getState().setPreferencesOpen(open)}
+      />
+    </div>
+  );
+}
+
+/** True when the shortcut would collide with typing (editor, input, textarea). */
+function isEditingText(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+
+/** Drag handle that lets the sidebar be sized to taste. */
+function SidebarResizer() {
+  const setSidebarWidth = useUiStore((state) => state.setSidebarWidth);
+  const [dragging, setDragging] = useState(false);
+  const frame = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!dragging) return;
+
+    const onMove = (event: PointerEvent) => {
+      // Coalesce to one update per frame: the store drives a layout-affecting
+      // width and pointermove can fire far more often than that.
+      if (frame.current !== null) return;
+      frame.current = requestAnimationFrame(() => {
+        frame.current = null;
+        setSidebarWidth(event.clientX);
+      });
+    };
+    const stop = () => setDragging(false);
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", stop);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", stop);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+      frame.current = null;
+    };
+  }, [dragging, setSidebarWidth]);
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Redimensionar barra lateral"
+      aria-valuemin={SIDEBAR_MIN_WIDTH}
+      aria-valuemax={SIDEBAR_MAX_WIDTH}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onKeyDown={(event) => {
+        const step = event.shiftKey ? 32 : 8;
+        const current = useUiStore.getState().sidebarWidth;
+        if (event.key === "ArrowLeft") setSidebarWidth(current - step);
+        if (event.key === "ArrowRight") setSidebarWidth(current + step);
+      }}
+      tabIndex={0}
+      className={cn(
+        "group relative -ml-px w-px shrink-0 cursor-col-resize bg-[var(--border)] transition-colors",
+        dragging ? "bg-[var(--accent)]" : "hover:bg-[var(--accent)]"
+      )}
+    >
+      {/* Widened hit area without widening the visible hairline. */}
+      <span className="absolute inset-y-0 -left-1.5 -right-1.5 block" />
     </div>
   );
 }
@@ -140,6 +319,7 @@ function DemoBanner() {
       Modo demonstração local: os dados ficam no seu navegador. Configure
       <code className="mx-1 font-mono">NEXT_PUBLIC_FIREBASE_*</code>
       e o Firebase Admin para Auth, Firestore, Storage e a importação real do Notion.
+      <span className="ml-1 text-faint">{isMac() ? "⌘," : "Ctrl ,"} abre as preferências.</span>
     </div>
   );
 }

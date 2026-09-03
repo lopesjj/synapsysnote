@@ -129,9 +129,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (!byParent.has(key)) byParent.set(key, []);
         byParent.get(key)!.push(page);
       }
+      // `order` is what sidebar drag-and-drop writes, so it has to win; title
+      // is only the tie-breaker for pages that have never been reordered.
       const build = (parentId: string | null, depth: number): PageTreeNode[] =>
         (byParent.get(parentId) ?? [])
-          .sort((a, b) => a.title.localeCompare(b.title, "pt-BR"))
+          .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, "pt-BR"))
           .map((page) => ({ page, depth, children: build(page.id, depth + 1) }));
       return build(null, 0);
     };

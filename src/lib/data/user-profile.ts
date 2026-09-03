@@ -20,7 +20,8 @@ export interface ProfileIdentity {
   providers?: string[];
 }
 
-function useLocal(uid: string): boolean {
+/** Demo sessions and unconfigured deployments keep the profile in localStorage. */
+function isLocalProfile(uid: string): boolean {
   return !isFirebaseConfigured() || uid === "demo-user";
 }
 
@@ -59,7 +60,7 @@ async function profileRef(uid: string) {
 export async function ensureUserProfile(identity: ProfileIdentity): Promise<UserProfile> {
   const now = Date.now();
 
-  if (useLocal(identity.uid)) {
+  if (isLocalProfile(identity.uid)) {
     const existing = readLocal(identity.uid);
     const profile: UserProfile = {
       uid: identity.uid,
@@ -106,7 +107,7 @@ export async function updateUserProfile(
   uid: string,
   patch: Partial<Pick<UserProfile, "displayName" | "photoURL">>
 ): Promise<void> {
-  if (useLocal(uid)) {
+  if (isLocalProfile(uid)) {
     const existing = readLocal(uid);
     if (existing) writeLocal({ ...existing, ...patch, updatedAt: Date.now() });
     return;
@@ -126,7 +127,7 @@ export async function saveUserPreferences(
   uid: string,
   preferences: UserPreferences
 ): Promise<void> {
-  if (useLocal(uid)) {
+  if (isLocalProfile(uid)) {
     const existing = readLocal(uid);
     if (existing) {
       writeLocal({

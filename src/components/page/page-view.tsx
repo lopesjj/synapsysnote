@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import type { AppBlock, Page, PageVersion } from "@/types/models";
 import { useWorkspace } from "@/lib/data/provider";
 import { useDebounceAutoSave } from "@/hooks/use-debounce-auto-save";
+import { useUiStore } from "@/lib/store/ui-store";
 import { BlockEditor } from "@/components/editor/block-editor";
 import { AudioRecorder } from "@/components/media/audio-recorder";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,9 @@ export function PageView({ pageId }: { pageId: string }) {
   const [versions, setVersions] = useState<PageVersion[]>([]);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  const zenMode = useUiStore((state) => state.zenMode);
+  const showSaveIndicator = useUiStore((state) => state.showSaveIndicator);
 
   const { schedule, status, lastSavedAt } = useDebounceAutoSave<Partial<Page>>({
     onSave: async (patch) => {
@@ -125,8 +129,16 @@ export function PageView({ pageId }: { pageId: string }) {
 
   return (
     <div className="relative">
-      {/* Header */}
-      <div className="sticky top-0 z-30 flex items-center gap-2 border-b border-[var(--border)] bg-[var(--canvas)]/85 px-4 py-2 backdrop-blur-xl md:px-8">
+      {/*
+        Header. Zen mode keeps it mounted (the actions stay reachable) but fades
+        it back until the pointer comes near, so the page is all that is left.
+      */}
+      <div
+        className={cn(
+          "sticky top-0 z-30 flex items-center gap-2 border-b border-[var(--border)] bg-[var(--canvas)]/85 px-4 py-2 backdrop-blur-xl md:px-8",
+          zenMode && "border-transparent opacity-0 transition-opacity duration-200 hover:opacity-100 focus-within:opacity-100"
+        )}
+      >
         <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[12px] text-muted">
           {notebook ? (
             <>
@@ -146,7 +158,9 @@ export function PageView({ pageId }: { pageId: string }) {
           <span className="truncate text-ink">{page.title || "Sem título"}</span>
         </div>
 
-        <SaveIndicator status={status} lastSavedAt={lastSavedAt ?? page.updatedAt} />
+        {showSaveIndicator ? (
+          <SaveIndicator status={status} lastSavedAt={lastSavedAt ?? page.updatedAt} />
+        ) : null}
 
         <Tooltip label={page.favorite ? "Remover dos favoritos" : "Favoritar"}>
           <Button
@@ -204,7 +218,8 @@ export function PageView({ pageId }: { pageId: string }) {
         </Menu>
       </div>
 
-      <div className="mx-auto max-w-3xl px-5 pb-24 pt-8 md:px-8">
+      {/* `--reading-width` comes from the typography preference. */}
+      <div className="mx-auto w-full max-w-[var(--reading-width,46rem)] px-5 pb-24 pt-8 md:px-8">
         {/* Icon + title */}
         <div className="group flex items-start gap-3">
           <Menu>
@@ -241,6 +256,7 @@ export function PageView({ pageId }: { pageId: string }) {
               el.style.height = "auto";
               el.style.height = `${el.scrollHeight}px`;
             }}
+            style={{ fontFamily: "var(--font-editor, var(--font-sans))" }}
             className="w-full resize-none border-none bg-transparent pt-0.5 text-[34px] font-semibold leading-tight tracking-[-0.025em] text-ink outline-none placeholder:text-faint"
           />
         </div>
@@ -285,7 +301,11 @@ export function PageView({ pageId }: { pageId: string }) {
               + tag
             </button>
           )}
-          {page.notionPageId ? <Badge tone="accent">importada do Notion</Badge> : null}
+          {page.notionPageId ? (
+            <Badge tone="accent">importada do Notion</Badge>
+          ) : page.importSource === "notion-zip" ? (
+            <Badge tone="accent">importada de um .zip do Notion</Badge>
+          ) : null}
           <span className="ml-auto text-[11px] text-faint">
             Atualizada {formatRelative(page.updatedAt)}
           </span>

@@ -3,12 +3,41 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronDown,
   ChevronRight,
+  FileStack,
+  FolderPlus,
+  GripVertical,
+  Home,
+  Import,
+  Minimize2,
   MoreHorizontal,
+  PanelLeftClose,
   Plus,
+  Search,
+  Settings2,
   Star,
   Trash2,
 } from "lucide-react";
@@ -16,46 +45,85 @@ import { toast } from "sonner";
 import { cn, isMac } from "@/lib/utils";
 import { useWorkspace, type PageTreeNode } from "@/lib/data/provider";
 import { useAuth } from "@/hooks/use-auth";
+import { useUserProfile } from "@/hooks/use-user-profile";
+import { useUiStore } from "@/lib/store/ui-store";
 import { useTheme } from "@/components/theme-provider";
 import { SynapsysMark, SynapsysWordmark } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Kbd, Tooltip } from "@/components/ui/primitives";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
+import type { Notebook, Page } from "@/types/models";
 
 /**
- * ETAPA 6 — Collapsible sidebar with the infinite page tree, notebooks,
- * favorites, global tags and workspace-level entry points.
+ * Collapsible sidebar: notebook tree, favorites, tags and workspace entry
+ * points, plus drag-and-drop reordering.
+ *
+ * Order is stored as a sparse `order` field. On drop the affected sibling list
+ * is renumbered in fixed steps, which keeps the writes bounded to one list and
+ * avoids the fractional-index drift you get from midpoint insertion.
  */
-export function Sidebar({
-  collapsed,
-  onToggle,
-  onOpenPalette,
-  onOpenImport,
-}: {
-  collapsed: boolean;
-  onToggle: () => void;
-  onOpenPalette: () => void;
-  onOpenImport: () => void;
-}) {
+
+const ORDER_STEP = 100;
+
+type DragKind = "notebook" | "page";
+
+interface DragId {
+  kind: DragKind;
+  id: string;
+}
+
+function encodeId(kind: DragKind, id: string): string {
+  return `${kind}:${id}`;
+}
+
+function decodeId(value: string | number): DragId | null {
+  const [kind, ...rest] = String(value).split(":");
+  if (kind !== "notebook" && kind !== "page") return null;
+  return { kind, id: rest.join(":") };
+}
+
+export function Sidebar({ collapsed, width }: { collapsed: boolean; width: number }) {
   const router = useRouter();
   const pathname = usePathname();
   const { theme, toggle } = useTheme();
   const { user, signOut } = useAuth();
+  const { profile } = useUserProfile();
   const { notebooks, livePages, databases, tags, trashedPages, treeFor, adapter } = useWorkspace();
 
-  const [openNotebooks, setOpenNotebooks] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(notebooks.map((n) => [n.id, true]))
-  );
+  const [openNotebooks, setOpenNotebooks] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [dragging, setDragging] = useState<DragId | null>(null);
 
-  const favorites = useMemo(() => livePages.filter((p) => p.favorite), [livePages]);
+  const sensors = useSensors(
+    // A small distance threshold keeps a click on a page link from starting a drag.
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const favorites = useMemo(() => livePages.filter((page) => page.favorite), [livePages]);
   const orphanPages = useMemo(
     () => treeFor(null).filter((node) => !node.page.notebookId),
     [treeFor]
   );
 
+  // `treeFor` walks every page, so resolve each notebook's contents once per
+  // render rather than on each of the several places that need them.
+  const contents = useMemo(() => {
+    const map = new Map<string, { tree: PageTreeNode[]; databases: typeof databases }>();
+    for (const notebook of notebooks) {
+      map.set(notebook.id, {
+        tree: treeFor(notebook.id),
+        databases: databases.filter((db) => db.notebookId === notebook.id && !db.deletedAt),
+      });
+    }
+    return map;
+  }, [databases, notebooks, treeFor]);
+
+  const displayName = profile?.displayName ?? user?.displayName ?? "";
+
   const createPage = async (notebookId: string | null) => {
     const page = await adapter.createPage({ notebookId, title: "Sem título" });
+    if (notebookId) setOpenNotebooks((prev) => ({ ...prev, [notebookId]: true }));
     router.push(`/app/p/${page.id}`);
   };
 
@@ -65,87 +133,154 @@ export function Sidebar({
     toast.success("Caderno criado");
   };
 
+  /** Renumbers a sibling list so the new visual order is what gets persisted. */
+  const persistOrder = async (items: { id: string }[], write: (id: string, order: number) => Promise<void>) => {
+    await Promise.all(items.map((item, index) => write(item.id, index * ORDER_STEP)));
+  };
+
+  const onDragEnd = async (event: DragEndEvent) => {
+    setDragging(null);
+    const active = decodeId(event.active.id);
+    const over = event.over ? decodeId(event.over.id) : null;
+    if (!active || !over || event.active.id === event.over?.id) return;
+
+    if (active.kind === "notebook" && over.kind === "notebook") {
+      const from = notebooks.findIndex((notebook) => notebook.id === active.id);
+      const to = notebooks.findIndex((notebook) => notebook.id === over.id);
+      if (from < 0 || to < 0) return;
+      await persistOrder(arrayMove(notebooks, from, to), (id, order) =>
+        adapter.updateNotebook(id, { order })
+      );
+      return;
+    }
+
+    if (active.kind !== "page") return;
+    const page = livePages.find((candidate) => candidate.id === active.id);
+    if (!page) return;
+
+    // Dropped on a notebook header: move to that notebook's root.
+    if (over.kind === "notebook") {
+      if (page.notebookId === over.id && !page.parentPageId) return;
+      await adapter.movePage(page.id, { notebookId: over.id, parentPageId: null });
+      toast.success("Página movida");
+      return;
+    }
+
+    const target = livePages.find((candidate) => candidate.id === over.id);
+    if (!target || target.id === page.id) return;
+
+    // Reordering among siblings, or re-parenting to the target's siblings.
+    const siblings = livePages
+      .filter(
+        (candidate) =>
+          candidate.notebookId === target.notebookId &&
+          candidate.parentPageId === target.parentPageId
+      )
+      .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, "pt-BR"));
+
+    const sameParent =
+      page.notebookId === target.notebookId && page.parentPageId === target.parentPageId;
+
+    let ordered: Page[];
+    if (sameParent) {
+      const from = siblings.findIndex((candidate) => candidate.id === page.id);
+      const to = siblings.findIndex((candidate) => candidate.id === target.id);
+      if (from < 0 || to < 0) return;
+      ordered = arrayMove(siblings, from, to);
+    } else {
+      await adapter.movePage(page.id, {
+        notebookId: target.notebookId,
+        parentPageId: target.parentPageId,
+      });
+      const insertAt = siblings.findIndex((candidate) => candidate.id === target.id);
+      ordered = [...siblings];
+      ordered.splice(insertAt < 0 ? ordered.length : insertAt, 0, page);
+    }
+
+    await persistOrder(ordered, (id, order) => adapter.updatePage(id, { order }));
+  };
+
+  if (collapsed) {
+    return (
+      <aside className="flex w-14 shrink-0 flex-col items-center gap-2 border-r border-[var(--border)] bg-[var(--surface)] py-3">
+        <Tooltip label="Expandir barra lateral" shortcut={isMac() ? "⌘B" : "Ctrl B"} side="right">
+          <button
+            onClick={() => useUiStore.getState().toggleSidebar()}
+            className="rounded-lg p-1.5 transition hover:bg-[var(--surface-hover)]"
+            aria-label="Expandir barra lateral"
+          >
+            <SynapsysMark size={26} />
+          </button>
+        </Tooltip>
+        <Tooltip label="Buscar" shortcut={isMac() ? "⌘K" : "Ctrl K"} side="right">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => useUiStore.getState().setPaletteOpen(true)}
+            aria-label="Buscar"
+          >
+            <Search />
+          </Button>
+        </Tooltip>
+        <Tooltip label="Nova nota" shortcut={isMac() ? "⌘N" : "Ctrl N"} side="right">
+          <Button variant="ghost" size="icon" onClick={() => createPage(null)} aria-label="Nova nota">
+            <Plus />
+          </Button>
+        </Tooltip>
+        <Tooltip label="Todas as notas" side="right">
+          <Button variant="ghost" size="icon" asChild>
+            <Link href="/app/notes" aria-label="Todas as notas">
+              <FileStack />
+            </Link>
+          </Button>
+        </Tooltip>
+        <div className="mt-auto">
+          <Tooltip label="Preferências" shortcut={isMac() ? "⌘," : "Ctrl ,"} side="right">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => useUiStore.getState().setPreferencesOpen(true)}
+              aria-label="Preferências"
+            >
+              <Settings2 />
+            </Button>
+          </Tooltip>
+        </div>
+      </aside>
+    );
+  }
+
   const renderTree = (nodes: PageTreeNode[]) =>
     nodes.map((node) => {
       const isOpen = expanded[node.page.id] ?? node.depth < 1;
       const active = pathname === `/app/p/${node.page.id}`;
       return (
         <div key={node.page.id}>
-          <div
-            className={cn(
-              "group flex items-center gap-1 rounded-[var(--radius-xs)] pr-1 transition-colors",
-              active ? "bg-[var(--accent-soft)]" : "hover:bg-[var(--surface-hover)]"
-            )}
-            style={{ paddingLeft: `${node.depth * 12}px` }}
-          >
-            <button
-              type="button"
-              onClick={() => setExpanded((prev) => ({ ...prev, [node.page.id]: !isOpen }))}
-              className={cn(
-                "flex size-4 shrink-0 items-center justify-center rounded text-faint transition hover:text-ink",
-                !node.children.length && "invisible"
-              )}
-            >
-              <ChevronRight className={cn("size-3 transition-transform", isOpen && "rotate-90")} />
-            </button>
-            <Link
-              href={`/app/p/${node.page.id}`}
-              className={cn(
-                "flex min-w-0 flex-1 items-center gap-1.5 py-1 text-[12.5px]",
-                active ? "font-medium text-ink" : "text-muted group-hover:text-ink"
-              )}
-            >
-              <span className="w-4 shrink-0 text-center text-[12px]">{node.page.icon ?? "📄"}</span>
-              <span className="truncate">{node.page.title || "Sem título"}</span>
-            </Link>
-            <Menu>
-              <MenuTrigger asChild>
-                <button
-                  type="button"
-                  className="rounded p-0.5 text-faint opacity-0 transition group-hover:opacity-100 hover:text-ink"
-                  aria-label="Ações da página"
-                >
-                  <MoreHorizontal className="size-3.5" />
-                </button>
-              </MenuTrigger>
-              <MenuContent align="start">
-                <MenuItem
-                  onSelect={async () => {
-                    const child = await adapter.createPage({
-                      parentPageId: node.page.id,
-                      notebookId: node.page.notebookId,
-                      title: "Sem título",
-                    });
-                    setExpanded((prev) => ({ ...prev, [node.page.id]: true }));
-                    router.push(`/app/p/${child.id}`);
-                  }}
-                >
-                  <Plus /> Nova subpágina
-                </MenuItem>
-                <MenuItem
-                  onSelect={() => adapter.updatePage(node.page.id, { favorite: !node.page.favorite })}
-                >
-                  <Star /> {node.page.favorite ? "Remover dos favoritos" : "Favoritar"}
-                </MenuItem>
-                <MenuSeparator />
-                <MenuItem
-                  destructive
-                  onSelect={async () => {
-                    await adapter.trashPage(node.page.id);
-                    toast.success("Movida para a lixeira", {
-                      action: {
-                        label: "Desfazer",
-                        onClick: () => adapter.restorePage(node.page.id),
-                      },
-                    });
-                    if (active) router.push("/app");
-                  }}
-                >
-                  <Trash2 /> Mover para lixeira
-                </MenuItem>
-              </MenuContent>
-            </Menu>
-          </div>
+          <SortablePageRow
+            node={node}
+            active={active}
+            isOpen={isOpen}
+            onToggle={() => setExpanded((prev) => ({ ...prev, [node.page.id]: !isOpen }))}
+            onCreateChild={async () => {
+              const child = await adapter.createPage({
+                parentPageId: node.page.id,
+                notebookId: node.page.notebookId,
+                title: "Sem título",
+              });
+              setExpanded((prev) => ({ ...prev, [node.page.id]: true }));
+              router.push(`/app/p/${child.id}`);
+            }}
+            onToggleFavorite={() =>
+              adapter.updatePage(node.page.id, { favorite: !node.page.favorite })
+            }
+            onTrash={async () => {
+              await adapter.trashPage(node.page.id);
+              toast.success("Movida para a lixeira", {
+                action: { label: "Desfazer", onClick: () => adapter.restorePage(node.page.id) },
+              });
+              if (active) router.push("/app");
+            }}
+          />
           <AnimatePresence initial={false}>
             {isOpen && node.children.length ? (
               <motion.div
@@ -163,48 +298,37 @@ export function Sidebar({
       );
     });
 
-  if (collapsed) {
-    return (
-      <aside className="flex w-14 shrink-0 flex-col items-center gap-2 border-r border-[var(--border)] bg-[var(--surface)] py-3">
-        <button onClick={onToggle} className="rounded-lg p-1.5 hover:bg-[var(--surface-hover)]" aria-label="Expandir">
-          <SynapsysMark size={26} />
-        </button>
-        <Tooltip label="Buscar" shortcut={isMac() ? "⌘K" : "Ctrl K"} side="right">
-          <Button variant="ghost" size="icon" onClick={onOpenPalette}>
-            <span className="text-[13px] font-medium">K</span>
-          </Button>
-        </Tooltip>
-        <Tooltip label="Nova página" side="right">
-          <Button variant="ghost" size="icon" onClick={() => createPage(null)}>
-            <Plus />
-          </Button>
-        </Tooltip>
-      </aside>
-    );
-  }
+  const draggedLabel =
+    dragging?.kind === "notebook"
+      ? notebooks.find((notebook) => notebook.id === dragging.id)?.name
+      : livePages.find((page) => page.id === dragging?.id)?.title;
 
   return (
-    <aside className="flex w-[268px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]">
-      {/* Workspace switcher */}
+    <aside
+      className="flex h-full shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]"
+      style={{ width }}
+    >
       <div className="flex items-center justify-between gap-2 px-3 py-3">
         <Menu>
           <MenuTrigger asChild>
             <button className="flex min-w-0 items-center gap-2 rounded-[var(--radius-sm)] px-1 py-1 transition hover:bg-[var(--surface-hover)]">
-              <SynapsysWordmark size={34} />
+              <SynapsysWordmark size={30} />
               <ChevronDown className="size-3.5 shrink-0 text-faint" />
             </button>
           </MenuTrigger>
-          <MenuContent align="start" className="min-w-[230px]">
+          <MenuContent align="start" className="min-w-[240px]">
             <div className="px-2 py-1.5">
-              <p className="truncate text-[12.5px] font-medium text-ink">{user?.displayName}</p>
+              <p className="truncate text-[12.5px] font-medium text-ink">{displayName}</p>
               <p className="truncate text-[11px] text-muted">{user?.email}</p>
             </div>
             <MenuSeparator />
-            <MenuItem onSelect={() => router.push("/app/integrations")}>
-              Integrações
+            <MenuItem onSelect={() => useUiStore.getState().setPreferencesOpen(true)}>
+              <Settings2 /> Preferências
             </MenuItem>
-            <MenuItem onSelect={toggle}>
-              Tema {theme === "dark" ? "claro" : "escuro"}
+            <MenuItem onSelect={() => router.push("/app/integrations")}>Integrações</MenuItem>
+            <MenuItem onSelect={toggle}>Tema {theme === "dark" ? "claro" : "escuro"}</MenuItem>
+            <MenuItem onSelect={() => useUiStore.getState().toggleZenMode()}>
+              <Minimize2 /> Modo foco
             </MenuItem>
             <MenuSeparator />
             <MenuItem
@@ -217,180 +341,456 @@ export function Sidebar({
             </MenuItem>
           </MenuContent>
         </Menu>
-        <Tooltip label="Recolher barra lateral" side="right">
-          <Button variant="ghost" size="icon-sm" onClick={onToggle} aria-label="Recolher">
-            <ChevronRight className="rotate-180" />
+        <Tooltip label="Recolher barra lateral" shortcut={isMac() ? "⌘B" : "Ctrl B"} side="right">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => useUiStore.getState().toggleSidebar()}
+            aria-label="Recolher barra lateral"
+          >
+            <PanelLeftClose />
           </Button>
         </Tooltip>
       </div>
 
-      {/* Primary actions */}
       <div className="space-y-0.5 px-2">
         <button
-          onClick={onOpenPalette}
+          onClick={() => useUiStore.getState().setPaletteOpen(true)}
           className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[12.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
         >
+          <Search className="size-3.5" />
           Buscar
           <Kbd className="ml-auto">{isMac() ? "⌘K" : "Ctrl K"}</Kbd>
         </button>
-        <Link
-          href="/app"
-          className={cn(
-            "flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[12.5px] transition hover:bg-[var(--surface-hover)]",
-            pathname === "/app" ? "font-medium text-ink" : "text-muted hover:text-ink"
-          )}
-        >
+        <NavLink href="/app" active={pathname === "/app"} icon={<Home className="size-3.5" />}>
           Início
-        </Link>
+        </NavLink>
+        <NavLink
+          href="/app/notes"
+          active={pathname === "/app/notes"}
+          icon={<FileStack className="size-3.5" />}
+        >
+          Todas as notas
+          <span className="ml-auto text-[10.5px] text-faint">{livePages.length}</span>
+        </NavLink>
         <button
-          onClick={onOpenImport}
+          onClick={() => useUiStore.getState().setImportOpen(true)}
           className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[12.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
         >
+          <Import className="size-3.5" />
           Importar do Notion
         </button>
       </div>
 
-      <div className="mt-3 flex-1 space-y-4 overflow-y-auto px-2 pb-4">
-        {favorites.length ? (
-          <Section title="Favoritos">
-            {favorites.map((page) => (
-              <Link
-                key={page.id}
-                href={`/app/p/${page.id}`}
-                className="flex items-center gap-2 rounded-[var(--radius-xs)] px-2 py-1 text-[12.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
-              >
-                <span className="w-4 text-center text-[12px]">{page.icon ?? "⭐"}</span>
-                <span className="truncate">{page.title}</span>
-              </Link>
-            ))}
-          </Section>
-        ) : null}
-
-        <Section
-          title="Cadernos"
-          action={
-            <Tooltip label="Novo caderno">
-              <button
-                onClick={createNotebook}
-                className="rounded p-0.5 text-faint transition hover:text-ink"
-                aria-label="Novo caderno"
-              >
-                <Plus className="size-3.5" />
-              </button>
-            </Tooltip>
-          }
-        >
-          {notebooks.map((notebook) => {
-            const open = openNotebooks[notebook.id] ?? true;
-            const tree = treeFor(notebook.id);
-            const dbs = databases.filter((d) => d.notebookId === notebook.id && !d.deletedAt);
-            return (
-              <div key={notebook.id}>
-                <div className="group flex items-center gap-1 rounded-[var(--radius-xs)] pr-1 hover:bg-[var(--surface-hover)]">
-                  <button
-                    onClick={() =>
-                      setOpenNotebooks((prev) => ({ ...prev, [notebook.id]: !open }))
-                    }
-                    className="flex flex-1 items-center gap-1.5 py-1 pl-1 text-left"
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        modifiers={[restrictToVerticalAxis]}
+        onDragStart={(event: DragStartEvent) => setDragging(decodeId(event.active.id))}
+        onDragCancel={() => setDragging(null)}
+        onDragEnd={(event) => void onDragEnd(event)}
+      >
+        <div className="mt-3 flex-1 space-y-4 overflow-y-auto px-2 pb-4">
+          {favorites.length ? (
+            <Section
+              title="Favoritos"
+              action={
+                <Tooltip label="Ver todos os favoritos">
+                  <Link
+                    href="/app/notes?favorites=1"
+                    className="rounded p-0.5 text-faint transition hover:text-ink"
+                    aria-label="Ver todos os favoritos"
                   >
-                    <ChevronRight
-                      className={cn("size-3 shrink-0 text-faint transition-transform", open && "rotate-90")}
-                    />
-                    <span className="text-[12px]">{notebook.emoji ?? "📓"}</span>
-                    <span className="truncate text-[12.5px] font-medium text-ink">{notebook.name}</span>
-                    <span className="ml-auto text-[10.5px] text-faint">{tree.length + dbs.length}</span>
-                  </button>
-                  <Tooltip label="Nova página">
-                    <button
-                      onClick={() => createPage(notebook.id)}
-                      className="rounded p-0.5 text-faint opacity-0 transition group-hover:opacity-100 hover:text-ink"
-                      aria-label="Nova página"
-                    >
-                      <Plus className="size-3.5" />
-                    </button>
-                  </Tooltip>
-                </div>
-                <AnimatePresence initial={false}>
-                  {open ? (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                      className="overflow-hidden pl-2"
-                    >
-                      {renderTree(tree)}
-                      {dbs.map((database) => (
-                        <Link
-                          key={database.id}
-                          href={`/app/db/${database.id}`}
-                          className={cn(
-                            "flex items-center gap-1.5 rounded-[var(--radius-xs)] py-1 pl-5 pr-2 text-[12.5px] transition hover:bg-[var(--surface-hover)]",
-                            pathname === `/app/db/${database.id}`
-                              ? "font-medium text-ink"
-                              : "text-muted hover:text-ink"
-                          )}
-                        >
-                          <span className="truncate">{database.name}</span>
-                        </Link>
-                      ))}
-                      {!tree.length && !dbs.length ? (
-                        <p className="px-6 py-1 text-[11.5px] text-faint">Vazio</p>
-                      ) : null}
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
-              </div>
-            );
-          })}
-        </Section>
-
-        {orphanPages.length ? (
-          <Section title="Sem caderno">{renderTree(orphanPages)}</Section>
-        ) : null}
-
-        {tags.length ? (
-          <Section title="Tags">
-            <div className="flex flex-wrap gap-1 px-1.5 pt-1">
-              {tags.slice(0, 12).map((tag) => (
+                    <FileStack className="size-3.5" />
+                  </Link>
+                </Tooltip>
+              }
+            >
+              {favorites.map((page) => (
                 <Link
-                  key={tag.name}
-                  href={`/app/tag/${encodeURIComponent(tag.name)}`}
-                  className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-muted transition hover:border-[var(--accent)] hover:text-ink"
+                  key={page.id}
+                  href={`/app/p/${page.id}`}
+                  className="flex items-center gap-2 rounded-[var(--radius-xs)] px-2 py-1 text-[12.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
                 >
-                  {tag.name}
-                  <span className="text-faint">{tag.count}</span>
+                  <span className="w-4 text-center text-[12px]">{page.icon ?? "⭐"}</span>
+                  <span className="truncate">{page.title || "Sem título"}</span>
                 </Link>
               ))}
-            </div>
+            </Section>
+          ) : null}
+
+          <Section
+            title="Cadernos"
+            action={
+              <Tooltip label="Novo caderno" shortcut={isMac() ? "⌘⇧N" : "Ctrl ⇧ N"}>
+                <button
+                  onClick={createNotebook}
+                  className="rounded p-0.5 text-faint transition hover:text-ink"
+                  aria-label="Novo caderno"
+                >
+                  <FolderPlus className="size-3.5" />
+                </button>
+              </Tooltip>
+            }
+          >
+            <SortableContext
+              items={notebooks.map((notebook) => encodeId("notebook", notebook.id))}
+              strategy={verticalListSortingStrategy}
+            >
+              {notebooks.map((notebook) => {
+                const { tree, databases: notebookDatabases } =
+                  contents.get(notebook.id) ?? { tree: [], databases: [] };
+                const open = openNotebooks[notebook.id] ?? true;
+
+                return (
+                  <NotebookRow
+                    key={notebook.id}
+                    notebook={notebook}
+                    open={open}
+                    count={tree.length + notebookDatabases.length}
+                    onToggle={() =>
+                      setOpenNotebooks((prev) => ({ ...prev, [notebook.id]: !open }))
+                    }
+                    onCreatePage={() => createPage(notebook.id)}
+                    onRename={(name) => adapter.updateNotebook(notebook.id, { name })}
+                    onDelete={async () => {
+                      await adapter.deleteNotebook(notebook.id);
+                      toast.success("Caderno removido");
+                    }}
+                  >
+                    {open ? (
+                      <SortableContext
+                        items={tree.map((node) => encodeId("page", node.page.id))}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {renderTree(tree)}
+                        {notebookDatabases.map((database) => (
+                          <Link
+                            key={database.id}
+                            href={`/app/db/${database.id}`}
+                            className={cn(
+                              "flex items-center gap-1.5 rounded-[var(--radius-xs)] py-1 pl-5 pr-2 text-[12.5px] transition hover:bg-[var(--surface-hover)]",
+                              pathname === `/app/db/${database.id}`
+                                ? "font-medium text-ink"
+                                : "text-muted hover:text-ink"
+                            )}
+                          >
+                            <span className="truncate">{database.name}</span>
+                          </Link>
+                        ))}
+                        {!tree.length && !notebookDatabases.length ? (
+                          <p className="px-6 py-1 text-[11.5px] text-faint">
+                            Vazio — arraste notas para cá
+                          </p>
+                        ) : null}
+                      </SortableContext>
+                    ) : null}
+                  </NotebookRow>
+                );
+              })}
+            </SortableContext>
           </Section>
-        ) : null}
-      </div>
+
+          {orphanPages.length ? (
+            <Section title="Sem caderno">
+              <SortableContext
+                items={orphanPages.map((node) => encodeId("page", node.page.id))}
+                strategy={verticalListSortingStrategy}
+              >
+                {renderTree(orphanPages)}
+              </SortableContext>
+            </Section>
+          ) : null}
+
+          {tags.length ? (
+            <Section title="Tags">
+              <div className="flex flex-wrap gap-1 px-1.5 pt-1">
+                {tags.slice(0, 14).map((tag) => (
+                  <Link
+                    key={tag.name}
+                    href={`/app/tag/${encodeURIComponent(tag.name)}`}
+                    className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-muted transition hover:border-[var(--accent)] hover:text-ink"
+                  >
+                    {tag.name}
+                    <span className="text-faint">{tag.count}</span>
+                  </Link>
+                ))}
+              </div>
+            </Section>
+          ) : null}
+        </div>
+
+        <DragOverlay dropAnimation={null}>
+          {dragging ? (
+            <div className="rounded-[var(--radius-xs)] border border-[var(--accent)] bg-[var(--surface)] px-2 py-1 text-[12.5px] text-ink shadow-[var(--shadow-float)]">
+              {draggedLabel || "Sem título"}
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       <div className="border-t border-[var(--border)] px-2 py-2">
-        <Link
-          href="/app/trash"
-          className={cn(
-            "flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[12.5px] transition hover:bg-[var(--surface-hover)]",
-            pathname === "/app/trash" ? "font-medium text-ink" : "text-muted hover:text-ink"
-          )}
-        >
+        <NavLink href="/app/trash" active={pathname === "/app/trash"} icon={<Trash2 className="size-3.5" />}>
           Lixeira
           {trashedPages.length ? (
             <span className="ml-auto text-[10.5px] text-faint">{trashedPages.length}</span>
           ) : null}
-        </Link>
-        <Link
-          href="/app/integrations"
-          className={cn(
-            "flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[12.5px] transition hover:bg-[var(--surface-hover)]",
-            pathname === "/app/integrations" ? "font-medium text-ink" : "text-muted hover:text-ink"
-          )}
+        </NavLink>
+        <button
+          onClick={() => useUiStore.getState().setPreferencesOpen(true)}
+          className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[12.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
         >
-          Integrações
-        </Link>
+          <Settings2 className="size-3.5" />
+          Preferências
+          <Kbd className="ml-auto">{isMac() ? "⌘," : "Ctrl ,"}</Kbd>
+        </button>
       </div>
     </aside>
+  );
+}
+
+function NavLink({
+  href,
+  active,
+  icon,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[12.5px] transition hover:bg-[var(--surface-hover)]",
+        active ? "font-medium text-ink" : "text-muted hover:text-ink"
+      )}
+    >
+      {icon}
+      {children}
+    </Link>
+  );
+}
+
+/** Notebook header: sortable itself, and a drop target for pages. */
+function NotebookRow({
+  notebook,
+  open,
+  count,
+  onToggle,
+  onCreatePage,
+  onRename,
+  onDelete,
+  children,
+}: {
+  notebook: Notebook;
+  open: boolean;
+  count: number;
+  onToggle: () => void;
+  onCreatePage: () => void;
+  onRename: (name: string) => Promise<void>;
+  onDelete: () => Promise<void>;
+  children: React.ReactNode;
+}) {
+  const router = useRouter();
+  // `useSortable` already registers this id as a drop target, which is what
+  // makes the header accept pages dragged onto it — no second droppable.
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } =
+    useSortable({ id: encodeId("notebook", notebook.id) });
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState(notebook.name);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={cn(isDragging && "opacity-40")}
+    >
+      <div
+        className={cn(
+          "group flex items-center gap-1 rounded-[var(--radius-xs)] pr-1 transition-colors",
+          isOver && !isDragging
+            ? "bg-[var(--accent-soft)] ring-1 ring-[var(--accent)]"
+            : "hover:bg-[var(--surface-hover)]"
+        )}
+      >
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab rounded p-0.5 text-faint opacity-0 transition group-hover:opacity-100 active:cursor-grabbing"
+          aria-label={`Reordenar ${notebook.name}`}
+        >
+          <GripVertical className="size-3" />
+        </button>
+        {renaming ? (
+          <input
+            autoFocus
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={async () => {
+              setRenaming(false);
+              if (draft.trim() && draft.trim() !== notebook.name) await onRename(draft.trim());
+              else setDraft(notebook.name);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
+              if (event.key === "Escape") {
+                setDraft(notebook.name);
+                setRenaming(false);
+              }
+            }}
+            className="my-0.5 min-w-0 flex-1 rounded border border-[var(--accent)] bg-[var(--surface)] px-1 py-0.5 text-[12.5px] text-ink outline-none"
+          />
+        ) : (
+          <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left">
+            <ChevronRight
+              className={cn("size-3 shrink-0 text-faint transition-transform", open && "rotate-90")}
+            />
+            <span className="text-[12px]">{notebook.emoji ?? "📓"}</span>
+            <span className="truncate text-[12.5px] font-medium text-ink">{notebook.name}</span>
+            <span className="ml-auto text-[10.5px] text-faint">{count}</span>
+          </button>
+        )}
+        <Tooltip label="Nova nota">
+          <button
+            onClick={onCreatePage}
+            className="rounded p-0.5 text-faint opacity-0 transition group-hover:opacity-100 hover:text-ink"
+            aria-label="Nova nota"
+          >
+            <Plus className="size-3.5" />
+          </button>
+        </Tooltip>
+        <Menu>
+          <MenuTrigger asChild>
+            <button
+              className="rounded p-0.5 text-faint opacity-0 transition group-hover:opacity-100 hover:text-ink"
+              aria-label={`Ações de ${notebook.name}`}
+            >
+              <MoreHorizontal className="size-3.5" />
+            </button>
+          </MenuTrigger>
+          <MenuContent align="start">
+            <MenuItem onSelect={() => router.push(`/app/notes?notebook=${notebook.id}`)}>
+              <FileStack /> Ver todas as notas
+            </MenuItem>
+            <MenuItem onSelect={() => setRenaming(true)}>Renomear</MenuItem>
+            <MenuItem onSelect={onCreatePage}>
+              <Plus /> Nova nota
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem destructive onSelect={() => void onDelete()}>
+              <Trash2 /> Excluir caderno
+            </MenuItem>
+          </MenuContent>
+        </Menu>
+      </div>
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="overflow-hidden pl-2"
+          >
+            {children}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function SortablePageRow({
+  node,
+  active,
+  isOpen,
+  onToggle,
+  onCreateChild,
+  onToggleFavorite,
+  onTrash,
+}: {
+  node: PageTreeNode;
+  active: boolean;
+  isOpen: boolean;
+  onToggle: () => void;
+  onCreateChild: () => Promise<void>;
+  onToggleFavorite: () => void;
+  onTrash: () => Promise<void>;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } =
+    useSortable({ id: encodeId("page", node.page.id) });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Translate.toString(transform),
+        transition,
+        paddingLeft: `${node.depth * 12}px`,
+      }}
+      className={cn(
+        "group flex items-center gap-1 rounded-[var(--radius-xs)] pr-1 transition-colors",
+        isDragging && "opacity-40",
+        isOver && !isDragging && "ring-1 ring-[var(--accent)]",
+        active ? "bg-[var(--accent-soft)]" : "hover:bg-[var(--surface-hover)]"
+      )}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="cursor-grab rounded p-0.5 text-faint opacity-0 transition group-hover:opacity-100 active:cursor-grabbing"
+        aria-label={`Reordenar ${node.page.title || "página"}`}
+      >
+        <GripVertical className="size-3" />
+      </button>
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cn(
+          "flex size-4 shrink-0 items-center justify-center rounded text-faint transition hover:text-ink",
+          !node.children.length && "invisible"
+        )}
+        aria-label={isOpen ? "Recolher" : "Expandir"}
+      >
+        <ChevronRight className={cn("size-3 transition-transform", isOpen && "rotate-90")} />
+      </button>
+      <Link
+        href={`/app/p/${node.page.id}`}
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-1.5 py-1 text-[12.5px]",
+          active ? "font-medium text-ink" : "text-muted group-hover:text-ink"
+        )}
+      >
+        <span className="w-4 shrink-0 text-center text-[12px]">{node.page.icon ?? "📄"}</span>
+        <span className="truncate">{node.page.title || "Sem título"}</span>
+      </Link>
+      <Menu>
+        <MenuTrigger asChild>
+          <button
+            type="button"
+            className="rounded p-0.5 text-faint opacity-0 transition group-hover:opacity-100 hover:text-ink"
+            aria-label="Ações da página"
+          >
+            <MoreHorizontal className="size-3.5" />
+          </button>
+        </MenuTrigger>
+        <MenuContent align="start">
+          <MenuItem onSelect={() => void onCreateChild()}>
+            <Plus /> Nova subpágina
+          </MenuItem>
+          <MenuItem onSelect={onToggleFavorite}>
+            <Star /> {node.page.favorite ? "Remover dos favoritos" : "Favoritar"}
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem destructive onSelect={() => void onTrash()}>
+            <Trash2 /> Mover para lixeira
+          </MenuItem>
+        </MenuContent>
+      </Menu>
+    </div>
   );
 }
 

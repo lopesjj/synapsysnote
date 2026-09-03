@@ -2,8 +2,10 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { FileArchive } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/lib/data/provider";
+import { useUiStore } from "@/lib/store/ui-store";
 import { ImportWizard } from "@/components/notion/import-wizard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/primitives";
@@ -103,6 +105,26 @@ function IntegrationsBody() {
               Conectar workspace
             </Button>
           )}
+        </div>
+
+        <div className="mt-5 border-t border-[var(--border)] pt-4">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
+            Sem conectar a conta
+          </p>
+          <p className="text-[12.5px] leading-relaxed text-muted">
+            Já tem um export? O arquivo <code className="font-mono">.zip</code> gerado pelo Notion
+            em <strong className="font-medium text-ink">Markdown &amp; CSV</strong> é processado
+            inteiramente no navegador: as pastas viram cadernos, os arquivos{" "}
+            <code className="font-mono">.md</code> viram notas e as imagens vão direto para o seu
+            Cloud Storage.
+          </p>
+          <Button
+            variant="secondary"
+            className="mt-3"
+            onClick={() => useUiStore.getState().setZipImportOpen(true)}
+          >
+            <FileArchive /> Importar arquivo .zip
+          </Button>
         </div>
 
         {importJobs.length ? (

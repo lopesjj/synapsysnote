@@ -21,7 +21,7 @@ interface Options<T> {
  * and on `visibilitychange` so navigating away never drops the last edit.
  */
 export function useDebounceAutoSave<T>({
-  delay = 700,
+  delay = 500,
   maxWait = 4000,
   onSave,
   onError,

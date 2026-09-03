@@ -6,6 +6,7 @@ import { Command } from "cmdk";
 import { AnimatePresence, motion } from "framer-motion";
 import { useWorkspace } from "@/lib/data/provider";
 import { useTheme } from "@/components/theme-provider";
+import { useUiStore } from "@/lib/store/ui-store";
 import { searchWorkspace } from "@/lib/search";
 import { Kbd } from "@/components/ui/primitives";
 import { cn, isMac } from "@/lib/utils";
@@ -20,16 +21,20 @@ import { cn, isMac } from "@/lib/utils";
 export function CommandPalette({
   open,
   onOpenChange,
-  onOpenImport,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onOpenImport: () => void;
 }) {
   const router = useRouter();
   const { livePages, databases, adapter } = useWorkspace();
   const { theme, toggle } = useTheme();
   const [query, setQuery] = useState("");
+
+  /** Runs a chrome action and dismisses the palette. */
+  const run = (action: () => void) => {
+    onOpenChange(false);
+    action();
+  };
 
   const hits = useMemo(
     () => searchWorkspace(query, livePages, databases, 8),
@@ -153,8 +158,19 @@ export function CommandPalette({
                           go(`/app/p/${page.id}`);
                         }}
                       >
-                        <span className="flex-1 text-[13px] text-ink">Nova página</span>
+                        <span className="flex-1 text-[13px] text-ink">Nova nota</span>
                         <Kbd>{isMac() ? "⌘N" : "Ctrl N"}</Kbd>
+                      </Command.Item>
+                      <Command.Item
+                        value="new-notebook"
+                        className={itemClass}
+                        onSelect={async () => {
+                          await adapter.createNotebook({ name: "Novo caderno" });
+                          onOpenChange(false);
+                        }}
+                      >
+                        <span className="flex-1 text-[13px] text-ink">Novo caderno</span>
+                        <Kbd>{isMac() ? "⌘⇧N" : "Ctrl ⇧ N"}</Kbd>
                       </Command.Item>
                       <Command.Item
                         value="new-database"
@@ -167,22 +183,50 @@ export function CommandPalette({
                         <span className="flex-1 text-[13px] text-ink">Nova base de dados</span>
                       </Command.Item>
                       <Command.Item
-                        value="import-notion"
+                        value="all-notes"
                         className={itemClass}
-                        onSelect={() => {
-                          onOpenChange(false);
-                          onOpenImport();
-                        }}
+                        onSelect={() => go("/app/notes")}
                       >
-                        <span className="flex-1 text-[13px] text-ink">Importar do Notion</span>
+                        <span className="flex-1 text-[13px] text-ink">Todas as notas</span>
+                      </Command.Item>
+                      <Command.Item
+                        value="zen-mode"
+                        className={itemClass}
+                        onSelect={() => run(() => useUiStore.getState().toggleZenMode())}
+                      >
+                        <span className="flex-1 text-[13px] text-ink">Modo foco / Zen</span>
+                        <Kbd>{isMac() ? "⌘⇧F" : "Ctrl ⇧ F"}</Kbd>
+                      </Command.Item>
+                      <Command.Item
+                        value="import-notion-api"
+                        className={itemClass}
+                        onSelect={() => run(() => useUiStore.getState().setImportOpen(true))}
+                      >
+                        <span className="flex-1 text-[13px] text-ink">
+                          Importar do Notion (conta conectada)
+                        </span>
+                      </Command.Item>
+                      <Command.Item
+                        value="import-notion-zip"
+                        className={itemClass}
+                        onSelect={() => run(() => useUiStore.getState().setZipImportOpen(true))}
+                      >
+                        <span className="flex-1 text-[13px] text-ink">
+                          Importar arquivo .zip do Notion
+                        </span>
+                      </Command.Item>
+                      <Command.Item
+                        value="preferences"
+                        className={itemClass}
+                        onSelect={() => run(() => useUiStore.getState().setPreferencesOpen(true))}
+                      >
+                        <span className="flex-1 text-[13px] text-ink">Preferências</span>
+                        <Kbd>{isMac() ? "⌘," : "Ctrl ,"}</Kbd>
                       </Command.Item>
                       <Command.Item
                         value="toggle-theme"
                         className={itemClass}
-                        onSelect={() => {
-                          toggle();
-                          onOpenChange(false);
-                        }}
+                        onSelect={() => run(toggle)}
                       >
                         <span className="flex-1 text-[13px] text-ink">
                           Alternar para tema {theme === "dark" ? "claro" : "escuro"}
