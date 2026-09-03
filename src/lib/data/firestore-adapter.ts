@@ -13,6 +13,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
   writeBatch,
   type DocumentData,
   type QueryDocumentSnapshot,
@@ -33,6 +34,7 @@ import type {
 } from "@/types/models";
 import { getDb, getFirebaseFunctions, getFirebaseStorage } from "@/lib/firebase/client";
 import { firebaseJson } from "@/lib/firebase/auth-headers";
+import { subtreePatches } from "./page-tree";
 import { plainTextOf } from "./seed";
 import type {
   CommittedTree,
@@ -366,13 +368,36 @@ export class FirestoreAdapter implements DataAdapter {
       const parent = await getDoc(this.docRef("pages", target.parentPageId));
       path = parent.exists() ? [...((parent.data().path as string[]) ?? []), target.parentPageId] : [];
     }
-    await updateDoc(this.docRef("pages", id), {
-      ...(target.notebookId !== undefined ? { notebookId: target.notebookId } : {}),
+
+    const moved = await getDoc(this.docRef("pages", id));
+    const notebookId =
+      target.notebookId !== undefined
+        ? target.notebookId
+        : ((moved.data()?.notebookId as string | null | undefined) ?? null);
+
+    const batch = writeBatch(getDb());
+    batch.update(this.docRef("pages", id), {
+      notebookId,
       parentPageId: target.parentPageId ?? null,
       path,
       updatedBy: this.userId,
       updatedAt: serverTimestamp(),
     });
+
+    // Descendants carry a materialised path and a denormalised notebookId, so
+    // the whole subtree has to follow the move or it detaches from its parent.
+    // `array-contains` on `path` is a single-field query — no composite index.
+    const descendants = await getDocs(query(this.col("pages"), where("path", "array-contains", id)));
+    for (const patch of subtreePatches(descendants.docs.map(mapPage), id, path, notebookId)) {
+      batch.update(this.docRef("pages", patch.pageId), {
+        path: patch.path,
+        notebookId: patch.notebookId,
+        updatedBy: this.userId,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
   }
 
   async trashPage(id: string) {

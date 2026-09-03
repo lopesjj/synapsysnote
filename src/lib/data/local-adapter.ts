@@ -28,6 +28,7 @@ import type {
   PageDraft,
   Unsubscribe,
 } from "./adapter";
+import { subtreePatches } from "./page-tree";
 import { buildSeed, plainTextOf } from "./seed";
 
 /**
@@ -270,13 +271,27 @@ export class LocalAdapter implements DataAdapter {
   }
 
   async movePage(id: string, target: { notebookId?: string | null; parentPageId?: string | null }) {
+    const page = this.state.pages.find((p) => p.id === id);
+    if (!page) return;
+
     const parent = target.parentPageId
       ? this.state.pages.find((p) => p.id === target.parentPageId)
       : null;
+    const path = parent ? [...parent.path, parent.id] : [];
+    // An omitted notebookId means "keep it"; spreading `undefined` into the
+    // patch would erase the value instead.
+    const notebookId = target.notebookId !== undefined ? target.notebookId : page.notebookId;
+
+    // Descendants carry a materialised path and a denormalised notebookId, so
+    // the whole subtree has to follow the move or it detaches from its parent.
+    for (const patch of subtreePatches(this.state.pages, id, path, notebookId)) {
+      await this.updatePage(patch.pageId, { path: patch.path, notebookId: patch.notebookId });
+    }
+
     await this.updatePage(id, {
-      notebookId: target.notebookId !== undefined ? target.notebookId : undefined,
+      notebookId,
       parentPageId: target.parentPageId ?? null,
-      path: parent ? [...parent.path, parent.id] : [],
+      path,
     });
   }
 

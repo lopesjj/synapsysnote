@@ -98,6 +98,18 @@ const detectCollisions: CollisionDetection = (args) => {
   return within.length ? within : closestCenter(scoped);
 };
 
+/**
+ * Drag handle. Kept faintly visible rather than hidden until hover: a target
+ * that only exists once the cursor is already on it is hard to aim at, and
+ * reserving its width keeps the row from shifting. The padding is what makes
+ * the hit area comfortable — the glyph itself is only 12px.
+ */
+const GRIP_CLASS = cn(
+  "-my-1 shrink-0 cursor-grab rounded px-1 py-2 text-faint opacity-30 transition",
+  "hover:bg-[var(--surface-hover)] hover:opacity-100 group-hover:opacity-70",
+  "active:cursor-grabbing"
+);
+
 /** Flattens a page subtree into sortable ids, nested descendants included. */
 function sortableIds(nodes: PageTreeNode[]): string[] {
   return nodes.flatMap((node) => [
@@ -592,8 +604,16 @@ function NotebookRow({
   const router = useRouter();
   // `useSortable` already registers this id as a drop target, which is what
   // makes the header accept pages dragged onto it — no second droppable.
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } =
-    useSortable({ id: encodeId("notebook", notebook.id) });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+    isOver,
+  } = useSortable({ id: encodeId("notebook", notebook.id) });
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(notebook.name);
 
@@ -612,9 +632,10 @@ function NotebookRow({
         )}
       >
         <button
+          ref={setActivatorNodeRef}
           {...attributes}
           {...listeners}
-          className="cursor-grab rounded p-0.5 text-faint opacity-0 transition group-hover:opacity-100 active:cursor-grabbing"
+          className={GRIP_CLASS}
           aria-label={`Reordenar ${notebook.name}`}
         >
           <GripVertical className="size-3" />
@@ -715,8 +736,16 @@ function SortablePageRow({
   onToggleFavorite: () => void;
   onTrash: () => Promise<void>;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } =
-    useSortable({ id: encodeId("page", node.page.id) });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+    isOver,
+  } = useSortable({ id: encodeId("page", node.page.id) });
 
   return (
     <div
@@ -734,9 +763,10 @@ function SortablePageRow({
       )}
     >
       <button
+        ref={setActivatorNodeRef}
         {...attributes}
         {...listeners}
-        className="cursor-grab rounded p-0.5 text-faint opacity-0 transition group-hover:opacity-100 active:cursor-grabbing"
+        className={GRIP_CLASS}
         aria-label={`Reordenar ${node.page.title || "página"}`}
       >
         <GripVertical className="size-3" />
