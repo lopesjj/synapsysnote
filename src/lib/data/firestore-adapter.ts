@@ -13,6 +13,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
   type DocumentData,
   type QueryDocumentSnapshot,
   type Timestamp,
@@ -33,9 +34,21 @@ import type {
 import { getDb, getFirebaseFunctions, getFirebaseStorage } from "@/lib/firebase/client";
 import { firebaseJson } from "@/lib/firebase/auth-headers";
 import { plainTextOf } from "./seed";
-import type { CreateImportJobInput, CreatePageInput, DataAdapter, Unsubscribe } from "./adapter";
+import type {
+  CommittedTree,
+  CreateImportJobInput,
+  CreatePageInput,
+  DataAdapter,
+  ImportedAsset,
+  NotebookDraft,
+  PageDraft,
+  Unsubscribe,
+} from "./adapter";
 
 const SERVER_OWNED = ["extractedOCRText", "transcriptText", "embedding", "embeddingUpdatedAt"];
+
+/** Firestore caps a batch at 500 writes; leave headroom for the notebook docs. */
+const BATCH_LIMIT = 400;
 
 /**
  * ETAPA 2 — Production adapter.
@@ -614,5 +627,119 @@ export class FirestoreAdapter implements DataAdapter {
       createdAt: serverTimestamp(),
     });
     // OCR runs from the Storage trigger; nothing else to do here.
+  }
+
+  /* --------------------------------------------------- client-side .zip import */
+
+  async uploadImportAsset({
+    fileName,
+    blob,
+    contentType,
+  }: {
+    fileName: string;
+    blob: Blob;
+    contentType?: string;
+  }): Promise<ImportedAsset> {
+    // `zip-import` occupies the `{pageId}` segment of the uploads path: the
+    // page does not exist yet, and the storage rules only require membership
+    // for that prefix.
+    const safeName = fileName.replace(/[^\w.\-]+/g, "_").slice(-80);
+    const path = `workspaces/${this.workspaceId}/uploads/zip-import/${Date.now()}-${nanoid(6)}-${safeName}`;
+    const storageRef = ref(getFirebaseStorage(), path);
+    await uploadBytes(storageRef, blob, {
+      contentType: contentType || blob.type || "application/octet-stream",
+    });
+    return { url: await getDownloadURL(storageRef), storagePath: path };
+  }
+
+  async commitImportedTree({
+    notebooks,
+    pages,
+  }: {
+    notebooks: NotebookDraft[];
+    pages: PageDraft[];
+  }): Promise<CommittedTree> {
+    const notebookIds: Record<string, string> = {};
+    for (const notebook of notebooks) notebookIds[notebook.key] = `nb_${nanoid(8)}`;
+
+    const pageIds: Record<string, string> = {};
+    for (const page of pages) pageIds[page.key] = `page_${nanoid(10)}`;
+
+    /** Ancestor id chain, walked over draft keys so it needs no reads. */
+    const byKey = new Map(pages.map((page) => [page.key, page]));
+    const pathOf = (draft: PageDraft): string[] => {
+      const path: string[] = [];
+      let parentKey = draft.parentKey;
+      const seen = new Set<string>();
+      while (parentKey && !seen.has(parentKey)) {
+        seen.add(parentKey);
+        const id = pageIds[parentKey];
+        if (id) path.unshift(id);
+        parentKey = byKey.get(parentKey)?.parentKey ?? null;
+      }
+      return path;
+    };
+
+    const writes: { ref: ReturnType<typeof doc>; data: Record<string, unknown> }[] = [];
+
+    notebooks.forEach((notebook, index) => {
+      writes.push({
+        ref: this.docRef("notebooks", notebookIds[notebook.key]),
+        data: {
+          id: notebookIds[notebook.key],
+          name: notebook.name,
+          emoji: notebook.emoji ?? "📓",
+          color: "#0E7490",
+          order: notebook.order ?? index,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+      });
+    });
+
+    pages.forEach((draft, index) => {
+      const id = pageIds[draft.key];
+      writes.push({
+        ref: this.docRef("pages", id),
+        data: {
+          id,
+          title: draft.title,
+          icon: draft.icon ?? "📄",
+          coverUrl: null,
+          notebookId: draft.notebookKey ? notebookIds[draft.notebookKey] ?? null : null,
+          parentPageId: draft.parentKey ? pageIds[draft.parentKey] ?? null : null,
+          path: pathOf(draft),
+          blocks: draft.blocks,
+          plainText: plainTextOf(draft.blocks),
+          tags: draft.tags ?? [],
+          outgoingLinks: [],
+          backlinks: [],
+          favorite: false,
+          archived: false,
+          deletedAt: null,
+          // The rules reserve notionPageId/importJobId for the Admin pipeline,
+          // so provenance for this path is recorded in `importSource`.
+          notionPageId: null,
+          notionUrl: null,
+          importJobId: null,
+          importSource: draft.importSource ?? "notion-zip",
+          createdBy: this.userId,
+          updatedBy: this.userId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          order: draft.order ?? index,
+        },
+      });
+    });
+
+    for (let start = 0; start < writes.length; start += BATCH_LIMIT) {
+      const batch = writeBatch(getDb());
+      for (const write of writes.slice(start, start + BATCH_LIMIT)) {
+        batch.set(write.ref, write.data);
+      }
+      await batch.commit();
+    }
+
+    return { notebookIds, pageIds };
   }
 }

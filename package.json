@@ -9,6 +9,7 @@
     "start": "next start --port 43127",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "verify:zip-import": "tsx scripts/verify-zip-import.mts",
     "functions:build": "npm --prefix functions run build",
     "functions:typecheck": "npm --prefix functions run typecheck",
     "emulators": "firebase emulators:start --only auth,firestore,functions,storage",
@@ -17,6 +18,7 @@
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@notionhq/client": "^5.26.0",
@@ -74,6 +76,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5"
   }
 }

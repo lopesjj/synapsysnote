@@ -19,7 +19,15 @@ import {
   mockFileCount,
   parentMap,
 } from "@/lib/notion/mock-workspace";
-import type { CreateImportJobInput, CreatePageInput, DataAdapter, Unsubscribe } from "./adapter";
+import type {
+  CommittedTree,
+  CreateImportJobInput,
+  CreatePageInput,
+  DataAdapter,
+  NotebookDraft,
+  PageDraft,
+  Unsubscribe,
+} from "./adapter";
 import { buildSeed, plainTextOf } from "./seed";
 
 /**
@@ -732,6 +740,89 @@ export class LocalAdapter implements DataAdapter {
         extractedOCRText: `${target.extractedOCRText}\n${ocrText}`.trim(),
       });
     }, 1800);
+  }
+
+  /* --------------------------------------------------- client-side .zip import */
+
+  async uploadImportAsset({ fileName, blob }: { fileName: string; blob: Blob }) {
+    void fileName;
+    return { url: await toPersistableUrl(blob) };
+  }
+
+  async commitImportedTree({
+    notebooks,
+    pages,
+  }: {
+    notebooks: NotebookDraft[];
+    pages: PageDraft[];
+  }): Promise<CommittedTree> {
+    const notebookIds: Record<string, string> = {};
+    const pageIds: Record<string, string> = {};
+    for (const notebook of notebooks) notebookIds[notebook.key] = `nb_${nanoid(8)}`;
+    for (const page of pages) pageIds[page.key] = `page_${nanoid(10)}`;
+
+    const byKey = new Map(pages.map((page) => [page.key, page]));
+    const pathOf = (draft: PageDraft): string[] => {
+      const path: string[] = [];
+      let parentKey = draft.parentKey;
+      const seen = new Set<string>();
+      while (parentKey && !seen.has(parentKey)) {
+        seen.add(parentKey);
+        const id = pageIds[parentKey];
+        if (id) path.unshift(id);
+        parentKey = byKey.get(parentKey)?.parentKey ?? null;
+      }
+      return path;
+    };
+
+    const base = this.state.notebooks.length;
+    notebooks.forEach((notebook, index) => {
+      this.state.notebooks.push({
+        id: notebookIds[notebook.key],
+        name: notebook.name,
+        emoji: notebook.emoji ?? "📓",
+        color: "#0E7490",
+        order: notebook.order ?? base + index,
+        createdAt: nowMs(),
+        updatedAt: nowMs(),
+      });
+    });
+
+    pages.forEach((draft, index) => {
+      this.state.pages.push({
+        id: pageIds[draft.key],
+        title: draft.title,
+        icon: draft.icon ?? "📄",
+        coverUrl: null,
+        notebookId: draft.notebookKey ? notebookIds[draft.notebookKey] ?? null : null,
+        parentPageId: draft.parentKey ? pageIds[draft.parentKey] ?? null : null,
+        path: pathOf(draft),
+        blocks: draft.blocks,
+        plainText: plainTextOf(draft.blocks),
+        extractedOCRText: "",
+        transcriptText: "",
+        tags: draft.tags ?? [],
+        outgoingLinks: [],
+        backlinks: [],
+        embedding: null,
+        embeddingUpdatedAt: null,
+        favorite: false,
+        archived: false,
+        deletedAt: null,
+        notionPageId: null,
+        notionUrl: null,
+        importJobId: null,
+        importSource: draft.importSource ?? "notion-zip",
+        createdBy: "demo-user",
+        updatedBy: "demo-user",
+        createdAt: nowMs(),
+        updatedAt: nowMs(),
+        order: draft.order ?? index,
+      });
+    });
+
+    this.emit();
+    return { notebookIds, pageIds };
   }
 }
 

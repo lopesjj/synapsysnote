@@ -1,4 +1,5 @@
 import type {
+  AppBlock,
   AppDatabase,
   DatabaseRow,
   ImportJob,
@@ -26,6 +27,48 @@ export interface CreateImportJobInput {
   options: ImportJob["options"];
   /** Titles resolved from the wizard tree so progress rows render immediately. */
   items: { notionId: string; title: string; type: "page" | "database" }[];
+}
+
+/* -------------------------------------------------------------------------- */
+/* Client-side bulk import (Notion .zip)                                       */
+/* -------------------------------------------------------------------------- */
+
+/** A media file that has been rehosted and can be linked from a block. */
+export interface ImportedAsset {
+  url: string;
+  storagePath?: string;
+}
+
+/**
+ * Notebooks and pages are described with importer-local `key`s because the
+ * hierarchy is known before any document exists. `commitImportedTree` allocates
+ * the real ids and returns the mapping, which is what lets the importer rewrite
+ * cross-page links after the fact.
+ */
+export interface NotebookDraft {
+  key: string;
+  name: string;
+  emoji?: string;
+  order?: number;
+}
+
+export interface PageDraft {
+  key: string;
+  notebookKey: string | null;
+  parentKey: string | null;
+  title: string;
+  icon?: string;
+  blocks: AppBlock[];
+  tags?: string[];
+  order?: number;
+  /** Where the page came from, shown as a badge in the editor. */
+  importSource?: Page["importSource"];
+}
+
+export interface CommittedTree {
+  /** Draft key → Firestore document id. */
+  notebookIds: Record<string, string>;
+  pageIds: Record<string, string>;
 }
 
 /**
@@ -85,4 +128,23 @@ export interface DataAdapter {
   saveAudioNote(pageId: string, blob: Blob, durationSeconds: number): Promise<void>;
   /** Attachments: uploads the file and requests OCR when it is an image/PDF. */
   saveAttachment(pageId: string, file: File): Promise<void>;
+
+  /**
+   * Rehosts one media file extracted from a `.zip`, without attaching it to a
+   * page — the importer links it from a block it is still assembling.
+   */
+  uploadImportAsset(input: {
+    fileName: string;
+    blob: Blob;
+    contentType?: string;
+  }): Promise<ImportedAsset>;
+
+  /**
+   * Writes a whole imported hierarchy transactionally. Firestore commits in
+   * batches so a failure cannot leave a half-imported notebook behind.
+   */
+  commitImportedTree(input: {
+    notebooks: NotebookDraft[];
+    pages: PageDraft[];
+  }): Promise<CommittedTree>;
 }

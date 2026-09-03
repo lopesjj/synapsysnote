@@ -219,6 +219,12 @@ export interface Page {
   notionPageId?: string | null;
   notionUrl?: string | null;
   importJobId?: string | null;
+  /**
+   * How the page entered the workspace. `notion-zip` marks the client-side
+   * `.zip` importer, which cannot set `notionPageId`/`importJobId` — the
+   * security rules reserve those for the server-side pipeline.
+   */
+  importSource?: "notion-zip" | null;
   createdBy: string;
   updatedBy: string;
   createdAt: ISOTimestamp;
