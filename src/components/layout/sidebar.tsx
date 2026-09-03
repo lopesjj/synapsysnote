@@ -9,15 +9,16 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCenter,
+  pointerWithin,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
   SortableContext,
-  arrayMove,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
@@ -52,7 +53,14 @@ import { SynapsysMark, SynapsysWordmark } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Kbd, Tooltip } from "@/components/ui/primitives";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
-import type { Notebook, Page } from "@/types/models";
+import type { Notebook } from "@/types/models";
+import {
+  ORDER_STEP,
+  decodeId,
+  encodeId,
+  planSidebarDrop,
+  type DragId,
+} from "./sidebar-dnd";
 
 /**
  * Collapsible sidebar: notebook tree, favorites, tags and workspace entry
@@ -61,25 +69,41 @@ import type { Notebook, Page } from "@/types/models";
  * Order is stored as a sparse `order` field. On drop the affected sibling list
  * is renumbered in fixed steps, which keeps the writes bounded to one list and
  * avoids the fractional-index drift you get from midpoint insertion.
+ *
+ * Deciding *what* a drop means lives in `sidebar-dnd.ts`, which is dnd-kit-free
+ * and unit-tested; this file only applies the resulting plan.
  */
 
-const ORDER_STEP = 100;
+/**
+ * A notebook row is a few pixels tall while its expanded page list can fill the
+ * viewport, so unfiltered detection almost always resolves a notebook drag to
+ * one of the pages inside the target. Dragging a notebook therefore only
+ * considers other notebooks; dragging a page considers everything, since a page
+ * legitimately drops either next to a sibling or onto a notebook header.
+ *
+ * `pointerWithin` first because it is exact when the cursor is inside a row,
+ * with `closestCenter` as the fallback for the gaps between them.
+ */
+const detectCollisions: CollisionDetection = (args) => {
+  const active = decodeId(args.active.id);
+  const droppableContainers =
+    active?.kind === "notebook"
+      ? args.droppableContainers.filter(
+          (container) => decodeId(container.id)?.kind === "notebook"
+        )
+      : args.droppableContainers;
 
-type DragKind = "notebook" | "page";
+  const scoped = { ...args, droppableContainers };
+  const within = pointerWithin(scoped);
+  return within.length ? within : closestCenter(scoped);
+};
 
-interface DragId {
-  kind: DragKind;
-  id: string;
-}
-
-function encodeId(kind: DragKind, id: string): string {
-  return `${kind}:${id}`;
-}
-
-function decodeId(value: string | number): DragId | null {
-  const [kind, ...rest] = String(value).split(":");
-  if (kind !== "notebook" && kind !== "page") return null;
-  return { kind, id: rest.join(":") };
+/** Flattens a page subtree into sortable ids, nested descendants included. */
+function sortableIds(nodes: PageTreeNode[]): string[] {
+  return nodes.flatMap((node) => [
+    encodeId("page", node.page.id),
+    ...sortableIds(node.children),
+  ]);
 }
 
 export function Sidebar({ collapsed, width }: { collapsed: boolean; width: number }) {
@@ -133,71 +157,42 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
     toast.success("Caderno criado");
   };
 
-  /** Renumbers a sibling list so the new visual order is what gets persisted. */
-  const persistOrder = async (items: { id: string }[], write: (id: string, order: number) => Promise<void>) => {
-    await Promise.all(items.map((item, index) => write(item.id, index * ORDER_STEP)));
-  };
-
   const onDragEnd = async (event: DragEndEvent) => {
     setDragging(null);
-    const active = decodeId(event.active.id);
-    const over = event.over ? decodeId(event.over.id) : null;
-    if (!active || !over || event.active.id === event.over?.id) return;
 
-    if (active.kind === "notebook" && over.kind === "notebook") {
-      const from = notebooks.findIndex((notebook) => notebook.id === active.id);
-      const to = notebooks.findIndex((notebook) => notebook.id === over.id);
-      if (from < 0 || to < 0) return;
-      await persistOrder(arrayMove(notebooks, from, to), (id, order) =>
-        adapter.updateNotebook(id, { order })
+    const plan = planSidebarDrop(event.active.id, event.over?.id, {
+      notebooks,
+      pages: livePages,
+    });
+    if (!plan) return;
+
+    try {
+      if (plan.kind === "reorder-notebooks") {
+        await Promise.all(
+          plan.notebookIds.map((id, index) =>
+            adapter.updateNotebook(id, { order: index * ORDER_STEP })
+          )
+        );
+        return;
+      }
+
+      // The move has to land before the sibling list is renumbered, so the
+      // page is already in its destination when the orders are written.
+      if (plan.kind === "move-page") {
+        await adapter.movePage(plan.pageId, {
+          notebookId: plan.notebookId,
+          parentPageId: plan.parentPageId,
+        });
+      }
+
+      await Promise.all(
+        plan.pageIds.map((id, index) => adapter.updatePage(id, { order: index * ORDER_STEP }))
       );
-      return;
+
+      if (plan.kind === "move-page") toast.success("Página movida");
+    } catch {
+      toast.error("Não foi possível reordenar. Tente novamente.");
     }
-
-    if (active.kind !== "page") return;
-    const page = livePages.find((candidate) => candidate.id === active.id);
-    if (!page) return;
-
-    // Dropped on a notebook header: move to that notebook's root.
-    if (over.kind === "notebook") {
-      if (page.notebookId === over.id && !page.parentPageId) return;
-      await adapter.movePage(page.id, { notebookId: over.id, parentPageId: null });
-      toast.success("Página movida");
-      return;
-    }
-
-    const target = livePages.find((candidate) => candidate.id === over.id);
-    if (!target || target.id === page.id) return;
-
-    // Reordering among siblings, or re-parenting to the target's siblings.
-    const siblings = livePages
-      .filter(
-        (candidate) =>
-          candidate.notebookId === target.notebookId &&
-          candidate.parentPageId === target.parentPageId
-      )
-      .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, "pt-BR"));
-
-    const sameParent =
-      page.notebookId === target.notebookId && page.parentPageId === target.parentPageId;
-
-    let ordered: Page[];
-    if (sameParent) {
-      const from = siblings.findIndex((candidate) => candidate.id === page.id);
-      const to = siblings.findIndex((candidate) => candidate.id === target.id);
-      if (from < 0 || to < 0) return;
-      ordered = arrayMove(siblings, from, to);
-    } else {
-      await adapter.movePage(page.id, {
-        notebookId: target.notebookId,
-        parentPageId: target.parentPageId,
-      });
-      const insertAt = siblings.findIndex((candidate) => candidate.id === target.id);
-      ordered = [...siblings];
-      ordered.splice(insertAt < 0 ? ordered.length : insertAt, 0, page);
-    }
-
-    await persistOrder(ordered, (id, order) => adapter.updatePage(id, { order }));
   };
 
   if (collapsed) {
@@ -384,7 +379,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={detectCollisions}
         modifiers={[restrictToVerticalAxis]}
         onDragStart={(event: DragStartEvent) => setDragging(decodeId(event.active.id))}
         onDragCancel={() => setDragging(null)}
@@ -460,7 +455,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                   >
                     {open ? (
                       <SortableContext
-                        items={tree.map((node) => encodeId("page", node.page.id))}
+                        items={sortableIds(tree)}
                         strategy={verticalListSortingStrategy}
                       >
                         {renderTree(tree)}
@@ -494,7 +489,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           {orphanPages.length ? (
             <Section title="Sem caderno">
               <SortableContext
-                items={orphanPages.map((node) => encodeId("page", node.page.id))}
+                items={sortableIds(orphanPages)}
                 strategy={verticalListSortingStrategy}
               >
                 {renderTree(orphanPages)}
