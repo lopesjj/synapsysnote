@@ -1,12 +1,21 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Complete Synapsys Note brand lockup.
+ * Synapsys Note brand lockups.
  *
- * The attached mark and wordmark are used as-is; only their *position* changes
- * relative to the original stacked file: the symbol sits on the left and the
- * original “Synapsys / Note” lettering sits to its right.
+ * The original artwork stacks the symbol above the "Synapsys / Note" lettering.
+ * Both elements are used exactly as drawn — only their arrangement changes, and
+ * every call site picks it: `vertical` keeps the original stack (used on the
+ * landing hero and the auth card), `horizontal` puts the symbol beside the
+ * lettering for the tight rhythm of the sidebar and mobile header, and
+ * `reversed` flips which of the two comes first.
  */
+
+/** Intrinsic aspect ratios of the exported assets. */
+const MARK_RATIO = 624 / 652;
+const WORDMARK_RATIO = 299 / 874;
+
+export type LogoOrientation = "horizontal" | "vertical";
 
 export function SynapsysMark({
   className,
@@ -21,65 +30,118 @@ export function SynapsysMark({
       src="/brand/synapsys-mark.png"
       alt=""
       width={size}
-      height={Math.round(size * (689 / 720))}
+      height={Math.round(size * MARK_RATIO)}
       className={cn("shrink-0 object-contain", className)}
       draggable={false}
     />
   );
 }
 
-export function SynapsysWordmark({
+function Wordmark({ width, className }: { width: number; className?: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/brand/synapsys-wordmark.png"
+      alt="Synapsys Note"
+      width={width}
+      height={Math.round(width * WORDMARK_RATIO)}
+      className={cn("synapsys-wordmark object-contain", className)}
+      draggable={false}
+    />
+  );
+}
+
+interface LockupProps {
+  className?: string;
+  /** Height of the symbol in pixels; the lettering is scaled to match. */
+  size?: number;
+  orientation?: LogoOrientation;
+  /** Puts the lettering before the symbol (right-to-left, or text above). */
+  reversed?: boolean;
+  /** Hides the lettering — used by the collapsed sidebar rail. */
+  markOnly?: boolean;
+}
+
+/**
+ * The complete lockup. `SynapsysWordmark` and `SynapsysLockup` below are thin
+ * presets over this component so call sites stay readable.
+ */
+export function SynapsysLogo({
   className,
   size = 32,
-  subtitle = true,
-}: {
-  className?: string;
-  size?: number;
-  subtitle?: boolean;
-}) {
-  const wordH = Math.max(18, Math.round(size * 0.78));
-  const wordW = Math.round(wordH * (900 / 305));
+  orientation = "horizontal",
+  reversed = false,
+  markOnly = false,
+}: LockupProps) {
+  const vertical = orientation === "vertical";
+  // Beside the symbol the lettering reads best at ~78% of its height; stacked
+  // underneath it wants to span a little wider than the symbol itself.
+  const wordmarkWidth = vertical
+    ? Math.round(size * 1.55)
+    : Math.round(size * 0.78 / WORDMARK_RATIO);
 
   return (
-    <span className={cn("inline-flex items-center gap-2.5", className)}>
+    <span
+      className={cn(
+        "inline-flex",
+        vertical
+          ? cn("flex-col items-center", reversed ? "flex-col-reverse gap-2" : "gap-2.5")
+          : cn("items-center", reversed ? "flex-row-reverse gap-2.5" : "gap-2.5"),
+        className
+      )}
+    >
       <SynapsysMark size={size} />
-      {subtitle ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src="/brand/synapsys-wordmark.png"
-          alt="Synapsys Note"
-          width={wordW}
-          height={wordH}
-          className="synapsys-wordmark origin-left object-contain object-left"
-          draggable={false}
-        />
-      ) : null}
+      {markOnly ? null : (
+        <Wordmark width={wordmarkWidth} className={vertical ? undefined : "origin-left"} />
+      )}
     </span>
   );
 }
 
-/** Larger horizontal lockup for the landing hero — complete logo, text to the right of the mark. */
-export function SynapsysLockup({
+/** Compact horizontal lockup for app chrome. */
+export function SynapsysWordmark({
   className,
-  size = 72,
+  size = 32,
+  subtitle = true,
+  orientation = "horizontal",
+  reversed = false,
 }: {
   className?: string;
   size?: number;
+  /** Kept for call-site compatibility: `false` renders the symbol alone. */
+  subtitle?: boolean;
+  orientation?: LogoOrientation;
+  reversed?: boolean;
 }) {
-  const wordH = Math.round(size * 0.72);
-  const wordW = Math.round(wordH * (900 / 305));
   return (
-    <span className={cn("inline-flex items-center gap-4", className)}>
-      <SynapsysMark size={size} />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/brand/synapsys-wordmark.png"
-        alt="Synapsys Note"
-        width={wordW}
-        height={wordH}
-        className="synapsys-wordmark object-contain object-left"
-        draggable={false}
-      />
-    </span>
+    <SynapsysLogo
+      className={className}
+      size={size}
+      orientation={orientation}
+      reversed={reversed}
+      markOnly={!subtitle}
+    />
+  );
+}
+
+/** Large lockup for the landing hero — stacked, as in the original artwork. */
+export function SynapsysLockup({
+  className,
+  size = 72,
+  orientation = "vertical",
+  reversed = false,
+}: {
+  className?: string;
+  size?: number;
+  orientation?: LogoOrientation;
+  reversed?: boolean;
+}) {
+  return (
+    <SynapsysLogo
+      className={className}
+      size={size}
+      orientation={orientation}
+      reversed={reversed}
+    />
   );
 }
