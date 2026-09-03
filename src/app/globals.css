@@ -1,0 +1,384 @@
+@import "tailwindcss";
+@import "katex/dist/katex.min.css";
+
+/*
+ * Synapsys Note — Design System
+ * Teal/navy canvases, hairline borders, generous negative space and the original
+ * Synapsys Note lockup (mark left, stacked wordmark right).
+ */
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --color-accent-50: #ecfeff;
+  --color-accent-100: #cffafe;
+  --color-accent-200: #a5f3fc;
+  --color-accent-300: #67e8f9;
+  --color-accent-400: #22d3ee;
+  --color-accent-500: #0e7490;
+  --color-accent-600: #0f766e;
+  --color-accent-700: #155e75;
+  --color-violet-accent: #0ea5e9;
+
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+
+  --ease-luxury: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---------- Light mode (default) ---------- */
+:root {
+  --canvas: #f4f7fa;
+  --surface: #ffffff;
+  --surface-2: #eef3f6;
+  --surface-hover: rgba(15, 44, 76, 0.045);
+  --border: #d9e2ea;
+  --border-strong: #c5d2de;
+  --text: #0f2c4c;
+  --text-muted: #5b6b7c;
+  --text-faint: #8a97a6;
+  --accent: #0e7490;
+  --accent-soft: rgba(14, 116, 144, 0.1);
+  --accent-contrast: #ffffff;
+  --danger: #dc2626;
+  --success: #059669;
+  --warning: #d97706;
+  --shadow-panel: 0 1px 2px rgba(15, 44, 76, 0.04), 0 8px 24px -12px rgba(15, 44, 76, 0.14);
+  --shadow-float: 0 12px 48px -12px rgba(15, 44, 76, 0.22);
+  --selection: rgba(14, 116, 144, 0.16);
+}
+
+/* ---------- Dark mode ---------- */
+.dark {
+  --canvas: #07111c;
+  --surface: #0d1824;
+  --surface-2: #12202e;
+  --surface-hover: rgba(255, 255, 255, 0.05);
+  --border: rgba(148, 185, 210, 0.12);
+  --border-strong: rgba(148, 185, 210, 0.2);
+  --text: #e8eef4;
+  --text-muted: #93a4b5;
+  --text-faint: #6b7c8d;
+  --accent: #22d3ee;
+  --accent-soft: rgba(34, 211, 238, 0.14);
+  --accent-contrast: #07111c;
+  --danger: #f87171;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 24px 48px -24px rgba(0, 0, 0, 0.8);
+  --shadow-float: 0 24px 64px -16px rgba(0, 0, 0, 0.85);
+  --selection: rgba(34, 211, 238, 0.22);
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-hairline: var(--border);
+  --color-hairline-strong: var(--border-strong);
+  --color-ink: var(--text);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: var(--selection);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--text-faint);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .panel {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .hairline {
+    border-color: var(--border);
+  }
+
+  /* Subtle top-lit gradient used on hero surfaces and modals. */
+  .lux-gradient {
+    background-image: radial-gradient(
+        120% 100% at 50% -20%,
+        color-mix(in oklab, var(--accent) 12%, transparent) 0%,
+        transparent 60%
+      ),
+      linear-gradient(to bottom, var(--surface), var(--surface));
+  }
+
+  /* Navy wordmark becomes light on the dark canvas; the colorful mark is untouched. */
+  .dark .synapsys-wordmark {
+    filter: brightness(0) invert(1);
+    opacity: 0.92;
+  }
+
+  .grain::after {
+    content: none;
+  }
+}
+
+/* ---------- Editor (ProseMirror) ---------- */
+.synapsys-editor .ProseMirror {
+  outline: none;
+  min-height: 60vh;
+  font-size: 1rem;
+  line-height: 1.75;
+  color: var(--text);
+}
+
+.synapsys-editor .ProseMirror > * + * {
+  margin-top: 0.55rem;
+}
+
+.synapsys-editor .ProseMirror h1 {
+  font-size: 1.875rem;
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.022em;
+  margin-top: 2rem;
+}
+.synapsys-editor .ProseMirror h2 {
+  font-size: 1.45rem;
+  line-height: 1.3;
+  font-weight: 640;
+  letter-spacing: -0.018em;
+  margin-top: 1.6rem;
+}
+.synapsys-editor .ProseMirror h3 {
+  font-size: 1.175rem;
+  line-height: 1.4;
+  font-weight: 620;
+  letter-spacing: -0.012em;
+  margin-top: 1.25rem;
+}
+
+.synapsys-editor .ProseMirror ul,
+.synapsys-editor .ProseMirror ol {
+  padding-left: 1.35rem;
+}
+.synapsys-editor .ProseMirror ul {
+  list-style: disc;
+}
+.synapsys-editor .ProseMirror ol {
+  list-style: decimal;
+}
+.synapsys-editor .ProseMirror li p {
+  margin: 0;
+}
+
+.synapsys-editor .ProseMirror blockquote {
+  border-left: 2px solid var(--accent);
+  padding-left: 1rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.synapsys-editor .ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.75rem 0;
+}
+
+.synapsys-editor .ProseMirror code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 0.12em 0.35em;
+  border-radius: 5px;
+}
+
+.synapsys-editor .ProseMirror pre {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.65;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+}
+.synapsys-editor .ProseMirror pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+
+.synapsys-editor .ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.15rem;
+}
+.synapsys-editor .ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+.synapsys-editor .ProseMirror ul[data-type="taskList"] li > label {
+  margin-top: 0.34rem;
+}
+.synapsys-editor .ProseMirror ul[data-type="taskList"] input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 0.95rem;
+  height: 0.95rem;
+  cursor: pointer;
+}
+.synapsys-editor .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.synapsys-editor .ProseMirror p.is-empty:first-child::before,
+.synapsys-editor .ProseMirror h1.is-empty::before,
+.synapsys-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--text-faint);
+}
+
+.synapsys-editor .ProseMirror a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.synapsys-editor .ProseMirror mark {
+  background: color-mix(in oklab, var(--warning) 32%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 0.15em;
+}
+
+.synapsys-editor .ProseMirror .mention {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 5px;
+  padding: 0.06em 0.32em;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.synapsys-editor .ProseMirror .synapsys-callout {
+  display: flex;
+  gap: 0.75rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+}
+
+.synapsys-editor .ProseMirror .ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Syntax highlighting (lowlight / highlight.js token classes) */
+.hljs-comment,
+.hljs-quote {
+  color: var(--text-faint);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type {
+  color: var(--accent);
+}
+.hljs-string,
+.hljs-title,
+.hljs-name,
+.hljs-attr {
+  color: #10b981;
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-built_in {
+  color: #f59e0b;
+}
+
+/* KaTeX inherits app typography rather than its own serif stack. */
+.katex {
+  font-size: 1.02em;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--accent) 22%, transparent),
+    transparent
+  );
+  animation: shimmer 1.8s infinite;
+}

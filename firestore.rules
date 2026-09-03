@@ -1,0 +1,233 @@
+rules_version = '2';
+
+// =============================================================================
+// Synapsys Note — Firestore
+//
+// Substitui as regras antigas de /notebooks e /notes (userId no documento).
+// O modelo real é:
+//
+//   /workspaces/{workspaceId}
+//     /members/{uid}
+//     /notebooks/{id}
+//     /pages/{id}/versions/{id}
+//     /databases/{id}/rows/{id}
+//     /attachments/{id}
+//     /import_jobs/{id}/logs/{id}
+//     /integrations/{id}/secure/{id}   ← token Notion, só Admin SDK
+//
+// O Admin SDK (bootstrap, OAuth Notion, worker de importação, OCR) ignora
+// estas regras. O cliente só lê o que for membro e só escreve conteúdo.
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function memberPath(workspaceId) {
+      return /databases/$(database)/documents/workspaces/$(workspaceId)/members/$(request.auth.uid);
+    }
+
+    function isMember(workspaceId) {
+      return isSignedIn() && exists(memberPath(workspaceId));
+    }
+
+    function role(workspaceId) {
+      return get(memberPath(workspaceId)).data.role;
+    }
+
+    function canWrite(workspaceId) {
+      return isMember(workspaceId) && role(workspaceId) in ['owner', 'admin', 'editor'];
+    }
+
+    function isAdmin(workspaceId) {
+      return isMember(workspaceId) && role(workspaceId) in ['owner', 'admin'];
+    }
+
+    function isOwner(workspaceId) {
+      return isMember(workspaceId) && role(workspaceId) == 'owner';
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function unchanged(field) {
+      return !(field in incoming()) || incoming()[field] == existing()[field];
+    }
+
+    // OCR, transcrição e vetores: só Cloud Functions / Admin SDK.
+    function hasNoServerFields() {
+      return !incoming().keys().hasAny([
+        'embedding', 'embeddingUpdatedAt', 'extractedOCRText', 'transcriptText'
+      ]);
+    }
+
+    function hasNoProvenanceFields() {
+      return (!('notionPageId' in incoming()) || incoming().notionPageId == null)
+        && (!('importJobId' in incoming()) || incoming().importJobId == null);
+    }
+
+    // Workspace pessoal do usuário (fallback se o Admin não estiver configurado).
+    // Workspaces compartilhados só o Admin SDK cria.
+    function isPersonalWorkspace(workspaceId) {
+      return workspaceId == 'ws_' + request.auth.uid;
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow create, update: if isSignedIn()
+        && request.auth.uid == userId
+        && incoming().uid == userId;
+      allow delete: if false;
+    }
+
+    match /workspaces/{workspaceId} {
+      // get: membro (subcoleção) ou listado em memberIds (consultas).
+      allow get: if isSignedIn() && (
+        request.auth.uid in resource.data.memberIds
+        || isMember(workspaceId)
+      );
+      allow list: if isSignedIn() && request.auth.uid in resource.data.memberIds;
+
+      allow create: if isSignedIn()
+        && isPersonalWorkspace(workspaceId)
+        && incoming().ownerId == request.auth.uid
+        && incoming().memberIds.hasOnly([request.auth.uid])
+        && incoming().name is string
+        && incoming().name.size() > 0
+        && incoming().name.size() <= 120;
+
+      allow update: if isAdmin(workspaceId)
+        && incoming().ownerId == existing().ownerId;
+
+      allow delete: if isOwner(workspaceId);
+
+      match /members/{userId} {
+        allow read: if isMember(workspaceId);
+
+        // Primeiro membro: o dono se registra depois de criar o workspace.
+        // Depois só admin/owner convida.
+        allow create: if isSignedIn() && (
+          (
+            request.auth.uid == userId
+            && incoming().role == 'owner'
+            && isPersonalWorkspace(workspaceId)
+            && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId
+              == request.auth.uid
+          )
+          || isAdmin(workspaceId)
+        );
+
+        allow update: if isAdmin(workspaceId)
+          && !(existing().role == 'owner' && incoming().role != 'owner');
+
+        allow delete: if isAdmin(workspaceId) && existing().role != 'owner';
+      }
+
+      match /notebooks/{notebookId} {
+        allow read: if isMember(workspaceId);
+        allow create, update: if canWrite(workspaceId)
+          && incoming().name is string
+          && incoming().name.size() > 0
+          && incoming().name.size() <= 200;
+        allow delete: if canWrite(workspaceId);
+      }
+
+      match /pages/{pageId} {
+        allow read: if isMember(workspaceId);
+
+        allow create: if canWrite(workspaceId)
+          && incoming().createdBy == request.auth.uid
+          && incoming().title is string
+          && incoming().title.size() <= 500
+          && hasNoServerFields()
+          && hasNoProvenanceFields();
+
+        allow update: if canWrite(workspaceId)
+          && incoming().createdBy == existing().createdBy
+          && incoming().updatedBy == request.auth.uid
+          && unchanged('extractedOCRText')
+          && unchanged('transcriptText')
+          && unchanged('embedding')
+          && unchanged('embeddingUpdatedAt')
+          && unchanged('notionPageId')
+          && unchanged('importJobId');
+
+        // Hard delete só admin; o fluxo normal grava deletedAt (update).
+        allow delete: if isAdmin(workspaceId);
+
+        match /versions/{versionId} {
+          allow read: if isMember(workspaceId);
+          allow create: if canWrite(workspaceId) && incoming().authorId == request.auth.uid;
+          allow update: if false;
+          allow delete: if isAdmin(workspaceId);
+        }
+      }
+
+      match /databases/{databaseId} {
+        allow read: if isMember(workspaceId);
+        allow create, update: if canWrite(workspaceId)
+          && incoming().name is string
+          && incoming().name.size() > 0
+          && incoming().name.size() <= 200;
+        allow delete: if isAdmin(workspaceId);
+
+        match /rows/{rowId} {
+          allow read: if isMember(workspaceId);
+          allow create, update, delete: if canWrite(workspaceId);
+        }
+      }
+
+      match /attachments/{attachmentId} {
+        allow read: if isMember(workspaceId);
+        allow create: if canWrite(workspaceId)
+          && incoming().uploadedBy == request.auth.uid
+          && incoming().storagePath.matches('workspaces/' + workspaceId + '/.*');
+        allow update: if canWrite(workspaceId)
+          && unchanged('ocrText')
+          && unchanged('transcript')
+          && unchanged('embedding');
+        allow delete: if canWrite(workspaceId);
+      }
+
+      match /import_jobs/{jobId} {
+        allow read: if isMember(workspaceId);
+
+        // Enfileirar e atualizar progresso: só o worker (Admin SDK / API Next).
+        allow create: if false;
+
+        allow update: if canWrite(workspaceId)
+          && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          && incoming().status == 'canceled'
+          && existing().status in ['pending', 'discovering', 'running'];
+
+        allow delete: if isAdmin(workspaceId);
+
+        match /logs/{logId} {
+          allow read: if isMember(workspaceId);
+          allow write: if false;
+        }
+      }
+
+      match /integrations/{integrationId} {
+        allow read: if isMember(workspaceId);
+        allow write: if false;
+
+        match /secure/{secretId} {
+          allow read, write: if false;
+        }
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
