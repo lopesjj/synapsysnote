@@ -39,10 +39,26 @@ Sobre o **toggle**: o título fica em um atributo do nó, não no documento.
 Recolher desmonta o corpo em vez de escondê-lo, o que evita conteúdo editável
 invisível — armadilha clássica de `<details>` em editores.
 
+`Underline` e `Link` **não** aparecem na lista acima porque o StarterKit 3.x já
+os registra; declará-los de novo faz o TipTap avisar sobre nomes duplicados e
+descartar uma das cópias. `Link` é configurado através das opções do StarterKit.
+
+## 2.1. Tipografia
+
+O corpo do editor herda `--font-editor` e `--font-editor-size`, definidos pelo
+`AppShell` a partir das preferências do usuário
+([`typography.ts`](../src/lib/typography.ts) lista as 13 famílias com nome e
+classificação). Os tamanhos internos do editor — títulos, código, callouts —
+estão em `em`, então um único ajuste de corpo reescala tudo proporcionalmente em
+vez de mexer só no parágrafo.
+
 ## 3. Persistência
 
 `onUpdate` → `docToBlocks` → `collectMentionIds` → `useDebounceAutoSave.schedule`.
-Uma escrita por pausa de digitação, teto de 4 s, flush garantido ao sair.
+Uma escrita por pausa de 500 ms na digitação, teto de 4 s para quem digita sem
+parar, e flush garantido ao sair (`visibilitychange`, `beforeunload`, unmount).
+O cabeçalho da página mostra *Salvando… / Salvo*, e o indicador pode ser
+desligado nas preferências.
 
 O documento do TipTap é criado uma vez por `page.id`. Atualizações remotas da
 *mesma* página não são forçadas de volta enquanto o usuário digita — isso brigaria

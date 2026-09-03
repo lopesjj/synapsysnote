@@ -27,13 +27,27 @@ conexão e importação do Notion** (arquivos, páginas aninhadas e bases de dad
 
 | Área | Entregue |
 | --- | --- |
-| **Editor de blocos** | TipTap com slash commands (`/`), bubble menu, drag handles laterais, menções (`@`) com backlinks bidirecionais, callouts, toggles, código com realce, equações KaTeX, mídia embutida |
-| **Importação do Notion** | OAuth 2.0, árvore hierárquica selecionável, conversor recursivo de blocos, mapeamento de propriedades de bases de dados, rehospedagem de arquivos no Cloud Storage, worker em background com progresso em tempo real |
+| **Editor de blocos** | TipTap com slash commands (`/`), bubble menu, drag handles laterais, menções (`@`) com backlinks bidirecionais, callouts, toggles, código com realce, equações KaTeX, mídia embutida, autosave com debounce de 500 ms |
+| **Importação do Notion** | Dois caminhos: **OAuth** (árvore selecionável, conversor recursivo, worker em background com progresso em tempo real) e **arquivo `.zip`** processado 100% no navegador com JSZip, gravado em lotes com `writeBatch` |
+| **Lista de notas** | Lista compacta, cartões e painel duplo estilo Evernote com prévia ao vivo, mais filtros por caderno/tag/favoritos, busca local e ordenação por modificação, criação ou título |
 | **Bases de dados** | Visualizações Tabela e Kanban sobre os mesmos dados, edição inline, drag-and-drop de status |
 | **Captura (Evernote-like)** | Gravação de voz com transcrição e resumo via Gemini, OCR automático de imagens e PDFs via Cloud Vision |
 | **Busca** | Command Palette (`Cmd/Ctrl+K`) com busca híbrida: full-text local (funciona offline, inclui OCR e transcrições) + vetores via `findNearest` no Firestore |
-| **Organização** | Cadernos, árvore infinita de páginas, tags globais, favoritos, histórico de versões, lixeira com retenção de 30 dias |
+| **Organização** | Cadernos e árvore infinita de páginas com reordenação por arrastar, tags globais, favoritos, histórico de versões, lixeira com retenção de 30 dias |
+| **Interface** | Modo foco/Zen, barra lateral recolhível e redimensionável, tema claro/escuro, 13 famílias tipográficas auto-hospedadas com corpo e largura de leitura ajustáveis |
+| **Conta** | E-mail/senha, Google e GitHub — provedores federados só entram com e-mails já cadastrados na autenticação. Perfil e preferências em `users/{uid}`, então o layout acompanha a conta entre dispositivos |
 | **Infra** | Regras de segurança de Firestore e Storage, índices compostos e vetoriais, 12 Cloud Functions, persistência offline nativa |
+
+### Atalhos
+
+| Atalho | Ação |
+| --- | --- |
+| `Cmd/Ctrl + K` | Busca global e comandos |
+| `Cmd/Ctrl + N` | Nova nota |
+| `Cmd/Ctrl + Shift + N` | Novo caderno |
+| `Cmd/Ctrl + B` | Recolher a barra lateral (`Cmd/Ctrl + \` funciona também dentro do editor, onde `B` é negrito) |
+| `Cmd/Ctrl + Shift + F` | Modo foco / Zen (`Esc` sai) |
+| `Cmd/Ctrl + ,` | Preferências |
 
 ### Modo demonstração local
 
@@ -55,6 +69,10 @@ npm run dev          # http://localhost:43127
 ```
 
 Na tela inicial, clique em **“Explorar demonstração local (sem cadastro)”**.
+
+Para exercitar a importação sem nenhuma credencial: exporte qualquer página do
+Notion em **Markdown & CSV** e solte o `.zip` em `Cmd/Ctrl+K → Importar arquivo
+.zip do Notion`. Tudo roda no navegador.
 
 Para usar o backend real, copie `.env.example` para `.env.local` e preencha
 (veja [Setup completo](#setup-completo)).
@@ -135,12 +153,14 @@ O roteiro pedido está detalhado em `docs/`:
 │       └── maintenance/trash.ts # retenção de 30 dias
 └── src/
     ├── app/
-    │   ├── layout.tsx           # fontes, tema, providers, toaster
+    │   ├── layout.tsx           # tema, providers, toaster
+    │   ├── fonts.ts             # 13 famílias auto-hospedadas (next/font)
     │   ├── page.tsx             # landing + autenticação
     │   ├── api/notion/{authorize,callback}/route.ts
     │   └── app/                 # workspace autenticado
     │       ├── layout.tsx       # AppShell
     │       ├── page.tsx         # início
+    │       ├── notes/           # lista/cartões/painel duplo
     │       ├── p/[pageId]/      # editor
     │       ├── db/[databaseId]/ # tabela + kanban
     │       ├── tag/[tag]/
@@ -148,22 +168,28 @@ O roteiro pedido está detalhado em `docs/`:
     │       └── integrations/
     ├── components/
     │   ├── editor/              # TipTap: extensões, bubble menu, serializer
-    │   ├── notion/import-wizard.tsx
+    │   ├── notion/{import-wizard,zip-import-dialog}.tsx
+    │   ├── notes/               # explorador de notas + prévia read-only
     │   ├── database/            # tabela, kanban, células
-    │   ├── layout/              # shell, sidebar, command palette
+    │   ├── layout/              # shell, sidebar (+ sidebar-dnd), palette, preferências
     │   ├── media/audio-recorder.tsx
     │   ├── page/page-view.tsx
     │   └── ui/                  # primitivas (Radix + Tailwind)
     ├── hooks/
     │   ├── use-auth.tsx
+    │   ├── use-user-profile.ts  # users/{uid} + espelho de preferências
     │   ├── use-firestore-live-doc.ts
     │   ├── use-debounce-auto-save.ts
-    │   └── use-notion-import.ts
+    │   └── use-{notion,zip}-import.ts
     ├── lib/
     │   ├── firebase/{client,admin}.ts
-    │   ├── data/{adapter,firestore-adapter,local-adapter,provider,seed}.ts
+    │   ├── data/{adapter,firestore-adapter,local-adapter,provider,page-tree,seed,user-profile}.ts
+    │   ├── store/ui-store.ts    # Zustand: chrome, layout, tipografia
+    │   ├── query/query-provider.tsx  # TanStack Query (leituras sob demanda)
+    │   ├── auth/errors.ts
     │   ├── crypto/token-cipher.ts
-    │   ├── notion/mock-workspace.ts
+    │   ├── notion/zip/          # JSZip, markdown, csv, hierarquia
+    │   ├── typography.ts
     │   └── search.ts
     └── types/models.ts
 ```
@@ -262,6 +288,25 @@ firebase functions:log --only processNotionImportJob
 
 ---
 
+## Verificação
+
+```bash
+npm run typecheck
+npm run lint
+npm run verify        # checagens de lógica, sem navegador
+```
+
+`npm run verify` cobre as três partes cuja lógica é difícil de confiar só ao
+teste manual:
+
+| Script | O que garante |
+| --- | --- |
+| `verify:zip-import` | Monta um export sintético do Notion (pastas aninhadas, CSV de base com suas linhas, callouts, toggles, tabelas, listas de tarefas, links relativos) e confere o plano derivado |
+| `verify:sidebar-dnd` | Resolução de cada tipo de drop na barra lateral, incluindo caderno solto sobre uma página e a recusa de mover uma página para dentro da própria subárvore |
+| `verify:page-tree` | Roda o `LocalAdapter` de verdade e confere que mover uma página leva a subárvore inteira, com `path` e `notebookId` reescritos |
+
+---
+
 ## Decisões de projeto
 
 **Por que uma interface `DataAdapter` em vez de chamar o Firestore direto nos
@@ -285,6 +330,30 @@ exatamente o que o listener do wizard renderiza. Fechar o modal não cancela nad
 server-only.** As regras rejeitam qualquer escrita do cliente nesses campos. Eles
 alimentam a busca; se fossem graváveis pelo navegador, um cliente comprometido
 poderia envenenar o índice de todo o workspace.
+
+**Por que existem dois caminhos de importação do Notion.** O caminho por OAuth é
+o completo — lê bases de dados com seus tipos de propriedade, é idempotente por
+`notionPageId` e aguenta milhares de páginas fora do tempo limite de uma
+requisição. Mas exige criar uma integração pública no Notion e conectar a conta,
+o que é muito atrito para quem só quer trazer um export que já baixou. O caminho
+por `.zip` cobre esse caso sem servidor nenhum: o navegador descompacta,
+converte e grava. O custo é que o export em Markdown perde os tipos das
+propriedades das bases (viram uma tabela) e a proveniência não pode usar
+`notionPageId`, campo reservado ao Admin SDK pelas regras.
+
+**Por que mover uma página reescreve a subárvore inteira.** `path` e `notebookId`
+são dados derivados, mantidos desnormalizados para que ler uma subárvore seja
+uma consulta e não uma travessia. A árvore da barra lateral agrupa por
+`notebookId` e `parentPageId`, então um descendente deixado no caderno antigo se
+desprende do pai — a subárvore parece ter desaparecido do caderno de destino. As
+duas implementações de `movePage` reescrevem todos os descendentes; no Firestore,
+em um único lote, com uma consulta `array-contains` sobre `path`.
+
+**Por que a decisão do drop mora fora do componente.** Automatizar arrastar no
+navegador é pouco confiável — um teste que falha não distingue lógica errada de
+gesto mal sintetizado. `sidebar-dnd.ts` não importa nada do dnd-kit e responde
+só a “dado o que foi arrastado e onde soltou, o que muda?”, o que é verificável
+em Node. O componente apenas aplica o plano.
 
 **Por que o formato de bloco é próprio, e não o JSON do TipTap.** `AppBlock[]` é
 o alvo da conversão do Notion, a fonte do texto indexado e o que o editor

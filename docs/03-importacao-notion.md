@@ -154,3 +154,76 @@ Detalhes que importam:
   `notionDatabaseId`; reimportar atualiza no lugar em vez de duplicar.
 - **Hierarquia.** A ordem é *depth-first*, e um `Map<notionId, appId>` alimenta
   tanto `parentPageId` quanto a reescrita de links internos.
+
+---
+
+## 5. Caminho alternativo: arquivo `.zip`, 100% no navegador
+
+Arquivos: [`src/lib/notion/zip/`](../src/lib/notion/zip/) ·
+[`use-zip-import.ts`](../src/hooks/use-zip-import.ts) ·
+[`zip-import-dialog.tsx`](../src/components/notion/zip-import-dialog.tsx)
+
+O pipeline acima exige conectar a conta do Notion via OAuth. Quem já tem um
+export em **Markdown & CSV** na máquina não precisa disso: o `.zip` é processado
+inteiramente no navegador.
+
+```
+Usuário solta o .zip
+   → JSZip.loadAsync(arrayBuffer)          descompacta em memória
+   → readArchive()                         remove a pasta-envelope do export
+   → buildImportPlan()                     hierarquia + conversão
+        .md  → parseNotionMarkdown()  → AppBlock[]
+        .csv → csvToBlocks()          → bloco de tabela
+   ── plano exibido para confirmação ──
+   → runZipImport()
+        uploadImportAsset()  por mídia     → Cloud Storage
+        commitImportedTree()               → writeBatch (lotes de 400)
+        updatePage()                       → reescreve links internos
+```
+
+### Como a hierarquia é descoberta
+
+O export codifica a árvore em duas convenções, e as duas são usadas:
+
+1. **Uma pasta é a lista de filhos de uma página** quando existe um documento
+   com o mesmo nome ao lado dela — `Projetos abc…123.md` faz par com
+   `Projetos abc…123/`.
+2. **Todo nome carrega um id de 32 hexadecimais**, que é a única chave de junção
+   confiável para os links relativos: títulos se repetem, ids não.
+
+O primeiro segmento do caminho vira o **caderno**, e vale para a página e para
+todos os seus descendentes — a árvore da barra lateral agrupa por `notebookId`,
+então um filho sem caderno se desprenderia do pai.
+
+### Por que essa ordem
+
+- **Mídia antes dos documentos.** Cada bloco de imagem precisa da URL definitiva
+  do Storage; gravar primeiro exigiria uma segunda passada em tudo.
+- **Links depois do commit.** Os ids das páginas só existem após o `writeBatch`,
+  então a reescrita de `[texto](../Outra%20Pagina%20abc123.md)` para um link
+  interno é uma segunda etapa.
+- **Falha de mídia não aborta.** Um upload rejeitado (cota, tamanho, rede) vira
+  um aviso nomeando o arquivo; as notas entram do mesmo jeito.
+
+### Limites e escolhas
+
+- `notionPageId` e `importJobId` são **reservados ao Admin SDK** pelas regras de
+  segurança, então a proveniência deste caminho fica em `importSource:
+  "notion-zip"`.
+- As mídias vão para `workspaces/{ws}/uploads/zip-import/…`: a página ainda não
+  existe quando o upload acontece, e as regras de Storage só exigem que o
+  usuário seja membro nesse prefixo.
+- Um `.csv` de base de dados vira **um bloco de tabela** na página da base — as
+  linhas que o Notion exporta como páginas próprias são importadas como
+  subpáginas normais pelo mesmo passo da hierarquia. Duplicatas `_all.csv` são
+  ignoradas.
+- O progresso é estado de React, não um documento `import_jobs`: o worker é o
+  próprio navegador, então fechar a aba cancela — diferente do caminho por API,
+  em que fechar o modal não cancela nada.
+
+### Verificação
+
+`npm run verify:zip-import` monta um export sintético com pastas aninhadas, um
+CSV de base com suas linhas, callouts, toggles, tabelas, listas de tarefas e
+links relativos, e confere o plano derivado — hierarquia, pais, contagem de
+mídia e índice por id do Notion.

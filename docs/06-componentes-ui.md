@@ -47,13 +47,71 @@ com transição horizontal:
 Fechar o modal durante a importação não cancela: um pill flutuante no canto
 mostra o andamento e reabre o wizard. Cancelar é explícito.
 
+## 2.1. Import de arquivo `.zip`
+
+[`zip-import-dialog.tsx`](../src/components/notion/zip-import-dialog.tsx) — para
+quem já tem um export em Markdown & CSV e não quer conectar a conta. Aceita
+arrastar-e-soltar, analisa o arquivo e mostra o plano — cadernos, notas, bases,
+mídias e a estrutura detectada — **antes** de gravar qualquer coisa, porque a
+importação cria cadernos e notas em massa e isso não é algo para descobrir
+depois. Duas opções: rehospedar mídias e reconectar links internos.
+
+Diferença importante em relação ao wizard: aqui o worker é o próprio navegador,
+então fechar a aba cancela. O progresso é estado de React, não um documento
+`import_jobs`. Detalhes do pipeline em
+[`docs/03`](03-importacao-notion.md#5-caminho-alternativo-arquivo-zip-100-no-navegador).
+
 ## 3. Sidebar
 
-[`sidebar.tsx`](../src/components/layout/sidebar.tsx) — busca, início,
-importação, favoritos, cadernos com árvore infinita de páginas, bases de dados,
-tags globais, lixeira e integrações. Cada linha tem menu de contexto (nova
-subpágina, favoritar, mover para lixeira com desfazer no toast). Recolhe para uma
-faixa de ícones com `Cmd+\`, e no mobile vira overlay.
+[`sidebar.tsx`](../src/components/layout/sidebar.tsx) — busca, início, todas as
+notas, importação, favoritos, cadernos com árvore infinita de páginas, bases de
+dados, tags globais, lixeira e preferências. Cada linha tem menu de contexto
+(nova subpágina, favoritar, mover para lixeira com desfazer no toast). Recolhe
+para uma faixa de ícones com `Cmd/Ctrl+B`, é redimensionável arrastando a borda,
+e no mobile vira overlay.
+
+**Reordenação por arrastar** (`@dnd-kit`): cadernos entre si, páginas entre
+irmãs, e soltar uma página sobre o cabeçalho de um caderno a move para lá. A
+ordem é um campo `order` esparso, renumerado em passos fixos na lista de irmãs
+afetada — o que mantém as escritas limitadas a uma lista e evita a deriva de
+índices fracionários.
+
+Duas decisões não óbvias:
+
+- **Detecção de colisão filtrada.** A linha de um caderno tem alguns pixels de
+  altura, enquanto sua lista de páginas expandida ocupa a tela inteira. Sem
+  filtrar, quase todo arrasto de caderno resolvia para uma *página* dentro do
+  alvo. Arrastar um caderno passa a considerar só cadernos, e a detecção
+  prefere a linha realmente sob o cursor (`pointerWithin`) com `closestCenter`
+  como reserva para os vãos entre linhas.
+- **A decisão mora fora do componente.** [`sidebar-dnd.ts`](../src/components/layout/sidebar-dnd.ts)
+  não importa nada do dnd-kit e responde só a “dado o que foi arrastado e onde
+  soltou, o que muda?”. Automatizar arrastar no navegador é pouco confiável, e
+  um teste que falha não distinguiria lógica errada de gesto mal sintetizado.
+  `npm run verify:sidebar-dnd` cobre cada caso, inclusive a recusa de mover uma
+  página para dentro da própria subárvore.
+
+## 3.1. Lista de notas
+
+[`notes-explorer.tsx`](../src/components/notes/notes-explorer.tsx) — os três
+formatos que os apps clássicos estabeleceram: lista compacta, cartões e painel
+duplo com prévia ao vivo. O mesmo componente serve “Todas as notas”, um caderno
+e uma tag: a diferença entre eles é só o recorte recebido.
+
+A prévia renderiza os blocos armazenados direto
+([`block-preview.tsx`](../src/components/notes/block-preview.tsx)) em vez de
+montar um ProseMirror por seleção — no painel duplo, cada clique na lista
+trocaria o documento do editor.
+
+## 3.2. Preferências
+
+[`preferences-dialog.tsx`](../src/components/layout/preferences-dialog.tsx) —
+`Cmd/Ctrl+,`. Tema, modo foco, layout e densidade da lista, ordenação padrão,
+13 famílias tipográficas nomeadas e agrupadas por classificação
+([`typography.ts`](../src/lib/typography.ts)) com corpo e largura de leitura
+ajustáveis, perfil (nome de exibição e provedores vinculados) e a referência de
+atalhos. Tudo grava no store do Zustand, que persiste local e espelha em
+`users/{uid}.preferences`.
 
 ## 4. Command Palette
 

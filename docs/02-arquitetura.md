@@ -22,6 +22,22 @@ lixeira, tags globais, job de importação ativo. Componentes chamam
 Consequência prática: a suíte de telas é testável e demonstrável sem Firebase, e
 a lógica de UI não tem ramificações de ambiente.
 
+### Onde cada tipo de estado vive
+
+Três camadas, com fronteiras deliberadas:
+
+| Camada | Responsável | Por quê |
+| --- | --- | --- |
+| Documentos em tempo real | `WorkspaceProvider` + `DataAdapter` (`onSnapshot`) | Um canal *push* já entrega os dados mais frescos do que qualquer cache com revalidação conseguiria |
+| Leituras sob demanda | **TanStack Query** ([`query-provider.tsx`](../src/lib/query/query-provider.tsx)) | Histórico de versões, árvore do Notion e perfil são buscados por ação explícita do usuário; aí cache, `retry` e invalidação valem a pena |
+| Estado de interface | **Zustand** ([`ui-store.ts`](../src/lib/store/ui-store.ts)) | Geometria da barra lateral, modo foco, layout da lista e tipografia não pertencem a servidor nenhum |
+
+O slice durável do Zustand é persistido em `localStorage` e espelhado em
+`users/{uid}.preferences` por [`use-user-profile.ts`](../src/hooks/use-user-profile.ts),
+então trocar de dispositivo preserva o layout. A reidratação é adiada para
+depois da montagem (`skipHydration`) porque um layout persistido divergindo do
+HTML pré-renderizado quebraria a hidratação do React.
+
 ## 2. SDK do Firebase
 
 **Cliente** ([`lib/firebase/client.ts`](../src/lib/firebase/client.ts)) —

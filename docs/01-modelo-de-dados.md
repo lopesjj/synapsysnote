@@ -9,7 +9,12 @@ Arquivos: [`firestore.rules`](../firestore.rules) ·
 
 ```
 /users/{userId}
-    uid, email, displayName, photoURL, defaultWorkspaceId, createdAt
+    uid, email, displayName, photoURL, providers[]
+    preferences { theme, sidebarCollapsed, sidebarWidth, notesLayout,
+                  notesSort, notesSortDirection, notesDensity,
+                  editorFontId, editorFontSize, editorWidth,
+                  showSaveIndicator }
+    createdAt, updatedAt, lastSeenAt
 
 /workspaces/{workspaceId}
     name, emoji, ownerId, memberIds[], plan, createdAt, updatedAt
@@ -29,7 +34,8 @@ Arquivos: [`firestore.rules`](../firestore.rules) ·
       tags[], outgoingLinks[], backlinks[]
       embedding (vector<768>), embeddingUpdatedAt
       favorite, archived, deletedAt
-      notionPageId, notionUrl, importJobId       ← proveniência
+      notionPageId, notionUrl, importJobId       ← proveniência (só Admin SDK)
+      importSource                               ← "notion-zip" (import no cliente)
       createdBy, updatedBy, createdAt, updatedAt, order
 
     /versions/{versionId}
