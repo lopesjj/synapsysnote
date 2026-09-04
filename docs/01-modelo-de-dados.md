@@ -115,9 +115,14 @@ Pontos não óbvios das regras:
   Cloud Function no cadastro.
 - **Exclusão de página é soft delete.** `delete` direto exige papel de admin; o
   fluxo normal grava `deletedAt`. É o que garante a lixeira de 30 dias.
-- **Jobs de importação.** O cliente só pode criar um job com contadores zerados e
-  status `pending`, e a única transição que pode aplicar é `canceled`. Todo o
-  progresso pertence ao worker — nenhuma UI consegue fabricar "100% concluído".
+- **Jobs de importação.** `create` é negado ao cliente — o job nasce no Admin SDK
+  (rota Next / Cloud Function). A única transição que o cliente pode aplicar é
+  `canceled` (e só enquanto o status ainda é `pending` / `discovering` /
+  `running`). Todo o progresso pertence ao worker — nenhuma UI consegue fabricar
+  "100% concluído".
+- **Importação `.zip` no cliente.** Páginas entram com `importSource: "notion-zip"`
+  e `notionPageId` / `importJobId` nulos. As regras recusam qualquer tentativa do
+  cliente de preencher os campos de proveniência do pipeline OAuth.
 - **Integrações.** `allow write: if false` no documento e negação total na
   subcoleção `secure`. O status de conexão é legível (para renderizar a tela),
   o token não existe do lado do cliente.
@@ -130,7 +135,7 @@ Mesma primitiva de membro, lida via `firestore.get()`. Além disso:
 
 | Prefixo | Escrita | Limite | Tipos |
 | --- | --- | --- | --- |
-| `workspaces/{ws}/uploads/{pageId}/` | membro editor | 50 MB | imagens, vídeo, áudio, texto, PDF, Office |
+| `workspaces/{ws}/uploads/{pageId}/` | membro editor | 50 MB | imagens, vídeo, áudio, texto, PDF, Office, zip (inclui `uploads/zip-import/`) |
 | `workspaces/{ws}/audio/{pageId}/` | membro editor | 200 MB | `audio/*` |
 | `workspaces/{ws}/notion/{jobId}/` | **negada** (só Admin SDK) | — | qualquer (rehospedagem) |
 | `workspaces/{ws}/exports/` | **negada** | — | gerado por função |

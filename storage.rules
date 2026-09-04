@@ -1,12 +1,18 @@
 rules_version = '2';
 
 // =============================================================================
-// Synapsys Note — Cloud Storage
+// Synapsys Note — Cloud Storage  (projeto: synapsysnote)
 //
-// Substitui as regras antigas de users/{userId}/images|pdfs.
-// Caminhos reais:
+// COPIE ESTE ARQUIVO INTEIRO em:
+//   Firebase Console → Storage → Regras → Publicar
+//
+// Ou publique pelo CLI (na raiz do repo):
+//   firebase deploy --only storage
+//
+// Caminhos:
 //
 //   workspaces/{ws}/uploads/{pageId}/{file}   anexos do editor
+//   workspaces/{ws}/uploads/zip-import/{file} mídia da importação .zip (cliente)
 //   workspaces/{ws}/audio/{pageId}/{file}     notas de voz
 //   workspaces/{ws}/notion/{jobId}/{file}     mídia rehospedada (só Admin)
 //   workspaces/{ws}/exports/{file}            arquivos gerados (só Admin)
@@ -61,6 +67,8 @@ service firebase.storage {
            ];
     }
 
+    // Inclui `uploads/zip-import/...` — o importador .zip usa "zip-import"
+    // no lugar de pageId porque a página ainda não existe.
     match /workspaces/{workspaceId}/uploads/{pageId}/{fileName} {
       allow read: if isMember(workspaceId);
       allow create, update: if canWrite(workspaceId)
@@ -80,7 +88,7 @@ service firebase.storage {
       allow delete: if canWrite(workspaceId);
     }
 
-    // Worker de importação (Admin SDK). Cliente só lê.
+    // Worker de importação OAuth (Admin SDK). Cliente só lê.
     match /workspaces/{workspaceId}/notion/{jobId}/{fileName} {
       allow read: if isMember(workspaceId);
       allow write: if false;

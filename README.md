@@ -125,6 +125,7 @@ O roteiro pedido está detalhado em `docs/`:
 | 5 | [`docs/05-editor.md`](docs/05-editor.md) | Extensões do TipTap, serialização e autosave |
 | 6 | [`docs/06-componentes-ui.md`](docs/06-componentes-ui.md) | Design system, wizard, sidebar, palette, tabela e kanban |
 | 7 | [`docs/07-setup-e-deploy.md`](docs/07-setup-e-deploy.md) | Passo a passo de configuração e deploy |
+| 8 | [`docs/08-firebase-console.md`](docs/08-firebase-console.md) | `firebaseConfig` + regras de Firestore/Storage para copiar e colar |
 
 ---
 
@@ -132,12 +133,13 @@ O roteiro pedido está detalhado em `docs/`:
 
 ```
 .
+├── .firebaserc                  # projeto padrão: synapsysnote
 ├── firebase.json                # rules, indexes, functions, emuladores
 ├── firestore.rules              # ETAPA 1 — autorização por membro/role
 ├── firestore.indexes.json       # índices compostos + índice vetorial (768d)
 ├── storage.rules                # ETAPA 1 — uploads, áudio, mídia do Notion
-├── .env.example
-├── docs/                        # roteiro técnico (etapas 1 a 7)
+├── .env.example                 # Web SDK do projeto synapsysnote já preenchido
+├── docs/                        # roteiro técnico (etapas 1 a 8)
 ├── functions/                   # Cloud Functions (Node 20 + TypeScript)
 │   └── src/
 │       ├── index.ts             # exportação e opções globais
@@ -200,20 +202,24 @@ O roteiro pedido está detalhado em `docs/`:
 
 ### 1. Firebase
 
+O projeto **`synapsysnote`** já está associado (`.firebaserc`) e o Web SDK
+público já entra como fallback em `src/lib/firebase/config.ts`. Copie
+`.env.example` → `.env.local` ou deixe o fallback.
+
 ```bash
 npm install -g firebase-tools
 firebase login
-firebase use --add            # selecione seu projeto
+firebase use synapsysnote
 ```
 
-No console do Firebase:
+No console (https://console.firebase.google.com/project/synapsysnote):
 
-- **Authentication** → habilite *Google* e *E-mail/senha*.
-- **Firestore** → crie o banco em modo produção.
-- **Storage** → crie o bucket padrão.
-- **Configurações → Seus apps → Web** → copie as chaves para `.env.local`.
-- **Configurações → Contas de serviço** → gere a chave privada e cole o JSON
-  inteiro (uma linha) em `FIREBASE_SERVICE_ACCOUNT_JSON`.
+- **Authentication** → habilite *E-mail/senha*, *Google* e *GitHub*.
+- **Firestore** → crie o banco em modo produção e cole [`firestore.rules`](firestore.rules).
+- **Storage** → crie o bucket `synapsysnote.firebasestorage.app` e cole [`storage.rules`](storage.rules).
+- Texto pronto para colar: [`docs/08-firebase-console.md`](docs/08-firebase-console.md).
+- **Contas de serviço** → gere a chave privada e cole o JSON em uma linha em
+  `FIREBASE_SERVICE_ACCOUNT_JSON` (só necessário para Notion OAuth / Admin).
 
 Publique regras e índices:
 

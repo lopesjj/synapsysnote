@@ -1,29 +1,47 @@
-rules_version = '2';
+# Firebase Console — copiar e colar
 
-// =============================================================================
-// Synapsys Note — Firestore  (projeto: synapsysnote)
-//
-// COPIE ESTE ARQUIVO INTEIRO em:
-//   Firebase Console → Firestore Database → Regras → Publicar
-//
-// Ou publique pelo CLI (na raiz do repo):
-//   firebase deploy --only firestore:rules
-//
-// Modelo:
-//
-//   /users/{userId}
-//   /workspaces/{workspaceId}
-//     /members/{uid}
-//     /notebooks/{id}
-//     /pages/{id}/versions/{id}
-//     /databases/{id}/rows/{id}
-//     /attachments/{id}
-//     /import_jobs/{id}/logs/{id}          ← create só Admin SDK
-//     /integrations/{id}/secure/{id}       ← token Notion, só Admin SDK
-//
-// O Admin SDK (bootstrap, OAuth Notion, worker de importação, OCR) ignora
-// estas regras. O cliente só lê o que for membro e só escreve conteúdo.
-// =============================================================================
+Projeto: **`synapsysnote`**
+Console: https://console.firebase.google.com/project/synapsysnote
+
+Os arquivos canônicos são [`firestore.rules`](../firestore.rules) e
+[`storage.rules`](../storage.rules). O texto abaixo é o mesmo conteúdo, pronto
+para colar no Console se você não tiver o CLI (`firebase deploy`).
+
+## 1. Configuração do app Web
+
+Já está no código (`src/lib/firebase/config.ts`) e no `.env.example`:
+
+```js
+const firebaseConfig = {
+  apiKey: "AIzaSyCohAmoFuvjw-OXao3a_9yn0b-H22reprw",
+  authDomain: "synapsysnote.firebaseapp.com",
+  projectId: "synapsysnote",
+  storageBucket: "synapsysnote.firebasestorage.app",
+  messagingSenderId: "391599702512",
+  appId: "1:391599702512:web:f1948d41d3f63ad340dd35",
+  measurementId: "G-2ED1GY38CC",
+};
+```
+
+Essas chaves são públicas por desenho. Quem protege o projeto são as regras
+abaixo + os provedores de Auth + *Authorized domains*.
+
+## 2. Authentication
+
+1. Authentication → Sign-in method → habilite:
+   - **E-mail/senha**
+   - **Google**
+   - **GitHub** (OAuth app no GitHub com callback `https://synapsysnote.firebaseapp.com/__/auth/handler`)
+2. Settings → Authorized domains: `localhost`, `synapsysnote.firebaseapp.com`,
+   e o domínio de produção (Vercel).
+3. O app recusa OAuth de e-mails que ainda não existem no Auth (cadastro
+   prévio obrigatório). E-mail/senha continua sendo o caminho de primeiro
+   cadastro.
+
+## 3. Firestore — cole em Database → Regras
+
+```
+rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -68,7 +86,6 @@ service cloud.firestore {
       return !(field in incoming()) || incoming()[field] == existing()[field];
     }
 
-    // OCR, transcrição e vetores: só Cloud Functions / Admin SDK.
     function hasNoServerFields() {
       return !incoming().keys().hasAny([
         'embedding', 'embeddingUpdatedAt', 'extractedOCRText', 'transcriptText'
@@ -80,16 +97,12 @@ service cloud.firestore {
         && (!('importJobId' in incoming()) || incoming().importJobId == null);
     }
 
-    // Importação .zip no cliente marca a origem; o pipeline OAuth usa
-    // notionPageId/importJobId (só Admin SDK).
     function validImportSource() {
       return !('importSource' in incoming())
         || incoming().importSource == null
         || incoming().importSource == 'notion-zip';
     }
 
-    // Workspace pessoal do usuário (fallback se o Admin não estiver configurado).
-    // Workspaces compartilhados só o Admin SDK cria.
     function isPersonalWorkspace(workspaceId) {
       return workspaceId == 'ws_' + request.auth.uid;
     }
@@ -103,7 +116,6 @@ service cloud.firestore {
     }
 
     match /workspaces/{workspaceId} {
-      // get: membro (subcoleção) ou listado em memberIds (consultas).
       allow get: if isSignedIn() && (
         request.auth.uid in resource.data.memberIds
         || isMember(workspaceId)
@@ -126,8 +138,6 @@ service cloud.firestore {
       match /members/{userId} {
         allow read: if isMember(workspaceId);
 
-        // Primeiro membro: o dono se registra depois de criar o workspace.
-        // Depois só admin/owner convida.
         allow create: if isSignedIn() && (
           (
             request.auth.uid == userId
@@ -175,7 +185,6 @@ service cloud.firestore {
           && unchanged('notionPageId')
           && unchanged('importJobId');
 
-        // Hard delete só admin; o fluxo normal grava deletedAt (update).
         allow delete: if isAdmin(workspaceId);
 
         match /versions/{versionId} {
@@ -214,8 +223,6 @@ service cloud.firestore {
 
       match /import_jobs/{jobId} {
         allow read: if isMember(workspaceId);
-
-        // Enfileirar e atualizar progresso: só o worker (Admin SDK / API Next).
         allow create: if false;
 
         allow update: if canWrite(workspaceId)
@@ -246,3 +253,121 @@ service cloud.firestore {
     }
   }
 }
+```
+
+## 4. Storage — cole em Storage → Regras
+
+```
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function memberDoc(workspaceId) {
+      return firestore.get(
+        /databases/(default)/documents/workspaces/$(workspaceId)/members/$(request.auth.uid)
+      );
+    }
+
+    function isMember(workspaceId) {
+      return isSignedIn()
+        && firestore.exists(
+          /databases/(default)/documents/workspaces/$(workspaceId)/members/$(request.auth.uid)
+        );
+    }
+
+    function canWrite(workspaceId) {
+      return isMember(workspaceId)
+        && memberDoc(workspaceId).data.role in ['owner', 'admin', 'editor'];
+    }
+
+    function withinSizeLimit(maxMb) {
+      return request.resource.size < maxMb * 1024 * 1024;
+    }
+
+    function isAllowedUploadType() {
+      return request.resource.contentType.matches('image/.*')
+        || request.resource.contentType.matches('video/.*')
+        || request.resource.contentType.matches('audio/.*')
+        || request.resource.contentType.matches('text/.*')
+        || request.resource.contentType in [
+             'application/pdf',
+             'application/json',
+             'application/zip',
+             'application/octet-stream',
+             'application/msword',
+             'application/vnd.ms-excel',
+             'application/vnd.ms-powerpoint',
+             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+             'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+           ];
+    }
+
+    match /workspaces/{workspaceId}/uploads/{pageId}/{fileName} {
+      allow read: if isMember(workspaceId);
+      allow create, update: if canWrite(workspaceId)
+        && withinSizeLimit(50)
+        && isAllowedUploadType();
+      allow delete: if canWrite(workspaceId);
+    }
+
+    match /workspaces/{workspaceId}/audio/{pageId}/{fileName} {
+      allow read: if isMember(workspaceId);
+      allow create, update: if canWrite(workspaceId)
+        && withinSizeLimit(200)
+        && (
+          request.resource.contentType.matches('audio/.*')
+          || request.resource.contentType == 'video/webm'
+        );
+      allow delete: if canWrite(workspaceId);
+    }
+
+    match /workspaces/{workspaceId}/notion/{jobId}/{fileName} {
+      allow read: if isMember(workspaceId);
+      allow write: if false;
+    }
+
+    match /workspaces/{workspaceId}/exports/{fileName} {
+      allow read: if isMember(workspaceId);
+      allow write: if false;
+    }
+
+    match /users/{userId}/{fileName} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.auth.uid == userId
+        && withinSizeLimit(5)
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+```
+
+## 5. O que as regras garantem
+
+| Quem | Pode |
+| --- | --- |
+| Visitante anônimo | nada |
+| Usuário autenticado | ler/escrever só `users/{seuUid}`; criar o workspace pessoal `ws_{uid}` |
+| Membro `viewer` | ler o workspace e os arquivos |
+| Membro `editor` / `admin` / `owner` | criar páginas, cadernos, anexos, importar `.zip` |
+| Cliente | **não** cria job OAuth, **não** grava token Notion, **não** escreve OCR / embedding / `notionPageId` |
+| Admin SDK (Functions / Next) | tudo — as regras não se aplicam |
+
+## 6. Publicar pelo CLI (alternativa ao Console)
+
+```bash
+firebase login
+firebase use synapsysnote
+npm run deploy:rules
+```

@@ -172,7 +172,7 @@ function IntegrationsBody() {
           description={
             mode === "firestore"
               ? "Sincronização em tempo real com cache offline persistente."
-              : "Preencha NEXT_PUBLIC_FIREBASE_* para ativar."
+              : "Entre com uma conta (não o modo convidado) para usar o projeto synapsysnote."
           }
           active={mode === "firestore"}
         />

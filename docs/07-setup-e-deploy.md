@@ -20,39 +20,50 @@ Sem preencher nada, `npm run dev` já sobe o app em modo demonstração local.
 
 ## 3. Firebase
 
+Projeto já associado neste repo: **`synapsysnote`** (`.firebaserc`).
+
 ```bash
 firebase login
-firebase use --add        # associe o projeto
+firebase use synapsysnote
 ```
 
-No console:
+O Web SDK público já está em `.env.example` e em `src/lib/firebase/config.ts`.
+Copie `.env.example` → `.env.local` (ou deixe o fallback do código). Sem
+`FIREBASE_SERVICE_ACCOUNT_JSON` o app ainda sobe: o bootstrap do workspace
+pessoal `ws_{uid}` é permitido pelas regras.
+
+No console (https://console.firebase.google.com/project/synapsysnote):
 
 | Serviço | Ação |
 | --- | --- |
-| Authentication | habilite **Google** e **E-mail/senha**; em produção, adicione o domínio em *Authorized domains* |
-| Firestore | crie o banco (modo produção) |
-| Storage | crie o bucket padrão |
-| Configurações → Seus apps → Web | copie as chaves para `NEXT_PUBLIC_FIREBASE_*` |
-| Configurações → Contas de serviço | gere a chave privada; cole o JSON em uma linha em `FIREBASE_SERVICE_ACCOUNT_JSON` |
+| Authentication | habilite **E-mail/senha**, **Google** e **GitHub**. Em *Authorized domains* deixe `localhost` e, em produção, o domínio da Vercel |
+| Firestore | crie o banco em **modo produção** (região `nam5` / `us-central` de preferência) |
+| Storage | crie o bucket padrão `synapsysnote.firebasestorage.app` |
+| Regras | cole [`firestore.rules`](../firestore.rules) e [`storage.rules`](../storage.rules) — ver [guia de copiar e colar](08-firebase-console.md) |
+| Contas de serviço | gere a chave privada; cole o JSON em uma linha em `FIREBASE_SERVICE_ACCOUNT_JSON` (só necessário para Notion OAuth / Admin) |
 
 Publique regras e índices:
 
 ```bash
 firebase deploy --only firestore:rules,firestore:indexes,storage
+# equivalente: npm run deploy:rules
 ```
 
 ### Workspace inicial
 
-O app lê `NEXT_PUBLIC_DEFAULT_WORKSPACE_ID` (padrão `primary`). Crie o documento
-uma vez, com o dono já registrado como membro — é o que as regras de bootstrap
-esperam:
+Por padrão o app **não** usa um workspace compartilhado `primary`. Cada conta
+ganha `ws_{uid}` na primeira sessão (via `/api/workspace/bootstrap` ou, se o
+Admin não estiver configurado, via `setDoc` no cliente — as regras permitem).
+
+Só defina `NEXT_PUBLIC_DEFAULT_WORKSPACE_ID` se quiser um workspace compartilhado
+entre contas; nesse caso crie o documento com o Admin SDK:
 
 ```js
 // Console do Firestore ou script com o Admin SDK
-/workspaces/primary
+/workspaces/<id-fixo>
   { name: "Meu workspace", ownerId: "<uid>", memberIds: ["<uid>"], plan: "free" }
 
-/workspaces/primary/members/<uid>
+/workspaces/<id-fixo>/members/<uid>
   { userId: "<uid>", email: "…", displayName: "…", role: "owner", joinedAt: <ts> }
 ```
 

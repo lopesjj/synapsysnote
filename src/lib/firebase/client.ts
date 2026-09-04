@@ -43,7 +43,7 @@ let functions: Functions | null = null;
 export function getFirebaseApp(): FirebaseApp {
   if (!isFirebaseConfigured()) {
     throw new Error(
-      "Firebase is not configured. Copy .env.example to .env.local and fill in NEXT_PUBLIC_FIREBASE_*."
+      "Firebase is not configured. Unset NEXT_PUBLIC_USE_LOCAL_DEMO or copy .env.example to .env.local."
     );
   }
   if (!app) {
