@@ -316,9 +316,8 @@ function SidebarResizer() {
 function DemoBanner() {
   return (
     <div className="border-b border-[var(--border)] bg-[var(--accent-soft)] px-4 py-1.5 text-[11.5px] text-[var(--accent)]">
-      Modo demonstração local: os dados ficam no seu navegador. Configure
-      <code className="mx-1 font-mono">NEXT_PUBLIC_FIREBASE_*</code>
-      e o Firebase Admin para Auth, Firestore, Storage e a importação real do Notion.
+      Modo convidado: os dados desta sessão ficam no navegador. Entre com uma
+      conta para sincronizar no Firebase (projeto <code className="font-mono">synapsysnote</code>).
       <span className="ml-1 text-faint">{isMac() ? "⌘," : "Ctrl ,"} abre as preferências.</span>
     </div>
   );

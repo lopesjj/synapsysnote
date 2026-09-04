@@ -2,9 +2,10 @@
 
 import { ReactRenderer } from "@tiptap/react";
 import type { SuggestionOptions } from "@tiptap/suggestion";
-import tippy, { type Instance as TippyInstance } from "tippy.js";
+import type { Instance as TippyInstance } from "tippy.js";
 import { FileText } from "lucide-react";
 import { SuggestionList, type SuggestionItem, type SuggestionListHandle } from "./suggestion-popup";
+import { ensureSuggestionPopup } from "./suggestion-tippy";
 
 export interface MentionCandidate {
   id: string;
@@ -58,25 +59,23 @@ export function createMentionSuggestion(
             },
             editor: props.editor,
           });
-          if (!props.clientRect) return;
-          popup = tippy(document.body, {
-            getReferenceClientRect: props.clientRect as () => DOMRect,
-            appendTo: () => document.body,
-            content: component.element,
-            showOnCreate: true,
-            interactive: true,
-            trigger: "manual",
-            placement: "bottom-start",
-            offset: [0, 8],
-          });
+          popup = ensureSuggestionPopup(
+            popup,
+            props.clientRect as (() => DOMRect) | null,
+            component.element
+          );
         },
 
         onUpdate: (props) => {
           component?.updateProps({
             items: toItems(props.items as MentionCandidate[], props.command),
           });
-          if (props.clientRect) {
-            popup?.setProps({ getReferenceClientRect: props.clientRect as () => DOMRect });
+          if (component) {
+            popup = ensureSuggestionPopup(
+              popup,
+              props.clientRect as (() => DOMRect) | null,
+              component.element
+            );
           }
         },
 

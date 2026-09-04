@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "katex/dist/katex.min.css";
+@import "tippy.js/dist/tippy.css";
 
 /*
  * Synapsys Note — Design System
@@ -399,4 +400,17 @@
     transparent
   );
   animation: shimmer 1.8s infinite;
+}
+
+/* Tippy is only used to position slash/mention lists; they draw their own chrome. */
+.tippy-box[data-theme~="synapsys"] {
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+}
+.tippy-box[data-theme~="synapsys"] > .tippy-content {
+  padding: 0;
+}
+.tippy-box[data-theme~="synapsys"] > .tippy-arrow {
+  display: none;
 }

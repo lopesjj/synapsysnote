@@ -14,6 +14,7 @@ import { Callout } from "./extensions/callout";
 import { ToggleBlock } from "./extensions/toggle-block";
 import { EquationBlock } from "./extensions/equation-block";
 import { MediaBlock } from "./extensions/media-block";
+import { TableBlock } from "./extensions/table-block";
 import { DragHandle } from "./extensions/drag-handle";
 import { SlashCommand } from "./extensions/slash-command";
 import { createMentionSuggestion, type MentionCandidate } from "./extensions/mention-suggestion";
@@ -81,6 +82,7 @@ export function BlockEditor({
       ToggleBlock,
       EquationBlock,
       MediaBlock,
+      TableBlock,
       DragHandle,
       SlashCommand.configure({ handlers }),
       Mention.configure({

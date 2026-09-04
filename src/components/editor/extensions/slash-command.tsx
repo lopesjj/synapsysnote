@@ -3,7 +3,6 @@
 import { Extension, type Editor, type Range } from "@tiptap/core";
 import Suggestion, { type SuggestionOptions } from "@tiptap/suggestion";
 import { ReactRenderer } from "@tiptap/react";
-import tippy, { type Instance as TippyInstance } from "tippy.js";
 import {
   AudioLines,
   CheckSquare,
@@ -20,9 +19,13 @@ import {
   Paperclip,
   Quote,
   Sigma,
+  Table2,
   Type,
 } from "lucide-react";
 import { SuggestionList, type SuggestionItem, type SuggestionListHandle } from "./suggestion-popup";
+import { ensureSuggestionPopup } from "./suggestion-tippy";
+import { emptyTableGrid } from "./table-block";
+import type { Instance as TippyInstance } from "tippy.js";
 
 /**
  * ETAPA 5 — Slash commands.
@@ -191,6 +194,24 @@ const COMMANDS: CommandDescriptor[] = [
     action: ({ editor, range }) => editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
   },
   {
+    id: "table",
+    title: "Tabela",
+    subtitle: "Grade editável com cabeçalho",
+    group: "Blocos",
+    icon: <Table2 />,
+    keywords: ["tabela", "table", "grade", "planilha"],
+    action: ({ editor, range }) =>
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent({
+          type: "tableBlock",
+          attrs: { rows: emptyTableGrid(3, 3), hasColumnHeader: true },
+        })
+        .run(),
+  },
+  {
     id: "image",
     title: "Imagem ou arquivo",
     subtitle: "OCR automático em imagens e PDFs",
@@ -271,25 +292,23 @@ function buildSuggestion(handlers: SlashCommandHandlers): Omit<SuggestionOptions
             },
             editor: props.editor,
           });
-          if (!props.clientRect) return;
-          popup = tippy(document.body, {
-            getReferenceClientRect: props.clientRect as () => DOMRect,
-            appendTo: () => document.body,
-            content: component.element,
-            showOnCreate: true,
-            interactive: true,
-            trigger: "manual",
-            placement: "bottom-start",
-            offset: [0, 8],
-          });
+          popup = ensureSuggestionPopup(
+            popup,
+            props.clientRect as (() => DOMRect) | null,
+            component.element
+          );
         },
 
         onUpdate: (props) => {
           component?.updateProps({
             items: toItems(props.items as CommandDescriptor[], props.editor, props.range),
           });
-          if (props.clientRect) {
-            popup?.setProps({ getReferenceClientRect: props.clientRect as () => DOMRect });
+          if (component) {
+            popup = ensureSuggestionPopup(
+              popup,
+              props.clientRect as (() => DOMRect) | null,
+              component.element
+            );
           }
         },
 

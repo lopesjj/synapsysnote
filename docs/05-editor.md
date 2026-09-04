@@ -21,7 +21,8 @@ volta; anotações viram marks; menções viram nós `mention`.
 
 | Extensão | Arquivo | O que faz |
 | --- | --- | --- |
-| `SlashCommand` | [`slash-command.tsx`](../src/components/editor/extensions/slash-command.tsx) | palette de 16 comandos ancorada no cursor, filtrada por título e palavras-chave |
+| `SlashCommand` | [`slash-command.tsx`](../src/components/editor/extensions/slash-command.tsx) | palette de 17 comandos ancorada no cursor (Tippy + CSS), filtrada por título e palavras-chave |
+| `TableBlock` | [`table-block.tsx`](../src/components/editor/extensions/table-block.tsx) | grade editável persistida como `AppBlock` `table` |
 | `Mention` | [`mention-suggestion.tsx`](../src/components/editor/extensions/mention-suggestion.tsx) | `@` lista páginas e insere a menção que gera o backlink |
 | `DragHandle` | [`drag-handle.ts`](../src/components/editor/extensions/drag-handle.ts) | alça lateral + botão “+”, plugin ProseMirror próprio |
 | `Callout` | [`callout.tsx`](../src/components/editor/extensions/callout.tsx) | destaque com emoji clicável |
@@ -73,7 +74,7 @@ backlinks da página lê.
 
 **Básico** — texto, título 1, título 2, título 3
 **Listas** — marcadores, numerada, tarefas, toggle
-**Blocos** — callout, citação, código, equação (LaTeX), divisor
+**Blocos** — callout, citação, código, equação (LaTeX), divisor, tabela
 **Mídia** — imagem ou arquivo (dispara OCR), gravar nota de voz, anexar do computador
 
 Os itens de mídia não manipulam o documento diretamente: eles chamam callbacks do

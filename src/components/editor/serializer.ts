@@ -180,18 +180,14 @@ function blockToNode(block: AppBlock): JSONContent | null {
         { type: "text", text: `↳ ${block.props?.title ?? "Página"}`, marks: [{ type: "bold" }] },
       ]);
     case "table":
-      // Rendered as a fenced preview until the native table node ships.
       return {
-        type: "codeBlock",
-        attrs: { language: "markdown" },
-        content: [
-          {
-            type: "text",
-            text: (block.props?.tableRows ?? [])
-              .map((row) => row.map((cell) => cell.map((s) => s.text).join("")).join(" | "))
-              .join("\n"),
-          },
-        ],
+        type: "tableBlock",
+        attrs: {
+          hasColumnHeader: Boolean(block.props?.hasColumnHeader),
+          rows: (block.props?.tableRows ?? []).map((row) =>
+            row.map((cell) => cell.map((span) => span.text).join(""))
+          ),
+        },
       };
     default:
       return paragraph();
@@ -294,6 +290,19 @@ function nodeToBlocks(node: JSONContent): AppBlock[] {
           children: (node.content ?? []).flatMap(nodeToBlocks),
         },
       ];
+    case "tableBlock": {
+      const rows = (node.attrs?.rows as string[][] | undefined) ?? [];
+      return [
+        {
+          id: id(),
+          type: "table",
+          props: {
+            hasColumnHeader: Boolean(node.attrs?.hasColumnHeader),
+            tableRows: rows.map((row) => row.map((cell) => [{ text: cell }])),
+          },
+        },
+      ];
+    }
     case "mediaBlock": {
       const attrs = node.attrs ?? {};
       const mediaType = (attrs.mediaType as BlockType) ?? "file";
@@ -352,6 +361,13 @@ export function blocksToPlainText(blocks: AppBlock[]): string {
     for (const block of list) {
       if (block.richText?.length) out.push(block.richText.map((s) => s.text).join(""));
       if (block.props?.expression) out.push(block.props.expression);
+      if (block.props?.tableRows?.length) {
+        out.push(
+          block.props.tableRows
+            .map((row) => row.map((cell) => cell.map((span) => span.text).join("")).join("\t"))
+            .join("\n")
+        );
+      }
       if (block.media?.name) out.push(block.media.name);
       if (block.children?.length) walk(block.children);
     }
