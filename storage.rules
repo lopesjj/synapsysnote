@@ -1,0 +1,115 @@
+rules_version = '2';
+
+// =============================================================================
+// Synapsys Note — Cloud Storage  (projeto: synapsysnote)
+//
+// COPIE ESTE ARQUIVO INTEIRO em:
+//   Firebase Console → Storage → Regras → Publicar
+//
+// Ou publique pelo CLI (na raiz do repo):
+//   firebase deploy --only storage
+//
+// Caminhos:
+//
+//   workspaces/{ws}/uploads/{pageId}/{file}   anexos do editor
+//   workspaces/{ws}/uploads/zip-import/{file} mídia da importação .zip (cliente)
+//   workspaces/{ws}/audio/{pageId}/{file}     notas de voz
+//   workspaces/{ws}/notion/{jobId}/{file}     mídia rehospedada (só Admin)
+//   workspaces/{ws}/exports/{file}            arquivos gerados (só Admin)
+//   users/{uid}/{file}                        avatar opcional
+// =============================================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function memberDoc(workspaceId) {
+      return firestore.get(
+        /databases/(default)/documents/workspaces/$(workspaceId)/members/$(request.auth.uid)
+      );
+    }
+
+    function isMember(workspaceId) {
+      return isSignedIn()
+        && firestore.exists(
+          /databases/(default)/documents/workspaces/$(workspaceId)/members/$(request.auth.uid)
+        );
+    }
+
+    function canWrite(workspaceId) {
+      return isMember(workspaceId)
+        && memberDoc(workspaceId).data.role in ['owner', 'admin', 'editor'];
+    }
+
+    function withinSizeLimit(maxMb) {
+      return request.resource.size < maxMb * 1024 * 1024;
+    }
+
+    function isAllowedUploadType() {
+      return request.resource.contentType.matches('image/.*')
+        || request.resource.contentType.matches('video/.*')
+        || request.resource.contentType.matches('audio/.*')
+        || request.resource.contentType.matches('text/.*')
+        || request.resource.contentType in [
+             'application/pdf',
+             'application/json',
+             'application/zip',
+             'application/octet-stream',
+             'application/msword',
+             'application/vnd.ms-excel',
+             'application/vnd.ms-powerpoint',
+             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+             'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+           ];
+    }
+
+    // Inclui `uploads/zip-import/...` — o importador .zip usa "zip-import"
+    // no lugar de pageId porque a página ainda não existe.
+    match /workspaces/{workspaceId}/uploads/{pageId}/{fileName} {
+      allow read: if isMember(workspaceId);
+      allow create, update: if canWrite(workspaceId)
+        && withinSizeLimit(50)
+        && isAllowedUploadType();
+      allow delete: if canWrite(workspaceId);
+    }
+
+    match /workspaces/{workspaceId}/audio/{pageId}/{fileName} {
+      allow read: if isMember(workspaceId);
+      allow create, update: if canWrite(workspaceId)
+        && withinSizeLimit(200)
+        && (
+          request.resource.contentType.matches('audio/.*')
+          || request.resource.contentType == 'video/webm'
+        );
+      allow delete: if canWrite(workspaceId);
+    }
+
+    // Worker de importação OAuth (Admin SDK). Cliente só lê.
+    match /workspaces/{workspaceId}/notion/{jobId}/{fileName} {
+      allow read: if isMember(workspaceId);
+      allow write: if false;
+    }
+
+    match /workspaces/{workspaceId}/exports/{fileName} {
+      allow read: if isMember(workspaceId);
+      allow write: if false;
+    }
+
+    match /users/{userId}/{fileName} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.auth.uid == userId
+        && withinSizeLimit(5)
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
