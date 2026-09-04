@@ -475,6 +475,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                           <Link
                             key={database.id}
                             href={`/app/db/${database.id}`}
+                            draggable={false}
                             className={cn(
                               "flex items-center gap-1.5 rounded-[var(--radius-xs)] py-1 pl-5 pr-2 text-[12.5px] transition hover:bg-[var(--surface-hover)]",
                               pathname === `/app/db/${database.id}`
@@ -784,6 +785,10 @@ function SortablePageRow({
       </button>
       <Link
         href={`/app/p/${node.page.id}`}
+        // Anchors are natively draggable, and the browser's link drag hijacks
+        // the gesture: a drag that starts slightly off the grip ends up opening
+        // the page instead of reordering it.
+        draggable={false}
         className={cn(
           "flex min-w-0 flex-1 items-center gap-1.5 py-1 text-[12.5px]",
           active ? "font-medium text-ink" : "text-muted group-hover:text-ink"
