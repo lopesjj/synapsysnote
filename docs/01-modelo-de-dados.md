@@ -111,8 +111,10 @@ Pontos não óbvios das regras:
 
 - **Bootstrap do workspace.** Quem cria precisa se declarar `ownerId` e ser o
   único item de `memberIds`; a criação do próprio documento de membro exige que o
-  workspace já aponte para ele como dono. Isso fecha o ciclo sem precisar de uma
-  Cloud Function no cadastro.
+  workspace já aponte para ele como dono. O `get` de um workspace que ainda não
+  existe só é permitido no id pessoal `ws_{uid}` — sem isso o cliente recebe
+  `permission-denied` ao checar se deve criar, e os `onSnapshot` disparam em
+  loop. Isso fecha o ciclo sem precisar de uma Cloud Function no cadastro.
 - **Exclusão de página é soft delete.** `delete` direto exige papel de admin; o
   fluxo normal grava `deletedAt`. É o que garante a lixeira de 30 dias.
 - **Jobs de importação.** `create` é negado ao cliente — o job nasce no Admin SDK

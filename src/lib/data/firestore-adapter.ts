@@ -49,6 +49,12 @@ import type {
 
 const SERVER_OWNED = ["extractedOCRText", "transcriptText", "embedding", "embeddingUpdatedAt"];
 
+function snapshotError(scope: string) {
+  return (error: unknown) => {
+    console.error(`[firestore] ${scope}`, error);
+  };
+}
+
 /** Firestore caps a batch at 500 writes; leave headroom for the notebook docs. */
 const BATCH_LIMIT = 400;
 
@@ -112,38 +118,61 @@ export class FirestoreAdapter implements DataAdapter {
       // Admin may be missing; fall through to a client-side create that the
       // security rules allow for the first owner.
     }
+
+    const db = getDb();
+    const wsRef = doc(db, "workspaces", this.workspaceId);
+    const memberRef = doc(db, "workspaces", this.workspaceId, "members", this.userId);
+    const inboxRef = doc(db, "workspaces", this.workspaceId, "notebooks", "nb_inbox");
+
+    let workspaceExists = false;
     try {
-      const ws = await getDoc(doc(getDb(), "workspaces", this.workspaceId));
-      if (!ws.exists()) {
-        await setDoc(doc(getDb(), "workspaces", this.workspaceId), {
-          id: this.workspaceId,
-          name: "Meu workspace",
-          emoji: "🧠",
-          ownerId: this.userId,
-          memberIds: [this.userId],
-          plan: "free",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        await setDoc(doc(getDb(), "workspaces", this.workspaceId, "members", this.userId), {
-          userId: this.userId,
-          role: "owner",
-          joinedAt: serverTimestamp(),
-        });
-        await setDoc(doc(getDb(), "workspaces", this.workspaceId, "notebooks", "nb_inbox"), {
-          id: "nb_inbox",
-          name: "Caixa de entrada",
-          emoji: "📥",
-          color: "#0E7490",
-          order: 0,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      }
-      this.bootstrapped = true;
-    } catch (error) {
-      console.error("Falha ao provisionar workspace", error);
+      workspaceExists = (await getDoc(wsRef)).exists();
+    } catch {
+      // Older rules denied get on a missing doc (they read resource.data).
+      // Treat that as "not created yet" and try the write.
+      workspaceExists = false;
     }
+
+    if (!workspaceExists) {
+      await setDoc(wsRef, {
+        id: this.workspaceId,
+        name: "Meu workspace",
+        emoji: "🧠",
+        ownerId: this.userId,
+        memberIds: [this.userId],
+        plan: "free",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    // Membership is what every other rule keys off. A workspace created
+    // without this doc leaves every onSnapshot as permission-denied.
+    await setDoc(
+      memberRef,
+      {
+        userId: this.userId,
+        role: "owner",
+        joinedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    await setDoc(
+      inboxRef,
+      {
+        id: "nb_inbox",
+        name: "Caixa de entrada",
+        emoji: "📥",
+        color: "#0E7490",
+        order: 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    this.bootstrapped = true;
   }
 
   private col(name: string) {
@@ -157,23 +186,28 @@ export class FirestoreAdapter implements DataAdapter {
   /* ------------------------------------------------------------ read paths */
 
   subscribeNotebooks(cb: (notebooks: Notebook[]) => void): Unsubscribe {
-    return onSnapshot(query(this.col("notebooks"), orderBy("order", "asc")), (snap) => {
-      cb(
-        snap.docs.map((d) => ({
-          ...(d.data() as Notebook),
-          id: d.id,
-          createdAt: ms(d.data().createdAt),
-          updatedAt: ms(d.data().updatedAt),
-        }))
-      );
-    });
+    return onSnapshot(
+      query(this.col("notebooks"), orderBy("order", "asc")),
+      (snap) => {
+        cb(
+          snap.docs.map((d) => ({
+            ...(d.data() as Notebook),
+            id: d.id,
+            createdAt: ms(d.data().createdAt),
+            updatedAt: ms(d.data().updatedAt),
+          }))
+        );
+      },
+      snapshotError("notebooks")
+    );
   }
 
   subscribePages(cb: (pages: Page[]) => void): Unsubscribe {
     return onSnapshot(
       query(this.col("pages"), orderBy("updatedAt", "desc")),
       { includeMetadataChanges: true },
-      (snap) => cb(snap.docs.map(mapPage))
+      (snap) => cb(snap.docs.map(mapPage)),
+      snapshotError("pages")
     );
   }
 
@@ -241,33 +275,41 @@ export class FirestoreAdapter implements DataAdapter {
   }
 
   subscribeImportJobs(cb: (jobs: ImportJob[]) => void): Unsubscribe {
-    return onSnapshot(query(this.col("import_jobs"), orderBy("createdAt", "desc")), (snap) => {
-      cb(
-        snap.docs.map((d) => ({
-          ...(d.data() as ImportJob),
-          id: d.id,
-          createdAt: ms(d.data().createdAt),
-          updatedAt: ms(d.data().updatedAt),
-          startedAt: d.data().startedAt ? ms(d.data().startedAt) : null,
-          finishedAt: d.data().finishedAt ? ms(d.data().finishedAt) : null,
-          errors: d.data().errors ?? [],
-          items: d.data().items ?? [],
-        }))
-      );
-    });
+    return onSnapshot(
+      query(this.col("import_jobs"), orderBy("createdAt", "desc")),
+      (snap) => {
+        cb(
+          snap.docs.map((d) => ({
+            ...(d.data() as ImportJob),
+            id: d.id,
+            createdAt: ms(d.data().createdAt),
+            updatedAt: ms(d.data().updatedAt),
+            startedAt: d.data().startedAt ? ms(d.data().startedAt) : null,
+            finishedAt: d.data().finishedAt ? ms(d.data().finishedAt) : null,
+            errors: d.data().errors ?? [],
+            items: d.data().items ?? [],
+          }))
+        );
+      },
+      snapshotError("import_jobs")
+    );
   }
 
   subscribeIntegration(cb: (integration: NotionIntegration | null) => void): Unsubscribe {
-    return onSnapshot(this.docRef("integrations", "notion"), (snap) => {
-      if (!snap.exists()) return cb(null);
-      const data = snap.data();
-      cb({
-        ...(data as NotionIntegration),
-        id: "notion",
-        connectedAt: ms(data.connectedAt),
-        lastSyncAt: data.lastSyncAt ? ms(data.lastSyncAt) : null,
-      });
-    });
+    return onSnapshot(
+      this.docRef("integrations", "notion"),
+      (snap) => {
+        if (!snap.exists()) return cb(null);
+        const data = snap.data();
+        cb({
+          ...(data as NotionIntegration),
+          id: "notion",
+          connectedAt: ms(data.connectedAt),
+          lastSyncAt: data.lastSyncAt ? ms(data.lastSyncAt) : null,
+        });
+      },
+      snapshotError("integration")
+    );
   }
 
   /* ------------------------------------------------------------ notebooks */

@@ -117,15 +117,27 @@ service cloud.firestore {
 
     match /workspaces/{workspaceId} {
       allow get: if isSignedIn() && (
-        request.auth.uid in resource.data.memberIds
-        || isMember(workspaceId)
+        (
+          isPersonalWorkspace(workspaceId)
+          && !exists(/databases/$(database)/documents/workspaces/$(workspaceId))
+        )
+        || (
+          exists(/databases/$(database)/documents/workspaces/$(workspaceId))
+          && (
+            request.auth.uid in resource.data.memberIds
+            || request.auth.uid == resource.data.ownerId
+            || isMember(workspaceId)
+          )
+        )
       );
       allow list: if isSignedIn() && request.auth.uid in resource.data.memberIds;
 
       allow create: if isSignedIn()
         && isPersonalWorkspace(workspaceId)
         && incoming().ownerId == request.auth.uid
-        && incoming().memberIds.hasOnly([request.auth.uid])
+        && incoming().memberIds is list
+        && incoming().memberIds.size() == 1
+        && incoming().memberIds[0] == request.auth.uid
         && incoming().name is string
         && incoming().name.size() > 0
         && incoming().name.size() <= 120;
@@ -136,7 +148,8 @@ service cloud.firestore {
       allow delete: if isOwner(workspaceId);
 
       match /members/{userId} {
-        allow read: if isMember(workspaceId);
+        allow read: if isMember(workspaceId)
+          || (isSignedIn() && request.auth.uid == userId && isPersonalWorkspace(workspaceId));
 
         allow create: if isSignedIn() && (
           (
@@ -149,8 +162,15 @@ service cloud.firestore {
           || isAdmin(workspaceId)
         );
 
-        allow update: if isAdmin(workspaceId)
-          && !(existing().role == 'owner' && incoming().role != 'owner');
+        allow update: if (
+          isAdmin(workspaceId)
+          && !(existing().role == 'owner' && incoming().role != 'owner')
+        ) || (
+          isSignedIn()
+          && request.auth.uid == userId
+          && isPersonalWorkspace(workspaceId)
+          && incoming().role == existing().role
+        );
 
         allow delete: if isAdmin(workspaceId) && existing().role != 'owner';
       }

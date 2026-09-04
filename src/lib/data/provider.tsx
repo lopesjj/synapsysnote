@@ -15,6 +15,7 @@ import type {
   NotionIntegration,
   Page,
 } from "@/types/models";
+import { toast } from "sonner";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
 import { useAuth } from "@/hooks/use-auth";
 import type { DataAdapter } from "./adapter";
@@ -84,7 +85,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const unsubs: Array<() => void> = [];
 
     void (async () => {
-      await adapter.ensureWorkspace();
+      try {
+        await adapter.ensureWorkspace();
+      } catch (error) {
+        console.error("ensureWorkspace", error);
+        toast.error(
+          "Não foi possível abrir seu workspace. Publique as regras mais recentes de firestore.rules e recarregue."
+        );
+        if (!cancelled) setLoadedAdapter(adapter);
+        return;
+      }
       if (cancelled) return;
       unsubs.push(
         adapter.subscribeNotebooks(setNotebooks),
