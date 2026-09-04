@@ -1,0 +1,191 @@
+# ETAPA 3 — Pipeline de importação do Notion
+
+Arquivos:
+[`api/notion/authorize`](../src/app/api/notion/authorize/route.ts) ·
+[`api/notion/callback`](../src/app/api/notion/callback/route.ts) ·
+[`api/notion/tree`](../src/app/api/notion/tree/route.ts) ·
+[`api/notion/import`](../src/app/api/notion/import/route.ts) ·
+[`api/notion/disconnect`](../src/app/api/notion/disconnect/route.ts) ·
+[`src/lib/notion/server/`](../src/lib/notion/server/) ·
+[`src/lib/notion/classify-import.ts`](../src/lib/notion/classify-import.ts) ·
+[`functions/src/notion/`](../functions/src/notion/)
+
+O cliente autenticado chama as rotas Next.js. O Admin SDK lê o token
+criptografado e fala com a API do Notion. As Cloud Functions
+(`listNotionTree`, `startNotionImport`, `processNotionImportJob`) continuam
+no repo como rede de segurança: o App Router limita o worker a ~5 minutos;
+o gatilho de documento nas Functions aceita 60.
+
+## 1. OAuth 2.0
+
+```
+Usuário clica "Conectar" (logado no Synapsys)
+   → POST /api/notion/authorize  { workspaceId }  + Bearer Firebase
+        exige membership no workspace
+        gera state = base64({nonce, workspaceId, uid})
+        grava o state inteiro em cookie httpOnly
+        devolve { redirectUrl }
+   → browser → https://api.notion.com/v1/oauth/authorize
+   → cada pessoa entra na PRÓPRIA conta Notion e escolhe páginas
+   → GET /api/notion/callback?code=…&state=…
+        cookie e state têm de ser idênticos (CSRF + anti-tamper)
+        POST /v1/oauth/token  (Basic client_id:client_secret)
+        criptografa access_token com AES-256-GCM
+        grava no workspace daquela conta Synapsys:
+          /workspaces/{id}/integrations/notion          ← metadados (connectedBy = uid)
+          /workspaces/{id}/integrations/notion/secure/token ← ciphertext
+   → 302 /app/integrations?connected=notion
+```
+
+A integração pública no portal do Notion precisa de escopo **Any workspace**.
+Com *Selected workspaces only* só os espaços do desenvolvedor autorizam.
+
+O envelope de criptografia é versionado (`v1.<iv>.<tag>.<ciphertext>`) para
+permitir rotação de chave sem adivinhar o formato — mesma implementação nos dois
+runtimes ([`token-cipher.ts`](../src/lib/crypto/token-cipher.ts) e
+[`functions/src/lib/crypto.ts`](../functions/src/lib/crypto.ts)).
+
+Reconexão é apenas repetir o fluxo (grava por cima). Revogação
+(`disconnectNotion`) marca `connected: false`, grava `revokedAt` e **apaga** o
+documento do token.
+
+## 2. Leitura da árvore
+
+`GET /api/notion/tree` delega a
+[`src/lib/notion/server/tree.ts`](../src/lib/notion/server/tree.ts)
+(espelho em [`functions/src/notion/tree.ts`](../functions/src/notion/tree.ts)).
+`POST /v1/search` devolve uma lista plana com ponteiro `parent`; a hierarquia é
+remontada localmente. Itens cujo pai não foi compartilhado com a integração
+viram raízes em vez de sumirem — o usuário compartilhou aquela página, então
+ela precisa aparecer no wizard.
+
+Toda chamada passa por `throttled()`, que respeita o limite de ~3 req/s da API
+e faz retry exponencial com jitter em 429/409/5xx.
+
+## 3. Conversor recursivo
+
+[`block-converter.ts`](../functions/src/notion/block-converter.ts) —
+`notionBlockToAppBlock(block, ctx, depth)`.
+
+Mapeamento:
+
+| Notion | App |
+| --- | --- |
+| `paragraph`, `heading_1..3`, `quote`, `divider` | equivalentes diretos |
+| `bulleted_list_item`, `numbered_list_item` | listas (agrupadas na serialização do editor) |
+| `to_do` | `todo` com `props.checked` |
+| `toggle` | `toggle` com filhos aninhados |
+| `callout` | `callout` preservando o emoji do ícone |
+| `code` | `code` com `props.language` |
+| `equation` | `equation` (LaTeX → KaTeX) |
+| `image`, `video`, `audio`, `file`, `pdf` | bloco de mídia **após rehospedagem** |
+| `bookmark`, `embed`, `link_preview` | `bookmark` com URL e título |
+| `table` + `table_row` | `table` com `props.tableRows` |
+| `child_page`, `child_database` | referência resolvida para o id local |
+| `column_list`, `column`, `synced_block` | achatados (os filhos sobem um nível) |
+| `table_of_contents`, `breadcrumb` | descartados |
+| desconhecido | `unsupported` com aviso legível — nada é perdido em silêncio |
+
+O rich text preserva negrito, itálico, sublinhado, tachado, código, cor e link.
+Menções de página viram `mention` apontando para o **id local** quando a página
+já foi importada (via `resolvePageLink`), o que reconstrói os links internos.
+
+Proteções: profundidade máxima de 12 níveis (blocos sincronizados podem formar
+ciclos) e paginação completa de `blocks.children.list`.
+
+## 4. Bases de dados
+
+[`property-mapper.ts`](../functions/src/notion/property-mapper.ts)
+
+| Notion | App |
+| --- | --- |
+| `title` | `title` |
+| `rich_text` | `text` |
+| `number` | `number` |
+| `select`, `status` | `select` (opções e cores convertidas) |
+| `multi_select` | `multi_select` |
+| `date` | `date` |
+| `checkbox` | `checkbox` |
+| `url`, `email`, `phone_number` | `url`, `email`, `phone` |
+| `people` | `person` |
+| `files` | `files` — **URLs rehospedadas** |
+| `relation` | `relation` (ids preservados) |
+| `formula`, `rollup` | achatados para texto/número (sem equivalente local) |
+| `created_time`, `last_edited_time` | somente leitura |
+
+Toda base importada nasce com duas visualizações: Tabela e Kanban (agrupado pela
+primeira propriedade de seleção encontrada). As linhas são gravadas em lotes de
+até 400 escritas, abaixo do teto de 500 do Firestore.
+
+## 5. Pipeline de mídia — o ponto crítico
+
+[`media-pipeline.ts`](../functions/src/notion/media-pipeline.ts)
+
+A API do Notion entrega arquivos como **URLs presigned do S3 que expiram em ~1
+hora**. Persistir esses links produz uma base inteira de imagens quebradas no dia
+seguinte. Por isso, para cada arquivo:
+
+1. `fetch(url)` com `redirect: follow`;
+2. `pipeline(response.body → contador → file.createWriteStream())` — streaming
+   puro, memória constante mesmo em vídeos grandes;
+3. metadados com `firebaseStorageDownloadTokens` (URL permanente sem expiração)
+   e `cacheControl: immutable`;
+4. o bloco é reescrito com `url`, `storagePath`, `mimeType` e `sizeBytes`;
+5. imagens e PDFs saem marcados como `pending: true` — o gatilho de OCR limpa
+   essa flag quando o texto chega.
+
+Limite configurável por `IMPORT_MAX_FILE_BYTES` (padrão 250 MB), aplicado tanto
+pelo `content-length` quanto durante o stream.
+
+## 6. Classificação: página, caderno ou nota
+
+[`classify-import.ts`](../src/lib/notion/classify-import.ts) — compartilhado
+pelo worker OAuth e pelo importador `.zip`.
+
+Um item do Notion com filhos e **sem** corpo substantivo (só `child_page`,
+divisores, sumário, breadcrumb) vira **notebook**: raiz → página na UI,
+aninhado → caderno. Uma folha, ou qualquer coisa com texto, mídia, código,
+tabela ou equação, vira **nota**. Bases / CSV nunca viram caderno.
+
+`resolveImportPlacement` sobe os pais já classificados e pousa a nota no
+caderno mais próximo, aninhando só sob outra nota. É o que impede a sidebar
+de encher de “notas vazias” que no Notion eram só pastas.
+
+## 7. Worker em background
+
+Caminho principal — rotas Next.js:
+
+```
+cliente  POST /api/notion/import
+             └─ cria /workspaces/{ws}/import_jobs/{jobId}  status=pending
+             └─ after(() => runNotionImportJob)            (até ~5 min)
+             └─ PUT  /api/notion/import  { jobId }         backup se after() falhar
+                        status=discovering  → lê a árvore
+                        status=running      → classifica → converte → rehospeda
+                                              grava página / caderno / nota / base
+                        reconstrói backlinks
+                        status=completed | completed_with_errors | failed
+```
+
+Rede de segurança — Cloud Function `processNotionImportJob` (60 min, 1 GiB)
+no mesmo documento. A implementação mora em
+[`src/lib/notion/server/run-import.ts`](../src/lib/notion/server/run-import.ts)
+e o espelho em [`functions/src/notion/import-job.ts`](../functions/src/notion/import-job.ts).
+
+Por que o progresso mora no documento e não na resposta HTTP: importar milhares
+de itens não cabe no tempo de uma requisição, e o cliente não pode ficar preso.
+
+Detalhes que importam:
+
+- **Progresso a cada item.** `ProgressReporter` usa `FieldValue.increment` nos
+  contadores (correto sob concorrência) e atualiza `currentStep` com texto legível.
+  O wizard só escuta o documento.
+- **Falha isolada.** Um item quebrado vira uma entrada em `errors[]` e o job
+  segue; ao final, o status é `completed_with_errors`.
+- **Cancelamento cooperativo.** O cliente só pode gravar `status: 'canceled'`; o
+  worker verifica antes de cada item.
+- **Idempotência.** Páginas são buscadas por `notionPageId` e bases por
+  `notionDatabaseId`; reimportar atualiza no lugar em vez de duplicar.
+- **Hierarquia.** A ordem é *depth-first*. O mapa de papéis (notebook / page /
+  database) + `Map<notionId, appId>` alimenta `parentId` do caderno,
+  `notebookId` / `parentPageId` da nota e a reescrita de links internos.

@@ -1,0 +1,41 @@
+export const TEXT_COLORS = [
+  { label: "Padrão", value: null },
+  { label: "Cinza", value: "#9CA3AF" },
+  { label: "Grafite", value: "#4B5563" },
+  { label: "Marrom", value: "#92400E" },
+  { label: "Laranja", value: "#EA580C" },
+  { label: "Âmbar", value: "#D97706" },
+  { label: "Amarelo", value: "#CA8A04" },
+  { label: "Lima", value: "#65A30D" },
+  { label: "Verde", value: "#059669" },
+  { label: "Teal", value: "#0D9488" },
+  { label: "Ciano", value: "#0891B2" },
+  { label: "Azul", value: "#2563EB" },
+  { label: "Índigo", value: "#4F46E5" },
+  { label: "Violeta", value: "#7C3AED" },
+  { label: "Roxo", value: "#9333EA" },
+  { label: "Magenta", value: "#C026D3" },
+  { label: "Rosa", value: "#DB2777" },
+  { label: "Vermelho", value: "#DC2626" },
+] as const;
+
+export const HIGHLIGHT_COLORS = [
+  { label: "Sem marca", value: null },
+  { label: "Cinza", value: "#E5E7EB" },
+  { label: "Marrom", value: "#E7D5C5" },
+  { label: "Laranja", value: "#FED7AA" },
+  { label: "Amarelo", value: "#FDE68A" },
+  { label: "Lima", value: "#D9F99D" },
+  { label: "Verde", value: "#BBF7D0" },
+  { label: "Teal", value: "#99F6E4" },
+  { label: "Ciano", value: "#A5F3FC" },
+  { label: "Azul", value: "#BFDBFE" },
+  { label: "Índigo", value: "#C7D2FE" },
+  { label: "Violeta", value: "#DDD6FE" },
+  { label: "Roxo", value: "#E9D5FF" },
+  { label: "Magenta", value: "#F5D0FE" },
+  { label: "Rosa", value: "#FECDD3" },
+  { label: "Vermelho", value: "#FECACA" },
+] as const;
+
+export type PaletteColor = { label: string; value: string | null };

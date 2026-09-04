@@ -1,0 +1,71 @@
+import { randomBytes } from "node:crypto";
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { requireWorkspaceEditor } from "@/lib/api/session";
+import { jsonError } from "@/lib/api/errors";
+import { encodeOauthState, NOTION_OAUTH_COOKIE } from "@/lib/notion/server/oauth";
+
+export const runtime = "nodejs";
+
+/**
+ * POST /api/notion/authorize
+ *
+ * Starts OAuth for the signed-in Synapsys user. The Notion token that comes
+ * back is stored on *their* workspace — never on a shared developer token.
+ * GET is rejected so a bookmark cannot start a bind without a Firebase session.
+ */
+export async function POST(request: Request) {
+  try {
+    const body = (await request.json().catch(() => ({}))) as { workspaceId?: string };
+    if (!body.workspaceId) {
+      return Response.json({ error: "workspaceId é obrigatório" }, { status: 400 });
+    }
+
+    const user = await requireWorkspaceEditor(request, body.workspaceId);
+    const clientId = process.env.NOTION_CLIENT_ID;
+    const origin = new URL(request.url).origin;
+    const redirectUri = process.env.NOTION_REDIRECT_URI ?? `${origin}/api/notion/callback`;
+
+    if (!clientId) {
+      return Response.json(
+        { error: "NOTION_CLIENT_ID não configurado. Veja o README (ETAPA 7)." },
+        { status: 503 }
+      );
+    }
+
+    const state = encodeOauthState({
+      nonce: randomBytes(16).toString("hex"),
+      workspaceId: body.workspaceId,
+      uid: user.uid,
+    });
+
+    const authorizeUrl = new URL("https://api.notion.com/v1/oauth/authorize");
+    authorizeUrl.searchParams.set("client_id", clientId);
+    authorizeUrl.searchParams.set("response_type", "code");
+    authorizeUrl.searchParams.set("owner", "user");
+    authorizeUrl.searchParams.set("redirect_uri", redirectUri);
+    authorizeUrl.searchParams.set("state", state);
+
+    const jar = await cookies();
+    jar.set(NOTION_OAUTH_COOKIE, state, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 600,
+    });
+
+    return Response.json({ redirectUrl: authorizeUrl.toString() });
+  } catch (error) {
+    return jsonError(error);
+  }
+}
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  return NextResponse.redirect(
+    `${url.origin}/app/integrations?error=${encodeURIComponent(
+      "Conecte o Notion pelo botão no app, com a sua conta Synapsys."
+    )}`
+  );
+}

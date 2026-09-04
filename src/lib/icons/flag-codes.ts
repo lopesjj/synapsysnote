@@ -1,0 +1,86 @@
+/** ISO 3166-1 alpha-2 codes we render as flag images (Windows shows these as "BR"). */
+export const FLAG_CODES = [
+  "BR",
+  "PT",
+  "US",
+  "ES",
+  "FR",
+  "IT",
+  "DE",
+  "GB",
+  "AR",
+  "UY",
+  "PY",
+  "BO",
+  "CL",
+  "PE",
+  "CO",
+  "VE",
+  "EC",
+  "MX",
+  "CA",
+  "JP",
+  "CN",
+  "KR",
+  "IN",
+  "AU",
+  "NZ",
+  "ZA",
+  "NG",
+  "EG",
+  "MA",
+  "AO",
+  "MZ",
+  "CV",
+  "GW",
+  "ST",
+  "TL",
+  "NL",
+  "BE",
+  "CH",
+  "AT",
+  "SE",
+  "NO",
+  "DK",
+  "FI",
+  "IE",
+  "PL",
+  "CZ",
+  "HU",
+  "RO",
+  "GR",
+  "TR",
+  "RU",
+  "UA",
+  "IL",
+  "SA",
+  "AE",
+  "QA",
+  "ID",
+  "TH",
+  "VN",
+  "PH",
+  "SG",
+  "MY",
+  "CU",
+  "CR",
+  "PA",
+  "DO",
+  "PR",
+  "HT",
+  "JM",
+] as const;
+
+export const FLAG_CODE_SET = new Set<string>(FLAG_CODES);
+
+const RI_START = 0x1f1e6;
+
+export function flagEmojiFromCode(code: string): string {
+  const upper = code.toUpperCase();
+  return String.fromCodePoint(
+    upper.charCodeAt(0) - 65 + RI_START,
+    upper.charCodeAt(1) - 65 + RI_START
+  );
+}
+
+export const FLAG_ICONS = FLAG_CODES.map(flagEmojiFromCode);

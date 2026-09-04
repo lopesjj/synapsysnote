@@ -1,0 +1,127 @@
+import type { AppBlock, BlockMedia } from "@/types/models";
+
+export interface TranscriptResult {
+  transcript: string;
+  summary: string;
+  actionItems?: string[];
+}
+
+/** Stable key so OCR/transcript can find a block after TipTap regenerates ids. */
+export function mediaIdentity(media: {
+  storagePath?: string | null;
+  url?: string | null;
+}): string | null {
+  if (media.storagePath) return `path:${media.storagePath}`;
+  if (media.url) return `url:${media.url}`;
+  return null;
+}
+
+export function walkBlocks(blocks: AppBlock[], visit: (block: AppBlock) => void) {
+  for (const block of blocks) {
+    visit(block);
+    if (block.children?.length) walkBlocks(block.children, visit);
+  }
+}
+
+export function indexMedia(blocks: AppBlock[]): Map<string, BlockMedia> {
+  const map = new Map<string, BlockMedia>();
+  walkBlocks(blocks, (block) => {
+    if (!block.media) return;
+    const key = mediaIdentity(block.media);
+    if (key) map.set(key, block.media);
+  });
+  return map;
+}
+
+export function pendingAudioPaths(blocks: AppBlock[]): string[] {
+  const paths: string[] = [];
+  walkBlocks(blocks, (block) => {
+    if (block.type !== "audio") return;
+    if (!block.media?.pending || !block.media.storagePath) return;
+    paths.push(block.media.storagePath);
+  });
+  return paths;
+}
+
+export function isRicherMedia(remote: BlockMedia, local: BlockMedia): boolean {
+  if (remote.transcript && remote.transcript !== local.transcript) return true;
+  if (remote.transcriptSummary && remote.transcriptSummary !== local.transcriptSummary) return true;
+  if (remote.ocrText && remote.ocrText !== local.ocrText) return true;
+  if (remote.pending === false && local.pending === true) return true;
+  return false;
+}
+
+export function stampMedia(local: BlockMedia, remote: BlockMedia): BlockMedia {
+  return {
+    ...local,
+    transcript: remote.transcript || local.transcript,
+    transcriptSummary: remote.transcriptSummary || local.transcriptSummary,
+    ocrText: remote.ocrText || local.ocrText,
+    pending: remote.pending === false ? false : local.pending,
+  };
+}
+
+/**
+ * Autosave must not wipe a transcript/OCR that landed while the editor still
+ * had `pending: true`. Matching is by storage path (or URL), not block id —
+ * TipTap allocates a new id on every serialize.
+ */
+export function mergeMediaEnrichment(localBlocks: AppBlock[], remoteBlocks: AppBlock[]): AppBlock[] {
+  const remote = indexMedia(remoteBlocks);
+
+  const map = (blocks: AppBlock[]): AppBlock[] =>
+    blocks.map((block) => {
+      const children = block.children ? map(block.children) : block.children;
+      if (!block.media) {
+        return children !== block.children ? { ...block, children } : block;
+      }
+      const key = mediaIdentity(block.media);
+      const match = key ? remote.get(key) : undefined;
+      if (!match || !isRicherMedia(match, block.media)) {
+        return children !== block.children ? { ...block, children } : block;
+      }
+      return { ...block, media: stampMedia(block.media, match), ...(children ? { children } : {}) };
+    });
+
+  return map(localBlocks);
+}
+
+export function stampTranscript(
+  blocks: AppBlock[],
+  storagePath: string,
+  result: TranscriptResult
+): AppBlock[] {
+  const summary = result.actionItems?.length
+    ? `${result.summary} Ações: ${result.actionItems.join("; ")}`
+    : result.summary;
+
+  const stamp = (list: AppBlock[]): AppBlock[] =>
+    list.map((block) => ({
+      ...block,
+      ...(block.media?.storagePath === storagePath
+        ? {
+            media: {
+              ...block.media,
+              transcript: result.transcript,
+              transcriptSummary: summary,
+              pending: false,
+            },
+          }
+        : {}),
+      ...(block.children ? { children: stamp(block.children) } : {}),
+    }));
+
+  return stamp(blocks);
+}
+
+export function clearMediaPending(blocks: AppBlock[], storagePath: string): AppBlock[] {
+  const stamp = (list: AppBlock[]): AppBlock[] =>
+    list.map((block) => ({
+      ...block,
+      ...(block.media?.storagePath === storagePath
+        ? { media: { ...block.media, pending: false } }
+        : {}),
+      ...(block.children ? { children: stamp(block.children) } : {}),
+    }));
+  return stamp(blocks);
+}

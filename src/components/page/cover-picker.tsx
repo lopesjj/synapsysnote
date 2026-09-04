@@ -1,0 +1,150 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { ImageOff, ImagePlus, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { COVER_PRESETS, coverPresetById } from "@/lib/covers/presets";
+import { Menu, MenuContent, MenuTrigger } from "@/components/ui/menu";
+import { cn } from "@/lib/utils";
+
+export function CoverPicker({
+  coverUrl,
+  onChange,
+  onUploadImage,
+}: {
+  coverUrl?: string | null;
+  onChange: (coverUrl: string | null) => void;
+  onUploadImage?: (file: File) => Promise<string>;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const preset = coverPresetById(coverUrl);
+
+  const upload = async (file: File) => {
+    if (!onUploadImage) return;
+    if (!file.type.startsWith("image/") && !/\.(png|jpe?g|webp|gif|svg)$/i.test(file.name)) {
+      toast.error("Escolha um arquivo de imagem");
+      return;
+    }
+    setUploading(true);
+    try {
+      onChange(await onUploadImage(file));
+      toast.success("Capa atualizada");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível enviar a capa");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const swatches = (
+    <div className="w-[248px] p-1.5">
+      <div className="grid max-h-64 grid-cols-4 gap-1 overflow-y-auto pr-0.5">
+        <button
+          type="button"
+          title="Sem capa"
+          onClick={() => onChange(null)}
+          className="flex h-11 items-center justify-center rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--surface-2)] text-[10px] text-faint"
+        >
+          Nenhuma
+        </button>
+        {COVER_PRESETS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            title={item.label}
+            onClick={() => onChange(item.id)}
+            className={cn(
+              "h-11 overflow-hidden rounded-[var(--radius-xs)] border border-[var(--border)]",
+              coverUrl === item.id && "ring-2 ring-[var(--accent)]",
+              item.className
+            )}
+            style={item.style}
+          />
+        ))}
+      </div>
+      {onUploadImage ? (
+        <button
+          type="button"
+          disabled={uploading}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => fileRef.current?.click()}
+          className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-dashed border-[var(--border-strong)] px-2 py-1.5 text-[11.5px] text-muted transition hover:border-[var(--accent)] hover:text-ink disabled:opacity-60"
+        >
+          {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImagePlus className="size-3.5" />}
+          {uploading ? "Enviando…" : "Enviar imagem"}
+        </button>
+      ) : null}
+    </div>
+  );
+
+  return (
+    <>
+      {onUploadImage ? (
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="sr-only"
+          tabIndex={-1}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void upload(file);
+          }}
+        />
+      ) : null}
+
+      {!coverUrl ? (
+        <div className="mx-auto flex w-full max-w-[var(--reading-width,46rem)] justify-end px-5 pt-5 md:px-8">
+          <Menu>
+            <MenuTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1 text-[12px] text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink"
+              >
+                <ImagePlus className="size-3.5" /> Adicionar capa
+              </button>
+            </MenuTrigger>
+            <MenuContent align="end" className="min-w-0 p-0">
+              {swatches}
+            </MenuContent>
+          </Menu>
+        </div>
+      ) : (
+        <div className="group/cover relative z-0 w-full overflow-hidden">
+          <div className="h-[28vh] max-h-[360px] min-h-[200px] w-full md:min-h-[240px]">
+            {preset ? (
+              <div className={cn("h-full w-full", preset.className)} style={preset.style} />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+            )}
+          </div>
+          <div className="absolute inset-x-0 bottom-0 flex justify-end gap-1 p-3 opacity-0 transition group-hover/cover:opacity-100">
+            <Menu>
+              <MenuTrigger asChild>
+                <button
+                  type="button"
+                  className="rounded-[var(--radius-sm)] bg-[var(--surface)]/90 px-2 py-1 text-[11.5px] text-ink shadow-sm backdrop-blur"
+                >
+                  Trocar
+                </button>
+              </MenuTrigger>
+              <MenuContent align="end" className="min-w-0 p-0">
+                {swatches}
+              </MenuContent>
+            </Menu>
+            <button
+              type="button"
+              onClick={() => onChange(null)}
+              className="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--surface)]/90 px-2 py-1 text-[11.5px] text-ink shadow-sm backdrop-blur"
+            >
+              <ImageOff className="size-3" /> Remover
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
