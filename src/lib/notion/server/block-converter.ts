@@ -90,7 +90,6 @@ const TYPE_MAP: Record<string, BlockType> = {
   embed: "embed",
   link_preview: "bookmark",
   table: "table",
-  pdf: "file",
   child_page: "child_page",
   child_database: "child_database",
 };

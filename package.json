@@ -19,7 +19,7 @@
     "emulators": "firebase emulators:start --only auth,firestore,functions,storage",
     "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes,storage",
     "deploy:functions": "firebase deploy --only functions",
-    "deploy:web": "firebase deploy --only apphosting"
+    "deploy:web": "firebase deploy --only apphosting:synapsysnote"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -64,6 +64,7 @@
     "firebase": "^12.18.0",
     "firebase-admin": "^14.3.0",
     "framer-motion": "^13.1.1",
+    "google-auth-library": "^10.9.1",
     "katex": "^0.18.5",
     "lowlight": "^3.3.0",
     "lucide-react": "^1.39.0",

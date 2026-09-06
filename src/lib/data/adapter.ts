@@ -68,6 +68,8 @@ export interface DataAdapter {
   createPage(input: CreatePageInput): Promise<Page>;
   duplicatePage(id: string): Promise<Page>;
   updatePage(id: string, patch: Partial<Page>): Promise<void>;
+  applyPageOrders(updates: { id: string; order: number }[]): Promise<void>;
+  applyNotebookOrders(updates: { id: string; order: number }[]): Promise<void>;
   movePage(id: string, target: { notebookId?: string | null; parentPageId?: string | null }): Promise<void>;
   trashPage(id: string): Promise<void>;
   restorePage(id: string): Promise<void>;

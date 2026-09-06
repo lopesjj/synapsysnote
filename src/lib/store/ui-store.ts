@@ -163,7 +163,7 @@ export const useUiStore = create<UiState>()(
 /** Applies the persisted preferences after mount. Render once, near the root. */
 export function useRehydrateUiStore(): void {
   useEffect(() => {
-    void useUiStore.persist.rehydrate().then(() => {
+    void Promise.resolve(useUiStore.persist.rehydrate()).then(() => {
       const store = useUiStore.getState();
       store.setSidebarCollapsed(false);
       store.setSidebarWidth(SIDEBAR_MIN_WIDTH);

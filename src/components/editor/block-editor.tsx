@@ -125,7 +125,10 @@ export function BlockEditor({
   }, [mentionCandidates]);
 
   const handlers = useMemo(
-    () => ({ onRequestUpload, onRequestAudio }),
+    () => ({
+      onRequestUpload: onRequestUpload ?? (() => undefined),
+      onRequestAudio: onRequestAudio ?? (() => undefined),
+    }),
     [onRequestAudio, onRequestUpload]
   );
   const insertFilesRef = useRef(onInsertFiles);

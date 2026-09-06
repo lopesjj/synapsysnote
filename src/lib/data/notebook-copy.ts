@@ -2,7 +2,7 @@ import type { Notebook } from "@/types/models";
 import { parentIdOf } from "./notebook-tree";
 
 /** Root notebooks are páginas; nested ones are cadernos. */
-export function isNestedNotebook(notebook: Pick<Notebook, "parentId" | "id">): boolean {
+export function isNestedNotebook(notebook: Pick<Notebook, "parentId">): boolean {
   return Boolean(parentIdOf(notebook));
 }
 

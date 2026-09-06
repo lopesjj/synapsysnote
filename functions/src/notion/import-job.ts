@@ -604,13 +604,17 @@ type JobRef = FirebaseFirestore.DocumentReference;
  */
 class ProgressReporter {
   private files = 0;
+  private items: ImportJobItem[];
 
   constructor(
     private readonly ref: JobRef,
     private readonly job: ImportJobDoc
-  ) {}
+  ) {
+    this.items = [...(job.items ?? [])];
+  }
 
   async patch(data: FirebaseFirestore.UpdateData<Record<string, unknown>>) {
+    if (Array.isArray(data.items)) this.items = data.items as ImportJobItem[];
     await this.ref.update({ ...data, updatedAt: FieldValue.serverTimestamp() });
   }
 
@@ -632,12 +636,11 @@ class ProgressReporter {
   }
 
   async itemStatus(notionId: string, status: ImportJobItem["status"], appId?: string) {
-    const snapshot = await this.ref.get();
-    const items = (snapshot.get("items") ?? []) as ImportJobItem[];
+    this.items = this.items.map((item) =>
+      item.notionId === notionId ? { ...item, status, ...(appId ? { appId } : {}) } : item
+    );
     await this.ref.update({
-      items: items.map((item) =>
-        item.notionId === notionId ? { ...item, status, ...(appId ? { appId } : {}) } : item
-      ),
+      items: this.items,
       updatedAt: FieldValue.serverTimestamp(),
     });
   }

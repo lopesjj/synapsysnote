@@ -64,12 +64,22 @@ async function fetchAllChildren(notion: Client, blockId: string): Promise<Notion
 }
 
 class ProgressReporter {
+  private items: ImportJobItem[];
+
   constructor(
     private readonly ref: FirebaseFirestore.DocumentReference,
-    private readonly job: { options: JobOptions; requestedBy: string; targetNotebookId: string | null }
-  ) {}
+    private readonly job: {
+      options: JobOptions;
+      requestedBy: string;
+      targetNotebookId: string | null;
+      items?: ImportJobItem[];
+    }
+  ) {
+    this.items = [...(job.items ?? [])];
+  }
 
   async patch(data: FirebaseFirestore.UpdateData<Record<string, unknown>>) {
+    if (Array.isArray(data.items)) this.items = data.items as ImportJobItem[];
     await this.ref.update({ ...data, updatedAt: FieldValue.serverTimestamp() });
   }
 
@@ -90,12 +100,11 @@ class ProgressReporter {
   }
 
   async itemStatus(notionId: string, status: ImportJobItem["status"], appId?: string) {
-    const snapshot = await this.ref.get();
-    const items = (snapshot.get("items") ?? []) as ImportJobItem[];
+    this.items = this.items.map((item) =>
+      item.notionId === notionId ? { ...item, status, ...(appId ? { appId } : {}) } : item
+    );
     await this.ref.update({
-      items: items.map((item) =>
-        item.notionId === notionId ? { ...item, status, ...(appId ? { appId } : {}) } : item
-      ),
+      items: this.items,
       updatedAt: FieldValue.serverTimestamp(),
     });
   }
@@ -520,6 +529,7 @@ export async function runNotionImportJob(workspaceId: string, jobId: string): Pr
       options: JobOptions;
       requestedBy: string;
       targetNotebookId: string | null;
+      items?: ImportJobItem[];
     };
   });
 

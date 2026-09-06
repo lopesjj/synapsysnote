@@ -30,6 +30,7 @@ import { notebookSubtreeIds } from "./notebook-tree";
 import { duplicateNotebookTree, duplicatePageTree } from "./duplicate";
 import { buildSeed, plainTextOf } from "./seed";
 import { mergeMediaEnrichment } from "./media-enrichment";
+import { pagePatchIsNoop } from "./page-write";
 import {
   resolveImportPlacement,
   resolveNotebookParentId,
@@ -320,21 +321,29 @@ export class LocalAdapter implements DataAdapter {
   }
 
   async updatePage(id: string, patch: Partial<Page>) {
-    this.state.pages = this.state.pages.map((page) => {
-      if (page.id !== id) return page;
-      const blocks = patch.blocks ? mergeMediaEnrichment(patch.blocks, page.blocks) : page.blocks;
-      const next = {
-        ...page,
-        ...patch,
-        ...(patch.blocks ? { blocks } : {}),
-        updatedAt: nowMs(),
-        updatedBy: "demo-user",
-      };
-      if (patch.blocks) next.plainText = plainTextOf(blocks);
-      return next;
-    });
+    const current = this.state.pages.find((page) => page.id === id);
+    if (!current) return;
+    const blocks = patch.blocks ? mergeMediaEnrichment(patch.blocks, current.blocks) : current.blocks;
+    const next = {
+      ...current,
+      ...patch,
+      ...(patch.blocks ? { blocks } : {}),
+    };
+    if (patch.blocks) next.plainText = plainTextOf(blocks);
+    if (pagePatchIsNoop(current, next)) return;
+    this.state.pages = this.state.pages.map((page) =>
+      page.id === id ? { ...next, updatedAt: nowMs(), updatedBy: "demo-user" } : page
+    );
     this.reindexBacklinks();
     this.emit();
+  }
+
+  async applyPageOrders(updates: { id: string; order: number }[]) {
+    for (const { id, order } of updates) await this.updatePage(id, { order });
+  }
+
+  async applyNotebookOrders(updates: { id: string; order: number }[]) {
+    for (const { id, order } of updates) await this.updateNotebook(id, { order });
   }
 
   /** Keeps `backlinks` as the exact inverse of `outgoingLinks`. */

@@ -23,6 +23,16 @@ export function walkBlocks(blocks: AppBlock[], visit: (block: AppBlock) => void)
   }
 }
 
+/** OCR/transcript merge only needs a server read when the note already has media. */
+export function hasMergeableMedia(blocks: AppBlock[]): boolean {
+  let found = false;
+  walkBlocks(blocks, (block) => {
+    if (found || !block.media) return;
+    if (mediaIdentity(block.media)) found = true;
+  });
+  return found;
+}
+
 export function indexMedia(blocks: AppBlock[]): Map<string, BlockMedia> {
   const map = new Map<string, BlockMedia>();
   walkBlocks(blocks, (block) => {

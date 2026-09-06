@@ -8,11 +8,13 @@
 import assert from "node:assert/strict";
 import {
   clearMediaPending,
+  hasMergeableMedia,
   isRicherMedia,
   mergeMediaEnrichment,
   pendingAudioPaths,
   stampTranscript,
 } from "../src/lib/data/media-enrichment";
+import { pagePatchIsNoop, stripBlockIds } from "../src/lib/data/page-write";
 import type { AppBlock } from "../src/types/models";
 
 function audio(
@@ -82,4 +84,22 @@ assert.equal(cleared[0]?.media?.pending, false);
 
 assert.deepEqual(pendingAudioPaths(editorStale), ["workspaces/ws/audio/p/a.webm"]);
 assert.deepEqual(pendingAudioPaths(serverDone), []);
+assert.equal(hasMergeableMedia(editorStale), true);
+assert.equal(hasMergeableMedia([{ id: "p", type: "paragraph", richText: [{ text: "oi" }] }]), false);
 console.log("  stamp / clear / pendingAudioPaths: ok");
+
+const sameTextNewIds = [
+  audio("blk_other", { path: "workspaces/ws/audio/p/a.webm", pending: true }),
+  { id: "blk_q", type: "paragraph", richText: [{ text: "novo texto" }] },
+] satisfies AppBlock[];
+assert.deepEqual(stripBlockIds(editorStale), stripBlockIds(sameTextNewIds));
+assert.equal(
+  pagePatchIsNoop({ blocks: editorStale, title: "Nota" }, { blocks: sameTextNewIds, title: "Nota" }),
+  true,
+  "retiring TipTap ids is not a content change"
+);
+assert.equal(
+  pagePatchIsNoop({ blocks: editorStale, title: "Nota" }, { blocks: editorStale, title: "Outro" }),
+  false
+);
+console.log("  pagePatchIsNoop: identical body with new ids is skipped");

@@ -122,7 +122,7 @@ function CodeBlockView({ node, updateAttributes, editor }: NodeViewProps) {
         )}
       </div>
       <pre className="synapsys-code-block__pre">
-        <NodeViewContent as="code" className={`language-${language}`} />
+        <NodeViewContent className={`language-${language}`} />
       </pre>
     </NodeViewWrapper>
   );

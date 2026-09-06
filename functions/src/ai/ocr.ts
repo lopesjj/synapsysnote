@@ -101,6 +101,35 @@ async function ocrPdf(gcsUri: string, bucketName: string): Promise<string> {
   return chunks.join("\n\n");
 }
 
+function pageIdFromUploadPath(storagePath: string): string | null {
+  return storagePath.match(/^workspaces\/[^/]+\/uploads\/([^/]+)\//)?.[1] ?? null;
+}
+
+function jobIdFromNotionPath(storagePath: string): string | null {
+  return storagePath.match(/^workspaces\/[^/]+\/notion\/([^/]+)\//)?.[1] ?? null;
+}
+
+function pageHasStoragePath(blocks: unknown, storagePath: string): boolean {
+  return JSON.stringify(blocks ?? []).includes(storagePath);
+}
+
+async function findPageIdForOcr(workspaceId: string, storagePath: string): Promise<string | null> {
+  const fromUpload = pageIdFromUploadPath(storagePath);
+  if (fromUpload) return fromUpload;
+
+  const importedJobId = jobIdFromNotionPath(storagePath);
+  if (importedJobId) {
+    const imported = await pagesRef(workspaceId).where("importJobId", "==", importedJobId).get();
+    const hit = imported.docs.find((doc) => pageHasStoragePath(doc.get("blocks"), storagePath));
+    if (hit) return hit.id;
+  }
+
+  const candidates = await pagesRef(workspaceId).orderBy("updatedAt", "desc").limit(200).get();
+  return (
+    candidates.docs.find((doc) => pageHasStoragePath(doc.get("blocks"), storagePath))?.id ?? null
+  );
+}
+
 /**
  * Writes the extracted text both to the attachment record and to the block that
  * references it, so the reader can expand "texto OCR" inline.
@@ -111,19 +140,13 @@ async function applyOcrText(workspaceId: string, storagePath: string, text: stri
     .limit(1)
     .get();
 
-  let pageId = attachments.empty ? null : (attachments.docs[0].get("pageId") as string | null);
   if (!attachments.empty) {
     await attachments.docs[0].ref.update({ ocrText: text, ocrAt: FieldValue.serverTimestamp() });
   }
 
-  // Notion-imported media has no attachment record; locate the page by block.
-  if (!pageId) {
-    const candidates = await pagesRef(workspaceId).orderBy("updatedAt", "desc").limit(200).get();
-    const hit = candidates.docs.find((doc) =>
-      JSON.stringify(doc.get("blocks") ?? []).includes(storagePath)
-    );
-    pageId = hit?.id ?? null;
-  }
+  const pageId =
+    (attachments.empty ? null : (attachments.docs[0].get("pageId") as string | null)) ??
+    (await findPageIdForOcr(workspaceId, storagePath));
   if (!pageId) return;
 
   const pageRef = pagesRef(workspaceId).doc(pageId);

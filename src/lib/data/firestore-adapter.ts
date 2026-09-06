@@ -40,10 +40,12 @@ import { subtreePatches } from "./page-tree";
 import { plainTextOf } from "./seed";
 import {
   clearMediaPending,
+  hasMergeableMedia,
   mergeMediaEnrichment,
   stampTranscript,
   type TranscriptResult,
 } from "./media-enrichment";
+import { canonicalizePagePatch, pagePatchIsNoop } from "./page-write";
 import type {
   CreateImportJobInput,
   CreatePageInput,
@@ -128,6 +130,14 @@ export class FirestoreAdapter implements DataAdapter {
   ) {}
 
   private bootstrapped = false;
+  private lastPagePatch = new Map<string, Record<string, unknown>>();
+
+  private rememberPagePatch(id: string, patch: Record<string, unknown>) {
+    this.lastPagePatch.set(id, {
+      ...(this.lastPagePatch.get(id) ?? {}),
+      ...canonicalizePagePatch(patch),
+    });
+  }
 
   async ensureWorkspace() {
     if (this.bootstrapped) return;
@@ -509,10 +519,12 @@ export class FirestoreAdapter implements DataAdapter {
 
   async updatePage(id: string, patch: Partial<Page>) {
     let blocks = patch.blocks;
-    if (blocks) {
+    let currentData: DocumentData | undefined;
+    if (blocks && hasMergeableMedia(blocks)) {
       const current = await getDoc(this.docRef("pages", id));
       if (current.exists()) {
-        blocks = mergeMediaEnrichment(blocks, (current.data()?.blocks ?? []) as Page["blocks"]);
+        currentData = current.data();
+        blocks = mergeMediaEnrichment(blocks, (currentData?.blocks ?? []) as Page["blocks"]);
       }
     }
     const payload: Record<string, unknown> = stripUndefined({
@@ -524,6 +536,15 @@ export class FirestoreAdapter implements DataAdapter {
     if (blocks) payload.plainText = plainTextOf(blocks);
     for (const key of SERVER_OWNED) delete payload[key];
 
+    const comparable = { ...payload };
+    delete comparable.updatedAt;
+    delete comparable.updatedBy;
+    const baseline = currentData ?? this.lastPagePatch.get(id);
+    if (baseline && pagePatchIsNoop(baseline, comparable)) {
+      this.rememberPagePatch(id, comparable);
+      return;
+    }
+
     const encoded = JSON.stringify(payload);
     if (encoded.length > MAX_PAGE_JSON_BYTES) {
       throw new Error(
@@ -532,6 +553,37 @@ export class FirestoreAdapter implements DataAdapter {
     }
 
     await updateDoc(this.docRef("pages", id), payload);
+    this.rememberPagePatch(id, comparable);
+  }
+
+  async applyPageOrders(updates: { id: string; order: number }[]) {
+    if (!updates.length) return;
+    await commitWrites(
+      updates.map(
+        ({ id, order }) =>
+          (batch) =>
+            batch.update(this.docRef("pages", id), {
+              order,
+              updatedBy: this.userId,
+              updatedAt: serverTimestamp(),
+            })
+      )
+    );
+    for (const { id, order } of updates) this.rememberPagePatch(id, { order });
+  }
+
+  async applyNotebookOrders(updates: { id: string; order: number }[]) {
+    if (!updates.length) return;
+    await commitWrites(
+      updates.map(
+        ({ id, order }) =>
+          (batch) =>
+            batch.update(this.docRef("notebooks", id), {
+              order,
+              updatedAt: serverTimestamp(),
+            })
+      )
+    );
   }
 
   async movePage(id: string, target: { notebookId?: string | null; parentPageId?: string | null }) {

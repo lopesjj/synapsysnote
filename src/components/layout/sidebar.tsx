@@ -262,20 +262,16 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
 
     try {
       if (plan.kind === "reorder-notebooks") {
-        await Promise.all(
-          plan.notebookIds.map((id, index) =>
-            adapter.updateNotebook(id, { order: index * ORDER_STEP })
-          )
+        await adapter.applyNotebookOrders(
+          plan.notebookIds.map((id, index) => ({ id, order: index * ORDER_STEP }))
         );
         return;
       }
 
       if (plan.kind === "move-notebook") {
         await adapter.moveNotebook(plan.notebookId, { parentId: plan.parentId });
-        await Promise.all(
-          plan.notebookIds.map((id, index) =>
-            adapter.updateNotebook(id, { order: index * ORDER_STEP })
-          )
+        await adapter.applyNotebookOrders(
+          plan.notebookIds.map((id, index) => ({ id, order: index * ORDER_STEP }))
         );
         toast.success(plan.parentId ? "Caderno movido" : "Página movida");
         return;
@@ -290,8 +286,8 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         });
       }
 
-      await Promise.all(
-        plan.pageIds.map((id, index) => adapter.updatePage(id, { order: index * ORDER_STEP }))
+      await adapter.applyPageOrders(
+        plan.pageIds.map((id, index) => ({ id, order: index * ORDER_STEP }))
       );
 
       if (plan.kind === "move-page") toast.success("Página movida");

@@ -12,9 +12,19 @@ export const metadata: Metadata = {
   description:
     "Pensado para quem faz concurso público, vestibular ou faculdade. Organize seus estudos com eficiência, transforme sua rotina em algo mais produtivo.",
   applicationName: "Synapsys Note",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Synapsys Note",
+    statusBarStyle: "black-translucent",
+  },
   icons: {
-    icon: [{ url: "/brand/synapsys-mark-64.png", type: "image/png", sizes: "64x64" }],
-    apple: [{ url: "/brand/synapsys-mark-192.png", type: "image/png", sizes: "192x192" }],
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icons/mark-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/icons/mark-512.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [{ url: "/icons/mark-180.png", type: "image/png", sizes: "180x180" }],
   },
 };
 
