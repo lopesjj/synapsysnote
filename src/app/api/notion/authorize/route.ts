@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { requireWorkspaceEditor } from "@/lib/api/session";
 import { jsonError } from "@/lib/api/errors";
+import { sharedCookieOptions } from "@/lib/auth/cookie-options";
+import { appHref, resolveUrl } from "@/lib/domains";
 import { encodeOauthState, NOTION_OAUTH_COOKIE } from "@/lib/notion/server/oauth";
 
 export const runtime = "nodejs";
@@ -47,13 +49,7 @@ export async function POST(request: Request) {
     authorizeUrl.searchParams.set("state", state);
 
     const jar = await cookies();
-    jar.set(NOTION_OAUTH_COOKIE, state, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 600,
-    });
+    jar.set(NOTION_OAUTH_COOKIE, state, sharedCookieOptions(600));
 
     return Response.json({ redirectUrl: authorizeUrl.toString() });
   } catch (error) {
@@ -63,9 +59,7 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  return NextResponse.redirect(
-    `${url.origin}/app/integrations?error=${encodeURIComponent(
-      "Conecte o Notion pelo botão no app, com a sua conta Synapsys."
-    )}`
-  );
+  const dest = new URL(resolveUrl(appHref("/home/integrations"), url.origin));
+  dest.searchParams.set("error", "Conecte o Notion pelo botão no app, com a sua conta Synapsys.");
+  return NextResponse.redirect(dest);
 }

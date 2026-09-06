@@ -117,7 +117,10 @@ async function siteverify(secret: string, token: string) {
     body: payload,
     signal: AbortSignal.timeout(8000),
   });
-  const result = (await google.json()) as { success?: boolean };
+  const result = (await google.json()) as { success?: boolean; "error-codes"?: string[] };
+  if (!result.success) {
+    console.warn("[recaptcha] siteverify rejeitado:", result["error-codes"]);
+  }
   return Boolean(result.success);
 }
 

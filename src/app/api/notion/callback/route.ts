@@ -4,6 +4,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb, isAdminConfigured } from "@/lib/firebase/admin";
 import { encryptToken, tokenPreview } from "@/lib/crypto/token-cipher";
 import { ensureWorkspace } from "@/lib/api/session";
+import { sharedCookieOptions } from "@/lib/auth/cookie-options";
+import { appHref, resolveUrl } from "@/lib/domains";
 import {
   decodeOauthState,
   notionOauthErrorMessage,
@@ -35,8 +37,13 @@ interface NotionTokenResponse {
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const fail = (message: string) =>
-    NextResponse.redirect(`${url.origin}/app/integrations?error=${encodeURIComponent(message)}`);
+  const integrationsUrl = (query?: { error?: string; connected?: string }) => {
+    const dest = new URL(resolveUrl(appHref("/home/integrations"), url.origin));
+    if (query?.error) dest.searchParams.set("error", query.error);
+    if (query?.connected) dest.searchParams.set("connected", query.connected);
+    return dest;
+  };
+  const fail = (message: string) => NextResponse.redirect(integrationsUrl({ error: message }));
 
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
@@ -50,7 +57,7 @@ export async function GET(request: Request) {
   if (!expectedState || expectedState !== state) {
     return fail("Falha na verificação de CSRF (state divergente).");
   }
-  jar.delete(NOTION_OAUTH_COOKIE);
+  jar.set(NOTION_OAUTH_COOKIE, "", sharedCookieOptions(0));
 
   const parsedState = decodeOauthState(state);
   if (!parsedState) return fail("State inválido.");
@@ -118,5 +125,5 @@ export async function GET(request: Request) {
     });
   });
 
-  return NextResponse.redirect(`${url.origin}/app/integrations?connected=notion`);
+  return NextResponse.redirect(integrationsUrl({ connected: "notion" }));
 }

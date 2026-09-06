@@ -50,12 +50,12 @@ export function WorkspaceCrumbs({
     ...linkedNotebooks.map((item) => ({
       kind: "notebook" as const,
       item,
-      href: `/app/n/${item.id}`,
+      href: `/home/n/${item.id}`,
     })),
     ...pageTrail.map((item) => ({
       kind: "page" as const,
       item,
-      href: `/app/p/${item.id}`,
+      href: `/home/p/${item.id}`,
     })),
   ];
 
@@ -104,6 +104,8 @@ export function WorkspaceCrumbs({
           </Button>
         </Tooltip>
       </div>
+
+      {/* Em telas sm+ exibe o trail completo de crumbs */}
       {crumbs.map((crumb, index) => {
         const label = crumb.kind === "notebook" ? crumb.item.name : crumb.item.title || "Sem título";
         const icon =
@@ -112,7 +114,10 @@ export function WorkspaceCrumbs({
             : crumb.item.icon;
         const fallback = crumb.kind === "notebook" ? "📓" : "📄";
         return (
-          <span key={`${crumb.kind}-${crumb.item.id}`} className="flex min-w-0 items-center gap-1.5">
+          <span
+            key={`${crumb.kind}-${crumb.item.id}`}
+            className="hidden min-w-0 items-center gap-1.5 sm:flex"
+          >
             {index > 0 ? <span className={slash}>/</span> : null}
             <Link
               href={crumb.href}
@@ -124,9 +129,11 @@ export function WorkspaceCrumbs({
           </span>
         );
       })}
+
       {currentLabel ? (
         <span className="flex min-w-0 items-center gap-1.5">
-          {crumbs.length ? <span className={slash}>/</span> : null}
+          {/* Separador só aparece no sm+ junto com os crumbs intermediários */}
+          {crumbs.length ? <span className={cn(slash, "hidden sm:inline")}>/</span> : null}
           {notebook && !page ? (
             <WorkspaceIcon icon={notebook.emoji} fallback="📓" size={13} />
           ) : null}

@@ -123,7 +123,7 @@ export function PageView({ pageId }: { pageId: string }) {
         <p className="max-w-xs text-[12.5px] text-muted">
           Ela pode ter sido excluída ou movida para a lixeira.
         </p>
-        <Button variant="secondary" onClick={() => router.push("/app")}>
+        <Button variant="secondary" onClick={() => router.push("/home")}>
           Voltar ao início
         </Button>
       </div>
@@ -260,7 +260,7 @@ export function PageView({ pageId }: { pageId: string }) {
                 try {
                   const copy = await adapter.duplicatePage(pageId);
                   toast.success("Nota duplicada");
-                  router.push(`/app/p/${copy.id}`);
+                  router.push(`/home/p/${copy.id}`);
                 } catch {
                   toast.error("Não foi possível duplicar a nota.");
                 }
@@ -274,7 +274,7 @@ export function PageView({ pageId }: { pageId: string }) {
               onSelect={async () => {
                 await adapter.trashPage(pageId);
                 toast.success("Página movida para a lixeira");
-                router.push("/app");
+                router.push("/home");
               }}
             >
               <Trash2 /> Mover para lixeira
@@ -292,7 +292,7 @@ export function PageView({ pageId }: { pageId: string }) {
       ) : null}
 
       {/* `--reading-width` comes from the typography preference. */}
-      <div className="relative z-10 mx-auto w-full max-w-[var(--reading-width,46rem)] px-5 pb-24 md:px-8">
+      <div className="relative z-10 mx-auto w-full max-w-[var(--reading-width,46rem)] px-5 pb-24 pb-safe md:px-8">
         {/* Icon + title. The icon may sit on the cover edge; the title stays below it. */}
         <div className={cn("group flex items-center", isIconUrl(page.icon ?? "") ? "gap-5" : "gap-3", hasCover ? "pt-0" : "pt-6")}>
           <IconPickerMenu
@@ -439,7 +439,7 @@ export function PageView({ pageId }: { pageId: string }) {
               {backlinks.map((source) => (
                 <Link
                   key={source.id}
-                  href={`/app/p/${source.id}`}
+                  href={`/home/p/${source.id}`}
                   className="flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] px-2.5 py-1.5 text-[12px] text-muted transition hover:border-[var(--accent)] hover:text-ink"
                 >
                   <WorkspaceIcon icon={source.icon} fallback="📄" size={16} />
@@ -462,7 +462,7 @@ export function PageView({ pageId }: { pageId: string }) {
           initial={{ x: 320, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           transition={{ type: "spring", stiffness: 420, damping: 36 }}
-          className="fixed inset-y-0 right-0 z-50 w-[320px] border-l border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-float)]"
+          className="fixed inset-y-0 right-0 z-50 w-full border-l border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-float)] sm:w-[320px]"
         >
           <div className="flex items-center justify-between">
             <p className="text-[13px] font-semibold text-ink">Histórico de versões</p>

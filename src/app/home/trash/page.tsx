@@ -43,7 +43,7 @@ export default function TrashPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-10 md:px-8">
-      <div className="flex items-start justify-between gap-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
             <span className="inline-flex size-10 items-center justify-center rounded-[14px] bg-[var(--accent-soft)] text-[var(--accent)]">
@@ -63,7 +63,7 @@ export default function TrashPage() {
           <Button
             variant="danger"
             size="sm"
-            className="shrink-0 rounded-full px-3.5"
+            className="w-full shrink-0 rounded-full px-3.5 sm:w-auto"
             disabled={emptying}
             onClick={() => void emptyTrash()}
           >
@@ -155,7 +155,7 @@ export default function TrashPage() {
             title="A lixeira está vazia"
             description="Nada foi excluído nos últimos 30 dias."
             action={
-              <Link href="/app" className="text-[12.5px] text-[var(--accent)] hover:underline">
+              <Link href="/home" className="text-[12.5px] text-[var(--accent)] hover:underline">
                 Voltar ao início
               </Link>
             }

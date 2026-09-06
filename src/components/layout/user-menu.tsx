@@ -13,6 +13,7 @@ import {
   Sun,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { loginHref, navigateTo } from "@/lib/domains";
 import { useUserProfile } from "@/hooks/use-user-profile";
 import { useUiStore } from "@/lib/store/ui-store";
 import { useTheme } from "@/components/theme-provider";
@@ -134,7 +135,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
           <MenuItem onSelect={() => setChangePasswordOpen(true)}>
             <KeyRound /> Alterar senha
           </MenuItem>
-          <MenuItem onSelect={() => router.push("/app/integrations")}>
+          <MenuItem onSelect={() => router.push("/home/integrations")}>
             <Plug /> Integrações
           </MenuItem>
           <MenuItem onSelect={toggle}>
@@ -152,7 +153,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
             destructive
             onSelect={async () => {
               await signOut();
-              router.push("/");
+              navigateTo(loginHref("/"), router);
             }}
           >
             <LogOut /> Sair da conta

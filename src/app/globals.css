@@ -529,3 +529,40 @@
 .tippy-box[data-theme~="synapsys"] > .tippy-arrow {
   display: none;
 }
+
+/* ─── Mobile / iOS safe area ─────────────────────────────────────────────── */
+
+/*
+ * Oculta scrollbar em dispositivos touch (pointer: coarse).
+ * O scroll continua funcionando — só a barra visual é removida.
+ */
+@media (pointer: coarse) {
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  * {
+    scrollbar-width: none;
+  }
+}
+
+/*
+ * Utilitários de safe-area para notch e home indicator do iOS.
+ * Uso: classe `pb-safe`, `pt-safe`, `px-safe` etc.
+ */
+.pb-safe  { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+.pt-safe  { padding-top:    max(0.5rem, env(safe-area-inset-top)); }
+.pl-safe  { padding-left:   max(0.5rem, env(safe-area-inset-left)); }
+.pr-safe  { padding-right:  max(0.5rem, env(safe-area-inset-right)); }
+
+/* Bottom nav container */
+.bottom-nav-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Garante área mínima de toque de 44px em elementos interativos no mobile */
+@media (pointer: coarse) {
+  [data-sidebar] a[href],
+  [data-sidebar] button {
+    min-height: 44px;
+  }
+}

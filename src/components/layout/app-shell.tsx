@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, Menu as MenuIcon, Minimize2 } from "lucide-react";
+import { FilePlus, Home, Loader2, Menu as MenuIcon, Minimize2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { loginHref, navigateTo } from "@/lib/domains";
 import { useUserPreferencesSync } from "@/hooks/use-user-profile";
 import { useWorkspace } from "@/lib/data/provider";
 import {
@@ -52,7 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const notesDensity = useUiStore((state) => state.notesDensity);
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/");
+    if (!loading && !user) navigateTo(loginHref("/?session=sync_failed"), router, "replace");
   }, [loading, router, user]);
 
   const onKeyDown = useCallback(
@@ -79,11 +80,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         if (event.shiftKey) {
           const notebook = await adapter.createNotebook({ name: "Nova página" });
           toast.success("Página criada");
-          router.push(`/app/n/${notebook.id}`);
+          router.push(`/home/n/${notebook.id}`);
           return;
         }
         const page = await adapter.createPage({ title: "Sem título" });
-        router.push(`/app/p/${page.id}`);
+        router.push(`/home/p/${page.id}`);
         return;
       }
 
@@ -186,7 +187,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {mode === "local" && !chromeHidden ? <DemoBanner /> : null}
 
-        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto pb-16 md:pb-0">{children}</div>
 
         {zenMode ? (
           <Tooltip
@@ -221,6 +222,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
         ) : null}
       </main>
+
+      {/* Bottom Navigation — mobile only */}
+      {!chromeHidden ? <BottomNav /> : null}
 
       <CommandPalette
         open={paletteOpen}
@@ -287,6 +291,82 @@ function isEditingText(target: EventTarget | null): boolean {
   if (target.isContentEditable) return true;
   const tag = target.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+
+/**
+ * Bottom navigation bar — mobile only (md:hidden).
+ * Gives one-thumb access to the most common actions.
+ */
+function BottomNav() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { adapter } = useWorkspace();
+
+  const createNote = async () => {
+    const page = await adapter.createPage({ title: "Sem título" });
+    useUiStore.getState().setMobileSidebarOpen(false);
+    router.push(`/home/p/${page.id}`);
+  };
+
+  const NavItem = ({
+    icon,
+    label,
+    active,
+    onClick,
+  }: {
+    icon: React.ReactNode;
+    label: string;
+    active?: boolean;
+    onClick: () => void;
+  }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
+        active ? "text-[var(--accent)]" : "text-muted hover:text-ink"
+      )}
+      aria-label={label}
+    >
+      <span className={cn("flex size-6 items-center justify-center rounded-lg transition-colors", active && "bg-[var(--accent-soft)]")}
+      >
+        {icon}
+      </span>
+      {label}
+    </button>
+  );
+
+  return (
+    <nav
+      className="bottom-nav-safe fixed inset-x-0 bottom-0 z-50 flex border-t border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur-xl md:hidden"
+      aria-label="Navegação principal"
+    >
+      <NavItem
+        icon={<Home className="size-[18px]" />}
+        label="Início"
+        active={pathname === "/home"}
+        onClick={() => router.push("/home")}
+      />
+      <NavItem
+        icon={<Search className="size-[18px]" />}
+        label="Buscar"
+        active={false}
+        onClick={() => useUiStore.getState().setPaletteOpen(true)}
+      />
+      <NavItem
+        icon={<FilePlus className="size-[18px]" />}
+        label="Nova nota"
+        active={false}
+        onClick={() => void createNote()}
+      />
+      <NavItem
+        icon={<MenuIcon className="size-[18px]" />}
+        label="Menu"
+        active={false}
+        onClick={() => useUiStore.getState().setMobileSidebarOpen(true)}
+      />
+    </nav>
+  );
 }
 
 /** Drag handle that lets the sidebar be sized to taste. */

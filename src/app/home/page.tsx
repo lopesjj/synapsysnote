@@ -103,12 +103,12 @@ export default function WorkspaceHome() {
 
   const createNote = async () => {
     const page = await adapter.createPage({ title: "Sem título" });
-    router.push(`/app/p/${page.id}`);
+    router.push(`/home/p/${page.id}`);
   };
 
   const createRootPage = async () => {
     const notebook = await adapter.createNotebook({ name: NOTEBOOK_COPY.newRootName });
-    router.push(`/app/n/${notebook.id}`);
+    router.push(`/home/n/${notebook.id}`);
   };
 
   const openPlanning = async () => {
@@ -116,11 +116,11 @@ export default function WorkspaceHome() {
       (database) => !database.deletedAt && database.name === "Planejamento"
     );
     if (existing) {
-      router.push(`/app/db/${existing.id}`);
+      router.push(`/home/db/${existing.id}`);
       return;
     }
     const database = await adapter.createDatabase({ name: "Planejamento" });
-    router.push(`/app/db/${database.id}`);
+    router.push(`/home/db/${database.id}`);
   };
 
   return (
@@ -153,15 +153,15 @@ export default function WorkspaceHome() {
               ) : null}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" size="sm" onClick={() => void openPlanning()}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <Button variant="secondary" size="sm" className="sm:w-auto" onClick={() => void openPlanning()}>
               Planejamento
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => void createRootPage()}>
+            <Button variant="secondary" size="sm" className="sm:w-auto" onClick={() => void createRootPage()}>
               <FolderPlus />
               Nova página
             </Button>
-            <Button variant="primary" size="sm" onClick={() => void createNote()}>
+            <Button variant="primary" size="sm" className="sm:w-auto" onClick={() => void createNote()}>
               <FilePlus />
               Nova nota
             </Button>
@@ -208,7 +208,7 @@ export default function WorkspaceHome() {
             </div>
             {recent.length ? (
               <Link
-                href="/app/notes"
+                href="/home/notes"
                 className="inline-flex items-center gap-0.5 text-[12px] font-medium text-[var(--accent)] hover:underline"
               >
                 Ver todas
@@ -238,13 +238,13 @@ export default function WorkspaceHome() {
         </section>
 
         {favorites.length ? (
-          <aside>
+          <aside className="border-t border-[var(--border)] pt-6 lg:border-t-0 lg:pt-0">
             <h2 className="mb-2 text-[13px] font-semibold text-ink">Favoritos</h2>
             <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]">
               {favorites.map((page) => (
                 <Link
                   key={page.id}
-                  href={`/app/p/${page.id}`}
+                  href={`/home/p/${page.id}`}
                   className="flex items-center gap-2.5 border-b border-[var(--border)] px-3 py-2.5 last:border-b-0 transition hover:bg-[var(--surface-hover)]"
                 >
                   <WorkspaceIcon icon={page.icon} fallback="📄" size={16} />
@@ -279,7 +279,7 @@ function PageCard({
 
   return (
     <Link
-      href={`/app/n/${notebook.id}`}
+      href={`/home/n/${notebook.id}`}
       className="group block overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-panel)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/45 hover:shadow-[var(--shadow-float)]"
     >
       <CoverStrip coverUrl={notebook.coverUrl} className="h-[4.5rem] w-full" />
@@ -309,7 +309,7 @@ function PageCard({
 function NoteCard({ page, notebook }: { page: Page; notebook?: Notebook }) {
   return (
     <Link
-      href={`/app/p/${page.id}`}
+      href={`/home/p/${page.id}`}
       className="group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] transition hover:border-[var(--accent)]/45 hover:shadow-[var(--shadow-panel)]"
     >
       {page.coverUrl ? (

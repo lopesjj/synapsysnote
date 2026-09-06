@@ -52,9 +52,9 @@ function mentionHref(
   notebooks: { id: string }[]
 ): string | null {
   if (!id) return null;
-  if (notebooks.some((notebook) => notebook.id === id)) return `/app/n/${id}`;
-  if (pages.some((page) => page.id === id)) return `/app/p/${id}`;
-  return `/app/p/${id}`;
+  if (notebooks.some((notebook) => notebook.id === id)) return `/home/n/${id}`;
+  if (pages.some((page) => page.id === id)) return `/home/p/${id}`;
+  return `/home/p/${id}`;
 }
 
 function mentionFromEvent(event: { target: EventTarget | null }): HTMLElement | null {
@@ -178,7 +178,7 @@ export function BlockEditor({
           return [
             "a",
             mergeAttributes(options.HTMLAttributes, {
-              href: `/app/p/${id}`,
+              href: `/home/p/${id}`,
               "data-id": id,
               "data-label": label,
             }),

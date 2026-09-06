@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,10 +9,12 @@ import { Input } from "@/components/ui/primitives";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserProfile } from "@/hooks/use-user-profile";
 import { isValidPhoneBR } from "@/lib/phone";
+import { appHref, navigateTo } from "@/lib/domains";
 import { AuthField } from "./auth-field";
 import { PhoneField } from "./phone-field";
 
 export function CompleteRegistrationForm() {
+  const router = useRouter();
   const { user, completeRegistration } = useAuth();
   const { profile, complete } = useUserProfile();
   const googleAccount = Boolean(user?.providers.includes("google.com"));
@@ -34,6 +37,7 @@ export function CompleteRegistrationForm() {
         phone,
       });
       await complete();
+      navigateTo(appHref("/home"), router);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível salvar o cadastro");
     } finally {

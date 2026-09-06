@@ -28,6 +28,13 @@ async function applyAuthPersistence(remember: boolean) {
   markRemembered(remember);
 }
 import { completeUserRegistration } from "@/lib/data/user-profile";
+import {
+  clearCrossHostSession,
+  hydrateFromSessionCookie,
+  persistCrossHostSession,
+  suppressSessionHydrate,
+} from "@/lib/auth/cross-host-session";
+import { loginHref, resolveUrl } from "@/lib/domains";
 
 function toAppUser(fbUser: {
   uid: string;
@@ -145,15 +152,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ]);
       if (cancelled) return;
       if (isRememberExpired()) {
+        suppressSessionHydrate();
+        await clearCrossHostSession();
         await signOut(auth);
         clearRemembered();
         writeDemoUser(null);
       } else if (auth.currentUser && !isRememberActive()) {
         adoptLegacySession();
       }
+      let hydrating = false;
       unsub = onAuthStateChanged(auth, (fbUser) => {
-        setFirebaseUser(fbUser ? toAppUser(fbUser) : null);
-        setFirebaseLoading(false);
+        if (fbUser) {
+          setFirebaseUser(toAppUser(fbUser));
+          setFirebaseLoading(false);
+          return;
+        }
+        if (hydrating) return;
+        hydrating = true;
+        void hydrateFromSessionCookie()
+          .then((ok) => {
+            if (!ok && !cancelled) {
+              setFirebaseUser(null);
+              setFirebaseLoading(false);
+            }
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setFirebaseUser(null);
+              setFirebaseLoading(false);
+            }
+          })
+          .finally(() => {
+            hydrating = false;
+          });
       });
     })();
     return () => {
@@ -215,6 +246,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw createAuthError("oauth-unregistered");
           }
           const next = toAppUser(credential.user);
+          await persistCrossHostSession(remember);
           setFirebaseUser(next);
           return next;
         } catch (error) {
@@ -237,6 +269,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const cred = await signInWithEmailAndPassword(auth, email, password);
           const next = toAppUser(cred.user);
+          await persistCrossHostSession(remember);
           setFirebaseUser(next);
           return next;
         } catch (error) {
@@ -276,6 +309,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             photoURL: next.photoURL,
             providers: next.providers,
           });
+          await persistCrossHostSession(true);
           setFirebaseUser(next);
           return next;
         } catch (error) {
@@ -323,6 +357,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           photoURL: next.photoURL,
           providers: next.providers,
         });
+        await persistCrossHostSession(true);
         setFirebaseUser(next);
       },
 
@@ -336,8 +371,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ]);
         auth.languageCode = "pt";
         try {
+          const resetUrl = new URL(resolveUrl(loginHref("/"), window.location.origin));
+          resetUrl.searchParams.set("reset", "ok");
           await sendPasswordResetEmail(auth, email.trim(), {
-            url: `${window.location.origin}/?reset=ok`,
+            url: resetUrl.toString(),
           });
         } catch (error) {
           const mapped = toAuthError(error);
@@ -388,6 +425,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
 
       async signOut() {
+        suppressSessionHydrate();
+        await clearCrossHostSession();
         if (configured) {
           const [{ signOut }, auth] = await Promise.all([import("firebase/auth"), firebaseAuth()]);
           await signOut(auth);

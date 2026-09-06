@@ -24,7 +24,8 @@ export function isAdminConfigured(): boolean {
   return Boolean(
     process.env.FIREBASE_SERVICE_ACCOUNT_JSON ||
       process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-      process.env.FIREBASE_PROJECT_ID
+      process.env.FIREBASE_PROJECT_ID ||
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
   );
 }
 
@@ -35,6 +36,10 @@ export function getAdminApp(): App {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   const storageBucket =
     process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  const projectId =
+    process.env.FIREBASE_PROJECT_ID ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+    "synapsysnote";
 
   if (raw) {
     const parsed = JSON.parse(raw) as {
@@ -51,13 +56,14 @@ export function getAdminApp(): App {
           privateKey: parsed.private_key.replace(/\\n/g, "\n"),
         }),
         storageBucket,
+        projectId: parsed.project_id || projectId,
       },
       ADMIN_APP
     );
   }
 
   try {
-    return initializeApp({ storageBucket }, ADMIN_APP);
+    return initializeApp({ projectId, storageBucket }, ADMIN_APP);
   } catch {
     return getApp(ADMIN_APP);
   }

@@ -10,7 +10,7 @@ export function useWorkspaceNavHistory(): void {
   const record = useNavHistory((state) => state.record);
 
   useEffect(() => {
-    if (!pathname.startsWith("/app")) return;
+    if (!pathname.startsWith("/home")) return;
     record(pathname);
   }, [pathname, record]);
 }

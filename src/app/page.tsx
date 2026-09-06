@@ -17,6 +17,8 @@ import { Button } from "@/components/ui/button";
 import { RecaptchaField } from "@/components/auth/recaptcha-field";
 import { verifyRecaptchaToken } from "@/lib/recaptcha";
 import { Checkbox, Input } from "@/components/ui/primitives";
+import { appHref, isSplitHosts, loginHref, navigateTo } from "@/lib/domains";
+import { persistCrossHostSession } from "@/lib/auth/cross-host-session";
 
 const SIGNUP_ENABLED = false;
 
@@ -30,6 +32,7 @@ export default function LandingPage() {
     signInWithEmail,
     signUpWithEmail,
     resetPassword,
+    signOut,
   } = useAuth();
   const { profile, loading: profileLoading } = useUserProfile();
 
@@ -64,7 +67,10 @@ export default function LandingPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("mode") === "resetPassword" && params.get("oobCode")) return;
-    if (!loading && !profileLoading && user && !needsCompletion) router.replace("/app");
+    if (isSplitHosts() && params.get("session") === "sync_failed") return;
+    if (!loading && !profileLoading && user && !needsCompletion) {
+      navigateTo(appHref("/home"), router, "replace");
+    }
   }, [loading, needsCompletion, profileLoading, router, user]);
 
   const refreshCaptcha = () => {
@@ -83,12 +89,12 @@ export default function LandingPage() {
           return;
         }
         await signUpWithEmail(name.trim() || email.split("@")[0], email, password, phone);
-        router.push("/app");
+        navigateTo(appHref("/home"), router);
         return;
       }
       const signedIn = await signInWithEmail(email, password, remember);
       const existing = await loadUserProfile(signedIn.uid);
-      if (!profileNeedsCompletion(signedIn, existing)) router.push("/app");
+      if (!profileNeedsCompletion(signedIn, existing)) navigateTo(appHref("/home"), router);
     } catch (error) {
       refreshCaptcha();
       toast.error(error instanceof Error ? error.message : "Não foi possível entrar");
@@ -102,7 +108,7 @@ export default function LandingPage() {
     try {
       const signedIn = await signInWithProvider(provider, remember);
       const existing = await loadUserProfile(signedIn.uid);
-      if (!profileNeedsCompletion(signedIn, existing)) router.push("/app");
+      if (!profileNeedsCompletion(signedIn, existing)) navigateTo(appHref("/home"), router);
     } catch (error) {
       // The OAuth guard rejects e-mails without an account; that needs an
       // explanation rather than a generic failure toast.
@@ -143,7 +149,7 @@ export default function LandingPage() {
 
       <div className="relative mx-auto grid min-h-dvh max-w-6xl grid-cols-1 gap-12 px-6 py-12 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:gap-16">
         <div className="max-w-xl">
-          <div className="flex -translate-x-5 -translate-y-7 select-none justify-center">
+          <div className="flex select-none justify-center sm:-translate-x-5 sm:-translate-y-7">
             <SynapsysLockup size={92} />
           </div>
 
@@ -168,14 +174,54 @@ export default function LandingPage() {
           </p>
         </div>
 
-        <div className="lux-gradient rounded-[var(--radius-xl)] border border-[var(--border)] p-6 shadow-[var(--shadow-float)]">
+        <div className="mx-auto w-full max-w-sm sm:max-w-none lux-gradient rounded-[var(--radius-xl)] border border-[var(--border)] p-6 shadow-[var(--shadow-float)]">
           {user && profileLoading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="size-5 animate-spin text-muted" />
             </div>
           ) : null}
           {user && !profileLoading && needsCompletion ? <CompleteRegistrationForm /> : null}
-          {user && (profileLoading || needsCompletion) ? null : tab === "reset" ? (
+          {user && !profileLoading && !needsCompletion ? (
+            <div className="space-y-4 py-2 text-center">
+              <p className="text-[15px] font-medium text-ink">
+                Conectado como <span className="font-semibold text-[var(--accent)]">{user.email || user.displayName}</span>
+              </p>
+              <p className="text-[13px] leading-relaxed text-muted">
+                Sua conta está ativa. Clique abaixo para entrar no seu ambiente de estudos.
+              </p>
+              <Button
+                variant="primary"
+                size="lg"
+                className="w-full"
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await persistCrossHostSession(true);
+                    navigateTo(appHref("/home"), router);
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Falha ao sincronizar sessão");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                disabled={busy}
+              >
+                {busy ? <Loader2 className="animate-spin" /> : null}
+                Acessar Synapsys Note
+              </Button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await signOut();
+                  window.location.replace(loginHref("/"));
+                }}
+                className="w-full text-center text-[12.5px] text-muted transition hover:text-ink"
+              >
+                Sair da conta
+              </button>
+            </div>
+          ) : null}
+          {user ? null : tab === "reset" ? (
             <>
               <p className="text-[15px] font-medium tracking-[-0.015em] text-ink">Esqueceu a senha</p>
               <p className="mt-1 text-[13px] leading-relaxed text-muted">

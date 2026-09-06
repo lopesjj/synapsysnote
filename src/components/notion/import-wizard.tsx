@@ -165,7 +165,7 @@ export function ImportWizard({
             {step === "progress" && job ? (
               <ProgressStep job={job} progress={progress} onOpenPage={(id) => {
                 onOpenChange(false);
-                router.push(`/app/p/${id}`);
+                router.push(`/home/p/${id}`);
               }} />
             ) : null}
           </motion.div>
@@ -242,7 +242,7 @@ export function ImportWizard({
                       (item) => item.status === "done" && item.appId && item.type === "page"
                     );
                     onOpenChange(false);
-                    if (imported?.appId) router.push(`/app/p/${imported.appId}`);
+                    if (imported?.appId) router.push(`/home/p/${imported.appId}`);
                   }}
                 >
                   <Check /> Concluir

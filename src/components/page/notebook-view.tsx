@@ -70,7 +70,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
         <p className="text-sm font-medium text-ink">{NOTEBOOK_COPY.missing}</p>
         <p className="max-w-xs text-[12.5px] text-muted">{NOTEBOOK_COPY.missingHint}</p>
-        <Button variant="secondary" onClick={() => router.push("/app")}>
+        <Button variant="secondary" onClick={() => router.push("/home")}>
           Voltar ao início
         </Button>
       </div>
@@ -83,12 +83,12 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
       parentId: notebookId,
     });
     toast.success(NOTEBOOK_COPY.createdChild);
-    router.push(`/app/n/${created.id}`);
+    router.push(`/home/n/${created.id}`);
   };
 
   const createNote = async () => {
     const page = await adapter.createPage({ notebookId, title: "Sem título" });
-    router.push(`/app/p/${page.id}`);
+    router.push(`/home/p/${page.id}`);
   };
 
   const empty = !childNotebooks.length && !notes.length && !notebookDatabases.length;
@@ -134,7 +134,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                   toast.success(
                     parentIdOf(notebook) ? NOTEBOOK_COPY.duplicatedChild : NOTEBOOK_COPY.duplicatedRoot
                   );
-                  router.push(`/app/n/${copy.id}`);
+                  router.push(`/home/n/${copy.id}`);
                 } catch {
                   toast.error("Não foi possível duplicar.");
                 }
@@ -150,7 +150,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                 const parent = parentIdOf(notebook);
                 await adapter.deleteNotebook(notebookId);
                 toast.success(parent ? NOTEBOOK_COPY.removedChild : NOTEBOOK_COPY.removedRoot);
-                router.push(parent ? `/app/n/${parent}` : "/app");
+                router.push(parent ? `/home/n/${parent}` : "/home");
               }}
             >
               <Trash2 /> {deleteNotebookLabel(notebook)}
@@ -167,7 +167,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
         />
       ) : null}
 
-      <div className="relative z-10 mx-auto w-full max-w-[46rem] px-5 pb-24 md:px-8">
+      <div className="relative z-10 mx-auto w-full max-w-[46rem] px-5 pb-24 pb-safe md:px-8">
         <div className={cn("flex items-center", isIconUrl(notebook.emoji ?? "") ? "gap-5" : "gap-3", hasCover ? "pt-0" : "pt-6")}>
           <IconPickerMenu
             icons={NOTEBOOK_ICONS}
@@ -287,7 +287,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                   {notebookDatabases.map((database) => (
                     <Link
                       key={database.id}
-                      href={`/app/db/${database.id}`}
+                      href={`/home/db/${database.id}`}
                       className="flex items-center gap-3 px-4 py-3 transition hover:bg-[var(--surface-hover)]"
                     >
                       <WorkspaceIcon icon={database.icon} fallback="🗃️" size={16} />
@@ -322,7 +322,7 @@ function NotebookRow({ notebook }: { notebook: Notebook }) {
     try {
       const copy = await adapter.duplicateNotebook(notebook.id);
       toast.success(NOTEBOOK_COPY.duplicatedChild);
-      router.push(`/app/n/${copy.id}`);
+      router.push(`/home/n/${copy.id}`);
     } catch {
       toast.error("Não foi possível duplicar.");
     }
@@ -338,7 +338,7 @@ function NotebookRow({ notebook }: { notebook: Notebook }) {
 
   return (
     <div className="group flex items-center gap-2 px-4 py-3 transition hover:bg-[var(--surface-hover)]">
-      <Link href={`/app/n/${notebook.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+      <Link href={`/home/n/${notebook.id}`} className="flex min-w-0 flex-1 items-center gap-3">
         <WorkspaceIcon icon={notebook.emoji} fallback="📓" variant="list" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13.5px] font-medium text-ink">{notebook.name}</span>
@@ -387,7 +387,7 @@ function NoteRow({ page }: { page: Page }) {
     try {
       const copy = await adapter.duplicatePage(page.id);
       toast.success("Nota duplicada");
-      router.push(`/app/p/${copy.id}`);
+      router.push(`/home/p/${copy.id}`);
     } catch {
       toast.error("Não foi possível duplicar a nota.");
     }
@@ -403,7 +403,7 @@ function NoteRow({ page }: { page: Page }) {
 
   return (
     <div className="group flex items-center gap-2 px-4 py-3 transition hover:bg-[var(--surface-hover)]">
-      <Link href={`/app/p/${page.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+      <Link href={`/home/p/${page.id}`} className="flex min-w-0 flex-1 items-center gap-3">
         <WorkspaceIcon icon={page.icon} fallback="📄" variant="list" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13.5px] font-medium text-ink">

@@ -127,7 +127,7 @@ export function NotesExplorer({
       tags: scope.tag ? [scope.tag] : [],
       title: "Sem título",
     });
-    router.push(`/app/p/${page.id}`);
+    router.push(`/home/p/${page.id}`);
   };
 
   return (
@@ -270,7 +270,7 @@ export function NotesExplorer({
               <button
                 key={page.id}
                 onClick={() => setPickedId(page.id)}
-                onDoubleClick={() => router.push(`/app/p/${page.id}`)}
+                onDoubleClick={() => router.push(`/home/p/${page.id}`)}
                 className={cn(
                   "block w-full border-b border-[var(--border)] px-4 text-left transition",
                   density === "compact" ? "py-1.5" : "py-3.5",
@@ -298,7 +298,7 @@ export function NotesExplorer({
                     {selected.title || "Sem título"}
                   </h2>
                   <Button variant="secondary" asChild>
-                    <Link href={`/app/p/${selected.id}`}>Abrir</Link>
+                    <Link href={`/home/p/${selected.id}`}>Abrir</Link>
                   </Button>
                 </div>
                 <NoteMeta page={selected} className="mt-2" />
@@ -326,7 +326,7 @@ export function NotesExplorer({
             {pages.map((page) => (
               <Link
                 key={page.id}
-                href={`/app/p/${page.id}`}
+                href={`/home/p/${page.id}`}
                 className={cn(
                   "panel group flex flex-col transition hover:border-[var(--accent)]",
                   density === "compact" ? "gap-1 px-3 py-2" : "gap-2 px-4 py-3.5"
@@ -356,7 +356,7 @@ export function NotesExplorer({
           {pages.map((page) => (
             <Link
               key={page.id}
-              href={`/app/p/${page.id}`}
+              href={`/home/p/${page.id}`}
               className={cn(
                 "flex items-center gap-3 border-b border-[var(--border)] px-5 transition hover:bg-[var(--surface-hover)] sm:px-8",
                 density === "compact" ? "py-1.5" : "py-3.5"

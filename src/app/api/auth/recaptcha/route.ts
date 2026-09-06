@@ -16,7 +16,11 @@ export async function POST(request: Request) {
       throw new ApiError(400, "Confirme que você não é um robô.");
     }
 
-    if (await verifyRecaptchaSecret(token)) {
+    if (process.env.RECAPTCHA_SECRET_KEY) {
+      const ok = await verifyRecaptchaSecret(token);
+      if (!ok) {
+        throw new ApiError(400, "Confirme que você não é um robô.");
+      }
       return Response.json({ ok: true, provider: "classic" });
     }
 

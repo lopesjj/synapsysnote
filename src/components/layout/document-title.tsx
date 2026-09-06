@@ -21,37 +21,37 @@ function titleForRoute(
 ): string | null {
   const params = new URLSearchParams(search);
 
-  const pageId = pathSegment(pathname, "/app/p/");
+  const pageId = pathSegment(pathname, "/home/p/");
   if (pageId) {
     const page = pages.find((candidate) => candidate.id === pageId);
     return page ? formatTabTitle(page.title || "Sem título") : null;
   }
 
-  const notebookId = pathSegment(pathname, "/app/n/");
+  const notebookId = pathSegment(pathname, "/home/n/");
   if (notebookId) {
     const notebook = notebooks.find((candidate) => candidate.id === notebookId);
     return notebook ? formatTabTitle(notebook.name || "Sem nome") : null;
   }
 
-  const databaseId = pathSegment(pathname, "/app/db/");
+  const databaseId = pathSegment(pathname, "/home/db/");
   if (databaseId) {
     const database = databases.find((candidate) => candidate.id === databaseId);
     return database ? formatTabTitle(database.name || "Base") : null;
   }
 
-  const tag = pathSegment(pathname, "/app/tag/");
+  const tag = pathSegment(pathname, "/home/tag/");
   if (tag) return formatTabTitle(`#${tag}`);
 
-  if (pathname === "/app/trash") return formatTabTitle("Lixeira");
-  if (pathname === "/app/integrations") return formatTabTitle("Integrações");
+  if (pathname === "/home/trash") return formatTabTitle("Lixeira");
+  if (pathname === "/home/integrations") return formatTabTitle("Integrações");
 
-  if (pathname === "/app/notes") {
+  if (pathname === "/home/notes") {
     if (params.get("favorites") === "1") return formatTabTitle("Favoritos");
     const notebook = notebooks.find((candidate) => candidate.id === params.get("notebook"));
     return formatTabTitle(notebook?.name || "Todas as notas");
   }
 
-  if (pathname.startsWith("/app")) return formatTabTitle("Início");
+  if (pathname.startsWith("/home")) return formatTabTitle("Início");
   return formatTabTitle();
 }
 

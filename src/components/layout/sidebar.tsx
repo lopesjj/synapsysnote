@@ -144,7 +144,7 @@ export function SidebarRail() {
 
   const createPage = async () => {
     const page = await adapter.createPage({ notebookId: null, title: "Sem título" });
-    router.push(`/app/p/${page.id}`);
+    router.push(`/home/p/${page.id}`);
   };
 
   return (
@@ -179,14 +179,14 @@ export function SidebarRail() {
         </Tooltip>
         <Tooltip label="Todas as notas" side="right">
           <Button variant="ghost" size="icon" asChild>
-            <Link href="/app/notes" aria-label="Todas as notas">
+            <Link href="/home/notes" aria-label="Todas as notas">
               <FileStack />
             </Link>
           </Button>
         </Tooltip>
         <Tooltip label="Lixeira" side="right">
           <Button variant="ghost" size="icon" asChild>
-            <Link href="/app/trash" aria-label="Lixeira">
+            <Link href="/home/trash" aria-label="Lixeira">
               <Trash2 />
             </Link>
           </Button>
@@ -237,7 +237,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   const createPage = async (notebookId: string | null) => {
     const page = await adapter.createPage({ notebookId, title: "Sem título" });
     if (notebookId) setOpenNotebooks((prev) => ({ ...prev, [notebookId]: true }));
-    router.push(`/app/p/${page.id}`);
+    router.push(`/home/p/${page.id}`);
   };
 
   const createNotebook = async (parentId: string | null = null) => {
@@ -248,7 +248,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
     if (parentId) setOpenNotebooks((prev) => ({ ...prev, [parentId]: true }));
     setOpenNotebooks((prev) => ({ ...prev, [notebook.id]: true }));
     toast.success(parentId ? NOTEBOOK_COPY.createdChild : NOTEBOOK_COPY.createdRoot);
-    router.push(`/app/n/${notebook.id}`);
+    router.push(`/home/n/${notebook.id}`);
   };
 
   const onDragEnd = async (event: DragEndEvent) => {
@@ -310,7 +310,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           contents.get(notebook.id) ?? { tree: [], databases: [] };
         const nested = childrenOf(notebooks, notebook.id);
         const open = openNotebooks[notebook.id] ?? true;
-        const active = pathname === `/app/n/${notebook.id}`;
+        const active = pathname === `/home/n/${notebook.id}`;
         const empty = !tree.length && !notebookDatabases.length && !nested.length;
 
         return (
@@ -333,7 +333,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                 toast.success(
                   isNestedNotebook(notebook) ? NOTEBOOK_COPY.duplicatedChild : NOTEBOOK_COPY.duplicatedRoot
                 );
-                router.push(`/app/n/${copy.id}`);
+                router.push(`/home/n/${copy.id}`);
               } catch {
                 toast.error("Não foi possível duplicar.");
               }
@@ -345,7 +345,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               toast.success(isNestedNotebook(notebook) ? NOTEBOOK_COPY.removedChild : NOTEBOOK_COPY.removedRoot);
               if (active) {
                 const parent = parentIdOf(notebook);
-                router.push(parent ? `/app/n/${parent}` : "/app");
+                router.push(parent ? `/home/n/${parent}` : "/home");
               }
             }}
           >
@@ -360,12 +360,12 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                   {notebookDatabases.map((database) => (
                     <Link
                       key={database.id}
-                      href={`/app/db/${database.id}`}
+                      href={`/home/db/${database.id}`}
                       draggable={false}
                       className={cn(
                         "flex items-center gap-1.5 rounded-[var(--radius-xs)] py-1 pr-2 text-[13.5px] transition hover:bg-[var(--surface-hover)]",
                         depth > 0 ? "pl-7" : "pl-5",
-                        pathname === `/app/db/${database.id}`
+                        pathname === `/home/db/${database.id}`
                           ? "font-medium text-ink"
                           : "text-muted hover:text-ink"
                       )}
@@ -390,7 +390,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   const renderTree = (nodes: PageTreeNode[]) =>
     nodes.map((node) => {
       const isOpen = expanded[node.page.id] ?? node.depth < 1;
-      const active = pathname === `/app/p/${node.page.id}`;
+      const active = pathname === `/home/p/${node.page.id}`;
       return (
         <div key={node.page.id}>
           <SortablePageRow
@@ -405,7 +405,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                 title: "Sem título",
               });
               setExpanded((prev) => ({ ...prev, [node.page.id]: true }));
-              router.push(`/app/p/${child.id}`);
+              router.push(`/home/p/${child.id}`);
             }}
             onToggleFavorite={() =>
               adapter.updatePage(node.page.id, { favorite: !node.page.favorite })
@@ -414,7 +414,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               try {
                 const copy = await adapter.duplicatePage(node.page.id);
                 toast.success("Nota duplicada");
-                router.push(`/app/p/${copy.id}`);
+                router.push(`/home/p/${copy.id}`);
               } catch {
                 toast.error("Não foi possível duplicar a nota.");
               }
@@ -424,7 +424,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               toast.success("Movida para a lixeira", {
                 action: { label: "Desfazer", onClick: () => adapter.restorePage(node.page.id) },
               });
-              if (active) router.push("/app");
+              if (active) router.push("/home");
             }}
           />
           <AnimatePresence initial={false}>
@@ -455,7 +455,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
       className="flex h-full shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]"
       style={{ width }}
     >
-      <div className="relative flex items-center px-4 py-5">
+      <div className="relative flex items-center px-4 py-5 pt-safe">
         <Tooltip label="Recolher barra lateral" shortcut={isMac() ? "⌘B" : "Ctrl B"} side="right">
           <button
             type="button"
@@ -481,18 +481,18 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           Buscar
           <Kbd className="ml-auto">{isMac() ? "⌘K" : "Ctrl K"}</Kbd>
         </button>
-        <NavLink href="/app" active={pathname === "/app"} icon={<Home className="size-3.5" />}>
+        <NavLink href="/home" active={pathname === "/home"} icon={<Home className="size-3.5" />}>
           Início
         </NavLink>
         <NavLink
-          href="/app/notes"
-          active={pathname === "/app/notes"}
+          href="/home/notes"
+          active={pathname === "/home/notes"}
           icon={<FileStack className="size-3.5" />}
         >
           Todas as notas
           <span className="ml-auto text-[10.5px] text-faint">{livePages.length}</span>
         </NavLink>
-        <NavLink href="/app/trash" active={pathname === "/app/trash"} icon={<Trash2 className="size-3.5" />}>
+        <NavLink href="/home/trash" active={pathname === "/home/trash"} icon={<Trash2 className="size-3.5" />}>
           Lixeira
           {trashedPages.length ? (
             <span className="ml-auto text-[10.5px] text-faint">{trashedPages.length}</span>
@@ -522,7 +522,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               action={
                 <Tooltip label="Ver todos os favoritos">
                   <Link
-                    href="/app/notes?favorites=1"
+                    href="/home/notes?favorites=1"
                     className="rounded p-0.5 text-faint transition hover:text-ink"
                     aria-label="Ver todos os favoritos"
                   >
@@ -534,7 +534,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               {favorites.map((page) => (
                 <Link
                   key={page.id}
-                  href={`/app/p/${page.id}`}
+                  href={`/home/p/${page.id}`}
                   className="flex items-center gap-2 rounded-[var(--radius-xs)] px-2 py-1 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
                 >
                   <SidebarItemIcon icon={page.icon} fallback="⭐" />
@@ -578,7 +578,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                 {tags.slice(0, 14).map((tag) => (
                   <Link
                     key={tag.name}
-                    href={`/app/tag/${encodeURIComponent(tag.name)}`}
+                    href={`/home/tag/${encodeURIComponent(tag.name)}`}
                     className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-muted transition hover:border-[var(--accent)] hover:text-ink"
                   >
                     {tag.name}
@@ -599,7 +599,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         </DragOverlay>
       </DndContext>
 
-      <div className="border-t border-[var(--border)] px-2.5 py-3">
+      <div className="border-t border-[var(--border)] px-2.5 py-3 pb-safe">
         <UserMenu />
       </div>
     </aside>
@@ -620,6 +620,7 @@ function NavLink({
   return (
     <Link
       href={href}
+      onClick={closeMenuBar}
       className={cn(
         "flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] transition hover:bg-[var(--surface-hover)]",
         active ? "font-medium text-ink" : "text-muted hover:text-ink"
@@ -727,8 +728,9 @@ function NotebookRow({
               />
             </button>
             <Link
-              href={`/app/n/${notebook.id}`}
+              href={`/home/n/${notebook.id}`}
               draggable={false}
+              onClick={closeMenuBar}
               className={cn(
                 "flex min-w-0 flex-1 items-center gap-1.5 text-left",
                 active ? "font-medium text-ink" : "text-ink"
@@ -765,10 +767,10 @@ function NotebookRow({
             </button>
           </MenuTrigger>
           <MenuContent align="start">
-            <MenuItem onSelect={() => router.push(`/app/n/${notebook.id}`)}>
+            <MenuItem onSelect={() => router.push(`/home/n/${notebook.id}`)}>
               <FolderPlus /> {openNotebookLabel(notebook)}
             </MenuItem>
-            <MenuItem onSelect={() => router.push(`/app/notes?notebook=${notebook.id}`)}>
+            <MenuItem onSelect={() => router.push(`/home/notes?notebook=${notebook.id}`)}>
               <FileStack /> Ver todas as notas
             </MenuItem>
             <MenuItem onSelect={() => setRenaming(true)}>Renomear</MenuItem>
@@ -873,11 +875,9 @@ function SortablePageRow({
         <ChevronRight className={cn("size-3 transition-transform", isOpen && "rotate-90")} />
       </button>
       <Link
-        href={`/app/p/${node.page.id}`}
-        // Anchors are natively draggable, and the browser's link drag hijacks
-        // the gesture: a drag that starts slightly off the grip ends up opening
-        // the page instead of reordering it.
+        href={`/home/p/${node.page.id}`}
         draggable={false}
+        onClick={closeMenuBar}
         className={cn(
           "flex min-w-0 flex-1 items-center gap-1.5 py-1 text-[13.5px]",
           active ? "font-medium text-ink" : "text-muted group-hover:text-ink"

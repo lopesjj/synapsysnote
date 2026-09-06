@@ -19,7 +19,7 @@ export default function DatabaseRoute({ params }: { params: Promise<{ databaseId
           {ready ? "Base de dados não encontrada" : "Carregando…"}
         </p>
         {ready ? (
-          <Button variant="secondary" onClick={() => router.push("/app")}>
+          <Button variant="secondary" onClick={() => router.push("/home")}>
             Voltar ao início
           </Button>
         ) : null}

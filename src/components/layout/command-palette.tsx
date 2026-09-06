@@ -31,8 +31,8 @@ export function CommandPalette({
   const router = useRouter();
   const pathname = usePathname();
   const { livePages, databases, notebooks, adapter } = useWorkspace();
-  const currentPageId = pathname.startsWith("/app/p/") ? pathname.slice("/app/p/".length) : null;
-  const currentNotebookId = pathname.startsWith("/app/n/") ? pathname.slice("/app/n/".length) : null;
+  const currentPageId = pathname.startsWith("/home/p/") ? pathname.slice("/home/p/".length) : null;
+  const currentNotebookId = pathname.startsWith("/home/n/") ? pathname.slice("/home/n/".length) : null;
   const currentNotebook = currentNotebookId
     ? notebooks.find((notebook) => notebook.id === currentNotebookId)
     : null;
@@ -122,7 +122,7 @@ export function CommandPalette({
                       <Command.Item
                         key={notebook.id}
                         value={`hit-notebook-${notebook.id}`}
-                        onSelect={() => go(`/app/n/${notebook.id}`)}
+                        onSelect={() => go(`/home/n/${notebook.id}`)}
                         className={itemClass}
                       >
                         <WorkspaceIcon icon={notebook.emoji} fallback="📓" size={14} />
@@ -139,7 +139,7 @@ export function CommandPalette({
                         key={`${hit.kind}-${hit.id}`}
                         value={`${hit.kind}-${hit.id}`}
                         onSelect={() =>
-                          go(hit.kind === "page" ? `/app/p/${hit.id}` : `/app/db/${hit.id}`)
+                          go(hit.kind === "page" ? `/home/p/${hit.id}` : `/home/db/${hit.id}`)
                         }
                         className={itemClass}
                       >
@@ -174,7 +174,7 @@ export function CommandPalette({
                           <Command.Item
                             key={notebook.id}
                             value={`notebook-${notebook.id}`}
-                            onSelect={() => go(`/app/n/${notebook.id}`)}
+                            onSelect={() => go(`/home/n/${notebook.id}`)}
                             className={itemClass}
                           >
                             <WorkspaceIcon icon={notebook.emoji} fallback="📓" size={14} />
@@ -191,7 +191,7 @@ export function CommandPalette({
                         <Command.Item
                           key={page.id}
                           value={`recent-${page.id}`}
-                          onSelect={() => go(`/app/p/${page.id}`)}
+                          onSelect={() => go(`/home/p/${page.id}`)}
                           className={itemClass}
                         >
                           <WorkspaceIcon icon={page.icon} fallback="📄" size={14} />
@@ -209,7 +209,7 @@ export function CommandPalette({
                             try {
                               const copy = await adapter.duplicatePage(currentPageId);
                               toast.success("Nota duplicada");
-                              go(`/app/p/${copy.id}`);
+                              go(`/home/p/${copy.id}`);
                             } catch {
                               toast.error("Não foi possível duplicar a nota.");
                             }
@@ -226,7 +226,7 @@ export function CommandPalette({
                             try {
                               const copy = await adapter.duplicateNotebook(currentNotebookId);
                               toast.success("Duplicado");
-                              go(`/app/n/${copy.id}`);
+                              go(`/home/n/${copy.id}`);
                             } catch {
                               toast.error("Não foi possível duplicar.");
                             }
@@ -244,7 +244,7 @@ export function CommandPalette({
                         className={itemClass}
                         onSelect={async () => {
                           const page = await adapter.createPage({ title: "Sem título" });
-                          go(`/app/p/${page.id}`);
+                          go(`/home/p/${page.id}`);
                         }}
                       >
                         <span className="flex-1 text-[13px] text-ink">Nova nota</span>
@@ -255,7 +255,7 @@ export function CommandPalette({
                         className={itemClass}
                         onSelect={async () => {
                           const notebook = await adapter.createNotebook({ name: "Nova página" });
-                          go(`/app/n/${notebook.id}`);
+                          go(`/home/n/${notebook.id}`);
                         }}
                       >
                         <span className="flex-1 text-[13px] text-ink">Nova página</span>
@@ -266,7 +266,7 @@ export function CommandPalette({
                         className={itemClass}
                         onSelect={async () => {
                           const database = await adapter.createDatabase({ name: "Nova base" });
-                          go(`/app/db/${database.id}`);
+                          go(`/home/db/${database.id}`);
                         }}
                       >
                         <span className="flex-1 text-[13px] text-ink">Nova base de dados</span>
@@ -274,7 +274,7 @@ export function CommandPalette({
                       <Command.Item
                         value="all-notes"
                         className={itemClass}
-                        onSelect={() => go("/app/notes")}
+                        onSelect={() => go("/home/notes")}
                       >
                         <span className="flex-1 text-[13px] text-ink">Todas as notas</span>
                       </Command.Item>
@@ -312,7 +312,7 @@ export function CommandPalette({
                           Alternar para tema {theme === "dark" ? "claro" : "escuro"}
                         </span>
                       </Command.Item>
-                      <Command.Item value="trash" className={itemClass} onSelect={() => go("/app/trash")}>
+                      <Command.Item value="trash" className={itemClass} onSelect={() => go("/home/trash")}>
                         <span className="flex-1 text-[13px] text-ink">Abrir lixeira</span>
                       </Command.Item>
                     </Command.Group>
