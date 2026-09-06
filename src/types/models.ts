@@ -213,6 +213,7 @@ export interface Notebook {
   /** Parent notebook — `null` (or missing on older docs) means a root caderno. */
   parentId?: string | null;
   order: number;
+  notionPageId?: string | null;
   createdAt: ISOTimestamp;
   updatedAt: ISOTimestamp;
 }

@@ -50,9 +50,10 @@ export function duplicateNotebookLabel(notebook: Pick<Notebook, "parentId">): st
 }
 
 export function deleteNotebookConfirm(notebook: Pick<Notebook, "parentId" | "name">): string {
-  const kind = isNestedNotebook(notebook) ? "caderno" : "página";
-  const name = notebook.name?.trim() || (isNestedNotebook(notebook) ? "caderno" : "página");
-  return `Excluir "${name}" e tudo que está dentro deste ${kind}? As notas vão para a lixeira.`;
+  const isNested = isNestedNotebook(notebook);
+  const target = isNested ? "deste caderno" : "desta página";
+  const name = notebook.name?.trim() || (isNested ? "caderno" : "página");
+  return `Excluir "${name}" e tudo que está dentro ${target}? As notas vão para a lixeira.`;
 }
 
 export function iconNotebookLabel(notebook: Pick<Notebook, "parentId">): string {

@@ -19,7 +19,8 @@ export interface ImportSelection {
  * document produced by the background worker.
  */
 export function useNotionImport() {
-  const { adapter, integration, importJobs, notebooks } = useWorkspace();
+  const { adapter, integration, importJobs, activeImportJob, notebooks, livePages, databases } =
+    useWorkspace();
 
   const [tree, setTree] = useState<NotionTreeNode[]>([]);
   const [treeError, setTreeError] = useState<string | null>(null);
@@ -28,6 +29,14 @@ export function useNotionImport() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [treeRequest, setTreeRequest] = useState(0);
+
+  const existingNotionIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of livePages) if (p.notionPageId) set.add(p.notionPageId);
+    for (const nb of notebooks) if (nb.notionPageId) set.add(nb.notionPageId);
+    for (const db of databases) if (db.notionDatabaseId) set.add(db.notionDatabaseId);
+    return set;
+  }, [livePages, notebooks, databases]);
 
   const loadTree = useCallback(async () => {
     setTreeError(null);
@@ -116,12 +125,14 @@ export function useNotionImport() {
     const rows = selectedNodes
       .filter((n) => n.type === "database")
       .reduce((sum, n) => sum + (n.childCount ?? 0), 0);
-    return { pages, databases, rows, total: selectedNodes.length };
-  }, [selectedNodes]);
+    const existingCount = selectedNodes.filter((n) => existingNotionIds.has(n.id)).length;
+    const newCount = selectedNodes.length - existingCount;
+    return { pages, databases, rows, total: selectedNodes.length, existingCount, newCount };
+  }, [existingNotionIds, selectedNodes]);
 
   const job: ImportJob | null = useMemo(
-    () => importJobs.find((j) => j.id === jobId) ?? null,
-    [importJobs, jobId]
+    () => (jobId ? importJobs.find((j) => j.id === jobId) : null) ?? activeImportJob ?? null,
+    [activeImportJob, importJobs, jobId]
   );
 
   const start = useCallback(
@@ -132,6 +143,11 @@ export function useNotionImport() {
       runOcr: boolean;
       createBacklinks: boolean;
     }) => {
+      if (activeImportJob) {
+        throw new Error(
+          "Já existe uma importação em andamento. Aguarde a conclusão ou cancele-a antes de iniciar outra."
+        );
+      }
       setSubmitting(true);
       try {
         // Import parents before children so `parentPageId` always resolves.
@@ -157,12 +173,13 @@ export function useNotionImport() {
         setSubmitting(false);
       }
     },
-    [adapter, flat, importAll, selected]
+    [activeImportJob, adapter, flat, importAll, selected]
   );
 
   const cancel = useCallback(async () => {
-    if (jobId) await adapter.cancelImportJob(jobId);
-  }, [adapter, jobId]);
+    const targetId = jobId ?? activeImportJob?.id;
+    if (targetId) await adapter.cancelImportJob(targetId);
+  }, [activeImportJob, adapter, jobId]);
 
   const reset = useCallback(() => {
     setJobId(null);
@@ -197,6 +214,8 @@ export function useNotionImport() {
     cancel,
     reset,
     job,
+    activeImportJob,
+    existingNotionIds,
     progress,
     connect: () => adapter.connectNotion(),
     disconnect: () => adapter.disconnectNotion(),

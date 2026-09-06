@@ -6,7 +6,7 @@ import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { toast } from "sonner";
-import { AudioLines, Download, FileText, Loader2, ScanText, Sparkles } from "lucide-react";
+import { AudioLines, Download, ExternalLink, FileText, Loader2, ScanText, Sparkles } from "lucide-react";
 import { cn, formatBytes, formatDuration } from "@/lib/utils";
 import { Badge } from "@/components/ui/primitives";
 import { useWorkspace } from "@/lib/data/provider";
@@ -171,6 +171,223 @@ function ResizableImage({
   );
 }
 
+function ResizablePdf({
+  url,
+  name,
+  width,
+  height,
+  editable,
+  selected,
+  onResize,
+}: {
+  url: string;
+  name: string;
+  width: number | null;
+  height: number | null;
+  editable: boolean;
+  selected: boolean;
+  onResize: (dims: { displayWidth?: number; displayHeight?: number }) => void;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const [resizing, setResizing] = useState<{ width?: number; height?: number } | null>(null);
+
+  const percent = clamp(width ?? 100, 25, 100);
+  const currentHeight = clamp(height ?? 640, 220, 1400);
+
+  const activeWidth = resizing?.width ?? percent;
+  const activeHeight = resizing?.height ?? currentHeight;
+
+  const showHandles = editable && (hovered || selected || resizing != null);
+
+  const startResize =
+    (mode: "horizontal" | "vertical" | "both", edge?: "left" | "right") =>
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (!editable) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const parent = boxRef.current?.parentElement;
+      if (!parent) return;
+      const parentWidth = parent.getBoundingClientRect().width;
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const startPercent = percent;
+      const startHeightPx = currentHeight;
+
+      const move = (pointer: PointerEvent) => {
+        const deltaX = pointer.clientX - startX;
+        const deltaY = pointer.clientY - startY;
+
+        let nextWidth = startPercent;
+        let nextHeight = startHeightPx;
+
+        if (mode === "horizontal" || mode === "both") {
+          const signed = edge === "left" ? -deltaX : deltaX;
+          nextWidth = snapWidth(clamp(Math.round(startPercent + (signed / parentWidth) * 100), 25, 100));
+        }
+
+        if (mode === "vertical" || mode === "both") {
+          nextHeight = clamp(Math.round(startHeightPx + deltaY), 220, 1400);
+        }
+
+        setResizing({ width: nextWidth, height: nextHeight });
+        onResize({
+          ...(mode !== "vertical" ? { displayWidth: nextWidth } : {}),
+          ...(mode !== "horizontal" ? { displayHeight: nextHeight } : {}),
+        });
+      };
+
+      const up = () => {
+        setResizing(null);
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    };
+
+  return (
+    <div
+      ref={boxRef}
+      className={cn(
+        "group/pdf relative mx-auto my-3 max-w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] shadow-xs transition-shadow",
+        "max-sm:!w-full",
+        showHandles && "ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)]"
+      )}
+      style={{ width: `${activeWidth}%` }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Header com controles e ações (sem exibir nome do arquivo) */}
+      <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-[12px]">
+        <div className="flex items-center gap-1.5">
+          <FileText className="size-4 shrink-0 text-red-500" />
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
+            title="Abrir em nova aba / tela cheia"
+          >
+            <ExternalLink className="size-3.5" />
+            <span className="hidden sm:inline">Abrir</span>
+          </a>
+          <a
+            href={url}
+            download={name || "documento.pdf"}
+            className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
+            title="Baixar PDF"
+          >
+            <Download className="size-3.5" />
+          </a>
+        </div>
+      </div>
+
+      {/* Visualizador responsivo com fallback mobile */}
+      <div
+        className="relative w-full overflow-hidden bg-[var(--surface)]"
+        style={{ height: `${activeHeight}px` }}
+      >
+        <object
+          data={`${url}#toolbar=1&navpanes=0`}
+          type="application/pdf"
+          className="h-full w-full"
+          aria-label={name || "PDF"}
+        >
+          {/* Fallback caso o navegador mobile não suporte object direto */}
+          <iframe
+            src={`https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`}
+            title={name || "PDF"}
+            className="h-full w-full border-0"
+          />
+        </object>
+      </div>
+
+      {/* Handles de redimensionamento */}
+      {editable ? (
+        <>
+          {/* Handle lateral esquerdo */}
+          <button
+            type="button"
+            aria-label="Redimensionar largura à esquerda"
+            draggable={false}
+            onPointerDown={startResize("horizontal", "left")}
+            className={cn(
+              "absolute left-1 top-1/2 z-10 hidden sm:flex h-16 w-4 -translate-y-1/2 items-center justify-center",
+              "cursor-ew-resize touch-none opacity-0 transition-opacity",
+              "group-hover/pdf:opacity-100 focus-visible:opacity-100",
+              showHandles && "opacity-100"
+            )}
+          >
+            <span className="h-10 w-1.5 rounded-full border border-white/80 bg-[var(--accent)] shadow-[0_1px_4px_rgba(15,44,76,0.35)]" />
+          </button>
+
+          {/* Handle lateral direito */}
+          <button
+            type="button"
+            aria-label="Redimensionar largura à direita"
+            draggable={false}
+            onPointerDown={startResize("horizontal", "right")}
+            className={cn(
+              "absolute right-1 top-1/2 z-10 hidden sm:flex h-16 w-4 -translate-y-1/2 items-center justify-center",
+              "cursor-ew-resize touch-none opacity-0 transition-opacity",
+              "group-hover/pdf:opacity-100 focus-visible:opacity-100",
+              showHandles && "opacity-100"
+            )}
+          >
+            <span className="h-10 w-1.5 rounded-full border border-white/80 bg-[var(--accent)] shadow-[0_1px_4px_rgba(15,44,76,0.35)]" />
+          </button>
+
+          {/* Handle inferior vertical */}
+          <button
+            type="button"
+            aria-label="Redimensionar altura vertical"
+            draggable={false}
+            onPointerDown={startResize("vertical")}
+            className={cn(
+              "absolute bottom-1 left-1/2 z-10 flex h-4 w-16 -translate-x-1/2 items-center justify-center",
+              "cursor-ns-resize touch-none opacity-0 transition-opacity",
+              "group-hover/pdf:opacity-100 focus-visible:opacity-100",
+              showHandles && "opacity-100"
+            )}
+          >
+            <span className="h-1.5 w-10 rounded-full border border-white/80 bg-[var(--accent)] shadow-[0_1px_4px_rgba(15,44,76,0.35)]" />
+          </button>
+
+          {/* Handle diagonal de canto */}
+          <button
+            type="button"
+            aria-label="Redimensionar largura e altura"
+            draggable={false}
+            onPointerDown={startResize("both", "right")}
+            className={cn(
+              "absolute bottom-1 right-1 z-10 flex size-5 items-center justify-center",
+              "cursor-nwse-resize touch-none opacity-0 transition-opacity",
+              "group-hover/pdf:opacity-100 focus-visible:opacity-100",
+              showHandles && "opacity-100"
+            )}
+          >
+            <span className="size-2.5 rounded-full border border-white/80 bg-[var(--accent)] shadow-[0_1px_4px_rgba(15,44,76,0.35)]" />
+          </button>
+
+          {/* Indicador de dimensão */}
+          <span
+            className={cn(
+              "pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-[var(--text)]/85 px-2.5 py-0.5 text-[10px] text-[var(--surface)]",
+              "opacity-0 transition-opacity group-hover/pdf:opacity-100",
+              showHandles && "opacity-100"
+            )}
+          >
+            {activeWidth}% × {activeHeight}px
+          </span>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) {
   const {
     mediaType,
@@ -185,6 +402,7 @@ function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) 
     transcriptSummary,
     pending,
     displayWidth,
+    displayHeight,
   } = node.attrs as Record<string, string | number | boolean | null>;
   const [showText, setShowText] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -225,10 +443,14 @@ function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) 
       ) : null}
 
       {pdf && url ? (
-        <iframe
-          src={url as string}
-          title={(name as string) || "PDF"}
-          className="h-[min(80vh,720px)] w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)]"
+        <ResizablePdf
+          url={url as string}
+          name={(name as string) || "PDF"}
+          width={typeof displayWidth === "number" ? displayWidth : null}
+          height={typeof displayHeight === "number" ? displayHeight : null}
+          editable={editor.isEditable}
+          selected={selected}
+          onResize={(dims) => updateAttributes(dims)}
         />
       ) : null}
 
@@ -345,6 +567,7 @@ export const MediaBlock = Node.create({
       transcriptSummary: { default: null },
       pending: { default: false },
       displayWidth: { default: null },
+      displayHeight: { default: null },
     };
   },
 

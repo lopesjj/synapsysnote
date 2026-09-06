@@ -148,7 +148,7 @@ export async function completeUserRegistration(identity: ProfileIdentity): Promi
 /** Patches identity fields (used by the "edit profile" dialog). */
 export async function updateUserProfile(
   uid: string,
-  patch: Partial<Pick<UserProfile, "displayName" | "photoURL" | "phone">>
+  patch: Partial<Pick<UserProfile, "displayName" | "photoURL" | "phone" | "providers">>
 ): Promise<void> {
   if (isLocalProfile(uid)) {
     const existing = readLocal(uid);

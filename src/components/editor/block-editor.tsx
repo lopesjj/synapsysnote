@@ -148,11 +148,22 @@ export function BlockEditor({
         },
       }),
       Placeholder.configure({
-        placeholder: ({ node }) =>
-          node.type.name === "heading"
-            ? "Título da seção"
-            : "Escreva, cole, use # para um título ou / para inserir um bloco",
-        includeChildren: true,
+        placeholder: ({ node, editor }) => {
+          if (node.type.name === "heading") {
+            return "Título da seção";
+          }
+          const { doc } = editor.state;
+          const isEmpty =
+            doc.childCount === 0 ||
+            (doc.childCount === 1 &&
+              doc.firstChild?.type.name === "paragraph" &&
+              doc.firstChild.content.size === 0);
+
+          return isEmpty
+            ? "Escreva, cole, use # para um título ou / para inserir um bloco"
+            : "";
+        },
+        includeChildren: false,
       }),
       TextStyle,
       Color.configure({ types: ["textStyle"] }),
@@ -314,7 +325,7 @@ export function BlockEditor({
   return (
     <div className={cn("synapsys-editor relative", !chrome && "synapsys-editor--preview")}>
       {chrome ? (
-        <div className="sticky top-[41px] z-10 -mx-4 mb-3 border-b border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 backdrop-blur-xl dark:bg-[var(--canvas)]/90 md:-mx-5 md:px-3">
+        <div className="sticky top-[41px] z-10 -mx-1 sm:-mx-4 md:-mx-5 mb-3 border-b border-[var(--border)] bg-[var(--surface)] px-1 sm:px-2 md:px-3 py-1.5 backdrop-blur-xl dark:bg-[var(--canvas)]/90">
           <div className="flex flex-wrap items-center justify-center gap-0.5">
             <EditorToolbar
               editor={editor}
@@ -326,7 +337,7 @@ export function BlockEditor({
           </div>
         </div>
       ) : null}
-      <div className="relative min-w-0 px-8" onClickCapture={openMention}>
+      <div className="relative min-w-0 px-1 sm:px-4 md:px-8" onClickCapture={openMention}>
         {editable ? <BubbleToolbar editor={editor} /> : null}
         <EditorContent editor={editor} />
         {chrome ? (

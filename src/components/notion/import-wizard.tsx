@@ -59,6 +59,7 @@ export function ImportWizard({
     job,
     progress,
     connect,
+    existingNotionIds,
   } = useNotionImport();
 
   const [stepOverride, setStepOverride] = useState<Step | null>(null);
@@ -72,7 +73,8 @@ export function ImportWizard({
   const [connecting, setConnecting] = useState(false);
 
   const connected = Boolean(integration?.connected);
-  const step: Step = stepOverride ?? (connected ? "select" : "connect");
+  const isJobActive = Boolean(job && ["pending", "discovering", "running"].includes(job.status));
+  const step: Step = isJobActive ? "progress" : (stepOverride ?? (connected ? "select" : "connect"));
   const resolvedNotebookId = targetNotebookId;
 
   const handleConnect = async () => {
@@ -148,6 +150,7 @@ export function ImportWizard({
                 stateOf={stateOf}
                 toggle={toggle}
                 toggleAll={toggleAll}
+                existingNotionIds={existingNotionIds}
               />
             ) : null}
 
@@ -310,6 +313,7 @@ function SelectStep({
   stateOf,
   toggle,
   toggleAll,
+  existingNotionIds,
 }: {
   tree: NotionTreeNode[];
   loading: boolean;
@@ -319,6 +323,7 @@ function SelectStep({
   stateOf: (id: string) => "checked" | "unchecked" | "indeterminate";
   toggle: (id: string, checked: boolean) => void;
   toggleAll: (checked: boolean) => void;
+  existingNotionIds?: Set<string>;
 }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -392,6 +397,12 @@ function SelectStep({
             </span>
 
             <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{node.title}</span>
+
+            {existingNotionIds?.has(node.id) ? (
+              <Badge tone="neutral" className="text-[10.5px] opacity-75">
+                Já no Synapsys
+              </Badge>
+            ) : null}
 
             {node.type === "database" ? (
               <Badge tone="accent">{node.childCount ?? 0} registros</Badge>
@@ -489,6 +500,12 @@ function PreviewStep({
         <SummaryCard label="Bases" value={summary.databases} />
         <SummaryCard label="Registros" value={summary.rows} />
       </div>
+
+      {"existingCount" in summary && (summary as { existingCount: number }).existingCount > 0 ? (
+        <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-2)] p-2.5 text-[12px] text-muted">
+          💡 <strong className="text-ink">{(summary as { existingCount: number }).existingCount}</strong> dos itens selecionados já existem no Synapsys Note e serão sincronizados e atualizados sem criar duplicatas.
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">

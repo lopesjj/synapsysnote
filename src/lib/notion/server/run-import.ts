@@ -65,6 +65,10 @@ async function fetchAllChildren(notion: Client, blockId: string): Promise<Notion
 
 class ProgressReporter {
   private items: ImportJobItem[];
+  private pendingFilesCount = 0;
+  private pendingProcessedFiles = 0;
+  private pendingBytes = 0;
+  private flushTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly ref: FirebaseFirestore.DocumentReference,
@@ -78,28 +82,58 @@ class ProgressReporter {
     this.items = [...(job.items ?? [])];
   }
 
+  async flush() {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    const updates: Record<string, unknown> = {};
+    if (this.pendingFilesCount > 0) {
+      updates.totalFiles = FieldValue.increment(this.pendingFilesCount);
+      this.pendingFilesCount = 0;
+    }
+    if (this.pendingProcessedFiles > 0) {
+      updates.processedFiles = FieldValue.increment(this.pendingProcessedFiles);
+      this.pendingProcessedFiles = 0;
+    }
+    if (this.pendingBytes > 0) {
+      updates.totalBytes = FieldValue.increment(this.pendingBytes);
+      this.pendingBytes = 0;
+    }
+    if (Object.keys(updates).length > 0) {
+      updates.updatedAt = FieldValue.serverTimestamp();
+      await this.ref.update(updates).catch(() => {});
+    }
+  }
+
+  private scheduleFlush() {
+    if (!this.flushTimer) {
+      this.flushTimer = setTimeout(() => {
+        void this.flush();
+      }, 500);
+    }
+  }
+
   async patch(data: FirebaseFirestore.UpdateData<Record<string, unknown>>) {
+    await this.flush();
     if (Array.isArray(data.items)) this.items = data.items as ImportJobItem[];
     await this.ref.update({ ...data, updatedAt: FieldValue.serverTimestamp() });
   }
 
   async addFiles(count: number) {
     if (!count) return;
-    await this.ref.update({
-      totalFiles: FieldValue.increment(count),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    this.pendingFilesCount += count;
+    this.scheduleFlush();
   }
 
   async fileDone(bytes: number) {
-    await this.ref.update({
-      processedFiles: FieldValue.increment(1),
-      totalBytes: FieldValue.increment(bytes),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    this.pendingProcessedFiles += 1;
+    this.pendingBytes += bytes;
+    this.scheduleFlush();
   }
 
   async itemStatus(notionId: string, status: ImportJobItem["status"], appId?: string) {
+    await this.flush();
     this.items = this.items.map((item) =>
       item.notionId === notionId ? { ...item, status, ...(appId ? { appId } : {}) } : item
     );
@@ -115,6 +149,7 @@ class ProgressReporter {
     stage: "fetch" | "convert" | "media" | "write";
     message: string;
   }) {
+    await this.flush();
     await this.ref.update({
       errors: FieldValue.arrayUnion({ ...error, at: Date.now() }),
       updatedAt: FieldValue.serverTimestamp(),
@@ -127,6 +162,7 @@ class ProgressReporter {
   }
 
   async finish() {
+    await this.flush();
     const snapshot = await this.ref.get();
     const errors = (snapshot.get("errors") ?? []) as unknown[];
     await this.ref.update({
@@ -140,6 +176,7 @@ class ProgressReporter {
   }
 
   async fail(message: string) {
+    await this.flush();
     await this.ref.update({
       status: "failed",
       currentStep: `Falhou: ${message}`,
@@ -378,28 +415,31 @@ async function importDatabase(args: ImportArgs): Promise<string> {
           if (!Array.isArray(value)) continue;
           const files = value as { name: string; url: string }[];
           if (!files.length || typeof files[0]?.url !== "string") continue;
-          const rehosted: { name: string; url: string }[] = [];
-          for (const file of files) {
-            if (!file.url) continue;
-            try {
-              await progress.addFiles(1);
-              const result = await rehostNotionFile({
-                workspaceId,
-                jobId,
-                url: file.url,
-                suggestedName: file.name,
-              });
-              await progress.fileDone(result.bytes);
-              rehosted.push({ name: file.name, url: result.url });
-            } catch (error) {
-              await progress.addError({
-                itemId: node.id,
-                itemTitle: file.name,
-                stage: "media",
-                message: (error as Error).message,
-              });
-            }
-          }
+
+          await progress.addFiles(files.filter((f) => Boolean(f.url)).length);
+          const rehosted = await Promise.all(
+            files.map(async (file) => {
+              if (!file.url) return file;
+              try {
+                const result = await rehostNotionFile({
+                  workspaceId,
+                  jobId,
+                  url: file.url,
+                  suggestedName: file.name,
+                });
+                await progress.fileDone(result.bytes);
+                return { name: file.name, url: result.url };
+              } catch (error) {
+                await progress.addError({
+                  itemId: node.id,
+                  itemTitle: file.name,
+                  stage: "media",
+                  message: (error as Error).message,
+                });
+                return file;
+              }
+            })
+          );
           values[propertyId] = rehosted;
         }
       }
@@ -434,6 +474,10 @@ async function rebuildBacklinks(workspaceId: string, idMap: Map<string, string>)
   const incoming = new Map<string, Set<string>>();
   const pages = await pagesRef(workspaceId).where("importJobId", "!=", null).get();
 
+  const db = pagesRef(workspaceId).firestore;
+  let batch = db.batch();
+  let batchCount = 0;
+
   for (const doc of pages.docs) {
     const blocks = (doc.get("blocks") ?? []) as AppBlock[];
     const links = new Set<string>();
@@ -455,14 +499,30 @@ async function rebuildBacklinks(workspaceId: string, idMap: Map<string, string>)
       incoming.get(target)!.add(doc.id);
     }
 
-    if (links.size) await doc.ref.update({ outgoingLinks: [...links] });
+    if (links.size) {
+      batch.update(doc.ref, { outgoingLinks: [...links] });
+      batchCount++;
+      if (batchCount >= 450) {
+        await batch.commit();
+        batch = db.batch();
+        batchCount = 0;
+      }
+    }
   }
 
-  const writer = pagesRef(workspaceId).firestore.batch();
   for (const [pageId, sources] of incoming) {
-    writer.update(pagesRef(workspaceId).doc(pageId), { backlinks: [...sources] });
+    batch.update(pagesRef(workspaceId).doc(pageId), { backlinks: [...sources] });
+    batchCount++;
+    if (batchCount >= 450) {
+      await batch.commit();
+      batch = db.batch();
+      batchCount = 0;
+    }
   }
-  await writer.commit();
+
+  if (batchCount > 0) {
+    await batch.commit();
+  }
 }
 
 export interface CreateImportInput {
@@ -475,6 +535,18 @@ export interface CreateImportInput {
 }
 
 export async function enqueueNotionImport(input: CreateImportInput): Promise<string> {
+  const activeSnap = await importJobRef(input.workspaceId, "placeholder")
+    .parent.where("status", "in", ["pending", "discovering", "running"])
+    .limit(1)
+    .get();
+
+  if (!activeSnap.empty) {
+    const existing = activeSnap.docs[0];
+    throw new Error(
+      `Já existe uma importação em andamento neste workspace (Job ${existing.id}). Aguarde a conclusão ou cancele-a antes de iniciar outra.`
+    );
+  }
+
   const jobId = `job_${randomUUID().slice(0, 8)}`;
   const ref = importJobRef(input.workspaceId, jobId);
   await ref.set({
@@ -567,41 +639,68 @@ export async function runNotionImportJob(workspaceId: string, jobId: string): Pr
 
     const idMap = new Map<string, string>();
     const roles = new Map<string, ImportRole>();
-    const topLevels = new Map<string, NotionBlock[]>();
+
+    const completionMap = new Map<string, Promise<void>>();
+    const resolveMap = new Map<string, () => void>();
 
     for (const node of ordered) {
-      if (node.type === "database") {
-        roles.set(node.id, "database");
-        continue;
-      }
-      const topLevel = await fetchAllChildren(notion, node.id);
-      topLevels.set(node.id, topLevel);
-      await progress.addFiles(countMediaBlocks(topLevel));
-      const asNotebook =
-        claimed.options.preserveHierarchy &&
-        shouldImportAsNotebook({
-          childCount: Math.max(node.children?.length ?? 0, countChildPageBlocks(topLevel)),
-          notionBlocks: topLevel,
-        });
-      roles.set(node.id, asNotebook ? "notebook" : "page");
+      let res!: () => void;
+      const p = new Promise<void>((r) => {
+        res = r;
+      });
+      completionMap.set(node.id, p);
+      resolveMap.set(node.id, res);
     }
 
-    for (const [index, node] of ordered.entries()) {
-      if (await progress.isCanceled()) return;
+    let completedCount = 0;
+
+    async function processNode(node: NotionTreeNode) {
+      if (await progress.isCanceled()) {
+        resolveMap.get(node.id)?.();
+        return;
+      }
+
+      // Se o pai do nó estiver na lista de importação, aguarda a conclusão do pai primeiro
+      const parentId = parents.get(node.id);
+      if (parentId && completionMap.has(parentId)) {
+        await completionMap.get(parentId);
+      }
+
+      if (await progress.isCanceled()) {
+        resolveMap.get(node.id)?.();
+        return;
+      }
 
       await progress.itemStatus(node.id, "processing");
-      await progress.patch({
-        currentStep: `(${index + 1}/${ordered.length}) Convertendo “${node.title}”…`,
-      });
 
       try {
         const shared = { notion, workspaceId, jobId, node, parents, idMap, roles, progress };
-        const appId =
-          roles.get(node.id) === "notebook"
-            ? await importNotebook(shared)
-            : node.type === "database"
-              ? await importDatabase(shared)
-              : await importPage({ ...shared, cachedTopLevel: topLevels.get(node.id) });
+        let appId: string;
+
+        if (node.type === "database") {
+          roles.set(node.id, "database");
+          appId = await importDatabase(shared);
+        } else {
+          // Busca os blocos de primeiro nível uma única vez sob demanda
+          const topLevel = await fetchAllChildren(notion, node.id);
+          await progress.addFiles(countMediaBlocks(topLevel));
+
+          const asNotebook =
+            progress.options.preserveHierarchy &&
+            shouldImportAsNotebook({
+              childCount: Math.max(node.children?.length ?? 0, countChildPageBlocks(topLevel)),
+              notionBlocks: topLevel,
+            });
+
+          roles.set(node.id, asNotebook ? "notebook" : "page");
+
+          if (asNotebook) {
+            appId = await importNotebook(shared);
+          } else {
+            appId = await importPage({ ...shared, cachedTopLevel: topLevel });
+          }
+        }
+
         idMap.set(node.id, appId);
         await progress.itemStatus(node.id, "done", appId);
       } catch (error) {
@@ -612,12 +711,30 @@ export async function runNotionImportJob(workspaceId: string, jobId: string): Pr
           stage: "convert",
           message: (error as Error).message,
         });
+      } finally {
+        resolveMap.get(node.id)?.();
+        completedCount++;
+        await progress.patch({
+          processedPages: completedCount,
+          currentStep: `(${completedCount}/${ordered.length}) Importando “${node.title}”…`,
+        });
       }
-
-      await progress.patch({ processedPages: index + 1 });
     }
 
-    if (claimed.options.createBacklinks) {
+    // Pool com concorrência de 3 páginas simultâneas
+    let queueIdx = 0;
+    const CONCURRENCY = 3;
+    const workers = Array.from({ length: Math.min(CONCURRENCY, ordered.length) }, async () => {
+      while (queueIdx < ordered.length) {
+        if (await progress.isCanceled()) break;
+        const current = ordered[queueIdx++];
+        await processNode(current);
+      }
+    });
+
+    await Promise.all(workers);
+
+    if (progress.options.createBacklinks) {
       await progress.patch({ currentStep: "Reconstruindo backlinks…" });
       await rebuildBacklinks(workspaceId, idMap);
     }

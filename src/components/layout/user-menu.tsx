@@ -12,6 +12,7 @@ import {
   Settings2,
   Sun,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { loginHref, navigateTo } from "@/lib/domains";
 import { useUserProfile } from "@/hooks/use-user-profile";
@@ -152,8 +153,12 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
           <MenuItem
             destructive
             onSelect={async () => {
-              await signOut();
-              navigateTo(loginHref("/"), router);
+              try {
+                await signOut();
+                navigateTo(loginHref("/?logout=1"), router, "replace");
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Não foi possível sair da conta");
+              }
             }}
           >
             <LogOut /> Sair da conta

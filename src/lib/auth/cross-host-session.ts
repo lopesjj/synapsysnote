@@ -1,4 +1,5 @@
 import { isSplitHosts } from "@/lib/domains";
+import { createAuthError } from "@/lib/auth/errors";
 
 let skipHydrate = false;
 
@@ -24,8 +25,7 @@ export async function persistCrossHostSession(remember: boolean) {
     body: JSON.stringify({ idToken, remember }),
   });
   if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(payload.error || "Não foi possível abrir a sessão no app.");
+    throw createAuthError("session");
   }
 }
 
@@ -46,7 +46,11 @@ export async function hydrateFromSessionCookie(): Promise<boolean> {
 
 export async function clearCrossHostSession() {
   if (!isSplitHosts()) return;
-  await fetch("/api/auth/session", { method: "DELETE", credentials: "include" }).catch(() => {
-    // Local sign-out still proceeds if the cookie clear fails.
-  });
+  let response: Response;
+  try {
+    response = await fetch("/api/auth/session", { method: "DELETE", credentials: "include" });
+  } catch {
+    throw createAuthError("session");
+  }
+  if (!response.ok) throw createAuthError("session");
 }

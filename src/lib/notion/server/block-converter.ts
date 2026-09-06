@@ -387,31 +387,61 @@ export async function notionBlockToAppBlock(
   return appBlock;
 }
 
+async function mapConcurrent<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (!items.length) return [];
+  const results: R[] = new Array(items.length);
+  let currentIndex = 0;
+
+  const worker = async () => {
+    while (currentIndex < items.length) {
+      const idx = currentIndex++;
+      results[idx] = await fn(items[idx], idx);
+    }
+  };
+
+  const pool = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  await Promise.all(pool);
+  return results;
+}
+
 export async function notionBlocksToAppBlocks(
   blocks: NotionBlock[],
   ctx: ConvertContext,
   depth = 0
 ): Promise<AppBlock[]> {
-  const out: AppBlock[] = [];
-  for (const block of blocks) {
-    let converted: AppBlock | null = null;
-    try {
-      converted = await notionBlockToAppBlock(block, ctx, depth);
-    } catch {
-      converted = {
-        id: randomUUID(),
-        type: "unsupported",
-        notionBlockId: block.id,
-        richText: [{ text: `Não foi possível converter este bloco (${block.type}).` }],
-      };
+  const concurrency = depth === 0 ? 3 : 1;
+  const convertedList = await mapConcurrent<NotionBlock, AppBlock | null>(
+    blocks,
+    concurrency,
+    async (block): Promise<AppBlock | null> => {
+      try {
+        return await notionBlockToAppBlock(block, ctx, depth);
+      } catch {
+        return {
+          id: randomUUID(),
+          type: "unsupported",
+          notionBlockId: block.id,
+          richText: [{ text: `Não foi possível converter este bloco (${block.type}).` }],
+        };
+      }
     }
+  );
+
+  const out: AppBlock[] = [];
+  for (const converted of convertedList) {
     if (!converted) continue;
     // Flattened containers contribute their children directly.
     if (
       converted.type === "paragraph" &&
       !converted.richText?.length &&
       converted.children?.length &&
-      ["column_list", "column", "synced_block"].includes(String(blocks.find((b) => b.id === converted.notionBlockId)?.type))
+      ["column_list", "column", "synced_block"].includes(
+        String(blocks.find((b) => b.id === converted.notionBlockId)?.type)
+      )
     ) {
       out.push(...converted.children);
       continue;

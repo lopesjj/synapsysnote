@@ -286,7 +286,7 @@ export function NotesExplorer({
 
           <div className="min-h-0 overflow-y-auto">
             {selected ? (
-              <article className="mx-auto w-full max-w-[var(--reading-width,46rem)] px-5 py-6 md:px-8">
+              <article className="mx-auto w-full max-w-full sm:max-w-[var(--reading-width,46rem)] px-1.5 sm:px-5 md:px-8 py-4 sm:py-6">
                 <div className="flex items-start justify-between gap-4">
                   <h2
                     className="min-w-0 text-[28px] font-semibold leading-[1.15] tracking-[-0.025em] text-ink"
@@ -302,7 +302,7 @@ export function NotesExplorer({
                   </Button>
                 </div>
                 <NoteMeta page={selected} className="mt-2" />
-                <div className="mt-6 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 dark:border-transparent dark:bg-transparent dark:px-0 dark:py-0 md:px-5">
+                <div className="mt-4 sm:mt-6 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-1 py-2 sm:px-4 sm:py-3 dark:border-transparent dark:bg-transparent dark:px-0 dark:py-0 md:px-5">
                   <BlockEditor
                     key={selected.id}
                     page={selected}

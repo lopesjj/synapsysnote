@@ -4,7 +4,6 @@ import { useState } from "react";
 import { KeyRound, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
-import { changeFirebasePassword } from "@/lib/auth/change-password";
 import { AuthField } from "@/components/auth/auth-field";
 import { Button } from "@/components/ui/button";
 import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
@@ -17,7 +16,7 @@ export function ChangePasswordDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { user, mode } = useAuth();
+  const { user, mode, changePassword } = useAuth();
   const isDemo = mode === "demo" || user?.uid === "demo-user" || user?.providers.includes("demo");
   const hasPassword = user?.providers.includes("password") ?? false;
   const [currentPassword, setCurrentPassword] = useState("");
@@ -44,14 +43,14 @@ export function ChangePasswordDialog({
       toast.error("As senhas não coincidem.");
       return;
     }
-    if (nextPassword === currentPassword) {
+    if (hasPassword && nextPassword === currentPassword) {
       toast.error("A nova senha precisa ser diferente da atual.");
       return;
     }
     setBusy(true);
     try {
-      await changeFirebasePassword(currentPassword, nextPassword);
-      toast.success("Senha alterada.");
+      await changePassword(currentPassword, nextPassword);
+      toast.success(hasPassword ? "Senha alterada." : "Senha adicionada. Você já pode entrar das duas formas.");
       close(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível alterar a senha");
@@ -70,23 +69,25 @@ export function ChangePasswordDialog({
             ? "No modo demonstração não existe senha no Firebase."
             : hasPassword
               ? "Informe a senha atual e escolha uma nova."
-              : "Esta conta entra com Google. Não há senha para alterar."
+              : "Adicione uma senha para também poder entrar com e-mail e senha. A conta continuará sendo a mesma."
         }
       />
 
-      {!isDemo && hasPassword ? (
+      {!isDemo ? (
         <form onSubmit={submit}>
           <div className="space-y-3.5 px-5 py-4">
-            <AuthField label="Senha atual">
-              <Input
-                type="password"
-                required
-                value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-                placeholder="••••••••"
-                autoComplete="current-password"
-              />
-            </AuthField>
+            {hasPassword ? (
+              <AuthField label="Senha atual">
+                <Input
+                  type="password"
+                  required
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+              </AuthField>
+            ) : null}
             <AuthField label="Nova senha">
               <Input
                 type="password"

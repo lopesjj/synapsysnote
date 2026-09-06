@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Menu } from "lucide-react";
 import { useWorkspace } from "@/lib/data/provider";
 import { notebookAncestors } from "@/lib/data/notebook-tree";
 import { useNavArrows } from "@/hooks/use-workspace-nav-history";
@@ -10,6 +10,7 @@ import { Tooltip } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import type { Notebook, Page } from "@/types/models";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
+import { useUiStore } from "@/lib/store/ui-store";
 
 /**
  * Clickable trail for a notebook or a note: every ancestor caderno and
@@ -77,6 +78,16 @@ export function WorkspaceCrumbs({
       className={cn("flex min-w-0 flex-1 items-center gap-1.5 text-[12px]", muted)}
     >
       <div className="flex shrink-0 items-center">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Abrir menu"
+          className={cn("mr-1 md:hidden", arrowClass)}
+          onClick={() => useUiStore.getState().setMobileSidebarOpen(true)}
+        >
+          <Menu className="size-4" />
+        </Button>
         <Tooltip label="Voltar">
           <Button
             type="button"

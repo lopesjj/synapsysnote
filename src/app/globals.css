@@ -219,10 +219,16 @@
 .synapsys-editor .ProseMirror {
   outline: none;
   min-height: 62vh;
-  padding-inline: 0.5rem;
+  padding-inline: 0.25rem;
   font-size: 1em;
   line-height: var(--editor-line-height, 1.75);
   color: var(--text);
+}
+
+@media (min-width: 640px) {
+  .synapsys-editor .ProseMirror {
+    padding-inline: 0.5rem;
+  }
 }
 
 .synapsys-editor--preview .ProseMirror {
@@ -364,9 +370,9 @@
   text-decoration: line-through;
 }
 
-.synapsys-editor .ProseMirror p.is-empty:first-child::before,
-.synapsys-editor .ProseMirror h1.is-empty::before,
-.synapsys-editor .ProseMirror p.is-editor-empty:first-child::before {
+.synapsys-editor .ProseMirror.is-editor-empty p.is-empty:first-child::before,
+.synapsys-editor .ProseMirror.is-editor-empty p.is-editor-empty:first-child::before,
+.synapsys-editor .ProseMirror h1.is-empty::before {
   content: attr(data-placeholder);
   float: left;
   height: 0;

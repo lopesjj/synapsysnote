@@ -212,8 +212,12 @@ export default function LandingPage() {
               <button
                 type="button"
                 onClick={async () => {
-                  await signOut();
-                  window.location.replace(loginHref("/"));
+                  try {
+                    await signOut();
+                    window.location.replace(loginHref("/?logout=1"));
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Não foi possível sair da conta");
+                  }
                 }}
                 className="w-full text-center text-[12.5px] text-muted transition hover:text-ink"
               >

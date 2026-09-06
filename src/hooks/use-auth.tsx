@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -27,7 +28,7 @@ async function applyAuthPersistence(remember: boolean) {
   await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
   markRemembered(remember);
 }
-import { completeUserRegistration } from "@/lib/data/user-profile";
+import { completeUserRegistration, updateUserProfile } from "@/lib/data/user-profile";
 import {
   clearCrossHostSession,
   hydrateFromSessionCookie,
@@ -71,6 +72,8 @@ export interface AppUser {
 interface AuthContextValue {
   user: AppUser | null;
   loading: boolean;
+  /** True only while a successful logout is navigating away from the app. */
+  loggingOut: boolean;
   /** "firebase" when credentials are present, "demo" for the local fallback. */
   mode: "firebase" | "demo";
   signInWithProvider: (provider: OAuthProviderId, remember?: boolean) => Promise<AppUser>;
@@ -97,6 +100,16 @@ const DEMO_USER: AppUser = {
   photoURL: null,
   providers: ["demo"],
 };
+
+function hasLogoutIntent(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("logout") === "1";
+}
+
+function clearLogoutIntent(): void {
+  if (typeof window === "undefined") return;
+  window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash}`);
+}
 
 /** `useSyncExternalStore` requires a stable snapshot reference between store updates. */
 let demoSnapshotRaw: string | null = null;
@@ -139,6 +152,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const [firebaseUser, setFirebaseUser] = useState<AppUser | null>(null);
   const [firebaseLoading, setFirebaseLoading] = useState(configured);
+  const [loggingOut, setLoggingOut] = useState(false);
+  // Firebase emits an auth change before the interactive login function
+  // returns. Keep that temporary state out of the UI until the cross-host
+  // session cookie is ready, otherwise / can jump to app too early.
+  const interactiveSignIn = useRef(false);
 
   useEffect(() => {
     if (isRememberExpired()) writeDemoUser(null);
@@ -151,9 +169,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         firebaseAuth(),
       ]);
       if (cancelled) return;
+      // Firebase persistence is isolated by origin. When logout starts on
+      // `app`, this second pass on the apex clears its own SDK session before
+      // the landing page can see the old user and redirect back to /home.
+      if (hasLogoutIntent()) {
+        suppressSessionHydrate();
+        await clearCrossHostSession().catch(() => {});
+        await signOut(auth).catch(() => {});
+        clearRemembered();
+        writeDemoUser(null);
+        if (!cancelled) {
+          setFirebaseUser(null);
+          setFirebaseLoading(false);
+          clearLogoutIntent();
+        }
+        return;
+      }
       if (isRememberExpired()) {
         suppressSessionHydrate();
-        await clearCrossHostSession();
+        await clearCrossHostSession().catch(() => {
+          // An explicit logout reports a cookie-clear failure. Here we still
+          // expire the local session so a stale remember marker cannot linger.
+        });
         await signOut(auth);
         clearRemembered();
         writeDemoUser(null);
@@ -163,6 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let hydrating = false;
       unsub = onAuthStateChanged(auth, (fbUser) => {
         if (fbUser) {
+          if (interactiveSignIn.current) return;
           setFirebaseUser(toAppUser(fbUser));
           setFirebaseLoading(false);
           return;
@@ -203,6 +241,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
+      loggingOut,
       mode: configured ? "firebase" : "demo",
 
       async signInWithProvider(providerId, remember = true) {
@@ -212,6 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return DEMO_USER;
         }
         await applyAuthPersistence(remember);
+        interactiveSignIn.current = true;
 
         const [
           { GoogleAuthProvider, GithubAuthProvider, signInWithPopup, getAdditionalUserInfo, deleteUser, signOut },
@@ -226,8 +266,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           provider.addScope("user:email");
         }
 
+        let authenticated = false;
         try {
           const credential = await signInWithPopup(auth, provider);
+          authenticated = true;
 
           /**
            * Federated sign-in must not silently provision accounts: the product
@@ -250,7 +292,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setFirebaseUser(next);
           return next;
         } catch (error) {
+          if (authenticated) {
+            // The provider is active at this point. Roll it back when the
+            // parent-domain handoff fails so no partial login reaches `app`.
+            suppressSessionHydrate();
+            await clearCrossHostSession().catch(() => {});
+            await signOut(auth).catch(() => {});
+            setFirebaseUser(null);
+          }
           throw toAuthError(error);
+        } finally {
+          interactiveSignIn.current = false;
         }
       },
 
@@ -262,18 +314,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return next;
         }
         await applyAuthPersistence(remember);
-        const [{ signInWithEmailAndPassword }, auth] = await Promise.all([
+        interactiveSignIn.current = true;
+        const [{ signInWithEmailAndPassword, signOut }, auth] = await Promise.all([
           import("firebase/auth"),
           firebaseAuth(),
         ]);
+        let authenticated = false;
         try {
           const cred = await signInWithEmailAndPassword(auth, email, password);
+          authenticated = true;
           const next = toAppUser(cred.user);
           await persistCrossHostSession(remember);
           setFirebaseUser(next);
           return next;
         } catch (error) {
+          if (authenticated) {
+            suppressSessionHydrate();
+            await clearCrossHostSession().catch(() => {});
+            await signOut(auth).catch(() => {});
+            setFirebaseUser(null);
+          }
           throw toAuthError(error);
+        } finally {
+          interactiveSignIn.current = false;
         }
       },
 
@@ -417,6 +480,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async changePassword(currentPassword, nextPassword) {
         const { changeFirebasePassword } = await import("@/lib/auth/change-password");
         await changeFirebasePassword(currentPassword, nextPassword);
+        const auth = await firebaseAuth();
+        if (!auth.currentUser) return;
+        const next = toAppUser(auth.currentUser);
+        setFirebaseUser(next);
+        void updateUserProfile(next.uid, { providers: next.providers }).catch(() => {
+          // Firebase Auth is authoritative. A later profile refresh will
+          // mirror the provider list if this display-only write is unavailable.
+        });
       },
 
       async continueAsGuest() {
@@ -425,17 +496,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
 
       async signOut() {
-        suppressSessionHydrate();
-        await clearCrossHostSession();
-        if (configured) {
-          const [{ signOut }, auth] = await Promise.all([import("firebase/auth"), firebaseAuth()]);
-          await signOut(auth);
+        // A failed cookie delete must not look like a completed logout: the
+        // app host would otherwise restore that server session on reload.
+        setLoggingOut(true);
+        try {
+          await clearCrossHostSession();
+          suppressSessionHydrate();
+          if (configured) {
+            const [{ signOut }, auth] = await Promise.all([import("firebase/auth"), firebaseAuth()]);
+            await signOut(auth).catch(() => {
+              // The shared server session is already gone. Clear rendered
+              // state below; Firebase reconciles its local storage next load.
+            });
+          }
+          writeDemoUser(null);
+          setFirebaseUser(null);
+          clearRemembered();
+          // Keep this true until the caller completes its full navigation.
+          // AppShell then cannot race it with ?session=sync_failed.
+        } catch (error) {
+          setLoggingOut(false);
+          throw error;
         }
-        writeDemoUser(null);
-        clearRemembered();
       },
     }),
-    [configured, firebaseUser, loading, user]
+    [configured, firebaseUser, loading, loggingOut, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

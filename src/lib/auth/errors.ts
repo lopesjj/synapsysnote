@@ -19,6 +19,8 @@ export type AuthErrorReason =
   | "invalid-email"
   | "popup-closed"
   | "too-many-requests"
+  | "session"
+  | "recent-login"
   | "expired-reset"
   | "invalid-reset"
   | "network"
@@ -46,6 +48,8 @@ const MESSAGES: Record<AuthErrorReason, string> = {
   "invalid-email": "Informe um e-mail válido.",
   "popup-closed": "A janela de login foi fechada antes de concluir.",
   "too-many-requests": "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
+  session: "Não foi possível concluir a sessão. Tente entrar novamente.",
+  "recent-login": "Por segurança, entre novamente antes de alterar a senha.",
   "expired-reset": "Este link de redefinição expirou. Peça outro em Esqueci a senha.",
   "invalid-reset": "Este link de redefinição é inválido. Peça outro em Esqueci a senha.",
   network: "Sem conexão com o servidor de autenticação. Verifique sua internet.",
@@ -64,6 +68,7 @@ const CODE_MAP: Record<string, AuthErrorReason> = {
   "auth/cancelled-popup-request": "popup-closed",
   "auth/account-exists-with-different-credential": "wrong-provider",
   "auth/too-many-requests": "too-many-requests",
+  "auth/requires-recent-login": "recent-login",
   "auth/expired-action-code": "expired-reset",
   "auth/invalid-action-code": "invalid-reset",
   "auth/missing-continue-uri": "unknown",

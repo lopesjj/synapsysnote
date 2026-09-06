@@ -27,3 +27,16 @@ export async function readSessionCookie(): Promise<string | undefined> {
   const jar = await cookies();
   return jar.get(SESSION_COOKIE)?.value;
 }
+
+/**
+ * Browsers can retain an old host-only cookie beside the current parent-domain
+ * cookie after a deployment changes the cookie scope. Keep every candidate so
+ * the token route can accept the valid one while logout expires the shared one.
+ */
+export async function readSessionCookies(): Promise<string[]> {
+  const jar = await cookies();
+  return jar
+    .getAll(SESSION_COOKIE)
+    .map((cookie) => cookie.value)
+    .filter(Boolean);
+}

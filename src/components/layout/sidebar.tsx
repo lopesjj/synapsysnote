@@ -149,7 +149,10 @@ export function SidebarRail() {
 
   return (
     <aside className="flex h-full w-14 shrink-0 flex-col items-center border-r border-[var(--border)] bg-[var(--surface)]">
-      <div className="flex shrink-0 items-center justify-center py-5">
+      <div
+        className="flex shrink-0 items-center justify-center pt-8 pb-6"
+        style={{ paddingTop: "calc(2rem + env(safe-area-inset-top, 0px))" }}
+      >
         <Tooltip label="Expandir barra lateral" shortcut={isMac() ? "⌘B" : "Ctrl B"} side="right">
           <button
             type="button"
@@ -455,7 +458,10 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
       className="flex h-full shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]"
       style={{ width }}
     >
-      <div className="relative flex items-center px-4 py-5 pt-safe">
+      <div
+        className="relative flex items-center px-4 pt-8 pb-6"
+        style={{ paddingTop: "calc(2rem + env(safe-area-inset-top, 0px))" }}
+      >
         <Tooltip label="Recolher barra lateral" shortcut={isMac() ? "⌘B" : "Ctrl B"} side="right">
           <button
             type="button"

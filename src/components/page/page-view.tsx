@@ -291,10 +291,10 @@ export function PageView({ pageId }: { pageId: string }) {
         />
       ) : null}
 
-      {/* `--reading-width` comes from the typography preference. */}
-      <div className="relative z-10 mx-auto w-full max-w-[var(--reading-width,46rem)] px-5 pb-24 pb-safe md:px-8">
+      {/* `--reading-width` comes from the typography preference; on mobile it uses full width. */}
+      <div className="relative z-10 mx-auto w-full max-w-full sm:max-w-[var(--reading-width,46rem)] px-1.5 sm:px-6 md:px-8 pb-24 pb-safe">
         {/* Icon + title. The icon may sit on the cover edge; the title stays below it. */}
-        <div className={cn("group flex items-center", isIconUrl(page.icon ?? "") ? "gap-5" : "gap-3", hasCover ? "pt-0" : "pt-6")}>
+        <div className={cn("group flex items-center", isIconUrl(page.icon ?? "") ? "gap-5" : "gap-3", hasCover ? "pt-0" : "pt-2 sm:pt-6")}>
           <IconPickerMenu
             icons={PAGE_ICONS}
             current={page.icon}
@@ -343,7 +343,7 @@ export function PageView({ pageId }: { pageId: string }) {
                 schedule({ title: event.target.value });
               }}
               style={{ fontFamily: "var(--font-editor, var(--font-sans))" }}
-              className="w-full min-w-0 resize-none overflow-hidden border-none bg-transparent py-0 text-[34px] font-semibold leading-[1.15] tracking-[-0.025em] text-ink outline-none placeholder:text-faint [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              className="w-full min-w-0 resize-none overflow-hidden border-none bg-transparent py-0 text-[26px] sm:text-[34px] font-semibold leading-[1.2] tracking-[-0.025em] text-ink outline-none placeholder:text-faint [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
             />
           </div>
         </div>
@@ -398,8 +398,8 @@ export function PageView({ pageId }: { pageId: string }) {
           </span>
         </div>
 
-        {/* Editor — light theme: white sheet on the canvas; dark stays flat. */}
-        <div className="mt-6 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 dark:border-transparent dark:bg-transparent dark:px-0 dark:py-0 md:px-5">
+        {/* Editor — light theme: white sheet on the canvas; dark stays flat. Full width on mobile. */}
+        <div className="mt-4 sm:mt-6 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-1 py-2 sm:px-4 sm:py-3 dark:border-transparent dark:bg-transparent dark:px-0 dark:py-0 md:px-5">
           <BlockEditor
             page={page}
             mentionCandidates={mentionCandidates}
