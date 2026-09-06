@@ -243,6 +243,13 @@ export interface Page {
   outgoingLinks: string[];
   /** Reverse index maintained on save so backlinks are a single read. */
   backlinks: string[];
+  /**
+   * True when this page still has a `mention` pointing at a Notion id that
+   * hasn't been imported yet. Lets the backlink rebuild step find, on a
+   * future import, only the handful of pages that might newly resolve —
+   * instead of re-scanning every page ever imported.
+   */
+  hasUnresolvedMentions?: boolean;
   /** 768-d Vertex AI embedding stored as a Firestore vector value. */
   embedding?: number[] | null;
   embeddingUpdatedAt?: ISOTimestamp | null;
@@ -387,6 +394,12 @@ export interface NotionIntegration {
   connectedAt: ISOTimestamp;
   lastSyncAt?: ISOTimestamp | null;
   revokedAt?: ISOTimestamp | null;
+  /**
+   * Set once the backlink rebuild has run its one-time full scan for this
+   * workspace. After that, imports only rescan the pages touched by the
+   * current job plus any page flagged `hasUnresolvedMentions`.
+   */
+  notionBacklinksIndexed?: boolean;
 }
 
 export type ImportJobStatus =
