@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { FilePlus, Home, Loader2, Menu as MenuIcon, Minimize2, Search } from "lucide-react";
+import { FilePlus, Home, Loader2, Minimize2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { loginHref, navigateTo } from "@/lib/domains";
@@ -175,22 +175,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <main className="flex min-w-0 flex-1 flex-col">
         {chromeHidden || isDocView ? null : (
-          <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface)]/90 px-3 py-2 backdrop-blur-xl md:hidden">
+          <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface)]/90 px-3.5 py-2.5 backdrop-blur-xl md:hidden">
             <button
               type="button"
               onClick={() => useUiStore.getState().setMobileSidebarOpen(true)}
-              aria-label="Menu"
-              className="flex size-8 items-center justify-center rounded-lg text-ink transition hover:bg-[var(--surface-hover)] focus-visible:ring-2 focus-visible:ring-[var(--accent)]/25"
+              aria-label="Abrir menu"
+              className="group flex size-9 items-center justify-center rounded-xl border border-[var(--border)]/80 bg-[var(--surface-2)]/80 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-md transition-all hover:border-[var(--accent)]/40 hover:bg-[var(--surface-3)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/25"
             >
-              <MenuIcon className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => useUiStore.getState().setPaletteOpen(true)}
-              aria-label="Buscar"
-              className="flex size-8 items-center justify-center rounded-lg text-muted transition hover:text-ink focus-visible:ring-2 focus-visible:ring-[var(--accent)]/25"
-            >
-              <Search className="size-4" />
+              <span className="flex flex-col items-start justify-center gap-[3.5px]">
+                <span className="h-[2px] w-4 rounded-full bg-current transition-all duration-200 group-hover:w-4.5" />
+                <span className="h-[2px] w-2.5 rounded-full bg-current transition-all duration-200 group-hover:w-3.5" />
+                <span className="h-[2px] w-3.5 rounded-full bg-current transition-all duration-200 group-hover:w-4" />
+              </span>
             </button>
           </div>
         )}

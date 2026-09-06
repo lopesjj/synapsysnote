@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Menu } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useWorkspace } from "@/lib/data/provider";
 import { notebookAncestors } from "@/lib/data/notebook-tree";
 import { useNavArrows } from "@/hooks/use-workspace-nav-history";
@@ -78,16 +78,22 @@ export function WorkspaceCrumbs({
       className={cn("flex min-w-0 flex-1 items-center gap-1.5 text-[12px]", muted)}
     >
       <div className="flex shrink-0 items-center">
-        <Button
+        <button
           type="button"
-          variant="ghost"
-          size="icon-sm"
           aria-label="Abrir menu"
-          className={cn("mr-1 md:hidden", arrowClass)}
+          className={cn(
+            "group mr-1.5 flex size-7.5 items-center justify-center rounded-lg border border-[var(--border)]/80 bg-[var(--surface-2)]/80 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-md transition-all hover:bg-[var(--surface-3)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/25 md:hidden",
+            arrowClass,
+            inverted && "border-white/20 bg-white/10 text-white shadow-none hover:bg-white/20"
+          )}
           onClick={() => useUiStore.getState().setMobileSidebarOpen(true)}
         >
-          <Menu className="size-4" />
-        </Button>
+          <span className="flex flex-col items-start justify-center gap-[3px]">
+            <span className="h-[1.5px] w-3.5 rounded-full bg-current transition-all duration-200 group-hover:w-4" />
+            <span className="h-[1.5px] w-2 rounded-full bg-current transition-all duration-200 group-hover:w-3" />
+            <span className="h-[1.5px] w-3 rounded-full bg-current transition-all duration-200 group-hover:w-3.5" />
+          </span>
+        </button>
         <Tooltip label="Voltar">
           <Button
             type="button"

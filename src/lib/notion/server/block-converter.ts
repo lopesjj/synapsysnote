@@ -387,79 +387,31 @@ export async function notionBlockToAppBlock(
   return appBlock;
 }
 
-/** Bounded-concurrency `Promise.all` — shared by the block converter and the
- *  database-row media pipeline so neither fires unbounded parallel requests. */
-export async function mapConcurrent<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T, index: number) => Promise<R>
-): Promise<R[]> {
-  if (!items.length) return [];
-  const results: R[] = new Array(items.length);
-  let currentIndex = 0;
-
-  const worker = async () => {
-    while (currentIndex < items.length) {
-      const idx = currentIndex++;
-      results[idx] = await fn(items[idx], idx);
-    }
-  };
-
-  const pool = Array.from({ length: Math.min(limit, items.length) }, () => worker());
-  await Promise.all(pool);
-  return results;
-}
-
-/**
- * How many sibling blocks are converted concurrently at each recursion depth.
- *
- * `throttled()` (see throttle.ts) already paces every Notion request to the
- * account-wide ~3 req/s limit — it does that by delaying *dispatch*, not by
- * waiting for the response. So the only way to actually reach that limit
- * (instead of paying pacing-delay + round-trip-time serially) is to have
- * several `fetchChildren` calls in flight at once so the next one is ready to
- * fire the moment its slot opens. This used to be capped at 1 below the top
- * level, which meant any page with nested toggles/lists/columns fetched every
- * descendant one full round-trip at a time — by far the slowest part of a
- * typical import. Keeping a modest, constant concurrency at every depth fixes
- * that without changing the pacing (and therefore without any extra risk of
- * hitting Notion's rate limit).
- */
-const BLOCK_FETCH_CONCURRENCY = 4;
-
 export async function notionBlocksToAppBlocks(
   blocks: NotionBlock[],
   ctx: ConvertContext,
   depth = 0
 ): Promise<AppBlock[]> {
-  const convertedList = await mapConcurrent<NotionBlock, AppBlock | null>(
-    blocks,
-    BLOCK_FETCH_CONCURRENCY,
-    async (block): Promise<AppBlock | null> => {
-      try {
-        return await notionBlockToAppBlock(block, ctx, depth);
-      } catch {
-        return {
-          id: randomUUID(),
-          type: "unsupported",
-          notionBlockId: block.id,
-          richText: [{ text: `Não foi possível converter este bloco (${block.type}).` }],
-        };
-      }
-    }
-  );
-
   const out: AppBlock[] = [];
-  for (const converted of convertedList) {
+  for (const block of blocks) {
+    let converted: AppBlock | null = null;
+    try {
+      converted = await notionBlockToAppBlock(block, ctx, depth);
+    } catch {
+      converted = {
+        id: randomUUID(),
+        type: "unsupported",
+        notionBlockId: block.id,
+        richText: [{ text: `Não foi possível converter este bloco (${block.type}).` }],
+      };
+    }
     if (!converted) continue;
     // Flattened containers contribute their children directly.
     if (
       converted.type === "paragraph" &&
       !converted.richText?.length &&
       converted.children?.length &&
-      ["column_list", "column", "synced_block"].includes(
-        String(blocks.find((b) => b.id === converted.notionBlockId)?.type)
-      )
+      ["column_list", "column", "synced_block"].includes(String(blocks.find((b) => b.id === converted.notionBlockId)?.type))
     ) {
       out.push(...converted.children);
       continue;

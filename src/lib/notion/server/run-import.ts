@@ -24,7 +24,6 @@ import {
   omitUndefined,
   countMediaBlocks,
   notionBlocksToAppBlocks,
-  mapConcurrent,
   type NotionBlock,
 } from "./block-converter";
 import {
@@ -38,40 +37,6 @@ import { defaultViews, mapDatabaseSchema, mapPropertyValues } from "./property-m
 import { rehostNotionFile } from "./media";
 
 type JobOptions = ImportJob["options"];
-
-/**
- * Looks up every doc whose `field` matches one of `notionIds` in a single
- * batch of parallel `in` queries (chunked to Firestore's 30-value limit),
- * instead of the old one-`where().limit(1).get()`-per-item pattern.
- *
- * Firestore reads are not paced by Notion's rate limit, but they were still
- * sitting on the per-item critical path (one extra round-trip before every
- * single write) and — for a workspace with import history — that's N
- * sequential reads that this collapses into `ceil(N/30)` parallel ones.
- */
-async function fetchExistingByNotionId(
-  collection: FirebaseFirestore.CollectionReference,
-  field: string,
-  notionIds: string[]
-): Promise<Map<string, FirebaseFirestore.QueryDocumentSnapshot>> {
-  const map = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
-  const unique = [...new Set(notionIds)];
-  if (!unique.length) return map;
-
-  const chunks: string[][] = [];
-  for (let i = 0; i < unique.length; i += 30) chunks.push(unique.slice(i, i + 30));
-
-  const snapshots = await Promise.all(
-    chunks.map((chunk) => collection.where(field, "in", chunk).get())
-  );
-  for (const snapshot of snapshots) {
-    for (const doc of snapshot.docs) {
-      const value = doc.get(field) as string;
-      map.set(value, doc);
-    }
-  }
-  return map;
-}
 
 function collectIds(tree: NotionTreeNode[]): string[] {
   const ids: string[] = [];
@@ -100,16 +65,6 @@ async function fetchAllChildren(notion: Client, blockId: string): Promise<Notion
 
 class ProgressReporter {
   private items: ImportJobItem[];
-  private pendingFilesCount = 0;
-  private pendingProcessedFiles = 0;
-  private pendingBytes = 0;
-  private flushTimer: NodeJS.Timeout | null = null;
-  // `isCanceled()` used to be a `.get()` on every single node (twice, plus
-  // once per worker loop iteration) — a Firestore round-trip sitting directly
-  // in the per-item critical path. A single realtime listener keeps a local
-  // flag in sync instead, so cancellation checks become free/instant.
-  private canceledFlag = false;
-  private unsubscribeCancel: () => void;
 
   constructor(
     private readonly ref: FirebaseFirestore.DocumentReference,
@@ -121,74 +76,30 @@ class ProgressReporter {
     }
   ) {
     this.items = [...(job.items ?? [])];
-    this.unsubscribeCancel = ref.onSnapshot(
-      (snap) => {
-        if (snap.get("status") === "canceled") this.canceledFlag = true;
-      },
-      () => {
-        // If the listener itself fails, fall back to "not canceled" — a
-        // failed cancel-check must never silently abort a healthy import.
-      }
-    );
-  }
-
-  /** Stops the realtime listener. Always call once the job finishes. */
-  dispose() {
-    this.unsubscribeCancel();
-  }
-
-  async flush() {
-    if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
-      this.flushTimer = null;
-    }
-    const updates: Record<string, unknown> = {};
-    if (this.pendingFilesCount > 0) {
-      updates.totalFiles = FieldValue.increment(this.pendingFilesCount);
-      this.pendingFilesCount = 0;
-    }
-    if (this.pendingProcessedFiles > 0) {
-      updates.processedFiles = FieldValue.increment(this.pendingProcessedFiles);
-      this.pendingProcessedFiles = 0;
-    }
-    if (this.pendingBytes > 0) {
-      updates.totalBytes = FieldValue.increment(this.pendingBytes);
-      this.pendingBytes = 0;
-    }
-    if (Object.keys(updates).length > 0) {
-      updates.updatedAt = FieldValue.serverTimestamp();
-      await this.ref.update(updates).catch(() => {});
-    }
-  }
-
-  private scheduleFlush() {
-    if (!this.flushTimer) {
-      this.flushTimer = setTimeout(() => {
-        void this.flush();
-      }, 500);
-    }
   }
 
   async patch(data: FirebaseFirestore.UpdateData<Record<string, unknown>>) {
-    await this.flush();
     if (Array.isArray(data.items)) this.items = data.items as ImportJobItem[];
     await this.ref.update({ ...data, updatedAt: FieldValue.serverTimestamp() });
   }
 
   async addFiles(count: number) {
     if (!count) return;
-    this.pendingFilesCount += count;
-    this.scheduleFlush();
+    await this.ref.update({
+      totalFiles: FieldValue.increment(count),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
   }
 
   async fileDone(bytes: number) {
-    this.pendingProcessedFiles += 1;
-    this.pendingBytes += bytes;
-    this.scheduleFlush();
+    await this.ref.update({
+      processedFiles: FieldValue.increment(1),
+      totalBytes: FieldValue.increment(bytes),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
   }
 
   async itemStatus(notionId: string, status: ImportJobItem["status"], appId?: string) {
-    await this.flush();
     this.items = this.items.map((item) =>
       item.notionId === notionId ? { ...item, status, ...(appId ? { appId } : {}) } : item
     );
@@ -204,7 +115,6 @@ class ProgressReporter {
     stage: "fetch" | "convert" | "media" | "write";
     message: string;
   }) {
-    await this.flush();
     await this.ref.update({
       errors: FieldValue.arrayUnion({ ...error, at: Date.now() }),
       updatedAt: FieldValue.serverTimestamp(),
@@ -212,11 +122,11 @@ class ProgressReporter {
   }
 
   async isCanceled(): Promise<boolean> {
-    return this.canceledFlag;
+    const snapshot = await this.ref.get();
+    return snapshot.get("status") === "canceled";
   }
 
   async finish() {
-    await this.flush();
     const snapshot = await this.ref.get();
     const errors = (snapshot.get("errors") ?? []) as unknown[];
     await this.ref.update({
@@ -230,7 +140,6 @@ class ProgressReporter {
   }
 
   async fail(message: string) {
-    await this.flush();
     await this.ref.update({
       status: "failed",
       currentStep: `Falhou: ${message}`,
@@ -262,22 +171,10 @@ interface ImportArgs {
   roles: Map<string, ImportRole>;
   progress: ProgressReporter;
   cachedTopLevel?: NotionBlock[];
-  /** Pre-fetched "does this Notion id already exist?" lookups — see fetchExistingByNotionId. */
-  existing: {
-    notebooks: Map<string, FirebaseFirestore.QueryDocumentSnapshot>;
-    pages: Map<string, FirebaseFirestore.QueryDocumentSnapshot>;
-    databases: Map<string, FirebaseFirestore.QueryDocumentSnapshot>;
-  };
-  /**
-   * Caches each imported page's own `path` field (its ancestor chain) keyed
-   * by app page id, so siblings that share a parent don't each re-fetch that
-   * parent's `path` from Firestore — only the first child processed does.
-   */
-  pathCache: Map<string, string[]>;
 }
 
 async function importNotebook(args: ImportArgs): Promise<string> {
-  const { workspaceId, node, parents, idMap, roles, existing } = args;
+  const { workspaceId, node, parents, idMap, roles } = args;
   const parentId = resolveNotebookParentId({
     notionId: node.id,
     parents,
@@ -285,8 +182,10 @@ async function importNotebook(args: ImportArgs): Promise<string> {
     idMap,
   });
 
-  const existingDoc = existing.notebooks.get(node.id);
-  const ref = existingDoc ? existingDoc.ref : notebooksRef(workspaceId).doc(`nb_${randomUUID().slice(0, 8)}`);
+  const existing = await notebooksRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
+  const ref = existing.empty
+    ? notebooksRef(workspaceId).doc(`nb_${randomUUID().slice(0, 8)}`)
+    : existing.docs[0].ref;
 
   await ref.set(
     {
@@ -297,7 +196,7 @@ async function importNotebook(args: ImportArgs): Promise<string> {
       parentId,
       notionPageId: node.id,
       order: Date.now(),
-      createdAt: existingDoc ? existingDoc.get("createdAt") : FieldValue.serverTimestamp(),
+      createdAt: existing.empty ? FieldValue.serverTimestamp() : existing.docs[0].get("createdAt"),
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true }
@@ -307,7 +206,7 @@ async function importNotebook(args: ImportArgs): Promise<string> {
 }
 
 async function importPage(args: ImportArgs): Promise<string> {
-  const { notion, workspaceId, jobId, node, parents, idMap, roles, progress, cachedTopLevel, existing, pathCache } = args;
+  const { notion, workspaceId, jobId, node, parents, idMap, roles, progress, cachedTopLevel } = args;
 
   const topLevel = cachedTopLevel ?? (await fetchAllChildren(notion, node.id));
   if (!cachedTopLevel) await progress.addFiles(countMediaBlocks(topLevel));
@@ -356,20 +255,12 @@ async function importPage(args: ImportArgs): Promise<string> {
 
   let path: string[] = [];
   if (parentPageId) {
-    let parentPath = pathCache.get(parentPageId);
-    if (!parentPath) {
-      // Cache miss: the parent wasn't imported in this job (it already
-      // existed), so this is the only Firestore round-trip we pay for it —
-      // every sibling under the same parent reuses this cached value.
-      const parentDoc = await pagesRef(workspaceId).doc(parentPageId).get();
-      parentPath = (parentDoc.get("path") as string[]) ?? [];
-      pathCache.set(parentPageId, parentPath);
-    }
-    path = [...parentPath, parentPageId];
+    const parentDoc = await pagesRef(workspaceId).doc(parentPageId).get();
+    path = [...((parentDoc.get("path") as string[]) ?? []), parentPageId];
   }
 
-  const existingDoc = existing.pages.get(node.id);
-  const ref = existingDoc ? existingDoc.ref : pagesRef(workspaceId).doc(`page_${randomUUID().slice(0, 10)}`);
+  const existing = await pagesRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
+  const ref = existing.empty ? pagesRef(workspaceId).doc(`page_${randomUUID().slice(0, 10)}`) : existing.docs[0].ref;
 
   await ref.set(
     {
@@ -381,8 +272,8 @@ async function importPage(args: ImportArgs): Promise<string> {
       path,
       blocks: omitUndefined(blocks),
       plainText: blocksToPlainText(blocks),
-      extractedOCRText: existingDoc ? (existingDoc.get("extractedOCRText") ?? "") : "",
-      transcriptText: existingDoc ? (existingDoc.get("transcriptText") ?? "") : "",
+      extractedOCRText: existing.empty ? "" : (existing.docs[0].get("extractedOCRText") ?? ""),
+      transcriptText: existing.empty ? "" : (existing.docs[0].get("transcriptText") ?? ""),
       tags: ["notion"],
       outgoingLinks: [],
       backlinks: [],
@@ -395,15 +286,11 @@ async function importPage(args: ImportArgs): Promise<string> {
       createdBy: progress.requestedBy,
       updatedBy: progress.requestedBy,
       order: Date.now(),
-      createdAt: existingDoc ? existingDoc.get("createdAt") : FieldValue.serverTimestamp(),
+      createdAt: existing.empty ? FieldValue.serverTimestamp() : existing.docs[0].get("createdAt"),
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true }
   );
-
-  // Let children processed later in this same job reuse this page's path
-  // without hitting Firestore for it.
-  pathCache.set(ref.id, path);
 
   return ref.id;
 }
@@ -425,7 +312,7 @@ interface NotionQueryable {
 }
 
 async function importDatabase(args: ImportArgs): Promise<string> {
-  const { notion, workspaceId, jobId, node, parents, idMap, roles, progress, existing } = args;
+  const { notion, workspaceId, jobId, node, parents, idMap, roles, progress } = args;
 
   const schema = await throttled(() => notion.databases.retrieve({ database_id: node.id }));
   const properties = mapDatabaseSchema(
@@ -441,8 +328,13 @@ async function importDatabase(args: ImportArgs): Promise<string> {
     preserveHierarchy: progress.options.preserveHierarchy,
   });
 
-  const existingDoc = existing.databases.get(node.id);
-  const ref = existingDoc ? existingDoc.ref : databasesRef(workspaceId).doc(`db_${randomUUID().slice(0, 8)}`);
+  const existing = await databasesRef(workspaceId)
+    .where("notionDatabaseId", "==", node.id)
+    .limit(1)
+    .get();
+  const ref = existing.empty
+    ? databasesRef(workspaceId).doc(`db_${randomUUID().slice(0, 8)}`)
+    : existing.docs[0].ref;
 
   await ref.set(
     {
@@ -456,7 +348,7 @@ async function importDatabase(args: ImportArgs): Promise<string> {
       views: defaultViews(properties),
       notionDatabaseId: node.id,
       deletedAt: null,
-      createdAt: existingDoc ? existingDoc.get("createdAt") : FieldValue.serverTimestamp(),
+      createdAt: existing.empty ? FieldValue.serverTimestamp() : existing.docs[0].get("createdAt"),
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true }
@@ -473,66 +365,52 @@ async function importDatabase(args: ImportArgs): Promise<string> {
       })
     );
 
-    const rows = response.results.map((row) => ({
-      rowId: row.id.replace(/-/g, "").slice(0, 20),
-      notionPageId: row.id,
-      order: order++,
-      values: mapPropertyValues(row.properties as unknown as Record<string, never>, properties),
-    }));
+    const batch = ref.firestore.batch();
+    for (const row of response.results) {
+      const rowId = row.id.replace(/-/g, "").slice(0, 20);
+      const values = mapPropertyValues(
+        row.properties as unknown as Record<string, never>,
+        properties
+      );
 
-    if (progress.options.downloadMedia) {
-      // Collect every file across every row in this page of results and
-      // rehost them together (bounded concurrency) instead of one row at a
-      // time — these downloads hit Storage/the Notion CDN directly and
-      // aren't subject to the Notion API pacing, so they were serializing
-      // for no reason.
-      const jobs: { row: (typeof rows)[number]; propertyId: string; fileIndex: number }[] = [];
-      for (const row of rows) {
-        for (const [propertyId, value] of Object.entries(row.values)) {
+      if (progress.options.downloadMedia) {
+        for (const [propertyId, value] of Object.entries(values)) {
           if (!Array.isArray(value)) continue;
           const files = value as { name: string; url: string }[];
           if (!files.length || typeof files[0]?.url !== "string") continue;
-          files.forEach((file, fileIndex) => {
-            if (file.url) jobs.push({ row, propertyId, fileIndex });
-          });
+          const rehosted: { name: string; url: string }[] = [];
+          for (const file of files) {
+            if (!file.url) continue;
+            try {
+              await progress.addFiles(1);
+              const result = await rehostNotionFile({
+                workspaceId,
+                jobId,
+                url: file.url,
+                suggestedName: file.name,
+              });
+              await progress.fileDone(result.bytes);
+              rehosted.push({ name: file.name, url: result.url });
+            } catch (error) {
+              await progress.addError({
+                itemId: node.id,
+                itemTitle: file.name,
+                stage: "media",
+                message: (error as Error).message,
+              });
+            }
+          }
+          values[propertyId] = rehosted;
         }
       }
 
-      if (jobs.length) {
-        await progress.addFiles(jobs.length);
-        await mapConcurrent(jobs, 6, async ({ row, propertyId, fileIndex }) => {
-          const files = row.values[propertyId] as { name: string; url: string }[];
-          const file = files[fileIndex];
-          try {
-            const result = await rehostNotionFile({
-              workspaceId,
-              jobId,
-              url: file.url,
-              suggestedName: file.name,
-            });
-            await progress.fileDone(result.bytes);
-            files[fileIndex] = { name: file.name, url: result.url };
-          } catch (error) {
-            await progress.addError({
-              itemId: node.id,
-              itemTitle: file.name,
-              stage: "media",
-              message: (error as Error).message,
-            });
-          }
-        });
-      }
-    }
-
-    const batch = ref.firestore.batch();
-    for (const row of rows) {
       batch.set(
-        ref.collection("rows").doc(row.rowId),
+        ref.collection("rows").doc(rowId),
         {
-          values: row.values,
-          order: row.order,
+          values,
+          order: order++,
           pageId: null,
-          notionPageId: row.notionPageId,
+          notionPageId: row.id,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         },
@@ -549,68 +427,22 @@ async function importDatabase(args: ImportArgs): Promise<string> {
   return ref.id;
 }
 
-/**
- * Rebuilds `outgoingLinks`/`backlinks` from page mentions.
- *
- * The old version re-read and re-walked *every page ever imported into the
- * workspace* (`importJobId != null`) on every single import — because a page
- * imported in job 1 that mentions a page not yet imported stores a raw
- * Notion id, and only a later job (job 2, importing the target) can resolve
- * it. That correctness requirement is real, but scanning the whole history
- * every time makes each import progressively slower — and progressively more
- * expensive in Firestore reads — as a workspace accumulates pages.
- *
- * Instead: every page is now tagged `hasUnresolvedMentions` when it still has
- * a dangling reference. Once a workspace has done one full pass (tracked by
- * `notionBacklinksIndexed` on the integration doc), later imports only
- * re-scan (a) the pages this job just touched and (b) whichever pages are
- * still flagged as unresolved — almost always a tiny fraction of history.
- *
- * Trade-off: `backlinks` is only ever grown (`arrayUnion`), never rewritten
- * from a full scan, in the fast path. If a source page's link is edited or
- * removed without that page itself going through an import job again, its
- * stale backlink entry can persist. Re-importing that source page (which
- * always recomputes its own `outgoingLinks` from scratch) clears it.
- */
-async function rebuildBacklinks(workspaceId: string, jobId: string, idMap: Map<string, string>) {
+async function rebuildBacklinks(workspaceId: string, idMap: Map<string, string>) {
   const appIds = new Set(idMap.values());
   if (!appIds.size) return;
 
-  const db = pagesRef(workspaceId).firestore;
-  const integrationSnap = await integrationRef(workspaceId).get();
-  const alreadyIndexed = integrationSnap.get("notionBacklinksIndexed") === true;
-
-  const docs = alreadyIndexed
-    ? await (async () => {
-        const [byJob, byUnresolved] = await Promise.all([
-          pagesRef(workspaceId).where("importJobId", "==", jobId).get(),
-          pagesRef(workspaceId).where("hasUnresolvedMentions", "==", true).get(),
-        ]);
-        const dedup = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
-        for (const doc of byJob.docs) dedup.set(doc.id, doc);
-        for (const doc of byUnresolved.docs) dedup.set(doc.id, doc);
-        return [...dedup.values()];
-      })()
-    : (await pagesRef(workspaceId).where("importJobId", "!=", null).get()).docs;
-
   const incoming = new Map<string, Set<string>>();
-  let batch = db.batch();
-  let batchCount = 0;
+  const pages = await pagesRef(workspaceId).where("importJobId", "!=", null).get();
 
-  for (const doc of docs) {
+  for (const doc of pages.docs) {
     const blocks = (doc.get("blocks") ?? []) as AppBlock[];
     const links = new Set<string>();
-    let hasUnresolvedMentions = false;
     const walk = (list: AppBlock[]) => {
       for (const block of list) {
         for (const span of block.richText ?? []) {
           if (span.mention?.kind === "page") {
             const mapped = idMap.get(span.mention.pageId) ?? span.mention.pageId;
-            if (appIds.has(mapped) || mapped.startsWith("page_")) {
-              links.add(mapped);
-            } else {
-              hasUnresolvedMentions = true;
-            }
+            if (appIds.has(mapped) || mapped.startsWith("page_")) links.add(mapped);
           }
         }
         if (block.children?.length) walk(block.children);
@@ -623,43 +455,14 @@ async function rebuildBacklinks(workspaceId: string, jobId: string, idMap: Map<s
       incoming.get(target)!.add(doc.id);
     }
 
-    const currentOutgoing = (doc.get("outgoingLinks") ?? []) as string[];
-    const nextOutgoing = [...links];
-    const outgoingChanged =
-      currentOutgoing.length !== nextOutgoing.length ||
-      nextOutgoing.some((id) => !currentOutgoing.includes(id));
-    const flagChanged = Boolean(doc.get("hasUnresolvedMentions")) !== hasUnresolvedMentions;
-
-    if (outgoingChanged || flagChanged) {
-      batch.update(doc.ref, { outgoingLinks: nextOutgoing, hasUnresolvedMentions });
-      batchCount++;
-      if (batchCount >= 450) {
-        await batch.commit();
-        batch = db.batch();
-        batchCount = 0;
-      }
-    }
+    if (links.size) await doc.ref.update({ outgoingLinks: [...links] });
   }
 
+  const writer = pagesRef(workspaceId).firestore.batch();
   for (const [pageId, sources] of incoming) {
-    batch.update(pagesRef(workspaceId).doc(pageId), {
-      backlinks: FieldValue.arrayUnion(...sources),
-    });
-    batchCount++;
-    if (batchCount >= 450) {
-      await batch.commit();
-      batch = db.batch();
-      batchCount = 0;
-    }
+    writer.update(pagesRef(workspaceId).doc(pageId), { backlinks: [...sources] });
   }
-
-  if (batchCount > 0) {
-    await batch.commit();
-  }
-
-  if (!alreadyIndexed) {
-    await integrationRef(workspaceId).set({ notionBacklinksIndexed: true }, { merge: true });
-  }
+  await writer.commit();
 }
 
 export interface CreateImportInput {
@@ -672,18 +475,6 @@ export interface CreateImportInput {
 }
 
 export async function enqueueNotionImport(input: CreateImportInput): Promise<string> {
-  const activeSnap = await importJobRef(input.workspaceId, "placeholder")
-    .parent.where("status", "in", ["pending", "discovering", "running"])
-    .limit(1)
-    .get();
-
-  if (!activeSnap.empty) {
-    const existing = activeSnap.docs[0];
-    throw new Error(
-      `Já existe uma importação em andamento neste workspace (Job ${existing.id}). Aguarde a conclusão ou cancele-a antes de iniciar outra.`
-    );
-  }
-
   const jobId = `job_${randomUUID().slice(0, 8)}`;
   const ref = importJobRef(input.workspaceId, jobId);
   await ref.set({
@@ -751,7 +542,6 @@ export async function runNotionImportJob(workspaceId: string, jobId: string): Pr
     notion = await getNotionClient(workspaceId);
   } catch (error) {
     await progress.fail((error as Error).message);
-    progress.dispose();
     return;
   }
 
@@ -777,84 +567,41 @@ export async function runNotionImportJob(workspaceId: string, jobId: string): Pr
 
     const idMap = new Map<string, string>();
     const roles = new Map<string, ImportRole>();
-    const pathCache = new Map<string, string[]>();
-
-    // Batch-fetch every "does this Notion id already exist?" lookup up front
-    // instead of one query per item once processing starts (see
-    // fetchExistingByNotionId). A "page"-typed node might still end up
-    // imported as a notebook (that's only decided once its content is
-    // fetched), so it's looked up in both collections; the miss side is a
-    // cheap no-op.
-    const pageOrNotebookIds = ordered.filter((n) => n.type !== "database").map((n) => n.id);
-    const databaseIds = ordered.filter((n) => n.type === "database").map((n) => n.id);
-    const [existingNotebooks, existingPages, existingDatabases] = await Promise.all([
-      fetchExistingByNotionId(notebooksRef(workspaceId), "notionPageId", pageOrNotebookIds),
-      fetchExistingByNotionId(pagesRef(workspaceId), "notionPageId", pageOrNotebookIds),
-      fetchExistingByNotionId(databasesRef(workspaceId), "notionDatabaseId", databaseIds),
-    ]);
-    const existing = { notebooks: existingNotebooks, pages: existingPages, databases: existingDatabases };
-
-    const completionMap = new Map<string, Promise<void>>();
-    const resolveMap = new Map<string, () => void>();
+    const topLevels = new Map<string, NotionBlock[]>();
 
     for (const node of ordered) {
-      let res!: () => void;
-      const p = new Promise<void>((r) => {
-        res = r;
-      });
-      completionMap.set(node.id, p);
-      resolveMap.set(node.id, res);
+      if (node.type === "database") {
+        roles.set(node.id, "database");
+        continue;
+      }
+      const topLevel = await fetchAllChildren(notion, node.id);
+      topLevels.set(node.id, topLevel);
+      await progress.addFiles(countMediaBlocks(topLevel));
+      const asNotebook =
+        claimed.options.preserveHierarchy &&
+        shouldImportAsNotebook({
+          childCount: Math.max(node.children?.length ?? 0, countChildPageBlocks(topLevel)),
+          notionBlocks: topLevel,
+        });
+      roles.set(node.id, asNotebook ? "notebook" : "page");
     }
 
-    let completedCount = 0;
-
-    async function processNode(node: NotionTreeNode) {
-      if (await progress.isCanceled()) {
-        resolveMap.get(node.id)?.();
-        return;
-      }
-
-      // Se o pai do nó estiver na lista de importação, aguarda a conclusão do pai primeiro
-      const parentId = parents.get(node.id);
-      if (parentId && completionMap.has(parentId)) {
-        await completionMap.get(parentId);
-      }
-
-      if (await progress.isCanceled()) {
-        resolveMap.get(node.id)?.();
-        return;
-      }
+    for (const [index, node] of ordered.entries()) {
+      if (await progress.isCanceled()) return;
 
       await progress.itemStatus(node.id, "processing");
+      await progress.patch({
+        currentStep: `(${index + 1}/${ordered.length}) Convertendo “${node.title}”…`,
+      });
 
       try {
-        const shared = { notion, workspaceId, jobId, node, parents, idMap, roles, progress, existing, pathCache };
-        let appId: string;
-
-        if (node.type === "database") {
-          roles.set(node.id, "database");
-          appId = await importDatabase(shared);
-        } else {
-          // Busca os blocos de primeiro nível uma única vez sob demanda
-          const topLevel = await fetchAllChildren(notion, node.id);
-          await progress.addFiles(countMediaBlocks(topLevel));
-
-          const asNotebook =
-            progress.options.preserveHierarchy &&
-            shouldImportAsNotebook({
-              childCount: Math.max(node.children?.length ?? 0, countChildPageBlocks(topLevel)),
-              notionBlocks: topLevel,
-            });
-
-          roles.set(node.id, asNotebook ? "notebook" : "page");
-
-          if (asNotebook) {
-            appId = await importNotebook(shared);
-          } else {
-            appId = await importPage({ ...shared, cachedTopLevel: topLevel });
-          }
-        }
-
+        const shared = { notion, workspaceId, jobId, node, parents, idMap, roles, progress };
+        const appId =
+          roles.get(node.id) === "notebook"
+            ? await importNotebook(shared)
+            : node.type === "database"
+              ? await importDatabase(shared)
+              : await importPage({ ...shared, cachedTopLevel: topLevels.get(node.id) });
         idMap.set(node.id, appId);
         await progress.itemStatus(node.id, "done", appId);
       } catch (error) {
@@ -865,36 +612,14 @@ export async function runNotionImportJob(workspaceId: string, jobId: string): Pr
           stage: "convert",
           message: (error as Error).message,
         });
-      } finally {
-        resolveMap.get(node.id)?.();
-        completedCount++;
-        await progress.patch({
-          processedPages: completedCount,
-          currentStep: `(${completedCount}/${ordered.length}) Importando “${node.title}”…`,
-        });
       }
+
+      await progress.patch({ processedPages: index + 1 });
     }
 
-    // Pool com concorrência de páginas simultâneas. O gargalo real das
-    // chamadas ao Notion continua sendo o throttle (~3 req/s, ver
-    // throttle.ts) — mas escrita no Firestore e download/rehost de mídia não
-    // passam por ele, então mais workers aqui ajudam a sobrepor esse trabalho
-    // enquanto outras páginas aguardam sua vez no throttle.
-    let queueIdx = 0;
-    const CONCURRENCY = 5;
-    const workers = Array.from({ length: Math.min(CONCURRENCY, ordered.length) }, async () => {
-      while (queueIdx < ordered.length) {
-        if (await progress.isCanceled()) break;
-        const current = ordered[queueIdx++];
-        await processNode(current);
-      }
-    });
-
-    await Promise.all(workers);
-
-    if (progress.options.createBacklinks) {
+    if (claimed.options.createBacklinks) {
       await progress.patch({ currentStep: "Reconstruindo backlinks…" });
-      await rebuildBacklinks(workspaceId, jobId, idMap);
+      await rebuildBacklinks(workspaceId, idMap);
     }
 
     await progress.finish();
@@ -904,7 +629,5 @@ export async function runNotionImportJob(workspaceId: string, jobId: string): Pr
     );
   } catch (error) {
     await progress.fail((error as Error).message);
-  } finally {
-    progress.dispose();
   }
 }
