@@ -31,6 +31,7 @@ import { duplicateNotebookTree, duplicatePageTree } from "./duplicate";
 import { buildSeed, plainTextOf } from "./seed";
 import { mergeMediaEnrichment } from "./media-enrichment";
 import { pagePatchIsNoop } from "./page-write";
+import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
 import {
   resolveImportPlacement,
   resolveNotebookParentId,
@@ -870,6 +871,7 @@ export class LocalAdapter implements DataAdapter {
   }
 
   async saveAttachment(pageId: string, file: File) {
+    file = await prepareEditorAttachment(file);
     const page = this.state.pages.find((p) => p.id === pageId);
     if (!page) return;
     const url = await toPersistableUrl(file);

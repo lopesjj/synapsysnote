@@ -46,6 +46,7 @@ import {
   type TranscriptResult,
 } from "./media-enrichment";
 import { canonicalizePagePatch, pagePatchIsNoop } from "./page-write";
+import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
 import type {
   CreateImportJobInput,
   CreatePageInput,
@@ -941,6 +942,7 @@ export class FirestoreAdapter implements DataAdapter {
   }
 
   async saveAttachment(pageId: string, file: File) {
+    file = await prepareEditorAttachment(file);
     const fileId = `${Date.now()}-${nanoid(6)}-${file.name}`;
     const path = `workspaces/${this.workspaceId}/uploads/${pageId}/${fileId}`;
     const storageRef = ref(getFirebaseStorage(), path);

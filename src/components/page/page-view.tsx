@@ -31,6 +31,7 @@ import { Badge, Input, Tooltip } from "@/components/ui/primitives";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { WorkspaceCrumbs } from "./workspace-crumbs";
 import { cn, formatRelative } from "@/lib/utils";
+import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
 
 import { PAGE_ICONS } from "@/lib/icons/catalog";
 import {
@@ -139,6 +140,28 @@ export function PageView({ pageId }: { pageId: string }) {
     outgoingLinks: string[];
   }) => {
     schedule({ blocks, outgoingLinks });
+  };
+
+  const attachEditorFiles = async (files: File[]) => {
+    for (const file of files) {
+      if (file.type.startsWith("audio/")) {
+        toast.error("Use o gravador de áudio para notas de voz.");
+        continue;
+      }
+      try {
+        const prepared = await prepareEditorAttachment(file);
+        await adapter.saveAttachment(pageId, prepared);
+        toast.success(
+          prepared.type.startsWith("image/")
+            ? "Imagem anexada. OCR em andamento."
+            : prepared.type === "application/pdf"
+              ? "PDF anexado. OCR em andamento."
+              : "Arquivo anexado."
+        );
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Não foi possível anexar o arquivo.");
+      }
+    }
   };
 
   const addTag = () => {
@@ -383,16 +406,7 @@ export function PageView({ pageId }: { pageId: string }) {
             onChange={handleEditorChange}
             onRequestUpload={() => fileInput.current?.click()}
             onRequestAudio={() => setAudioOpen(true)}
-            onInsertFiles={async (files) => {
-              for (const file of files) {
-                await adapter.saveAttachment(pageId, file);
-                toast.success(
-                  file.type.startsWith("image/")
-                    ? "Imagem anexada. OCR em andamento."
-                    : "Arquivo anexado."
-                );
-              }
-            }}
+            onInsertFiles={(files) => void attachEditorFiles(files)}
           />
         </div>
 
@@ -498,17 +512,13 @@ export function PageView({ pageId }: { pageId: string }) {
       <input
         ref={fileInput}
         type="file"
+        accept="image/*,application/pdf"
         hidden
         onChange={async (event) => {
           const file = event.target.files?.[0];
-          if (!file) return;
-          await adapter.saveAttachment(pageId, file);
-          toast.success(
-            file.type.startsWith("image/")
-              ? "Imagem anexada. OCR em andamento."
-              : "Arquivo anexado."
-          );
           event.target.value = "";
+          if (!file) return;
+          await attachEditorFiles([file]);
         }}
       />
 
