@@ -1,5 +1,6 @@
 import type { UserPreferences, UserProfile } from "@/types/models";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
+import { isValidPhoneBR } from "@/lib/phone";
 
 /**
  * `users/{userId}` access layer.
@@ -26,11 +27,7 @@ export function profileNeedsCompletion(
   profile: UserProfile | null | undefined
 ): boolean {
   if (!user || user.uid === "demo-user") return false;
-  if (profile?.registrationCompleted === true) return false;
-  if (profile && profile.registrationCompleted !== false) return false;
-  const password = user.providers.includes("password");
-  const google = user.providers.includes("google.com");
-  return password && !google;
+  return !isValidPhoneBR(profile?.phone ?? "");
 }
 
 /** Demo sessions and unconfigured deployments keep the profile in localStorage. */
@@ -76,7 +73,7 @@ function buildProfile(
     phone: identity.phone ?? previous?.phone,
     photoURL: identity.photoURL ?? previous?.photoURL ?? null,
     providers: identity.providers ?? previous?.providers ?? [],
-    registrationCompleted: completed || previous?.registrationCompleted === true,
+    registrationCompleted: completed,
     preferences: previous?.preferences ?? {},
     createdAt: previous?.createdAt ?? now,
     updatedAt: now,
@@ -117,11 +114,7 @@ export async function ensureUserProfile(identity: ProfileIdentity): Promise<User
 
   const snap = await getDoc(ref);
   const previous = snap.exists() ? (snap.data() as Partial<UserProfile>) : null;
-  const completed =
-    previous?.registrationCompleted === true ||
-    Boolean(identity.phone) ||
-    (identity.providers ?? []).includes("google.com") ||
-    snap.exists();
+  const completed = isValidPhoneBR(identity.phone ?? previous?.phone ?? "");
 
   const profile = buildProfile(identity, previous, now, completed);
 

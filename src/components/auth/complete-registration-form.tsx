@@ -13,10 +13,11 @@ import { PhoneField } from "./phone-field";
 
 export function CompleteRegistrationForm() {
   const { user, completeRegistration } = useAuth();
-  const { complete } = useUserProfile();
-  const [name, setName] = useState(user?.displayName ?? "");
-  const [email, setEmail] = useState(user?.email ?? "");
-  const [phone, setPhone] = useState("");
+  const { profile, complete } = useUserProfile();
+  const googleAccount = Boolean(user?.providers.includes("google.com"));
+  const [name, setName] = useState(user?.displayName || profile?.displayName || "");
+  const [email, setEmail] = useState(user?.email || profile?.email || "");
+  const [phone, setPhone] = useState(profile?.phone ?? "");
   const [busy, setBusy] = useState(false);
 
   const submit = async (event: FormEvent) => {
@@ -27,7 +28,11 @@ export function CompleteRegistrationForm() {
     }
     setBusy(true);
     try {
-      await completeRegistration({ name: name.trim(), email: email.trim(), phone });
+      await completeRegistration({
+        name: name.trim() || user?.displayName || email.split("@")[0],
+        email: email.trim() || user?.email || "",
+        phone,
+      });
       await complete();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível salvar o cadastro");
@@ -40,29 +45,35 @@ export function CompleteRegistrationForm() {
     <>
       <p className="text-[15px] font-medium tracking-[-0.015em] text-ink">Complete seu cadastro</p>
       <p className="mt-1 text-[13px] text-muted">
-        Sua conta já existe. Confirme nome e e-mail e informe o telefone para continuar.
+        {googleAccount
+          ? "Sua conta Google já existe. Informe o telefone para continuar."
+          : "Sua conta já existe. Confirme nome e e-mail e informe o telefone para continuar."}
       </p>
 
       <form onSubmit={submit} className="mt-5 space-y-3.5">
-        <AuthField label="Nome">
-          <Input
-            required
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Como te chamamos?"
-            autoComplete="name"
-          />
-        </AuthField>
-        <AuthField label="E-mail">
-          <Input
-            type="email"
-            required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="seu@email.com"
-            autoComplete="email"
-          />
-        </AuthField>
+        {googleAccount ? null : (
+          <>
+            <AuthField label="Nome">
+              <Input
+                required
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Como te chamamos?"
+                autoComplete="name"
+              />
+            </AuthField>
+            <AuthField label="E-mail">
+              <Input
+                type="email"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="seu@email.com"
+                autoComplete="email"
+              />
+            </AuthField>
+          </>
+        )}
         <PhoneField value={phone} onChange={setPhone} />
         <Button type="submit" variant="primary" size="lg" className="w-full" disabled={busy}>
           {busy ? <Loader2 className="animate-spin" /> : null}

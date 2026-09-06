@@ -100,8 +100,9 @@ export default function LandingPage() {
   const oauth = async (provider: OAuthProviderId) => {
     setOauthBusy(provider);
     try {
-      await signInWithProvider(provider, remember);
-      router.push("/app");
+      const signedIn = await signInWithProvider(provider, remember);
+      const existing = await loadUserProfile(signedIn.uid);
+      if (!profileNeedsCompletion(signedIn, existing)) router.push("/app");
     } catch (error) {
       // The OAuth guard rejects e-mails without an account; that needs an
       // explanation rather than a generic failure toast.
@@ -168,8 +169,13 @@ export default function LandingPage() {
         </div>
 
         <div className="lux-gradient rounded-[var(--radius-xl)] border border-[var(--border)] p-6 shadow-[var(--shadow-float)]">
-          {user && needsCompletion ? <CompleteRegistrationForm /> : null}
-          {user && needsCompletion ? null : tab === "reset" ? (
+          {user && profileLoading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="size-5 animate-spin text-muted" />
+            </div>
+          ) : null}
+          {user && !profileLoading && needsCompletion ? <CompleteRegistrationForm /> : null}
+          {user && (profileLoading || needsCompletion) ? null : tab === "reset" ? (
             <>
               <p className="text-[15px] font-medium tracking-[-0.015em] text-ink">Esqueceu a senha</p>
               <p className="mt-1 text-[13px] leading-relaxed text-muted">
