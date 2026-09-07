@@ -74,7 +74,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
           <button
             type="button"
             aria-label="Abrir menu da conta"
-            className={cn("flex w-full items-center gap-2.5 px-1 py-0.5 text-left", TRIGGER_CLASS)}
+            className={cn("flex h-9 w-full items-center gap-2.5 text-left", TRIGGER_CLASS)}
           >
             {avatar}
             <span className="min-w-0 flex-1">

@@ -65,6 +65,9 @@ export function CommandPalette({
 
   const go = (href: string) => {
     onOpenChange(false);
+    if (href.startsWith("/home/p/")) {
+      useUiStore.getState().closeMenu();
+    }
     router.push(href);
   };
 

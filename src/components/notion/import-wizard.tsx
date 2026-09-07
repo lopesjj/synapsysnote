@@ -633,8 +633,14 @@ function ProgressStep({
         <Progress value={progress} indeterminate={job.status === "discovering"} />
 
         <div className="grid grid-cols-3 gap-3 pt-1">
-          <Metric label="Páginas" value={`${job.processedPages}/${job.totalPages}`} />
-          <Metric label="Arquivos" value={`${job.processedFiles}/${job.totalFiles}`} />
+          <Metric
+            label="Páginas"
+            value={`${job.processedPages}/${Math.max(job.totalPages, job.processedPages)}`}
+          />
+          <Metric
+            label="Arquivos"
+            value={`${job.processedFiles}/${Math.max(job.totalFiles, job.processedFiles)}`}
+          />
           <Metric label="Transferido" value={formatBytes(job.totalBytes)} />
         </div>
       </div>

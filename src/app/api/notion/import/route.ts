@@ -1,7 +1,6 @@
-import { after } from "next/server";
 import { requireWorkspaceEditor } from "@/lib/api/session";
 import { jsonError } from "@/lib/api/errors";
-import { enqueueNotionImport, runNotionImportJob } from "@/lib/notion/server/run-import";
+import { enqueueNotionImport, runNotionImportStep } from "@/lib/notion/server/run-import";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -9,8 +8,9 @@ export const maxDuration = 300;
 /**
  * POST /api/notion/import
  *
- * Enqueues an import job via Firebase Admin and starts the worker after the
- * response is sent. The wizard listens to the job document for live progress.
+ * Enqueues an import job via Firebase Admin and returns the jobId.
+ * The client then pumps steps via PUT /api/notion/import while the wizard
+ * listens to the job document for live progress.
  */
 export async function POST(request: Request) {
   try {
@@ -50,10 +50,6 @@ export async function POST(request: Request) {
       items: body.items ?? [],
     });
 
-    after(async () => {
-      await runNotionImportJob(workspaceId, jobId);
-    });
-
     return Response.json({ jobId });
   } catch (error) {
     return jsonError(error);
@@ -63,8 +59,8 @@ export async function POST(request: Request) {
 /**
  * PUT /api/notion/import  { workspaceId, jobId }
  *
- * Resume/run a pending job. The client fires this as a backup in case `after()`
- * is not available on the hosting platform.
+ * Runs a slice/batch of the import job within an active HTTP connection.
+ * Guarantees 100% CPU on Google Cloud Run without hitting serverless timeouts.
  */
 export async function PUT(request: Request) {
   try {
@@ -73,8 +69,8 @@ export async function PUT(request: Request) {
       return Response.json({ error: "workspaceId e jobId são obrigatórios" }, { status: 400 });
     }
     await requireWorkspaceEditor(request, body.workspaceId);
-    await runNotionImportJob(body.workspaceId, body.jobId);
-    return Response.json({ ok: true });
+    const result = await runNotionImportStep(body.workspaceId, body.jobId);
+    return Response.json(result);
   } catch (error) {
     return jsonError(error);
   }

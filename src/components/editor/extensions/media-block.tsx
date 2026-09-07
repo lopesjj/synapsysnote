@@ -150,7 +150,8 @@ function ResizableImage({
         className="h-auto max-h-[min(80vh,880px)] w-full rounded-[var(--radius-md)] object-contain [-webkit-user-drag:none]"
         draggable={false}
         aria-hidden
-
+        loading="eager"
+        decoding="async"
       />
       {editable ? (
         <>
@@ -568,6 +569,7 @@ export const MediaBlock = Node.create({
       pending: { default: false },
       displayWidth: { default: null },
       displayHeight: { default: null },
+      tempId: { default: null },
     };
   },
 

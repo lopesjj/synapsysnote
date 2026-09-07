@@ -72,18 +72,18 @@ export function WorkspaceIcon({
       <span
         className={cn(
           "inline-flex shrink-0 items-center justify-center overflow-hidden",
-          hero ? "rounded-[28px] bg-white p-2 shadow-sm" : "rounded-[5px]",
+          hero
+            ? "size-24 rounded-[22px] sm:size-[160px] sm:rounded-[28px] bg-white p-2 shadow-sm"
+            : "rounded-[5px]",
           className,
           hero && "bg-white"
         )}
-        style={{ width: px, height: px }}
+        style={hero ? undefined : { width: px, height: px }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={value}
           alt=""
-          width={px}
-          height={px}
           className={
             hero
               ? "max-h-full max-w-full object-contain object-center"
@@ -95,32 +95,40 @@ export function WorkspaceIcon({
   }
 
   if (flag) {
-    const height = variant === "hero" ? Math.round(px * 0.72) : Math.max(10, Math.round(px * 0.75));
+    const height = variant === "hero" ? undefined : Math.max(10, Math.round(px * 0.75));
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={`https://flagcdn.com/${flag.toLowerCase()}.svg`}
         alt={flag}
-        width={px}
-        height={height}
         className={cn(
           "inline-block shrink-0 object-cover",
-          variant === "hero" ? "rounded-[16px] shadow-sm" : "rounded-[2px]",
+          variant === "hero"
+            ? "h-14 w-20 rounded-[12px] sm:h-24 sm:w-36 sm:rounded-[16px] shadow-sm"
+            : "rounded-[2px]",
           className
         )}
-        style={{ width: px, height }}
+        style={variant === "hero" ? undefined : { width: px, height }}
       />
     );
   }
 
   return (
     <span
-      className={cn("inline-flex shrink-0 items-center justify-center leading-none", className)}
-      style={{
-        fontSize: px,
-        width: px,
-        height: px,
-      }}
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center leading-none",
+        variant === "hero" ? "text-[42px] sm:text-[54px]" : undefined,
+        className
+      )}
+      style={
+        variant === "hero"
+          ? undefined
+          : {
+              fontSize: px,
+              width: px,
+              height: px,
+            }
+      }
     >
       {value}
     </span>

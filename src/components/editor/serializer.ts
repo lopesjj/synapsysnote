@@ -114,6 +114,9 @@ const LIST_WRAPPERS: Partial<Record<BlockType, { wrapper: string; item: string }
 function paragraphAttrs(block: AppBlock): Record<string, unknown> | undefined {
   const attrs: Record<string, unknown> = {};
   if (block.props?.indentFirst) attrs.indentFirst = true;
+  if (typeof block.props?.indent === "number" && block.props.indent > 0) {
+    attrs.indent = block.props.indent;
+  }
   if (block.props?.textAlign && block.props.textAlign !== "justify") {
     attrs.textAlign = block.props.textAlign;
   }
@@ -122,6 +125,9 @@ function paragraphAttrs(block: AppBlock): Record<string, unknown> | undefined {
 
 function headingAttrs(block: AppBlock, level: number): Record<string, unknown> {
   const attrs: Record<string, unknown> = { level };
+  if (typeof block.props?.indent === "number" && block.props.indent > 0) {
+    attrs.indent = block.props.indent;
+  }
   if (block.props?.textAlign && block.props.textAlign !== "left") {
     attrs.textAlign = block.props.textAlign;
   }
@@ -136,6 +142,8 @@ function persistedAlignProps(
   const align = node.attrs?.textAlign;
   const fallback = node.type === "heading" ? "left" : "justify";
   if (typeof align === "string" && align !== fallback) props.textAlign = align;
+  const indent = Number(node.attrs?.indent ?? 0);
+  if (indent > 0) props.indent = indent;
   return Object.keys(props).length ? { props } : {};
 }
 
@@ -162,7 +170,11 @@ function blockToNode(block: AppBlock): JSONContent | null {
         ...(inline.length ? { content: inline } : {}),
       };
     case "quote":
-      return { type: "blockquote", content: [paragraph()] };
+      return {
+        type: "blockquote",
+        ...(block.props?.indent ? { attrs: { indent: block.props.indent } } : {}),
+        content: [paragraph()],
+      };
     case "divider":
       return { type: "horizontalRule" };
     case "code":
@@ -307,14 +319,17 @@ function nodeToBlocks(node: JSONContent): AppBlock[] {
       const type = (`heading_${Math.min(3, Math.max(1, level))}` as BlockType);
       return [{ id: id(), type, richText: inlineToSpans(node.content), ...persistedAlignProps(node) }];
     }
-    case "blockquote":
+    case "blockquote": {
+      const indent = Number(node.attrs?.indent ?? 0);
       return [
         {
           id: id(),
           type: "quote",
           richText: inlineToSpans(node.content?.[0]?.content),
+          ...(indent > 0 ? { props: { indent } } : {}),
         },
       ];
+    }
     case "horizontalRule":
       return [{ id: id(), type: "divider" }];
     case "codeBlock":

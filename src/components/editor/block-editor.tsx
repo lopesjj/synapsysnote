@@ -14,12 +14,15 @@ import Typography from "@tiptap/extension-typography";
 import CharacterCount from "@tiptap/extension-character-count";
 import type { AppBlock, BlockMedia, Page } from "@/types/models";
 import { useWorkspace } from "@/lib/data/provider";
+import { toast } from "sonner";
+import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
 import { Callout } from "./extensions/callout";
 import { ToggleBlock } from "./extensions/toggle-block";
 import { EquationBlock } from "./extensions/equation-block";
 import { MediaBlock } from "./extensions/media-block";
 import { TableBlock } from "./extensions/table-block";
 import { DragHandle } from "./extensions/drag-handle";
+import { DragAutoScroll } from "./extensions/drag-auto-scroll";
 import { ParagraphIndent } from "./extensions/paragraph-indent";
 import { TextAlign } from "./extensions/text-align";
 import { SynapsysCodeBlock } from "./extensions/code-block";
@@ -44,6 +47,7 @@ export interface BlockEditorProps {
   onRequestUpload?: () => void;
   onRequestAudio?: () => void;
   onInsertFiles?: (files: File[]) => void;
+  onRegisterInsertFiles?: (fn: (files: File[]) => Promise<void>) => void;
 }
 
 function mentionHref(
@@ -65,9 +69,39 @@ function mentionFromEvent(event: { target: EventTarget | null }): HTMLElement | 
 
 function filesFromDataTransfer(data: DataTransfer | null): File[] {
   if (!data) return [];
-  return [...data.files].filter(
-    (file) => file.type.startsWith("image/") || file.type === "application/pdf" || file.type.startsWith("audio/")
-  );
+  const files: File[] = [];
+  if (data.items && data.items.length > 0) {
+    for (let i = 0; i < data.items.length; i++) {
+      const item = data.items[i];
+      if (item.kind === "file") {
+        const file = item.getAsFile();
+        if (
+          file &&
+          (file.type.startsWith("image/") ||
+            file.type === "application/pdf" ||
+            file.type.startsWith("audio/") ||
+            file.type.startsWith("video/"))
+        ) {
+          files.push(file);
+        }
+      }
+    }
+  }
+  if (files.length === 0 && data.files && data.files.length > 0) {
+    for (let i = 0; i < data.files.length; i++) {
+      const file = data.files[i];
+      if (
+        file &&
+        (file.type.startsWith("image/") ||
+          file.type === "application/pdf" ||
+          file.type.startsWith("audio/") ||
+          file.type.startsWith("video/"))
+      ) {
+        files.push(file);
+      }
+    }
+  }
+  return files;
 }
 
 /**
@@ -87,9 +121,10 @@ export function BlockEditor({
   onRequestUpload,
   onRequestAudio,
   onInsertFiles,
+  onRegisterInsertFiles,
 }: BlockEditorProps) {
   const router = useRouter();
-  const { livePages, notebooks } = useWorkspace();
+  const { livePages, notebooks, adapter } = useWorkspace();
   const [findOpen, setFindOpen] = useState(false);
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   const storeBlockCount = useRef(page.blocks.length);
@@ -99,6 +134,7 @@ export function BlockEditor({
   const candidatesRef = useRef(mentionCandidates);
   const mentionNavRef = useRef({ router, livePages, notebooks });
   mentionNavRef.current = { router, livePages, notebooks };
+  const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
 
   const openMention = useCallback((event: React.MouseEvent | MouseEvent) => {
     const mention = mentionFromEvent(event);
@@ -135,6 +171,131 @@ export function BlockEditor({
   useEffect(() => {
     insertFilesRef.current = onInsertFiles;
   }, [onInsertFiles]);
+
+  const insertFilesIntoEditor = useCallback(
+    async (files: File[], customPos?: number) => {
+      const instance = editorRef.current;
+      if (!instance || !editable) return;
+
+      const supportedFiles = files.filter((f) => {
+        if (f.type.startsWith("audio/")) {
+          toast.error("Use o gravador de áudio para notas de voz.");
+          return false;
+        }
+        return (
+          f.type.startsWith("image/") ||
+          f.type === "application/pdf" ||
+          f.type.startsWith("video/")
+        );
+      });
+
+      if (!supportedFiles.length) return;
+
+      for (const file of supportedFiles) {
+        const isImage = file.type.startsWith("image/");
+        const isVideo = file.type.startsWith("video/");
+        const mediaType = isImage ? "image" : isVideo ? "video" : "file";
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+        // Instant local preview (0ms de carregamento inicial)
+        const previewUrl = URL.createObjectURL(file);
+
+        let targetPos: number;
+        if (typeof customPos === "number") {
+          targetPos = Math.min(Math.max(0, customPos), instance.state.doc.content.size);
+        } else if (instance.isFocused) {
+          targetPos = instance.state.selection.from;
+        } else if (lastSelectionRef.current) {
+          targetPos = Math.min(lastSelectionRef.current.from, instance.state.doc.content.size);
+        } else {
+          targetPos = instance.state.doc.content.size;
+        }
+
+        instance
+          .chain()
+          .focus()
+          .setTextSelection(targetPos)
+          .insertContent({
+            type: "mediaBlock",
+            attrs: {
+              mediaType,
+              url: previewUrl,
+              name: file.name,
+              mimeType: file.type,
+              sizeBytes: file.size,
+              pending: true,
+              tempId,
+            },
+          })
+          .run();
+
+        lastSelectionRef.current = instance.state.selection;
+
+        // Otimização ultra-rápida e upload assíncrono em segundo plano
+        void (async () => {
+          try {
+            const prepared = await prepareEditorAttachment(file);
+            const { url: permanentUrl, storagePath } = await adapter.uploadAttachment(
+              page.id,
+              prepared
+            );
+
+            const { tr } = instance.state;
+            let found = false;
+
+            instance.state.doc.descendants((node, pos) => {
+              if (found) return false;
+              if (
+                node.type.name === "mediaBlock" &&
+                (node.attrs.tempId === tempId || node.attrs.url === previewUrl)
+              ) {
+                tr.setNodeMarkup(pos, undefined, {
+                  ...node.attrs,
+                  url: permanentUrl,
+                  storagePath: storagePath ?? null,
+                  pending: isImage || prepared.type === "application/pdf",
+                  tempId: null,
+                });
+                found = true;
+                return false;
+              }
+            });
+
+            if (found) {
+              instance.view.dispatch(tr);
+              const blocks = docToBlocks(instance.getJSON());
+              emittedBlockCount.current = blocks.length;
+              onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
+            }
+
+            toast.success(
+              isImage
+                ? "Imagem anexada. OCR em andamento."
+                : prepared.type === "application/pdf"
+                  ? "PDF anexado. OCR em andamento."
+                  : "Arquivo anexado."
+            );
+          } catch (error) {
+            console.error("Erro ao salvar anexo:", error);
+            toast.error(
+              error instanceof Error ? error.message : "Não foi possível anexar o arquivo."
+            );
+          } finally {
+            setTimeout(() => {
+              try {
+                URL.revokeObjectURL(previewUrl);
+              } catch {}
+            }, 10000);
+          }
+        })();
+      }
+    },
+    [adapter, editable, onChange, page.id]
+  );
+
+  useEffect(() => {
+    onRegisterInsertFiles?.(insertFilesIntoEditor);
+  }, [insertFilesIntoEditor, onRegisterInsertFiles]);
 
   const extensions = useMemo(
     () => [
@@ -180,7 +341,7 @@ export function BlockEditor({
       TableBlock,
       ParagraphIndent,
       TextAlign,
-      ...(editable ? [DragHandle, HeadingShortcut, SlashCommand.configure({ handlers })] : []),
+      ...(editable ? [DragAutoScroll, DragHandle, HeadingShortcut, SlashCommand.configure({ handlers })] : []),
       Mention.configure({
         HTMLAttributes: { class: "mention" },
         renderHTML({ options, node }) {
@@ -220,12 +381,10 @@ export function BlockEditor({
         },
         handlePaste: (_view, event) => {
           if (!editable) return false;
-          const text = event.clipboardData?.getData("text/plain")?.trim();
-          if (text) return false;
           const files = filesFromDataTransfer(event.clipboardData);
-          if (files.length && insertFilesRef.current) {
+          if (files.length) {
             event.preventDefault();
-            insertFilesRef.current(files);
+            void insertFilesIntoEditor(files);
             return true;
           }
           return false;
@@ -236,9 +395,11 @@ export function BlockEditor({
           // ProseMirror — do not treat that as a new upload.
           if (view.dragging) return false;
           const files = filesFromDataTransfer(event.dataTransfer);
-          if (files.length && insertFilesRef.current) {
+          if (files.length) {
             event.preventDefault();
-            insertFilesRef.current(files);
+            const coordinates = view.posAtCoords({ left: event.clientX, top: event.clientY });
+            const dropPos = coordinates ? coordinates.pos : undefined;
+            void insertFilesIntoEditor(files, dropPos);
             return true;
           }
           return false;
@@ -260,6 +421,12 @@ export function BlockEditor({
           }
           return false;
         },
+      },
+      onSelectionUpdate: ({ editor: instance }) => {
+        lastSelectionRef.current = instance.state.selection;
+      },
+      onFocus: ({ editor: instance }) => {
+        lastSelectionRef.current = instance.state.selection;
       },
       onUpdate: ({ editor: instance }) => {
         if (!editable || applyingRemote.current) return;

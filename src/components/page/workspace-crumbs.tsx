@@ -138,6 +138,11 @@ export function WorkspaceCrumbs({
             {index > 0 ? <span className={slash}>/</span> : null}
             <Link
               href={crumb.href}
+              onClick={() => {
+                if (crumb.href.startsWith("/home/p/")) {
+                  useUiStore.getState().closeMenu();
+                }
+              }}
               className={cn("flex min-w-0 items-center gap-1 truncate", hover)}
             >
               {index === 0 ? <WorkspaceIcon icon={icon} fallback={fallback} size={13} /> : null}

@@ -50,7 +50,31 @@ export const DragHandle = Extension.create({
           const container = document.createElement("div");
           container.className = "synapsys-drag-handle";
           container.style.cssText =
-            "position:absolute;display:none;gap:1px;align-items:center;z-index:11;user-select:none;";
+            "position:absolute;display:none;gap:1px;align-items:center;z-index:11;user-select:none;padding-right:12px;";
+
+          let hideTimer: ReturnType<typeof setTimeout> | null = null;
+
+          const cancelHide = () => {
+            if (hideTimer) {
+              clearTimeout(hideTimer);
+              hideTimer = null;
+            }
+          };
+
+          const scheduleHide = () => {
+            cancelHide();
+            hideTimer = setTimeout(() => {
+              container.style.display = "none";
+              state.pos = null;
+              hideTimer = null;
+            }, 250);
+          };
+
+          const hideImmediate = () => {
+            cancelHide();
+            container.style.display = "none";
+            state.pos = null;
+          };
 
           const addButton = document.createElement("button");
           addButton.type = "button";
@@ -69,6 +93,14 @@ export const DragHandle = Extension.create({
           dragButton.style.cssText =
             "display:flex;align-items:center;justify-content:center;width:20px;height:22px;border-radius:5px;color:var(--text-faint);background:transparent;border:none;cursor:grab;";
 
+          const deleteButton = document.createElement("button");
+          deleteButton.type = "button";
+          deleteButton.title = "Excluir bloco";
+          deleteButton.innerHTML =
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>';
+          deleteButton.style.cssText =
+            "display:flex;align-items:center;justify-content:center;width:20px;height:22px;border-radius:5px;color:var(--text-faint);background:transparent;border:none;cursor:pointer;";
+
           for (const button of [addButton, dragButton]) {
             button.addEventListener("mouseenter", () => {
               button.style.background = "var(--surface-hover)";
@@ -80,7 +112,19 @@ export const DragHandle = Extension.create({
             });
           }
 
-          container.append(addButton, dragButton);
+          deleteButton.addEventListener("mouseenter", () => {
+            deleteButton.style.background = "var(--surface-hover)";
+            deleteButton.style.color = "#ef4444";
+          });
+          deleteButton.addEventListener("mouseleave", () => {
+            deleteButton.style.background = "transparent";
+            deleteButton.style.color = "var(--text-faint)";
+          });
+
+          container.append(addButton, dragButton, deleteButton);
+          container.addEventListener("mouseenter", cancelHide);
+          container.addEventListener("mouseleave", scheduleHide);
+
           const parent = view.dom.parentElement;
           if (parent) {
             // The handle is absolutely positioned against this element, so it
@@ -89,32 +133,37 @@ export const DragHandle = Extension.create({
             parent.appendChild(container);
           }
 
-          const hide = () => {
-            container.style.display = "none";
-            state.pos = null;
-          };
-
           const onMouseMove = (event: MouseEvent) => {
             if (!view.editable) return;
             const target = event.target as HTMLElement;
-            if (container.contains(target)) return;
+            if (container.contains(target)) {
+              cancelHide();
+              return;
+            }
 
             const hit = topLevelPosAt(view, event);
-            if (!hit || !parent) return hide();
+            if (!hit || !parent) {
+              scheduleHide();
+              return;
+            }
 
+            cancelHide();
             const parentRect = parent.getBoundingClientRect();
             const rect = hit.dom.getBoundingClientRect();
             state.pos = hit.pos;
             state.dom = hit.dom;
             container.style.display = "flex";
             container.style.top = `${rect.top - parentRect.top + 1}px`;
-            container.style.left = `${rect.left - parentRect.left - 46}px`;
+            container.style.left = `${rect.left - parentRect.left - 68}px`;
           };
 
           const onMouseLeave = (event: MouseEvent) => {
             const related = event.relatedTarget as HTMLElement | null;
-            if (related && container.contains(related)) return;
-            hide();
+            if (related && container.contains(related)) {
+              cancelHide();
+              return;
+            }
+            scheduleHide();
           };
 
           addButton.addEventListener("click", () => {
@@ -128,6 +177,16 @@ export const DragHandle = Extension.create({
             );
             view.dispatch(tr.scrollIntoView());
             view.focus();
+          });
+
+          deleteButton.addEventListener("click", () => {
+            if (state.pos === null) return;
+            const node = view.state.doc.nodeAt(state.pos);
+            if (!node) return;
+            const tr = view.state.tr.delete(state.pos, state.pos + node.nodeSize);
+            view.dispatch(tr.scrollIntoView());
+            view.focus();
+            hideImmediate();
           });
 
           dragButton.addEventListener("dragstart", (event) => {
@@ -150,8 +209,11 @@ export const DragHandle = Extension.create({
 
           return {
             destroy() {
+              cancelHide();
               view.dom.removeEventListener("mousemove", onMouseMove);
               view.dom.removeEventListener("mouseleave", onMouseLeave);
+              container.removeEventListener("mouseenter", cancelHide);
+              container.removeEventListener("mouseleave", scheduleHide);
               container.remove();
             },
           };

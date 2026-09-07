@@ -870,11 +870,16 @@ export class LocalAdapter implements DataAdapter {
     });
   }
 
-  async saveAttachment(pageId: string, file: File) {
+  async uploadAttachment(pageId: string, file: File): Promise<{ url: string; storagePath?: string }> {
     file = await prepareEditorAttachment(file);
+    const url = await toPersistableUrl(file);
+    return { url };
+  }
+
+  async saveAttachment(pageId: string, file: File) {
+    const { url } = await this.uploadAttachment(pageId, file);
     const page = this.state.pages.find((p) => p.id === pageId);
     if (!page) return;
-    const url = await toPersistableUrl(file);
     const isImage = file.type.startsWith("image/");
     const blockId = `blk_${nanoid(8)}`;
     const blocks = [

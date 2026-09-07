@@ -117,6 +117,8 @@ export interface AppBlock {
     hasColumnHeader?: boolean;
     /** Word-style first-line indent on paragraphs. */
     indentFirst?: boolean;
+    /** Word-style paragraph line indent level (0 to 8). */
+    indent?: number;
     /** Block alignment. Paragraphs default to justify; headings to left. */
     textAlign?: "left" | "center" | "right" | "justify";
   };

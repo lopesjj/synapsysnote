@@ -88,6 +88,7 @@ export interface DataAdapter {
   /** Import Wizard step 1: read the shared Notion tree. */
   fetchNotionTree(): Promise<NotionTreeNode[]>;
   createImportJob(input: CreateImportJobInput): Promise<string>;
+  resumeImportJob?(jobId: string): Promise<void>;
   cancelImportJob(jobId: string): Promise<void>;
 
   connectNotion(): Promise<{ redirectUrl: string } | { connected: NotionIntegration }>;
@@ -99,6 +100,8 @@ export interface DataAdapter {
   retryMediaProcessing(pageId: string, storagePath: string): Promise<void>;
   /** Attachments: uploads the file and requests OCR when it is an image/PDF. */
   saveAttachment(pageId: string, file: File): Promise<void>;
+  /** Uploads an attachment to storage, returning its URL and storage path. */
+  uploadAttachment(pageId: string, file: File): Promise<{ url: string; storagePath?: string }>;
 
   /** Page/notebook icon image — stored like other uploads, URL written on the doc. */
   uploadWorkspaceIcon(file: File): Promise<string>;

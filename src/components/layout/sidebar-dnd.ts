@@ -112,7 +112,8 @@ function isDescendant(pages: Page[], candidate: Page, ancestorId: string): boole
 export function planSidebarDrop(
   activeRawId: string | number,
   overRawId: string | number | null | undefined,
-  { notebooks, pages }: SidebarSnapshot
+  { notebooks, pages }: SidebarSnapshot,
+  intent?: "reorder" | "inside"
 ): DropPlan | null {
   if (overRawId === null || overRawId === undefined) return null;
   if (String(activeRawId) === String(overRawId)) return null;
@@ -139,10 +140,24 @@ export function planSidebarDrop(
     if (isNotebookDescendant(notebooks, target.id, dragged.id)) return null;
 
     const draggedParent = parentIdOf(dragged);
+    const targetParent = parentIdOf(target);
+    const siblings = childrenOf(notebooks, draggedParent);
 
-    // Dropping on the header nests the dragged caderno. Dropping on a page
-    // (the usual outcome of an expanded list) reorders among siblings.
-    if (over.kind === "notebook") {
+    // Explicit reorder intent between siblings
+    if (intent === "reorder") {
+      if (targetParent === draggedParent) {
+        const from = siblings.findIndex((notebook) => notebook.id === dragged.id);
+        const to = siblings.findIndex((notebook) => notebook.id === target.id);
+        if (from < 0 || to < 0 || from === to) return null;
+        return {
+          kind: "reorder-notebooks",
+          notebookIds: moveItem(siblings, from, to).map((notebook) => notebook.id),
+        };
+      }
+    }
+
+    // Explicit inside intent or dropping directly onto another notebook header
+    if (intent === "inside" || over.kind === "notebook") {
       if (draggedParent === target.id) return null;
       const destination = childrenOf(notebooks, target.id).filter(
         (notebook) => notebook.id !== dragged.id
@@ -154,9 +169,6 @@ export function planSidebarDrop(
         notebookIds: [...destination.map((notebook) => notebook.id), dragged.id],
       };
     }
-
-    const targetParent = parentIdOf(target);
-    const siblings = childrenOf(notebooks, draggedParent);
 
     if (targetParent === draggedParent) {
       const from = siblings.findIndex((notebook) => notebook.id === dragged.id);

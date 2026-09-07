@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ImportJob, NotionTreeNode } from "@/types/models";
 import { useWorkspace } from "@/lib/data/provider";
 import { findNode, flattenTree } from "@/lib/notion/mock-workspace";
@@ -181,18 +181,53 @@ export function useNotionImport() {
     if (targetId) await adapter.cancelImportJob(targetId);
   }, [activeImportJob, adapter, jobId]);
 
+  const maxProgressRef = useRef(0);
+
   const reset = useCallback(() => {
     setJobId(null);
     setSelected(new Set());
     setImportAll(false);
+    maxProgressRef.current = 0;
   }, []);
+
+  useEffect(() => {
+    maxProgressRef.current = 0;
+  }, [jobId]);
+
+  useEffect(() => {
+    const targetId = jobId ?? activeImportJob?.id;
+    if (
+      targetId &&
+      activeImportJob &&
+      ["pending", "discovering", "running"].includes(activeImportJob.status)
+    ) {
+      void adapter.resumeImportJob?.(targetId);
+    }
+  }, [activeImportJob, adapter, jobId]);
 
   const progress = useMemo(() => {
     if (!job) return 0;
-    const totalUnits = job.totalPages + job.totalFiles;
+    if (job.status === "completed" || job.status === "completed_with_errors") {
+      maxProgressRef.current = 100;
+      return 100;
+    }
+    if (job.status === "failed" || job.status === "canceled") {
+      return maxProgressRef.current;
+    }
+
+    const effectiveTotalPages = Math.max(job.totalPages, job.processedPages, 1);
+    const effectiveTotalFiles = Math.max(job.totalFiles, job.processedFiles);
+    const totalUnits = effectiveTotalPages + effectiveTotalFiles;
     const doneUnits = job.processedPages + job.processedFiles;
-    if (!totalUnits) return job.status === "completed" ? 100 : 0;
-    return Math.min(100, Math.round((doneUnits / totalUnits) * 100));
+
+    if (!totalUnits) return 0;
+
+    const rawPct = Math.floor((doneUnits / totalUnits) * 100);
+    // Enquanto estiver em andamento (pending, discovering, running), nunca atinge 100% (máximo 99%)
+    const runningPct = Math.min(99, Math.max(1, rawPct));
+    // Monotônico: nunca retrocede, sempre progressivo
+    maxProgressRef.current = Math.max(maxProgressRef.current, runningPct);
+    return maxProgressRef.current;
   }, [job]);
 
   return {

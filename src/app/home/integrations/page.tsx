@@ -123,7 +123,7 @@ function IntegrationsBody() {
                     {importJobTitle(job)}
                   </span>
                   <span className="text-[12px] text-ink">
-                    {job.processedPages}/{job.totalPages} páginas · {job.processedFiles}/{job.totalFiles} arquivos
+                    {job.processedPages}/{Math.max(job.totalPages, job.processedPages)} páginas · {job.processedFiles}/{Math.max(job.totalFiles, job.processedFiles)} arquivos
                   </span>
                   <span className="ml-auto">
                     <Badge

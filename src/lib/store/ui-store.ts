@@ -47,6 +47,8 @@ interface UiState extends UiPreferences {
 
   toggleSidebar: () => void;
   setSidebarCollapsed: (value: boolean) => void;
+  closeMenu: () => void;
+  openMenu: () => void;
   setSidebarWidth: (value: number) => void;
   toggleZenMode: () => void;
   setZenMode: (value: boolean) => void;
@@ -115,6 +117,8 @@ export const useUiStore = create<UiState>()(
 
       toggleSidebar: () => set({ sidebarCollapsed: !get().sidebarCollapsed }),
       setSidebarCollapsed: (value) => set({ sidebarCollapsed: value }),
+      closeMenu: () => set({ mobileSidebarOpen: false, sidebarCollapsed: true }),
+      openMenu: () => set({ sidebarCollapsed: false }),
       setSidebarWidth: (value) =>
         set({ sidebarWidth: Math.round(clamp(value, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)) }),
       toggleZenMode: () => set({ zenMode: !get().zenMode }),
@@ -135,8 +139,11 @@ export const useUiStore = create<UiState>()(
       setShowSaveIndicator: (value) => set({ showSaveIndicator: value }),
       hydratePreferences: (value) => {
         const next = pickPreferences(value);
-        // Opening the app always starts expanded at the minimum docked width.
-        next.sidebarCollapsed = false;
+        const isNotePage =
+          typeof window !== "undefined" && window.location.pathname.startsWith("/home/p/");
+        if (isNotePage) {
+          next.sidebarCollapsed = true;
+        }
         next.sidebarWidth = SIDEBAR_MIN_WIDTH;
         set(next);
       },
@@ -146,7 +153,13 @@ export const useUiStore = create<UiState>()(
       version: 6,
       migrate: (persisted) => {
         const state = (persisted ?? {}) as Partial<UiPreferences>;
-        return { ...state, sidebarCollapsed: false, sidebarWidth: SIDEBAR_MIN_WIDTH };
+        const isNotePage =
+          typeof window !== "undefined" && window.location.pathname.startsWith("/home/p/");
+        return {
+          ...state,
+          sidebarCollapsed: isNotePage ? true : (state.sidebarCollapsed ?? false),
+          sidebarWidth: SIDEBAR_MIN_WIDTH,
+        };
       },
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => pickPreferences(state) as UiPreferences,
@@ -165,7 +178,11 @@ export function useRehydrateUiStore(): void {
   useEffect(() => {
     void Promise.resolve(useUiStore.persist.rehydrate()).then(() => {
       const store = useUiStore.getState();
-      store.setSidebarCollapsed(false);
+      const isNotePage =
+        typeof window !== "undefined" && window.location.pathname.startsWith("/home/p/");
+      if (isNotePage) {
+        store.setSidebarCollapsed(true);
+      }
       store.setSidebarWidth(SIDEBAR_MIN_WIDTH);
     });
   }, []);

@@ -512,6 +512,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           writeDemoUser(null);
           setFirebaseUser(null);
           clearRemembered();
+          if (typeof window !== "undefined") {
+            try {
+              sessionStorage.removeItem("synapsys.session.openNotebooks");
+              sessionStorage.removeItem("synapsys.session.expandedPages");
+            } catch {
+              // ignore
+            }
+          }
           // Keep this true until the caller completes its full navigation.
           // AppShell then cannot race it with ?session=sync_failed.
         } catch (error) {

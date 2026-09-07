@@ -249,6 +249,17 @@
   text-indent: 1.25cm;
 }
 
+/* Word-style progressive line and paragraph indent (≈ 1.25 cm / 0.5" per level). */
+.synapsys-editor .ProseMirror [data-indent="1"] { padding-left: min(1.25cm, 15vw); }
+.synapsys-editor .ProseMirror [data-indent="2"] { padding-left: min(2.5cm, 30vw); }
+.synapsys-editor .ProseMirror [data-indent="3"] { padding-left: min(3.75cm, 45vw); }
+.synapsys-editor .ProseMirror [data-indent="4"] { padding-left: min(5cm, 60vw); }
+.synapsys-editor .ProseMirror [data-indent="5"] { padding-left: min(6.25cm, 70vw); }
+.synapsys-editor .ProseMirror [data-indent="6"] { padding-left: min(7.5cm, 75vw); }
+.synapsys-editor .ProseMirror [data-indent="7"] { padding-left: min(8.75cm, 80vw); }
+.synapsys-editor .ProseMirror [data-indent="8"] { padding-left: min(10cm, 85vw); }
+
+
 .synapsys-editor .ProseMirror h1 {
   font-size: 1.875em;
   line-height: 1.25;

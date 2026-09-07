@@ -121,14 +121,14 @@ export function CoverPicker({
               <img src={coverUrl} alt="" className="h-full w-full object-cover" />
             )}
           </div>
-          <div className="absolute inset-x-0 bottom-0 flex justify-end gap-1 p-3 opacity-0 transition group-hover/cover:opacity-100">
+          <div className="absolute top-12 right-3 sm:top-14 sm:right-6 md:right-8 z-20 flex items-center gap-1.5 opacity-90 transition-opacity hover:opacity-100 sm:opacity-80 sm:hover:opacity-100">
             <Menu>
               <MenuTrigger asChild>
                 <button
                   type="button"
-                  className="rounded-[var(--radius-sm)] bg-[var(--surface)]/90 px-2 py-1 text-[11.5px] text-ink shadow-sm backdrop-blur"
+                  className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/55 px-2.5 py-1 text-[11.5px] font-medium text-white shadow-sm backdrop-blur-md transition hover:bg-black/75 active:scale-95"
                 >
-                  Trocar
+                  <ImagePlus className="size-3" /> Trocar capa
                 </button>
               </MenuTrigger>
               <MenuContent align="end" className="min-w-0 p-0">
@@ -138,9 +138,9 @@ export function CoverPicker({
             <button
               type="button"
               onClick={() => onChange(null)}
-              className="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--surface)]/90 px-2 py-1 text-[11.5px] text-ink shadow-sm backdrop-blur"
+              className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/55 px-2.5 py-1 text-[11.5px] font-medium text-white shadow-sm backdrop-blur-md transition hover:bg-black/75 active:scale-95"
             >
-              <ImageOff className="size-3" /> Remover
+              <ImageOff className="size-3" /> Remover capa
             </button>
           </div>
         </div>

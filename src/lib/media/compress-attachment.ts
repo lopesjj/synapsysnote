@@ -11,13 +11,61 @@ export function replaceExtension(name: string, ext: string): string {
   return name.replace(/\.[^.]+$/, "") + ext;
 }
 
+const MAX_WEB_EDGE = 2048;
+const HIGH_QUALITY = 0.86;
+
+/**
+ * Otimiza imagens para carregamento ultrarrápido na web sem qualquer perda perceptível
+ * de fidelidade visual (limite de 2048px de resolução e compressão de alta qualidade 86%).
+ * Imagens leves (< 600 KB) e GIFs/SVGs são preservados intactos.
+ */
+export async function optimizeImageForFastLoad(file: File): Promise<File> {
+  if (file.type === "image/gif" || file.type === "image/svg+xml") {
+    return file;
+  }
+  if (file.size < 600 * 1024) {
+    return file;
+  }
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    try {
+      const maxDim = Math.max(bitmap.width, bitmap.height);
+      const scale = maxDim > MAX_WEB_EDGE ? MAX_WEB_EDGE / maxDim : 1;
+      const targetWidth = Math.max(1, Math.round(bitmap.width * scale));
+      const targetHeight = Math.max(1, Math.round(bitmap.height * scale));
+
+      if (scale === 1 && file.size < 1024 * 1024) {
+        return file;
+      }
+
+      const blob = await rasterToJpeg(bitmap, targetWidth, targetHeight, HIGH_QUALITY);
+      if (blob.size < file.size) {
+        return new File([blob], replaceExtension(file.name, ".jpg"), {
+          type: "image/jpeg",
+          lastModified: Date.now(),
+        });
+      }
+      return file;
+    } finally {
+      bitmap.close();
+    }
+  } catch {
+    return file;
+  }
+}
+
 /**
  * Images and PDFs over 5 MB are reduced in a loop until they fit (or a
  * safety floor is hit). Smaller files and other types pass through.
  */
 export async function prepareEditorAttachment(file: File): Promise<File> {
+  if (file.type.startsWith("image/")) {
+    const optimized = await optimizeImageForFastLoad(file);
+    if (!needsCompression(optimized)) return optimized;
+    return compressImageUntilFits(optimized);
+  }
   if (!needsCompression(file)) return file;
-  if (file.type.startsWith("image/")) return compressImageUntilFits(file);
   return compressPdfUntilFits(file);
 }
 

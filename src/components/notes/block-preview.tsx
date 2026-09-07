@@ -79,8 +79,12 @@ export function BlockPreview({
 
 function headingAlign(block: AppBlock): CSSProperties | undefined {
   const align = block.props?.textAlign;
-  if (!align || align === "left") return undefined;
-  return { textAlign: align };
+  const indent = block.props?.indent;
+  if ((!align || align === "left") && !indent) return undefined;
+  return {
+    ...(align && align !== "left" ? { textAlign: align } : {}),
+    ...(indent ? { paddingLeft: `${indent * 1.25}cm` } : {}),
+  };
 }
 
 function BlockNode({ block }: { block: AppBlock }) {
@@ -304,11 +308,14 @@ function BlockNode({ block }: { block: AppBlock }) {
       return block.richText?.length ? (
         <p
           className={cn("text-justify hyphens-auto", block.props?.indentFirst && "[text-indent:1.25cm]")}
-          style={
-            block.props?.textAlign && block.props.textAlign !== "justify"
+          style={{
+            ...(block.props?.textAlign && block.props.textAlign !== "justify"
               ? { textAlign: block.props.textAlign }
-              : undefined
-          }
+              : {}),
+            ...(block.props?.indent
+              ? { paddingLeft: `${block.props.indent * 1.25}cm` }
+              : {}),
+          }}
         >
           <Spans spans={block.richText} />
         </p>

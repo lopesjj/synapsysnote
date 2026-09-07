@@ -14,6 +14,7 @@ import { WorkspaceIcon, isIconUrl } from "@/lib/icons/workspace-icon";
 import { coverPresetById } from "@/lib/covers/presets";
 import { notebookSubtreeIds } from "@/lib/data/notebook-tree";
 import { NOTEBOOK_COPY } from "@/lib/data/notebook-copy";
+import { useUiStore } from "@/lib/store/ui-store";
 import type { Notebook, Page } from "@/types/models";
 
 function greetingForHour(hour: number) {
@@ -103,6 +104,7 @@ export default function WorkspaceHome() {
 
   const createNote = async () => {
     const page = await adapter.createPage({ title: "Sem título" });
+    useUiStore.getState().closeMenu();
     router.push(`/home/p/${page.id}`);
   };
 
@@ -245,6 +247,7 @@ export default function WorkspaceHome() {
                 <Link
                   key={page.id}
                   href={`/home/p/${page.id}`}
+                  onClick={() => useUiStore.getState().closeMenu()}
                   className="flex items-center gap-2.5 border-b border-[var(--border)] px-3 py-2.5 last:border-b-0 transition hover:bg-[var(--surface-hover)]"
                 >
                   <WorkspaceIcon icon={page.icon} fallback="📄" size={16} />
@@ -310,6 +313,7 @@ function NoteCard({ page, notebook }: { page: Page; notebook?: Notebook }) {
   return (
     <Link
       href={`/home/p/${page.id}`}
+      onClick={() => useUiStore.getState().closeMenu()}
       className="group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] transition hover:border-[var(--accent)]/45 hover:shadow-[var(--shadow-panel)]"
     >
       {page.coverUrl ? (

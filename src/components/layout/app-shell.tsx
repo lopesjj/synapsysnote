@@ -56,6 +56,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isDocView = pathname?.startsWith("/home/p/") || pathname?.startsWith("/home/n/");
 
   useEffect(() => {
+    if (pathname?.startsWith("/home/p/")) {
+      useUiStore.getState().closeMenu();
+    }
+  }, [pathname]);
+
+  useEffect(() => {
     if (!loading && !user) navigateTo(loginHref("/?session=sync_failed"), router, "replace");
   }, [loading, router, user]);
 
@@ -87,6 +93,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           return;
         }
         const page = await adapter.createPage({ title: "Sem título" });
+        useUiStore.getState().closeMenu();
         router.push(`/home/p/${page.id}`);
         return;
       }
@@ -310,7 +317,7 @@ function BottomNav() {
 
   const createNote = async () => {
     const page = await adapter.createPage({ title: "Sem título" });
-    useUiStore.getState().setMobileSidebarOpen(false);
+    useUiStore.getState().closeMenu();
     router.push(`/home/p/${page.id}`);
   };
 

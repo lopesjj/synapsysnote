@@ -11,6 +11,7 @@ import {
   Copy,
   CloudOff,
   History,
+  ImageOff,
   Loader2,
   MoreHorizontal,
   Paperclip,
@@ -57,6 +58,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const [versions, setVersions] = useState<PageVersion[]>([]);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const editorInsertFilesRef = useRef<((files: File[]) => Promise<void>) | null>(null);
   const scannedPendingAudio = useRef<string | null>(null);
 
   const zenMode = useUiStore((state) => state.zenMode);
@@ -238,6 +240,16 @@ export function PageView({ pageId }: { pageId: string }) {
             <MenuItem onSelect={() => setAudioOpen(true)}>
               <AudioLines /> Gravar nota de voz
             </MenuItem>
+            {hasCover ? (
+              <MenuItem
+                onSelect={async () => {
+                  await adapter.updatePage(pageId, { coverUrl: null });
+                  toast.success("Capa removida");
+                }}
+              >
+                <ImageOff /> Remover capa
+              </MenuItem>
+            ) : null}
             <MenuSeparator />
             <MenuItem
               onSelect={async () => {
@@ -260,6 +272,7 @@ export function PageView({ pageId }: { pageId: string }) {
                 try {
                   const copy = await adapter.duplicatePage(pageId);
                   toast.success("Nota duplicada");
+                  useUiStore.getState().closeMenu();
                   router.push(`/home/p/${copy.id}`);
                 } catch {
                   toast.error("Não foi possível duplicar a nota.");
@@ -292,24 +305,38 @@ export function PageView({ pageId }: { pageId: string }) {
       ) : null}
 
       {/* `--reading-width` comes from the typography preference; on mobile it uses full width. */}
-      <div className="relative z-10 mx-auto w-full max-w-full sm:max-w-[var(--reading-width,46rem)] px-1.5 sm:px-6 md:px-8 pb-24 pb-safe">
-        {/* Icon + title. The icon may sit on the cover edge; the title stays below it. */}
-        <div className={cn("group flex items-center", isIconUrl(page.icon ?? "") ? "gap-5" : "gap-3", hasCover ? "pt-0" : "pt-2 sm:pt-6")}>
+      <div className="relative z-10 mx-auto w-full max-w-full sm:max-w-[var(--reading-width,46rem)] px-4 pb-24 pb-safe sm:px-5 md:px-8">
+        {/* Icon + title. The icon sits on the cover edge; the title stays below it on mobile, alongside it on desktop. */}
+        <div
+          className={cn(
+            "group flex flex-col items-start sm:flex-row sm:items-center",
+            isIconUrl(page.icon ?? "") ? "gap-2 sm:gap-5" : "gap-2 sm:gap-3",
+            hasCover ? "pt-0" : "pt-3 sm:pt-6"
+          )}
+        >
           <IconPickerMenu
             icons={PAGE_ICONS}
             current={page.icon}
             fallback="📄"
             onSelect={(icon) => void adapter.updatePage(pageId, { icon })}
             onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
-            className={hasCover && isIconUrl(page.icon ?? "") ? "relative z-20 -mt-14" : undefined}
+            className={
+              hasCover
+                ? cn(
+                    "relative z-20",
+                    isIconUrl(page.icon ?? "") ? "-mt-12 sm:-mt-14" : "-mt-6 sm:mt-0"
+                  )
+                : undefined
+            }
             trigger={
               <button
                 type="button"
                 className={cn(
-                  "shrink-0 self-center leading-none transition",
-                  isIconUrl(page.icon ?? "") ? "rounded-[28px]" : "rounded-[10px]",
+                  "shrink-0 self-start sm:self-center leading-none transition",
+                  isIconUrl(page.icon ?? "") ? "rounded-[22px] sm:rounded-[28px]" : "rounded-[10px]",
                   !hasCover && "hover:bg-[var(--surface-hover)]"
                 )}
+                aria-label="Alterar ícone da nota"
               >
                 <WorkspaceIcon
                   icon={page.icon}
@@ -323,10 +350,10 @@ export function PageView({ pageId }: { pageId: string }) {
 
           <div
             className={cn(
-              "flex min-w-0 flex-1 items-center",
-              hasCover && isIconUrl(page.icon ?? "") && "-mt-10"
+              "mt-2 w-full min-w-0 sm:mt-0 sm:flex sm:min-w-0 sm:flex-1 sm:items-center",
+              hasCover && isIconUrl(page.icon ?? "") && "sm:-mt-10",
+              isIconUrl(page.icon ?? "") ? "sm:min-h-[160px]" : "sm:min-h-[44px]"
             )}
-            style={{ minHeight: workspaceHeroSize(page.icon) }}
           >
             <textarea
               value={title}
@@ -343,7 +370,7 @@ export function PageView({ pageId }: { pageId: string }) {
                 schedule({ title: event.target.value });
               }}
               style={{ fontFamily: "var(--font-editor, var(--font-sans))" }}
-              className="w-full min-w-0 resize-none overflow-hidden border-none bg-transparent py-0 text-[26px] sm:text-[34px] font-semibold leading-[1.2] tracking-[-0.025em] text-ink outline-none placeholder:text-faint [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              className="w-full min-w-0 resize-none overflow-hidden border-none bg-transparent py-0 text-[26px] font-bold leading-[1.2] tracking-[-0.025em] text-ink outline-none placeholder:text-faint [scrollbar-width:none] [-ms-overflow-style:none] sm:text-[34px] sm:font-semibold sm:leading-[1.15] [&::-webkit-scrollbar]:hidden"
             />
           </div>
         </div>
@@ -406,7 +433,16 @@ export function PageView({ pageId }: { pageId: string }) {
             onChange={handleEditorChange}
             onRequestUpload={() => fileInput.current?.click()}
             onRequestAudio={() => setAudioOpen(true)}
-            onInsertFiles={(files) => void attachEditorFiles(files)}
+            onInsertFiles={(files) => {
+              if (editorInsertFilesRef.current) {
+                void editorInsertFilesRef.current(files);
+              } else {
+                void attachEditorFiles(files);
+              }
+            }}
+            onRegisterInsertFiles={(fn) => {
+              editorInsertFilesRef.current = fn;
+            }}
           />
         </div>
 
@@ -440,6 +476,7 @@ export function PageView({ pageId }: { pageId: string }) {
                 <Link
                   key={source.id}
                   href={`/home/p/${source.id}`}
+                  onClick={() => useUiStore.getState().closeMenu()}
                   className="flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] px-2.5 py-1.5 text-[12px] text-muted transition hover:border-[var(--accent)] hover:text-ink"
                 >
                   <WorkspaceIcon icon={source.icon} fallback="📄" size={16} />
@@ -513,12 +550,17 @@ export function PageView({ pageId }: { pageId: string }) {
         ref={fileInput}
         type="file"
         accept="image/*,application/pdf"
+        multiple
         hidden
         onChange={async (event) => {
-          const file = event.target.files?.[0];
+          const files = Array.from(event.target.files ?? []);
           event.target.value = "";
-          if (!file) return;
-          await attachEditorFiles([file]);
+          if (!files.length) return;
+          if (editorInsertFilesRef.current) {
+            await editorInsertFilesRef.current(files);
+          } else {
+            await attachEditorFiles(files);
+          }
         }}
       />
 

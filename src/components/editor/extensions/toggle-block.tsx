@@ -3,25 +3,25 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Trash2 } from "lucide-react";
 
 /**
  * Notion-style toggle list. The summary lives in an attribute (not in the doc)
  * so collapsing never hides editable content behind a closed node — the body is
  * simply unmounted while `open` is false.
  */
-function ToggleView({ node, updateAttributes, editor }: NodeViewProps) {
+function ToggleView({ node, updateAttributes, editor, deleteNode }: NodeViewProps) {
   const open = node.attrs.open as boolean;
   const summary = (node.attrs.summary as string) ?? "";
 
   return (
-    <NodeViewWrapper className="my-1.5 rounded-[var(--radius-sm)]">
-      <div className="flex items-start gap-1.5" contentEditable={false}>
+    <NodeViewWrapper className="group/toggle my-1.5 rounded-[var(--radius-sm)]">
+      <div className="flex items-center gap-1.5" contentEditable={false}>
         <button
           type="button"
           aria-label={open ? "Recolher" : "Expandir"}
           onClick={() => updateAttributes({ open: !open })}
-          className="mt-[3px] rounded p-0.5 text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
+          className="rounded p-0.5 text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
         >
           <ChevronRight
             className={`size-4 transition-transform duration-200 ${open ? "rotate-90" : ""}`}
@@ -31,9 +31,26 @@ function ToggleView({ node, updateAttributes, editor }: NodeViewProps) {
           value={summary}
           readOnly={!editor.isEditable}
           onChange={(event) => updateAttributes({ summary: event.target.value })}
+          onKeyDown={(event) => {
+            if (event.key === "Backspace" && !summary && editor.isEditable) {
+              event.preventDefault();
+              deleteNode();
+            }
+          }}
           placeholder="Título do toggle"
           className="w-full bg-transparent text-[15px] font-medium text-ink outline-none placeholder:text-faint"
         />
+        {editor.isEditable ? (
+          <button
+            type="button"
+            title="Excluir toggle"
+            aria-label="Excluir toggle"
+            onClick={() => deleteNode()}
+            className="flex size-6 shrink-0 items-center justify-center rounded text-faint opacity-0 transition group-hover/toggle:opacity-100 hover:bg-[var(--surface-hover)] hover:text-red-500"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        ) : null}
       </div>
       <NodeViewContent className={`ml-[26px] border-l border-[var(--border)] pl-3 ${open ? "" : "hidden"}`} />
     </NodeViewWrapper>

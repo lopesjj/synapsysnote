@@ -11,7 +11,10 @@ import {
   CheckSquare,
   Code,
   Code2,
+  Heading3,
   Highlighter,
+  IndentDecrease,
+  IndentIncrease,
   Italic,
   Link as LinkIcon,
   List,
@@ -343,6 +346,26 @@ export function EditorToolbar({
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
       >
         <Quote className="size-3.5" />
+      </ToolButton>
+      <ToolButton
+        label="Diminuir recuo (⇧Tab)"
+        disabled={
+          editor.isActive("table") ||
+          editor.isActive("codeBlock")
+        }
+        onClick={() => void editor.chain().focus().outdent().run()}
+      >
+        <IndentDecrease className="size-3.5" />
+      </ToolButton>
+      <ToolButton
+        label="Aumentar recuo (Tab)"
+        disabled={
+          editor.isActive("table") ||
+          editor.isActive("codeBlock")
+        }
+        onClick={() => void editor.chain().focus().indent().run()}
+      >
+        <IndentIncrease className="size-3.5" />
       </ToolButton>
       <ToolButton
         label="Recuo da primeira linha"

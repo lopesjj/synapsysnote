@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -14,6 +14,7 @@ import {
   useSensors,
   type CollisionDetection,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
@@ -123,12 +124,7 @@ function sortableIds(nodes: PageTreeNode[]): string[] {
 
 /** Collapses the docked sidebar, or dismisses the mobile overlay when it is open. */
 function closeMenuBar() {
-  const store = useUiStore.getState();
-  if (store.mobileSidebarOpen) {
-    store.setMobileSidebarOpen(false);
-    return;
-  }
-  store.setSidebarCollapsed(true);
+  useUiStore.getState().closeMenu();
 }
 
 const CHROME_HIT_CLASS = cn(
@@ -140,10 +136,12 @@ const CHROME_HIT_CLASS = cn(
 /** Icon rail shown while the docked sidebar is collapsed. */
 export function SidebarRail() {
   const router = useRouter();
+  const pathname = usePathname();
   const { adapter } = useWorkspace();
 
   const createPage = async () => {
     const page = await adapter.createPage({ notebookId: null, title: "Sem título" });
+    useUiStore.getState().closeMenu();
     router.push(`/home/p/${page.id}`);
   };
 
@@ -175,31 +173,75 @@ export function SidebarRail() {
             <Search />
           </Button>
         </Tooltip>
+        <Tooltip label="Início" side="right">
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            className={cn(pathname === "/home" && "bg-[var(--surface-active)] text-ink")}
+          >
+            <Link href="/home" aria-label="Início">
+              <Home />
+            </Link>
+          </Button>
+        </Tooltip>
         <Tooltip label="Nova nota" shortcut={isMac() ? "⌘N" : "Ctrl N"} side="right">
           <Button variant="ghost" size="icon" onClick={() => void createPage()} aria-label="Nova nota">
             <Plus />
           </Button>
         </Tooltip>
         <Tooltip label="Todas as notas" side="right">
-          <Button variant="ghost" size="icon" asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            className={cn(pathname === "/home/notes" && "bg-[var(--surface-active)] text-ink")}
+          >
             <Link href="/home/notes" aria-label="Todas as notas">
               <FileStack />
             </Link>
           </Button>
         </Tooltip>
         <Tooltip label="Lixeira" side="right">
-          <Button variant="ghost" size="icon" asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            className={cn(pathname === "/home/trash" && "bg-[var(--surface-active)] text-ink")}
+          >
             <Link href="/home/trash" aria-label="Lixeira">
               <Trash2 />
             </Link>
           </Button>
         </Tooltip>
       </div>
-      <div className="mt-auto py-3">
+      <div className="mt-auto flex w-full justify-center border-t border-[var(--border)] py-3 pb-safe">
         <UserMenu collapsed />
       </div>
     </aside>
   );
+}
+
+const SESSION_OPEN_NOTEBOOKS_KEY = "synapsys.session.openNotebooks";
+const SESSION_EXPANDED_PAGES_KEY = "synapsys.session.expandedPages";
+
+function getSessionState<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const item = sessionStorage.getItem(key);
+    return item ? (JSON.parse(item) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function setSessionState<T>(key: string, value: T) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage quota or privacy exceptions
+  }
 }
 
 export function Sidebar({ collapsed, width }: { collapsed: boolean; width: number }) {
@@ -208,9 +250,38 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   const { notebooks, livePages, databases, tags, trashedPages, treeFor, adapter, rootNotebooks } =
     useWorkspace();
 
-  const [openNotebooks, setOpenNotebooks] = useState<Record<string, boolean>>({});
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [openNotebooks, setOpenNotebooks] = useState<Record<string, boolean>>(() =>
+    getSessionState<Record<string, boolean>>(SESSION_OPEN_NOTEBOOKS_KEY, {})
+  );
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
+    getSessionState<Record<string, boolean>>(SESSION_EXPANDED_PAGES_KEY, {})
+  );
   const [dragging, setDragging] = useState<DragId | null>(null);
+  const [sidebarDropIntent, setSidebarDropIntent] = useState<{
+    id: string;
+    mode: "before" | "after" | "inside";
+  } | null>(null);
+  const sidebarDropIntentRef = useRef<{
+    id: string;
+    mode: "before" | "after" | "inside";
+  } | null>(null);
+  const sidebarPointerYRef = useRef<number>(0);
+
+  useEffect(() => {
+    const handlePointerMove = (e: PointerEvent) => {
+      sidebarPointerYRef.current = e.clientY;
+    };
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    return () => window.removeEventListener("pointermove", handlePointerMove);
+  }, []);
+
+  useEffect(() => {
+    setSessionState(SESSION_OPEN_NOTEBOOKS_KEY, openNotebooks);
+  }, [openNotebooks]);
+
+  useEffect(() => {
+    setSessionState(SESSION_EXPANDED_PAGES_KEY, expanded);
+  }, [expanded]);
 
   const sensors = useSensors(
     // A small distance threshold keeps a click on a page link from starting a drag.
@@ -240,6 +311,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   const createPage = async (notebookId: string | null) => {
     const page = await adapter.createPage({ notebookId, title: "Sem título" });
     if (notebookId) setOpenNotebooks((prev) => ({ ...prev, [notebookId]: true }));
+    useUiStore.getState().closeMenu();
     router.push(`/home/p/${page.id}`);
   };
 
@@ -254,13 +326,62 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
     router.push(`/home/n/${notebook.id}`);
   };
 
-  const onDragEnd = async (event: DragEndEvent) => {
-    setDragging(null);
+  const onDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) {
+      sidebarDropIntentRef.current = null;
+      setSidebarDropIntent(null);
+      return;
+    }
 
-    const plan = planSidebarDrop(event.active.id, event.over?.id, {
-      notebooks,
-      pages: livePages,
-    });
+    const overDecoded = decodeId(over.id);
+    if (!overDecoded || overDecoded.kind !== "notebook") {
+      sidebarDropIntentRef.current = null;
+      setSidebarDropIntent(null);
+      return;
+    }
+
+    const overRect = over.rect;
+    if (!overRect) return;
+
+    // Coordenada REAL do cursor do usuário para máxima precisão e controle
+    const cursorY = sidebarPointerYRef.current || (active.rect.current.translated ? active.rect.current.translated.top + active.rect.current.translated.height / 2 : overRect.top + overRect.height / 2);
+    const relativeY = (cursorY - overRect.top) / overRect.height;
+
+    let mode: "before" | "after" | "inside" = "inside";
+    if (relativeY < 0.25) {
+      mode = "before";
+    } else if (relativeY > 0.75) {
+      mode = "after";
+    } else {
+      mode = "inside"; // 50% central da linha para Inserir Dentro
+    }
+
+    sidebarDropIntentRef.current = { id: overDecoded.id, mode };
+    setSidebarDropIntent({ id: overDecoded.id, mode });
+  };
+
+  const onDragCancel = () => {
+    sidebarDropIntentRef.current = null;
+    setDragging(null);
+    setSidebarDropIntent(null);
+  };
+
+  const onDragEnd = async (event: DragEndEvent) => {
+    const currentIntent = (sidebarDropIntentRef.current ?? sidebarDropIntent)?.mode;
+    sidebarDropIntentRef.current = null;
+    setDragging(null);
+    setSidebarDropIntent(null);
+
+    const plan = planSidebarDrop(
+      event.active.id,
+      event.over?.id,
+      {
+        notebooks,
+        pages: livePages,
+      },
+      currentIntent === "inside" ? "inside" : currentIntent ? "reorder" : undefined
+    );
     if (!plan) return;
 
     try {
@@ -268,6 +389,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         await adapter.applyNotebookOrders(
           plan.notebookIds.map((id, index) => ({ id, order: index * ORDER_STEP }))
         );
+        toast.success("Ordem dos cadernos atualizada");
         return;
       }
 
@@ -276,7 +398,10 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         await adapter.applyNotebookOrders(
           plan.notebookIds.map((id, index) => ({ id, order: index * ORDER_STEP }))
         );
-        toast.success(plan.parentId ? "Caderno movido" : "Página movida");
+        if (plan.parentId) {
+          setOpenNotebooks((prev) => ({ ...prev, [plan.parentId!]: true }));
+        }
+        toast.success(plan.parentId ? "Caderno inserido dentro do caderno" : "Caderno movido");
         return;
       }
 
@@ -312,7 +437,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         const { tree, databases: notebookDatabases } =
           contents.get(notebook.id) ?? { tree: [], databases: [] };
         const nested = childrenOf(notebooks, notebook.id);
-        const open = openNotebooks[notebook.id] ?? true;
+        const open = openNotebooks[notebook.id] ?? false;
         const active = pathname === `/home/n/${notebook.id}`;
         const empty = !tree.length && !notebookDatabases.length && !nested.length;
 
@@ -324,6 +449,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
             active={active}
             depth={depth}
             count={tree.length + notebookDatabases.length + nested.length}
+            dropIntent={sidebarDropIntent?.id === notebook.id ? sidebarDropIntent.mode : undefined}
             onToggle={() =>
               setOpenNotebooks((prev) => ({ ...prev, [notebook.id]: !open }))
             }
@@ -392,7 +518,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
 
   const renderTree = (nodes: PageTreeNode[]) =>
     nodes.map((node) => {
-      const isOpen = expanded[node.page.id] ?? node.depth < 1;
+      const isOpen = expanded[node.page.id] ?? false;
       const active = pathname === `/home/p/${node.page.id}`;
       return (
         <div key={node.page.id}>
@@ -408,6 +534,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                 title: "Sem título",
               });
               setExpanded((prev) => ({ ...prev, [node.page.id]: true }));
+              useUiStore.getState().closeMenu();
               router.push(`/home/p/${child.id}`);
             }}
             onToggleFavorite={() =>
@@ -417,6 +544,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               try {
                 const copy = await adapter.duplicatePage(node.page.id);
                 toast.success("Nota duplicada");
+                useUiStore.getState().closeMenu();
                 router.push(`/home/p/${copy.id}`);
               } catch {
                 toast.error("Não foi possível duplicar a nota.");
@@ -451,6 +579,11 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
     dragging?.kind === "notebook"
       ? notebooks.find((notebook) => notebook.id === dragging.id)?.name
       : livePages.find((page) => page.id === dragging?.id)?.title;
+
+  const draggedIcon =
+    dragging?.kind === "notebook"
+      ? notebooks.find((notebook) => notebook.id === dragging.id)?.emoji
+      : livePages.find((page) => page.id === dragging?.id)?.icon;
 
   return (
     <aside
@@ -517,8 +650,12 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         sensors={sensors}
         collisionDetection={detectCollisions}
         modifiers={[restrictToVerticalAxis]}
-        onDragStart={(event: DragStartEvent) => setDragging(decodeId(event.active.id))}
-        onDragCancel={() => setDragging(null)}
+        onDragStart={(event: DragStartEvent) => {
+          setDragging(decodeId(event.active.id));
+          setSidebarDropIntent(null);
+        }}
+        onDragOver={onDragOver}
+        onDragCancel={onDragCancel}
         onDragEnd={(event) => void onDragEnd(event)}
       >
         <div className="mt-3 flex-1 space-y-4 overflow-y-auto px-2 pb-4">
@@ -541,6 +678,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                 <Link
                   key={page.id}
                   href={`/home/p/${page.id}`}
+                  onClick={closeMenuBar}
                   className="flex items-center gap-2 rounded-[var(--radius-xs)] px-2 py-1 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
                 >
                   <SidebarItemIcon icon={page.icon} fallback="⭐" />
@@ -555,7 +693,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
             action={
               <Tooltip label={NOTEBOOK_COPY.newRootName} shortcut={isMac() ? "⌘⇧N" : "Ctrl ⇧ N"}>
                 <button
-                  onClick={() => void createNotebook()}
+                  onClick={() => void createNotebook(null)}
                   className="rounded p-0.5 text-faint transition hover:text-ink"
                   aria-label={NOTEBOOK_COPY.newRootName}
                 >
@@ -598,8 +736,28 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
 
         <DragOverlay dropAnimation={null}>
           {dragging ? (
-            <div className="rounded-[var(--radius-xs)] border border-[var(--accent)] bg-[var(--surface)] px-2 py-1 text-[13.5px] text-ink shadow-[var(--shadow-float)]">
-              {draggedLabel || "Sem título"}
+            <div className="flex items-center gap-2 rounded-[var(--radius-xs)] border-2 border-[var(--accent)] bg-[var(--surface)] px-2.5 py-1.5 shadow-[var(--shadow-float)] ring-2 ring-[var(--accent)]/20">
+              <SidebarItemIcon
+                icon={draggedIcon}
+                fallback={dragging.kind === "notebook" ? "📓" : "📄"}
+                size={16}
+              />
+              <span className="max-w-[130px] truncate text-[13px] font-semibold text-ink">
+                {draggedLabel || "Sem título"}
+              </span>
+              {sidebarDropIntent?.mode === "inside" ? (
+                <span className="ml-auto flex items-center gap-1 rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold text-white shadow-sm animate-in fade-in zoom-in-95 duration-100">
+                  <FolderPlus className="size-3" /> Inserir dentro
+                </span>
+              ) : sidebarDropIntent?.mode === "before" ? (
+                <span className="ml-auto rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[10px] font-bold shadow-sm animate-in fade-in duration-100">
+                  ↕ Acima
+                </span>
+              ) : sidebarDropIntent?.mode === "after" ? (
+                <span className="ml-auto rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[10px] font-bold shadow-sm animate-in fade-in duration-100">
+                  ↕ Abaixo
+                </span>
+              ) : null}
             </div>
           ) : null}
         </DragOverlay>
@@ -626,7 +784,6 @@ function NavLink({
   return (
     <Link
       href={href}
-      onClick={closeMenuBar}
       className={cn(
         "flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] transition hover:bg-[var(--surface-hover)]",
         active ? "font-medium text-ink" : "text-muted hover:text-ink"
@@ -651,6 +808,7 @@ function NotebookRow({
   onDuplicate,
   onRename,
   onDelete,
+  dropIntent,
   children,
 }: {
   notebook: Notebook;
@@ -658,6 +816,7 @@ function NotebookRow({
   active: boolean;
   depth: number;
   count: number;
+  dropIntent?: "before" | "after" | "inside";
   onToggle: () => void;
   onCreatePage: () => void;
   onCreateSubnotebook: () => void;
@@ -686,7 +845,7 @@ function NotebookRow({
     <div
       ref={setNodeRef}
       style={{
-        transform: CSS.Translate.toString(transform),
+        transform: dropIntent === "inside" ? undefined : CSS.Translate.toString(transform),
         transition,
         paddingLeft: depth ? `${depth * 12}px` : undefined,
       }}
@@ -694,14 +853,36 @@ function NotebookRow({
     >
       <div
         className={cn(
-          "group flex items-center gap-1 rounded-[var(--radius-xs)] pr-1 transition-colors",
-          isOver && !isDragging
-            ? "bg-[var(--accent-soft)] ring-1 ring-[var(--accent)]"
+          "group relative flex items-center gap-1 rounded-[var(--radius-xs)] pr-1 transition-all",
+          dropIntent === "inside"
+            ? "bg-[var(--accent-soft)] ring-2 ring-inset ring-[var(--accent)] z-20 shadow-sm"
             : active
               ? "bg-[var(--accent-soft)]"
               : "hover:bg-[var(--surface-hover)]"
         )}
       >
+        {dropIntent === "before" && (
+          <div className="pointer-events-none absolute inset-x-0 -top-1 z-30 flex items-center">
+            <div className="h-0.5 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
+            <span className="absolute left-2 -top-2.5 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[9px] font-bold shadow-sm">
+              ↕ Acima
+            </span>
+          </div>
+        )}
+        {dropIntent === "after" && (
+          <div className="pointer-events-none absolute inset-x-0 -bottom-1 z-30 flex items-center">
+            <div className="h-0.5 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
+            <span className="absolute left-2 -bottom-2.5 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[9px] font-bold shadow-sm">
+              ↕ Abaixo
+            </span>
+          </div>
+        )}
+        {dropIntent === "inside" && (
+          <div className="pointer-events-none absolute right-1.5 top-1/2 z-30 -translate-y-1/2 flex items-center gap-1 rounded-full bg-[var(--accent)] px-2.5 py-0.5 text-[10.5px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
+            <FolderPlus className="size-3" />
+            <span>Inserir dentro</span>
+          </div>
+        )}
         {renaming ? (
           <input
             autoFocus
@@ -736,7 +917,6 @@ function NotebookRow({
             <Link
               href={`/home/n/${notebook.id}`}
               draggable={false}
-              onClick={closeMenuBar}
               className={cn(
                 "flex min-w-0 flex-1 items-center gap-1.5 text-left",
                 active ? "font-medium text-ink" : "text-ink"
@@ -752,7 +932,7 @@ function NotebookRow({
           </div>
         )}
         <span className="shrink-0 text-[10.5px] tabular-nums text-faint">{count}</span>
-        <div className="grid grid-cols-[0fr] transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:grid-cols-[1fr] group-focus-within:grid-cols-[1fr]">
+        <div className="grid grid-cols-[0fr] transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:grid-cols-[1fr]">
           <div className="flex min-w-0 items-center overflow-hidden">
         <Tooltip label="Nova nota">
           <button
@@ -892,7 +1072,7 @@ function SortablePageRow({
         <SidebarItemIcon icon={node.page.icon} fallback="📄" />
         <span className="truncate">{node.page.title || "Sem título"}</span>
       </Link>
-      <div className="grid grid-cols-[0fr] transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:grid-cols-[1fr] group-focus-within:grid-cols-[1fr]">
+      <div className="grid grid-cols-[0fr] transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:grid-cols-[1fr]">
         <div className="flex min-w-0 items-center overflow-hidden">
           <Menu>
             <MenuTrigger asChild>

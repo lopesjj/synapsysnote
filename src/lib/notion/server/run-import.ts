@@ -7,6 +7,7 @@ import type {
   AppBlock,
   ImportJob,
   ImportJobItem,
+  ImportJobStatus,
   NotionTreeNode,
 } from "@/types/models";
 import {
@@ -65,6 +66,8 @@ async function fetchAllChildren(notion: Client, blockId: string): Promise<Notion
 
 class ProgressReporter {
   private items: ImportJobItem[];
+  private totalFiles: number;
+  private processedFiles: number;
 
   constructor(
     private readonly ref: FirebaseFirestore.DocumentReference,
@@ -73,9 +76,13 @@ class ProgressReporter {
       requestedBy: string;
       targetNotebookId: string | null;
       items?: ImportJobItem[];
+      totalFiles?: number;
+      processedFiles?: number;
     }
   ) {
     this.items = [...(job.items ?? [])];
+    this.totalFiles = job.totalFiles ?? 0;
+    this.processedFiles = job.processedFiles ?? 0;
   }
 
   async patch(data: FirebaseFirestore.UpdateData<Record<string, unknown>>) {
@@ -85,6 +92,7 @@ class ProgressReporter {
 
   async addFiles(count: number) {
     if (!count) return;
+    this.totalFiles += count;
     await this.ref.update({
       totalFiles: FieldValue.increment(count),
       updatedAt: FieldValue.serverTimestamp(),
@@ -92,8 +100,15 @@ class ProgressReporter {
   }
 
   async fileDone(bytes: number) {
+    this.processedFiles += 1;
+    const extraTotal = this.processedFiles > this.totalFiles ? this.processedFiles - this.totalFiles : 0;
+    if (extraTotal > 0) {
+      this.totalFiles += extraTotal;
+    }
+
     await this.ref.update({
       processedFiles: FieldValue.increment(1),
+      ...(extraTotal > 0 ? { totalFiles: FieldValue.increment(extraTotal) } : {}),
       totalBytes: FieldValue.increment(bytes),
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -158,6 +173,10 @@ class ProgressReporter {
 
   get targetNotebookId() {
     return this.job.targetNotebookId;
+  }
+
+  get currentItems() {
+    return this.items;
   }
 }
 
@@ -505,119 +524,248 @@ export async function enqueueNotionImport(input: CreateImportInput): Promise<str
   return jobId;
 }
 
+export interface ImportStepResult {
+  done: boolean;
+  status: string;
+  processedPages?: number;
+  totalPages?: number;
+}
+
+interface TreeMetadata {
+  parents: Record<string, string | null>;
+  orderedNodes: {
+    id: string;
+    title: string;
+    type: "page" | "database";
+    icon?: string | null;
+    childCount?: number;
+  }[];
+  roles: Record<string, ImportRole>;
+}
+
 /**
- * Claims a pending job and runs the full Notion → Firestore conversion using
- * the Admin SDK. Safe to call twice: a second caller sees a non-pending status
- * and returns immediately.
+ * Runs a slice of the Notion import job within an active HTTP request context.
+ * Returns { done: false } if more items remain, allowing the client to pump
+ * the next step without hitting serverless timeouts and keeping 100% CPU.
  */
-export async function runNotionImportJob(workspaceId: string, jobId: string): Promise<void> {
+export async function runNotionImportStep(
+  workspaceId: string,
+  jobId: string
+): Promise<ImportStepResult> {
   const jobRef = importJobRef(workspaceId, jobId);
+  const snap = await jobRef.get();
+  if (!snap.exists) {
+    throw new Error("Job de importação não encontrado");
+  }
 
-  const claimed = await jobRef.firestore.runTransaction(async (tx) => {
-    const snap = await tx.get(jobRef);
-    if (!snap.exists) throw new Error("Job de importação não encontrado");
-    const status = snap.get("status") as string;
-    if (status !== "pending") return null;
-    tx.update(jobRef, {
-      status: "discovering",
-      currentStep: "Lendo estrutura do workspace no Notion…",
-      startedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    return snap.data() as {
-      selection: { notionIds: string[]; importAll: boolean };
-      options: JobOptions;
-      requestedBy: string;
-      targetNotebookId: string | null;
-      items?: ImportJobItem[];
+  let jobData = snap.data() as {
+    status: ImportJobStatus;
+    selection: { notionIds: string[]; importAll: boolean };
+    options: JobOptions;
+    requestedBy: string;
+    targetNotebookId: string | null;
+    items?: ImportJobItem[];
+    treeMetadata?: TreeMetadata;
+    processedPages?: number;
+    totalPages?: number;
+    totalFiles?: number;
+    processedFiles?: number;
+  };
+
+  if (["completed", "completed_with_errors", "failed", "canceled"].includes(jobData.status)) {
+    return {
+      done: true,
+      status: jobData.status,
+      processedPages: jobData.processedPages,
+      totalPages: jobData.totalPages,
     };
-  });
+  }
 
-  if (!claimed) return;
-
-  const progress = new ProgressReporter(jobRef, claimed);
   let notion: Client;
-
   try {
     notion = await getNotionClient(workspaceId);
   } catch (error) {
-    await progress.fail((error as Error).message);
-    return;
+    const message = (error as Error).message;
+    await jobRef.update({
+      status: "failed",
+      currentStep: `Falha de autenticação: ${message}`,
+      finishedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { done: true, status: "failed" };
   }
 
-  try {
-    const tree = await listNotionTree(notion);
-    const selected = new Set(
-      claimed.selection.importAll ? collectIds(tree) : claimed.selection.notionIds
-    );
-    const ordered = orderForImport(tree, selected);
-    const parents = buildParentMap(tree);
+  const progress = new ProgressReporter(jobRef, jobData);
 
+  // 1. Fase de descoberta (quando o job ainda está pendente)
+  if (jobData.status === "pending") {
     await progress.patch({
-      status: "running",
-      currentStep: `Preparando ${ordered.length} itens…`,
-      totalPages: ordered.length,
-      items: ordered.map<ImportJobItem>((node) => ({
+      status: "discovering",
+      currentStep: "Lendo estrutura do workspace no Notion…",
+      startedAt: FieldValue.serverTimestamp(),
+    });
+
+    try {
+      const tree = await listNotionTree(notion);
+      const selected = new Set(
+        jobData.selection.importAll ? collectIds(tree) : jobData.selection.notionIds
+      );
+      const ordered = orderForImport(tree, selected);
+      const parents = buildParentMap(tree);
+
+      const items: ImportJobItem[] = ordered.map((node) => ({
         notionId: node.id,
         title: node.title,
         type: node.type,
-        status: "queued",
-      })),
-    });
+        status: "queued" as const,
+      }));
 
-    const idMap = new Map<string, string>();
-    const roles = new Map<string, ImportRole>();
-    const topLevels = new Map<string, NotionBlock[]>();
+      const treeMetadata: TreeMetadata = {
+        parents: Object.fromEntries(parents.entries()),
+        orderedNodes: ordered.map((node) => ({
+          id: node.id,
+          title: node.title,
+          type: node.type,
+          icon: node.icon ?? null,
+          childCount: node.children?.length ?? 0,
+        })),
+        roles: {},
+      };
 
-    for (const node of ordered) {
-      if (node.type === "database") {
-        roles.set(node.id, "database");
-        continue;
-      }
-      const topLevel = await fetchAllChildren(notion, node.id);
-      topLevels.set(node.id, topLevel);
-      await progress.addFiles(countMediaBlocks(topLevel));
-      const asNotebook =
-        claimed.options.preserveHierarchy &&
-        shouldImportAsNotebook({
-          childCount: Math.max(node.children?.length ?? 0, countChildPageBlocks(topLevel)),
-          notionBlocks: topLevel,
-        });
-      roles.set(node.id, asNotebook ? "notebook" : "page");
-    }
-
-    for (const [index, node] of ordered.entries()) {
-      if (await progress.isCanceled()) return;
-
-      await progress.itemStatus(node.id, "processing");
       await progress.patch({
-        currentStep: `(${index + 1}/${ordered.length}) Convertendo “${node.title}”…`,
+        status: "running",
+        currentStep: `Preparando ${ordered.length} itens…`,
+        totalPages: ordered.length,
+        processedPages: 0,
+        items,
+        treeMetadata,
       });
 
-      try {
-        const shared = { notion, workspaceId, jobId, node, parents, idMap, roles, progress };
-        const appId =
-          roles.get(node.id) === "notebook"
-            ? await importNotebook(shared)
-            : node.type === "database"
-              ? await importDatabase(shared)
-              : await importPage({ ...shared, cachedTopLevel: topLevels.get(node.id) });
-        idMap.set(node.id, appId);
-        await progress.itemStatus(node.id, "done", appId);
-      } catch (error) {
-        await progress.itemStatus(node.id, "error");
-        await progress.addError({
-          itemId: node.id,
-          itemTitle: node.title,
-          stage: "convert",
-          message: (error as Error).message,
-        });
-      }
+      jobData = {
+        ...jobData,
+        status: "running",
+        totalPages: ordered.length,
+        processedPages: 0,
+        items,
+        treeMetadata,
+      };
+    } catch (error) {
+      await progress.fail((error as Error).message);
+      return { done: true, status: "failed" };
+    }
+  }
 
-      await progress.patch({ processedPages: index + 1 });
+  if (await progress.isCanceled()) {
+    return { done: true, status: "canceled" };
+  }
+
+  // 2. Processamento em lote dos itens pendentes
+  const treeMetadata = jobData.treeMetadata ?? {
+    parents: {},
+    orderedNodes: [],
+    roles: {},
+  };
+
+  const parents = new Map<string, string | null>(Object.entries(treeMetadata.parents ?? {}));
+  const roles = new Map<string, ImportRole>(Object.entries(treeMetadata.roles ?? {}));
+  const idMap = new Map<string, string>();
+
+  for (const it of jobData.items ?? []) {
+    if (it.status === "done" && it.appId) {
+      idMap.set(it.notionId, it.appId);
+    }
+  }
+
+  const items = progress.currentItems;
+  const MAX_STEP_DURATION_MS = 32_000;
+  const stepStart = Date.now();
+  let processedCount = jobData.processedPages ?? 0;
+  let hasRoleUpdates = false;
+
+  for (let i = 0; i < items.length; i++) {
+    // Evita estourar o tempo seguro da requisição HTTP (~32s)
+    if (Date.now() - stepStart >= MAX_STEP_DURATION_MS) {
+      break;
     }
 
-    if (claimed.options.createBacklinks) {
+    const item = items[i];
+    if (item.status === "done" || item.status === "error") {
+      continue;
+    }
+
+    if (await progress.isCanceled()) {
+      return { done: true, status: "canceled" };
+    }
+
+    await progress.itemStatus(item.notionId, "processing");
+    await progress.patch({
+      currentStep: `(${processedCount + 1}/${items.length}) Convertendo “${item.title}”…`,
+    });
+
+    const node: NotionTreeNode = treeMetadata.orderedNodes.find((n) => n.id === item.notionId) ?? {
+      id: item.notionId,
+      title: item.title,
+      type: item.type,
+    };
+
+    try {
+      let role: ImportRole =
+        roles.get(item.notionId) ?? (item.type === "database" ? "database" : "page");
+
+      let cachedTopLevel: NotionBlock[] | undefined;
+      if (item.type !== "database") {
+        cachedTopLevel = await fetchAllChildren(notion, item.notionId);
+        await progress.addFiles(countMediaBlocks(cachedTopLevel));
+
+        const asNotebook =
+          jobData.options.preserveHierarchy &&
+          shouldImportAsNotebook({
+            childCount: Math.max(node.children?.length ?? 0, countChildPageBlocks(cachedTopLevel)),
+            notionBlocks: cachedTopLevel,
+          });
+        role = asNotebook ? "notebook" : "page";
+        roles.set(item.notionId, role);
+        treeMetadata.roles[item.notionId] = role;
+        hasRoleUpdates = true;
+      }
+
+      const shared = { notion, workspaceId, jobId, node, parents, idMap, roles, progress };
+      const appId =
+        role === "notebook"
+          ? await importNotebook(shared)
+          : node.type === "database"
+            ? await importDatabase(shared)
+            : await importPage({ ...shared, cachedTopLevel });
+
+      idMap.set(node.id, appId);
+      await progress.itemStatus(node.id, "done", appId);
+    } catch (error) {
+      await progress.itemStatus(node.id, "error");
+      await progress.addError({
+        itemId: node.id,
+        itemTitle: node.title,
+        stage: "convert",
+        message: (error as Error).message,
+      });
+    }
+
+    processedCount += 1;
+    await progress.patch({ processedPages: processedCount });
+  }
+
+  if (hasRoleUpdates) {
+    await jobRef.update({
+      "treeMetadata.roles": treeMetadata.roles,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  const remaining = progress.currentItems.filter(
+    (it) => it.status === "queued" || it.status === "processing"
+  );
+
+  if (remaining.length === 0) {
+    if (jobData.options.createBacklinks) {
       await progress.patch({ currentStep: "Reconstruindo backlinks…" });
       await rebuildBacklinks(workspaceId, idMap);
     }
@@ -627,7 +775,29 @@ export async function runNotionImportJob(workspaceId: string, jobId: string): Pr
       { lastSyncAt: FieldValue.serverTimestamp() },
       { merge: true }
     );
-  } catch (error) {
-    await progress.fail((error as Error).message);
+    return {
+      done: true,
+      status: "completed",
+      processedPages: processedCount,
+      totalPages: items.length,
+    };
+  }
+
+  return {
+    done: false,
+    status: "running",
+    processedPages: processedCount,
+    totalPages: items.length,
+  };
+}
+
+/**
+ * Executes all steps sequentially in a single process.
+ */
+export async function runNotionImportJob(workspaceId: string, jobId: string): Promise<void> {
+  let done = false;
+  while (!done) {
+    const res = await runNotionImportStep(workspaceId, jobId);
+    if (res.done) done = true;
   }
 }

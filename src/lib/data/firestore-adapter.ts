@@ -663,35 +663,49 @@ export class FirestoreAdapter implements DataAdapter {
 
   async purgePage(id: string) {
     try {
-      await httpsCallable(getFirebaseFunctions(), "purgePage")({
-        workspaceId: this.workspaceId,
-        pageId: id,
+      await firebaseJson("/api/trash/purge", {
+        method: "POST",
+        body: JSON.stringify({ workspaceId: this.workspaceId, pageId: id }),
       });
     } catch {
-      const refs = await this.pageSubtreeRefs(id);
-      await commitWrites(refs.map((ref) => (batch) => batch.delete(ref)));
+      try {
+        await httpsCallable(getFirebaseFunctions(), "purgePage")({
+          workspaceId: this.workspaceId,
+          pageId: id,
+        });
+      } catch {
+        const refs = await this.pageSubtreeRefs(id);
+        await commitWrites(refs.map((ref) => (batch) => batch.delete(ref)));
+      }
     }
   }
 
   async emptyTrash() {
-    const snap = await getDocs(query(this.col("pages"), where("deletedAt", "!=", null)));
-    const pages = snap.docs.map((docSnap) => ({
-      id: docSnap.id,
-      parentPageId: (docSnap.data().parentPageId as string | null | undefined) ?? null,
-    }));
-    const ids = new Set(pages.map((page) => page.id));
-    const roots = pages.filter((page) => !page.parentPageId || !ids.has(page.parentPageId));
-    for (const page of roots) {
-      await this.purgePage(page.id);
-    }
+    try {
+      await firebaseJson("/api/trash/purge", {
+        method: "POST",
+        body: JSON.stringify({ workspaceId: this.workspaceId, emptyAll: true }),
+      });
+    } catch {
+      const snap = await getDocs(query(this.col("pages"), where("deletedAt", "!=", null)));
+      const pages = snap.docs.map((docSnap) => ({
+        id: docSnap.id,
+        parentPageId: (docSnap.data().parentPageId as string | null | undefined) ?? null,
+      }));
+      const ids = new Set(pages.map((page) => page.id));
+      const roots = pages.filter((page) => !page.parentPageId || !ids.has(page.parentPageId));
+      for (const page of roots) {
+        await this.purgePage(page.id);
+      }
 
-    const databases = await getDocs(query(this.col("databases"), where("deletedAt", "!=", null)));
-    for (const snapDoc of databases.docs) {
-      const rows = await getDocs(collection(snapDoc.ref, "rows"));
-      await commitWrites([
-        ...rows.docs.map((row) => (batch: ReturnType<typeof writeBatch>) => batch.delete(row.ref)),
-        (batch) => batch.delete(snapDoc.ref),
-      ]);
+      const databases = await getDocs(query(this.col("databases"), where("deletedAt", "!=", null)));
+      for (const snapDoc of databases.docs) {
+        const rows = await getDocs(collection(snapDoc.ref, "rows"));
+        await commitWrites([
+          ...rows.docs.map((row) => (batch: ReturnType<typeof writeBatch>) => batch.delete(row.ref)),
+          (batch) => batch.delete(snapDoc.ref),
+        ]);
+      }
     }
   }
 
@@ -820,12 +834,58 @@ export class FirestoreAdapter implements DataAdapter {
       method: "POST",
       body: JSON.stringify({ ...input, workspaceId: this.workspaceId }),
     });
-    // Backup worker in case Next.js `after()` is not scheduled by the host.
-    void firebaseJson("/api/notion/import", {
-      method: "PUT",
-      body: JSON.stringify({ workspaceId: this.workspaceId, jobId: result.jobId }),
-    }).catch((error) => console.error("import worker", error));
+
+    // Executa os passos do worker via requisições HTTP ativas sequenciais,
+    // garantindo 100% de CPU no Cloud Run sem risco de timeout.
+    void this.pumpImportWorker(result.jobId);
+
     return result.jobId;
+  }
+
+  private activeWorkers = new Set<string>();
+
+  async resumeImportJob(jobId: string) {
+    void this.pumpImportWorker(jobId);
+  }
+
+  private async pumpImportWorker(jobId: string) {
+    if (this.activeWorkers.has(jobId)) return;
+    this.activeWorkers.add(jobId);
+
+    try {
+      let done = false;
+      let consecutiveErrors = 0;
+      while (!done) {
+        try {
+          const stepRes = await firebaseJson<{
+            done?: boolean;
+            status?: string;
+            processedPages?: number;
+            totalPages?: number;
+          }>("/api/notion/import", {
+            method: "PUT",
+            body: JSON.stringify({ workspaceId: this.workspaceId, jobId }),
+          });
+
+          consecutiveErrors = 0;
+          if (
+            stepRes?.done ||
+            ["completed", "completed_with_errors", "failed", "canceled"].includes(stepRes?.status ?? "")
+          ) {
+            done = true;
+          }
+        } catch (error) {
+          consecutiveErrors += 1;
+          console.error("import worker step error", error);
+          if (consecutiveErrors >= 5) {
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+      }
+    } finally {
+      this.activeWorkers.delete(jobId);
+    }
   }
 
   async cancelImportJob(jobId: string) {
@@ -941,32 +1001,13 @@ export class FirestoreAdapter implements DataAdapter {
     });
   }
 
-  async saveAttachment(pageId: string, file: File) {
+  async uploadAttachment(pageId: string, file: File): Promise<{ url: string; storagePath: string }> {
     file = await prepareEditorAttachment(file);
     const fileId = `${Date.now()}-${nanoid(6)}-${file.name}`;
     const path = `workspaces/${this.workspaceId}/uploads/${pageId}/${fileId}`;
     const storageRef = ref(getFirebaseStorage(), path);
     await uploadBytes(storageRef, file, { contentType: file.type });
     const url = await getDownloadURL(storageRef);
-    const isImage = file.type.startsWith("image/");
-
-    const page = await getDoc(this.docRef("pages", pageId));
-    const blocks = [
-      ...((page.data()?.blocks ?? []) as Page["blocks"]),
-      {
-        id: `blk_${nanoid(8)}`,
-        type: (isImage ? "image" : "file") as "image" | "file",
-        media: {
-          url,
-          storagePath: path,
-          name: file.name,
-          mimeType: file.type,
-          sizeBytes: file.size,
-          pending: isImage || file.type === "application/pdf",
-        },
-      },
-    ];
-    await this.updatePage(pageId, { blocks });
 
     await addDoc(this.col("attachments"), {
       pageId,
@@ -978,7 +1019,31 @@ export class FirestoreAdapter implements DataAdapter {
       uploadedBy: this.userId,
       createdAt: serverTimestamp(),
     });
-    // OCR runs from the Storage trigger; nothing else to do here.
+
+    return { url, storagePath: path };
+  }
+
+  async saveAttachment(pageId: string, file: File) {
+    const isImage = file.type.startsWith("image/");
+    const { url, storagePath } = await this.uploadAttachment(pageId, file);
+
+    const page = await getDoc(this.docRef("pages", pageId));
+    const blocks = [
+      ...((page.data()?.blocks ?? []) as Page["blocks"]),
+      {
+        id: `blk_${nanoid(8)}`,
+        type: (isImage ? "image" : "file") as "image" | "file",
+        media: {
+          url,
+          storagePath,
+          name: file.name,
+          mimeType: file.type,
+          sizeBytes: file.size,
+          pending: isImage || file.type === "application/pdf",
+        },
+      },
+    ];
+    await this.updatePage(pageId, { blocks });
   }
 
   async uploadWorkspaceIcon(file: File) {
