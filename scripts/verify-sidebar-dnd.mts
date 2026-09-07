@@ -132,6 +132,30 @@ check("a page dropped on a page in another notebook re-parents and places it", (
   });
 });
 
+check("an explicit \"inside\" intent nests a page as a subpage of the target", () => {
+  const plan = planSidebarDrop(pg("journal"), pg("retro"), snapshot, "inside");
+  assert.deepEqual(plan, {
+    kind: "move-page",
+    pageId: "journal",
+    notebookId: "work",
+    parentPageId: "retro",
+    pageIds: ["journal"],
+  });
+});
+
+check("an explicit \"inside\" intent onto a page's current parent is a no-op", () => {
+  assert.equal(planSidebarDrop(pg("meeting"), pg("plan"), snapshot, "inside"), null);
+});
+
+check("a page cannot be nested inside its own subtree via \"inside\" intent", () => {
+  assert.equal(planSidebarDrop(pg("plan"), pg("meeting"), snapshot, "inside"), null);
+});
+
+check("an explicit \"reorder\" intent between siblings still reorders", () => {
+  const plan = planSidebarDrop(pg("retro"), pg("meeting"), snapshot, "reorder");
+  assert.deepEqual(plan, { kind: "reorder-pages", pageIds: ["retro", "meeting"] });
+});
+
 check("a page cannot be dropped into its own subtree", () => {
   assert.equal(planSidebarDrop(pg("plan"), pg("meeting"), snapshot), null);
 });

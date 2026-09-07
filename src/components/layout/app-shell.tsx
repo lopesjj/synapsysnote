@@ -34,7 +34,7 @@ import { cn, isMac } from "@/lib/utils";
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, loading, loggingOut } = useAuth();
   const { mode, activeImportJob, adapter } = useWorkspace();
   useDocumentTitle();
   useWorkspaceNavHistory();
@@ -62,8 +62,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
-    if (!loading && !user) navigateTo(loginHref("/?session=sync_failed"), router, "replace");
-  }, [loading, router, user]);
+    // A deliberate "Sair" click clears the user before the caller's own
+    // navigateTo(?logout=1) runs. Without the loggingOut guard, this effect
+    // wins that race and bounces to ?session=sync_failed, which never tells
+    // the login host to drop its own (separate-origin) Firebase session.
+    if (!loading && !user && !loggingOut) {
+      navigateTo(loginHref("/?session=sync_failed"), router, "replace");
+    }
+  }, [loading, loggingOut, router, user]);
 
   const onKeyDown = useCallback(
     async (event: KeyboardEvent) => {

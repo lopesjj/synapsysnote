@@ -14,7 +14,7 @@ import {
   useSensors,
   type CollisionDetection,
   type DragEndEvent,
-  type DragOverEvent,
+  type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
@@ -24,12 +24,12 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { AnimatePresence, motion } from "framer-motion";
 import { WorkspaceIcon, isIconUrl } from "@/lib/icons/workspace-icon";
 import {
   ChevronRight,
   Copy,
+  FilePlus,
   FileStack,
   FolderPlus,
   GripVertical,
@@ -326,7 +326,12 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
     router.push(`/home/n/${notebook.id}`);
   };
 
-  const onDragOver = (event: DragOverEvent) => {
+  // Wired to onDragMove (not onDragOver): onDragOver only fires when the
+  // "over" target itself changes, so during a slow drag the mode computed
+  // the instant you entered a row (often "before", near its top edge) would
+  // otherwise stay frozen even after the cursor reaches the row's center.
+  // onDragMove fires on every pointer movement, so the zone keeps recomputing.
+  const onDragMove = (event: DragMoveEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) {
       sidebarDropIntentRef.current = null;
@@ -334,8 +339,15 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
       return;
     }
 
+    const activeDecoded = decodeId(active.id);
     const overDecoded = decodeId(over.id);
-    if (!overDecoded || overDecoded.kind !== "notebook") {
+    // Nesting only makes sense between items of the same kind — a notebook
+    // nests inside a notebook, a page nests inside a page. A notebook
+    // dragged over one of its own pages (very common: an expanded notebook's
+    // page list is far taller than its own header) can only mean "reorder
+    // relative to the notebook that owns that page", which planSidebarDrop
+    // already resolves on its own; no before/after/inside intent to show here.
+    if (!activeDecoded || !overDecoded || activeDecoded.kind !== overDecoded.kind) {
       sidebarDropIntentRef.current = null;
       setSidebarDropIntent(null);
       return;
@@ -526,6 +538,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
             node={node}
             active={active}
             isOpen={isOpen}
+            dropIntent={sidebarDropIntent?.id === node.page.id ? sidebarDropIntent.mode : undefined}
             onToggle={() => setExpanded((prev) => ({ ...prev, [node.page.id]: !isOpen }))}
             onCreateChild={async () => {
               const child = await adapter.createPage({
@@ -654,7 +667,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           setDragging(decodeId(event.active.id));
           setSidebarDropIntent(null);
         }}
-        onDragOver={onDragOver}
+        onDragMove={onDragMove}
         onDragCancel={onDragCancel}
         onDragEnd={(event) => void onDragEnd(event)}
       >
@@ -747,7 +760,12 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               </span>
               {sidebarDropIntent?.mode === "inside" ? (
                 <span className="ml-auto flex items-center gap-1 rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold text-white shadow-sm animate-in fade-in zoom-in-95 duration-100">
-                  <FolderPlus className="size-3" /> Inserir dentro
+                  {dragging.kind === "notebook" ? (
+                    <FolderPlus className="size-3" />
+                  ) : (
+                    <FilePlus className="size-3" />
+                  )}
+                  {dragging.kind === "notebook" ? "Inserir dentro" : "Virar subpágina"}
                 </span>
               ) : sidebarDropIntent?.mode === "before" ? (
                 <span className="ml-auto rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[10px] font-bold shadow-sm animate-in fade-in duration-100">
@@ -833,10 +851,7 @@ function NotebookRow({
     listeners,
     setNodeRef,
     setActivatorNodeRef,
-    transform,
-    transition,
     isDragging,
-    isOver,
   } = useSortable({ id: encodeId("notebook", notebook.id) });
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(notebook.name);
@@ -845,8 +860,11 @@ function NotebookRow({
     <div
       ref={setNodeRef}
       style={{
-        transform: dropIntent === "inside" ? undefined : CSS.Translate.toString(transform),
-        transition,
+        // dnd-kit's own swap-preview transform is intentionally never applied:
+        // with it on, siblings slide the instant the pointer nears an edge,
+        // which reads as "it's reordering" and drowns out the explicit
+        // before/after/inside cues below. Those cues are the only feedback;
+        // rows stay put until the drop actually commits an order.
         paddingLeft: depth ? `${depth * 12}px` : undefined,
       }}
       className={cn(isDragging && "opacity-40")}
@@ -1008,6 +1026,7 @@ function SortablePageRow({
   node,
   active,
   isOpen,
+  dropIntent,
   onToggle,
   onCreateChild,
   onToggleFavorite,
@@ -1017,38 +1036,60 @@ function SortablePageRow({
   node: PageTreeNode;
   active: boolean;
   isOpen: boolean;
+  dropIntent?: "before" | "after" | "inside";
   onToggle: () => void;
   onCreateChild: () => Promise<void>;
   onToggleFavorite: () => void;
   onDuplicate: () => Promise<void>;
   onTrash: () => Promise<void>;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    setActivatorNodeRef,
-    transform,
-    transition,
-    isDragging,
-    isOver,
-  } = useSortable({ id: encodeId("page", node.page.id) });
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useSortable({
+    id: encodeId("page", node.page.id),
+  });
 
   return (
     <div
       ref={setNodeRef}
       style={{
-        transform: CSS.Translate.toString(transform),
-        transition,
+        // See NotebookRow: dnd-kit's swap-preview transform is skipped on
+        // purpose so sibling pages don't slide during drag — only the
+        // explicit before/after/inside cues below communicate the drop.
         paddingLeft: `${node.depth * 12}px`,
       }}
-      className={cn(
-        "group flex items-center gap-1 rounded-[var(--radius-xs)] pr-1 transition-colors",
-        isDragging && "opacity-40",
-        isOver && !isDragging && "ring-1 ring-[var(--accent)]",
-        active ? "bg-[var(--accent-soft)]" : "hover:bg-[var(--surface-hover)]"
-      )}
+      className={cn("relative", isDragging && "opacity-40")}
     >
+      {dropIntent === "before" && (
+        <div className="pointer-events-none absolute inset-x-0 -top-1 z-30 flex items-center">
+          <div className="h-0.5 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
+          <span className="absolute left-2 -top-2.5 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[9px] font-bold shadow-sm">
+            ↕ Acima
+          </span>
+        </div>
+      )}
+      {dropIntent === "after" && (
+        <div className="pointer-events-none absolute inset-x-0 -bottom-1 z-30 flex items-center">
+          <div className="h-0.5 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
+          <span className="absolute left-2 -bottom-2.5 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[9px] font-bold shadow-sm">
+            ↕ Abaixo
+          </span>
+        </div>
+      )}
+      <div
+        className={cn(
+          "group flex items-center gap-1 rounded-[var(--radius-xs)] pr-1 transition-colors",
+          dropIntent === "inside"
+            ? "bg-[var(--accent-soft)] ring-2 ring-inset ring-[var(--accent)] z-20 shadow-sm"
+            : active
+              ? "bg-[var(--accent-soft)]"
+              : "hover:bg-[var(--surface-hover)]"
+        )}
+      >
+      {dropIntent === "inside" && (
+        <div className="pointer-events-none absolute right-1.5 top-1/2 z-30 -translate-y-1/2 flex items-center gap-1 rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10.5px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
+          <FilePlus className="size-3" />
+          <span>Subpágina</span>
+        </div>
+      )}
       <button
         type="button"
         onClick={onToggle}
@@ -1110,6 +1151,7 @@ function SortablePageRow({
             <GripVertical className="size-3.5" />
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

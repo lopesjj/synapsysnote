@@ -217,6 +217,22 @@ export function planSidebarDrop(
   // Re-parenting a page under its own descendant would detach the subtree.
   if (isDescendant(pages, target, page.id)) return null;
 
+  // Explicit "inside" intent: nest the page as a subpage of the target,
+  // mirroring how a notebook nests under another notebook.
+  if (intent === "inside") {
+    if (page.notebookId === target.notebookId && page.parentPageId === target.id) return null;
+    const destination = siblingsOf(pages, target.notebookId, target.id).filter(
+      (sibling) => sibling.id !== page.id
+    );
+    return {
+      kind: "move-page",
+      pageId: page.id,
+      notebookId: target.notebookId,
+      parentPageId: target.id,
+      pageIds: [...destination.map((sibling) => sibling.id), page.id],
+    };
+  }
+
   const siblings = siblingsOf(pages, target.notebookId, target.parentPageId);
   const sameParent =
     page.notebookId === target.notebookId && page.parentPageId === target.parentPageId;

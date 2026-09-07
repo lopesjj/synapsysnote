@@ -11,7 +11,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-  type DragOverEvent,
+  type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
@@ -21,7 +21,6 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { Copy, FilePlus, FolderPlus, GripVertical, ImageOff, MoreHorizontal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useUiStore } from "@/lib/store/ui-store";
@@ -122,7 +121,12 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     setDropTarget(null);
   };
 
-  const onNotebookDragOver = (event: DragOverEvent) => {
+  // Wired to onDragMove (not onDragOver): onDragOver only fires when the
+  // "over" target itself changes, so during a slow drag the mode computed
+  // the instant you entered a row (often "before", near its top edge) would
+  // otherwise stay frozen even after the cursor reaches the row's center.
+  // onDragMove fires on every pointer movement, so the zone keeps recomputing.
+  const onNotebookDragMove = (event: DragMoveEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) {
       dropTargetRef.current = null;
@@ -497,7 +501,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                   sensors={sensors}
                   modifiers={[restrictToVerticalAxis]}
                   onDragStart={onNotebookDragStart}
-                  onDragOver={onNotebookDragOver}
+                  onDragMove={onNotebookDragMove}
                   onDragCancel={onNotebookDragCancel}
                   onDragEnd={onNotebookDragEnd}
                 >
@@ -628,8 +632,6 @@ function NotebookRow({
     listeners,
     setNodeRef,
     setActivatorNodeRef,
-    transform,
-    transition,
     isDragging,
   } = useSortable({ id: notebook.id });
 
@@ -662,10 +664,6 @@ function NotebookRow({
   return (
     <div
       ref={setNodeRef}
-      style={{
-        transform: isDropTarget && dropMode === "inside" ? undefined : CSS.Translate.toString(transform),
-        transition,
-      }}
       className={cn(
         "group relative flex items-center gap-2 px-3 py-3 transition-all",
         isDragging && "opacity-25",
@@ -761,8 +759,6 @@ function NoteRow({ page }: { page: Page }) {
     listeners,
     setNodeRef,
     setActivatorNodeRef,
-    transform,
-    transition,
     isDragging,
   } = useSortable({ id: page.id });
 
@@ -790,10 +786,6 @@ function NoteRow({ page }: { page: Page }) {
   return (
     <div
       ref={setNodeRef}
-      style={{
-        transform: CSS.Translate.toString(transform),
-        transition,
-      }}
       className={cn(
         "group relative flex items-center gap-2 px-3 py-3 transition hover:bg-[var(--surface-hover)]",
         isDragging && "opacity-30"
