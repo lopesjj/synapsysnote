@@ -6,7 +6,6 @@ export interface TranscriptResult {
   actionItems?: string[];
 }
 
-/** Stable key so OCR/transcript can find a block after TipTap regenerates ids. */
 export function mediaIdentity(media: {
   storagePath?: string | null;
   url?: string | null;
@@ -23,7 +22,6 @@ export function walkBlocks(blocks: AppBlock[], visit: (block: AppBlock) => void)
   }
 }
 
-/** OCR/transcript merge only needs a server read when the note already has media. */
 export function hasMergeableMedia(blocks: AppBlock[]): boolean {
   let found = false;
   walkBlocks(blocks, (block) => {
@@ -71,11 +69,6 @@ export function stampMedia(local: BlockMedia, remote: BlockMedia): BlockMedia {
   };
 }
 
-/**
- * Autosave must not wipe a transcript/OCR that landed while the editor still
- * had `pending: true`. Matching is by storage path (or URL), not block id —
- * TipTap allocates a new id on every serialize.
- */
 export function mergeMediaEnrichment(localBlocks: AppBlock[], remoteBlocks: AppBlock[]): AppBlock[] {
   const remote = indexMedia(remoteBlocks);
 

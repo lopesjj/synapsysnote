@@ -1,8 +1,3 @@
-/**
- * Mirror of `src/types/models.ts` in the web app. Kept as a standalone file so
- * the functions package can be deployed independently, and intentionally
- * narrow: only what the pipeline reads or writes.
- */
 
 export interface RichTextSpan {
   text: string;

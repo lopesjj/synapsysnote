@@ -10,17 +10,6 @@ import type { Instance as TippyInstance } from "tippy.js";
 import { SuggestionList, type SuggestionItem, type SuggestionListHandle } from "./suggestion-popup";
 import { ensureSuggestionPopup } from "./suggestion-tippy";
 
-/**
- * `#` / `##` / `###` at the start of a line become headings.
- *
- * StarterKit already registers markdown input rules, but they go through
- * `setBlockType` and silently no-op when the paragraph carries extra attrs
- * (`textAlign`, `indentFirst`). Commands go through the same path as the
- * toolbar, so the shortcut stays in sync with the rest of the editor.
- *
- * Typing `#` at the start of a line also opens the title picker — the
- * placeholder advertises `#` the same way it advertises `/` and `@`.
- */
 
 const headingSuggestionKey = new PluginKey("headingShortcut");
 

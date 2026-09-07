@@ -1,7 +1,3 @@
-/**
- * Mirrors `src/lib/notion/classify-import.ts` for the Cloud Functions worker.
- * Keep the heuristics in sync: empty containers → notebook, content/leaf → note.
- */
 
 const NOTION_STRUCTURAL = new Set([
   "child_page",

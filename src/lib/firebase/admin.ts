@@ -1,17 +1,5 @@
 import "server-only";
 
-/**
- * ETAPA 2 — Firebase Admin SDK (server-only).
- *
- * Used by the Notion OAuth callback route, which must persist encrypted tokens
- * under /workspaces/{id}/integrations/notion — a path the security rules close
- * to every client.
- *
- * Credentials resolve in this order:
- *   1. FIREBASE_SERVICE_ACCOUNT_JSON  (inline JSON, ideal for Vercel)
- *   2. GOOGLE_APPLICATION_CREDENTIALS (file path, ideal for Cloud Run / local)
- *   3. Application Default Credentials (Cloud Functions / GCE metadata)
- */
 
 import { cert, getApp, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
@@ -52,7 +40,6 @@ export function getAdminApp(): App {
         credential: cert({
           projectId: parsed.project_id,
           clientEmail: parsed.client_email,
-          // Vercel-style env vars escape newlines.
           privateKey: parsed.private_key.replace(/\\n/g, "\n"),
         }),
         storageBucket,
@@ -91,7 +78,6 @@ export function adminBucket() {
   return getStorage(getAdminApp()).bucket();
 }
 
-/** Verifies the `Authorization: Bearer <idToken>` header of an API route. */
 export async function verifyBearer(request: Request): Promise<{ uid: string; email?: string } | null> {
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer ")) return null;

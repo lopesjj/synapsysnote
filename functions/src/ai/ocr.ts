@@ -6,14 +6,6 @@ import * as logger from "firebase-functions/logger";
 import { attachmentsRef, bucket, pagesRef } from "../lib/firebase";
 import type { AppBlock } from "../types";
 
-/**
- * ETAPA 4 — OCR with Cloud Vision.
- *
- * Fires whenever an image or PDF lands in Storage (user upload or Notion
- * rehost), extracts the text and writes it back to the owning page's
- * `extractedOCRText`, which the search index reads. Because the field is
- * server-owned in the rules, a compromised client cannot forge OCR content.
- */
 
 const REGION = process.env.FUNCTIONS_REGION || "us-central1";
 const vision = new ImageAnnotatorClient();
@@ -49,7 +41,6 @@ export const runOcrOnUpload = onObjectFinalized(
   }
 );
 
-/** Manual re-run, exposed for the "reprocessar OCR" action in the UI. */
 export const reprocessOcr = onCall({ region: REGION, memory: "1GiB" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login obrigatório");
   const { workspaceId, storagePath } = request.data as {
@@ -66,10 +57,6 @@ async function ocrImage(gcsUri: string): Promise<string> {
   return result.fullTextAnnotation?.text ?? "";
 }
 
-/**
- * Vision processes PDFs asynchronously: results are written back to Storage as
- * JSON, then read and concatenated here.
- */
 async function ocrPdf(gcsUri: string, bucketName: string): Promise<string> {
   const outputPrefix = `${gcsUri.replace(/\.pdf$/i, "")}-ocr/`;
   const [operation] = await vision.asyncBatchAnnotateFiles({
@@ -130,10 +117,6 @@ async function findPageIdForOcr(workspaceId: string, storagePath: string): Promi
   );
 }
 
-/**
- * Writes the extracted text both to the attachment record and to the block that
- * references it, so the reader can expand "texto OCR" inline.
- */
 async function applyOcrText(workspaceId: string, storagePath: string, text: string) {
   const attachments = await attachmentsRef(workspaceId)
     .where("storagePath", "==", storagePath)

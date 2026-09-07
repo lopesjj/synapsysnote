@@ -77,7 +77,6 @@ function SidebarItemIcon({
 }: {
   icon?: string | null;
   fallback: string;
-  /** Uploaded marks default to 18px; emoji/flags to 14px. */
   size?: number;
 }) {
   if (isIconUrl(icon ?? "")) {
@@ -86,26 +85,7 @@ function SidebarItemIcon({
   return <WorkspaceIcon icon={icon} fallback={fallback} size={size ?? 14} />;
 }
 
-/**
- * Collapsible sidebar: notebook tree, favorites, tags and workspace entry
- * points, plus drag-and-drop reordering.
- *
- * Order is stored as a sparse `order` field. On drop the affected sibling list
- * is renumbered in fixed steps, which keeps the writes bounded to one list and
- * avoids the fractional-index drift you get from midpoint insertion.
- *
- * Deciding *what* a drop means lives in `sidebar-dnd.ts`, which is dnd-kit-free
- * and unit-tested; this file only applies the resulting plan.
- */
 
-/**
- * A notebook header is a few pixels tall while its expanded page list can fill
- * the viewport. Landing on a page still means "reorder next to that page's
- * caderno"; landing on the header itself nests the dragged caderno inside it.
- *
- * `pointerWithin` first because it is exact when the cursor is inside a row,
- * with `closestCenter` as the fallback for the gaps between them.
- */
 const detectCollisions: CollisionDetection = (args) => {
   const within = pointerWithin(args);
   return within.length ? within : closestCenter(args);
@@ -114,7 +94,6 @@ const detectCollisions: CollisionDetection = (args) => {
 const GRIP_CLASS =
   "shrink-0 cursor-grab rounded p-0.5 text-faint hover:text-ink active:cursor-grabbing";
 
-/** Flattens a page subtree into sortable ids, nested descendants included. */
 function sortableIds(nodes: PageTreeNode[]): string[] {
   return nodes.flatMap((node) => [
     encodeId("page", node.page.id),
@@ -122,7 +101,6 @@ function sortableIds(nodes: PageTreeNode[]): string[] {
   ]);
 }
 
-/** Collapses the docked sidebar, or dismisses the mobile overlay when it is open. */
 function closeMenuBar() {
   useUiStore.getState().closeMenu();
 }
@@ -133,7 +111,6 @@ const CHROME_HIT_CLASS = cn(
   "focus-visible:ring-2 focus-visible:ring-[var(--accent)]/25"
 );
 
-/** Icon rail shown while the docked sidebar is collapsed. */
 export function SidebarRail() {
   const router = useRouter();
   const pathname = usePathname();
@@ -284,7 +261,6 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   }, [expanded]);
 
   const sensors = useSensors(
-    // A small distance threshold keeps a click on a page link from starting a drag.
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
@@ -295,8 +271,6 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
     [treeFor]
   );
 
-  // `treeFor` walks every page, so resolve each notebook's contents once per
-  // render rather than on each of the several places that need them.
   const contents = useMemo(() => {
     const map = new Map<string, { tree: PageTreeNode[]; databases: typeof databases }>();
     for (const notebook of notebooks) {
@@ -326,11 +300,6 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
     router.push(`/home/n/${notebook.id}`);
   };
 
-  // Wired to onDragMove (not onDragOver): onDragOver only fires when the
-  // "over" target itself changes, so during a slow drag the mode computed
-  // the instant you entered a row (often "before", near its top edge) would
-  // otherwise stay frozen even after the cursor reaches the row's center.
-  // onDragMove fires on every pointer movement, so the zone keeps recomputing.
   const onDragMove = (event: DragMoveEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) {
@@ -341,12 +310,6 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
 
     const activeDecoded = decodeId(active.id);
     const overDecoded = decodeId(over.id);
-    // Nesting only makes sense between items of the same kind — a notebook
-    // nests inside a notebook, a page nests inside a page. A notebook
-    // dragged over one of its own pages (very common: an expanded notebook's
-    // page list is far taller than its own header) can only mean "reorder
-    // relative to the notebook that owns that page", which planSidebarDrop
-    // already resolves on its own; no before/after/inside intent to show here.
     if (!activeDecoded || !overDecoded || activeDecoded.kind !== overDecoded.kind) {
       sidebarDropIntentRef.current = null;
       setSidebarDropIntent(null);
@@ -356,7 +319,6 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
     const overRect = over.rect;
     if (!overRect) return;
 
-    // Coordenada REAL do cursor do usuário para máxima precisão e controle
     const cursorY = sidebarPointerYRef.current || (active.rect.current.translated ? active.rect.current.translated.top + active.rect.current.translated.height / 2 : overRect.top + overRect.height / 2);
     const relativeY = (cursorY - overRect.top) / overRect.height;
 
@@ -366,7 +328,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
     } else if (relativeY > 0.75) {
       mode = "after";
     } else {
-      mode = "inside"; // 50% central da linha para Inserir Dentro
+      mode = "inside"; 
     }
 
     sidebarDropIntentRef.current = { id: overDecoded.id, mode };
@@ -417,8 +379,6 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         return;
       }
 
-      // The move has to land before the sibling list is renumbered, so the
-      // page is already in its destination when the orders are written.
       if (plan.kind === "move-page") {
         await adapter.movePage(plan.pageId, {
           notebookId: plan.notebookId,
@@ -813,7 +773,6 @@ function NavLink({
   );
 }
 
-/** Notebook header: sortable itself, and a drop target for pages. */
 function NotebookRow({
   notebook,
   open,
@@ -844,8 +803,6 @@ function NotebookRow({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  // `useSortable` already registers this id as a drop target, which is what
-  // makes the header accept pages dragged onto it — no second droppable.
   const {
     attributes,
     listeners,
@@ -860,11 +817,6 @@ function NotebookRow({
     <div
       ref={setNodeRef}
       style={{
-        // dnd-kit's own swap-preview transform is intentionally never applied:
-        // with it on, siblings slide the instant the pointer nears an edge,
-        // which reads as "it's reordering" and drowns out the explicit
-        // before/after/inside cues below. Those cues are the only feedback;
-        // rows stay put until the drop actually commits an order.
         paddingLeft: depth ? `${depth * 12}px` : undefined,
       }}
       className={cn(isDragging && "opacity-40")}
@@ -1051,9 +1003,6 @@ function SortablePageRow({
     <div
       ref={setNodeRef}
       style={{
-        // See NotebookRow: dnd-kit's swap-preview transform is skipped on
-        // purpose so sibling pages don't slide during drag — only the
-        // explicit before/after/inside cues below communicate the drop.
         paddingLeft: `${node.depth * 12}px`,
       }}
       className={cn("relative", isDragging && "opacity-40")}

@@ -34,10 +34,8 @@ async function deletePageStorageAndDoc(
   const pageData = pageDoc.data() ?? {};
   const blocks = (pageData.blocks ?? []) as unknown[];
 
-  // 1. Storage: Coleta caminhos específicos nos blocos da página
   const storagePaths = new Set<string>(extractStoragePaths(blocks));
 
-  // 2. Storage: Versões antigas da página também podem ter caminhos de mídia
   const versionsSnap = await pageDoc.ref.collection("versions").get();
   for (const vDoc of versionsSnap.docs) {
     const vBlocks = (vDoc.data().blocks ?? []) as unknown[];
@@ -46,11 +44,9 @@ async function deletePageStorageAndDoc(
     }
   }
 
-  // 3. Storage: Exclusão via Firebase Admin (se configurado)
   if (isAdminConfigured()) {
     const bucket = adminBucket();
 
-    // Remove pastas inteiras de uploads e áudio associadas à página
     await Promise.allSettled([
       bucket.deleteFiles({ prefix: `workspaces/${workspaceId}/uploads/${pageId}/` }),
       bucket.deleteFiles({ prefix: `workspaces/${workspaceId}/audio/${pageId}/` }),
@@ -58,7 +54,6 @@ async function deletePageStorageAndDoc(
     ]);
   }
 
-  // 4. Firestore: Apaga versões e documento da página
   const batch = adminDb().batch();
   for (const vDoc of versionsSnap.docs) {
     batch.delete(vDoc.ref);
@@ -67,12 +62,6 @@ async function deletePageStorageAndDoc(
   await batch.commit();
 }
 
-/**
- * POST /api/trash/purge
- *
- * Purga definitivamente uma página (e suas filhas) ou esvazia toda a lixeira,
- * garantindo que todos os arquivos correspondentes no Cloud Storage sejam deletados.
- */
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
@@ -93,13 +82,11 @@ export async function POST(request: Request) {
     const databasesCol = wsRef.collection("databases");
 
     if (emptyAll) {
-      // 1. Purga todas as páginas com deletedAt != null
       const trashedPages = await pagesCol.where("deletedAt", "!=", null).get();
       for (const pDoc of trashedPages.docs) {
         await deletePageStorageAndDoc(workspaceId, pDoc);
       }
 
-      // 2. Purga todas as databases com deletedAt != null
       const trashedDatabases = await databasesCol.where("deletedAt", "!=", null).get();
       for (const dDoc of trashedDatabases.docs) {
         const rowsSnap = await dDoc.ref.collection("rows").get();
@@ -130,7 +117,6 @@ export async function POST(request: Request) {
     }
 
     if (pageId) {
-      // Purga página e toda a sua subárvore descendente
       const [targetDoc, descendantsSnap] = await Promise.all([
         pagesCol.doc(pageId).get(),
         pagesCol.where("path", "array-contains", pageId).get(),

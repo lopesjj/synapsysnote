@@ -55,7 +55,6 @@ export function useEditorTick(editor: Editor | null) {
   }, [editor]);
 }
 
-/** Word-style first-line indent: first line shorter, following lines full width. */
 function FirstLineIndentIcon({ className }: { className?: string }) {
   return (
     <svg

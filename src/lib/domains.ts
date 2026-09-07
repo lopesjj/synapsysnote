@@ -1,8 +1,3 @@
-/**
- * Login lives on the apex (`synapsysnt.com.br`); the workspace lives on
- * `app.synapsysnt.com.br`. Locally both origins stay empty so `/` and `/home`
- * keep working on one host.
- */
 
 function trimOrigin(value: string | undefined): string {
   return value?.trim().replace(/\/$/, "") ?? "";
@@ -39,7 +34,6 @@ export function appHref(path = "/home"): string {
   return isSplitHosts() ? `${APP_ORIGIN}${normalized}` : normalized;
 }
 
-/** Turn a helper href into an absolute URL (Route Handlers need this). */
 export function resolveUrl(href: string, fallbackOrigin: string): string {
   if (href.startsWith("http://") || href.startsWith("https://")) return href;
   return new URL(href, fallbackOrigin).toString();
@@ -76,10 +70,6 @@ export function hostOf(origin: string): string | null {
   }
 }
 
-/**
- * Cross-origin uses a full navigation so the session cookie is sent to the
- * other host. Same-origin keeps the Next.js router.
- */
 export function navigateTo(
   href: string,
   router?: { push: (path: string) => void; replace: (path: string) => void },

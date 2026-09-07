@@ -1,9 +1,3 @@
-/**
- * Autosave must not wipe a transcript that arrived while the editor still
- * had `pending: true`. Matching is by storage path, not TipTap block id.
- *
- * Run with: npm run verify:media-enrichment
- */
 
 import assert from "node:assert/strict";
 import {

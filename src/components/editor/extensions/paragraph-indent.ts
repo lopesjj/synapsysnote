@@ -16,7 +16,6 @@ declare module "@tiptap/core" {
   }
 }
 
-/** Check if the node can be indented with paragraph/line indent. */
 function isIndentable(node: ProseMirrorNode, parent?: ProseMirrorNode | null): boolean {
   if (parent?.type.name === "listItem" || parent?.type.name === "taskItem") return false;
   if (node.type.name === "listItem" || node.type.name === "taskItem") return false;
@@ -31,7 +30,6 @@ function isIndentable(node: ProseMirrorNode, parent?: ProseMirrorNode | null): b
   );
 }
 
-/** First-line indent only applies to paragraphs, not lists or tables. */
 function isIndentableParagraph(node: ProseMirrorNode, parent?: ProseMirrorNode | null): boolean {
   if (parent?.type.name === "listItem" || parent?.type.name === "taskItem") return false;
   return node.type.name === "paragraph";
@@ -86,13 +84,6 @@ function applyIndentFirst(tr: Transaction, value: boolean): boolean {
   return changed;
 }
 
-/**
- * Word-style line and paragraph indentation.
- * Supports:
- * - Tab / Shift+Tab for progressive indentation (levels 0 to 8).
- * - Backspace at offset 0 unindents line before deleting block.
- * - Word-style first-line indent on paragraphs (`text-indent`).
- */
 export const ParagraphIndent = Extension.create({
   name: "paragraphIndent",
 
@@ -189,15 +180,12 @@ export const ParagraphIndent = Extension.create({
   addKeyboardShortcuts() {
     return {
       Tab: () => {
-        // Let list extensions handle sinking (nesting list item)
         if (this.editor.isActive("listItem") || this.editor.isActive("taskItem")) {
           return false;
         }
-        // Let table extension navigate cells
         if (this.editor.isActive("table")) {
           return false;
         }
-        // Let codeBlock handle tab characters
         if (this.editor.isActive("codeBlock")) {
           return false;
         }
@@ -206,11 +194,9 @@ export const ParagraphIndent = Extension.create({
       },
 
       "Shift-Tab": () => {
-        // Let list extensions handle lifting
         if (this.editor.isActive("listItem") || this.editor.isActive("taskItem")) {
           return false;
         }
-        // Let table extension navigate cells
         if (this.editor.isActive("table")) {
           return false;
         }

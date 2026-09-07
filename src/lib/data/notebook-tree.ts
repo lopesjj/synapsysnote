@@ -1,10 +1,6 @@
 import type { Notebook } from "@/types/models";
 import { compareNatural } from "@/lib/utils";
 
-/**
- * Hierarchy helpers for notebooks. `parentId` was added after the first
- * workspaces shipped, so every reader treats a missing field as a root.
- */
 
 export function parentIdOf(notebook: Pick<Notebook, "parentId">): string | null {
   const parentId = notebook.parentId;
@@ -18,7 +14,6 @@ export function childrenOf(notebooks: Notebook[], parentId: string | null): Note
     .sort((a, b) => a.order - b.order || compareNatural(a.name, b.name));
 }
 
-/** Root → current, walking `parentId`. Guards against a cycle in stale data. */
 export function notebookAncestors(notebooks: Notebook[], notebookId: string): Notebook[] {
   const byId = new Map(notebooks.map((notebook) => [notebook.id, notebook]));
   const chain: Notebook[] = [];
@@ -50,7 +45,6 @@ export function isNotebookDescendant(
   return false;
 }
 
-/** Direct children of a deleted notebook, plus any deeper descendants. */
 export function descendantNotebooks<T extends Pick<Notebook, "id" | "parentId">>(
   notebooks: T[],
   notebookId: string
@@ -58,7 +52,6 @@ export function descendantNotebooks<T extends Pick<Notebook, "id" | "parentId">>
   return notebooks.filter((notebook) => isNotebookDescendant(notebooks, notebook.id, notebookId));
 }
 
-/** The notebook itself and every nested caderno underneath it. */
 export function notebookSubtreeIds(
   notebooks: Array<Pick<Notebook, "id" | "parentId">>,
   notebookId: string

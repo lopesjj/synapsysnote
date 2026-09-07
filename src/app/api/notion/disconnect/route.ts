@@ -5,11 +5,6 @@ import { integrationRef } from "@/lib/notion/server/client";
 
 export const runtime = "nodejs";
 
-/**
- * POST /api/notion/disconnect
- *
- * Revokes the Notion integration via the Admin SDK and deletes the ciphertext.
- */
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { workspaceId?: string };

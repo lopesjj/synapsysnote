@@ -1,14 +1,5 @@
 import type { AppDatabase, Page, SearchHit } from "@/types/models";
 
-/**
- * Client-side half of the hybrid search.
- *
- * In production the Command Palette merges two sources: this lexical pass over
- * the offline Firestore cache (instant, works offline) and the `semanticSearch`
- * callable, which runs a `findNearest` vector query on Vertex AI embeddings.
- * The lexical pass alone already covers titles, body text, OCR output, voice
- * transcripts and tags — which is what makes scanned attachments findable.
- */
 
 const STOPWORDS = new Set([
   "a", "o", "as", "os", "de", "da", "do", "das", "dos", "e", "em", "um", "uma",
@@ -80,7 +71,6 @@ export function searchWorkspace(
       for (const token of tokens) {
         const occurrences = normalized.split(token).length - 1;
         if (occurrences > 0) {
-          // Sub-linear term frequency keeps long pages from dominating.
           score += weight * (1 + Math.log(occurrences));
           matchedIn.add(field);
         }
@@ -90,7 +80,6 @@ export function searchWorkspace(
 
     if (!score) continue;
 
-    // Light recency boost: two weeks old ≈ half the bonus.
     const ageDays = (now - page.updatedAt) / 86_400_000;
     score += Math.max(0, 2 - ageDays / 14);
 

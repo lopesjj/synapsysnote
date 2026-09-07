@@ -9,13 +9,6 @@ import { encodeOauthState, NOTION_OAUTH_COOKIE } from "@/lib/notion/server/oauth
 
 export const runtime = "nodejs";
 
-/**
- * POST /api/notion/authorize
- *
- * Starts OAuth for the signed-in Synapsys user. The Notion token that comes
- * back is stored on *their* workspace — never on a shared developer token.
- * GET is rejected so a bookmark cannot start a bind without a Firebase session.
- */
 export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => ({}))) as { workspaceId?: string };

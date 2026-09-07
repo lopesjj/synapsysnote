@@ -1,13 +1,6 @@
 import "server-only";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
-/**
- * AES-256-GCM envelope for third-party OAuth tokens.
- *
- * Format: `v1.<iv-b64>.<tag-b64>.<ciphertext-b64>` — versioned so the key can be
- * rotated later without guessing the layout. The key comes from
- * `TOKEN_ENCRYPTION_KEY` (32-byte base64 or any passphrase, hashed to 32 bytes).
- */
 
 function key(): Buffer {
   const raw = process.env.TOKEN_ENCRYPTION_KEY;
@@ -18,7 +11,6 @@ function key(): Buffer {
   }
   const decoded = Buffer.from(raw, "base64");
   if (decoded.length === 32) return decoded;
-  // Any other input is stretched deterministically to 32 bytes.
   return createHash("sha256").update(raw).digest();
 }
 
@@ -41,7 +33,6 @@ export function decryptToken(payload: string): string {
   ]).toString("utf8");
 }
 
-/** Safe-to-display fingerprint, e.g. `secret_••••4f2a`. */
 export function tokenPreview(token: string): string {
   return `${token.slice(0, 7)}••••${token.slice(-4)}`;
 }

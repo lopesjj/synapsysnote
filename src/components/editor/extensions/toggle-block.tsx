@@ -5,11 +5,6 @@ import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap
 import type { NodeViewProps } from "@tiptap/react";
 import { ChevronRight, Trash2 } from "lucide-react";
 
-/**
- * Notion-style toggle list. The summary lives in an attribute (not in the doc)
- * so collapsing never hides editable content behind a closed node — the body is
- * simply unmounted while `open` is false.
- */
 function ToggleView({ node, updateAttributes, editor, deleteNode }: NodeViewProps) {
   const open = node.attrs.open as boolean;
   const summary = (node.attrs.summary as string) ?? "";

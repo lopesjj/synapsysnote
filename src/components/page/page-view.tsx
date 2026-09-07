@@ -186,11 +186,7 @@ export function PageView({ pageId }: { pageId: string }) {
         />
       ) : null}
 
-      {/*
-        Header. With a cover it sits on the banner so the image can run edge-to-edge.
-        Zen mode keeps it mounted (the actions stay reachable) but fades it back
-        until the pointer comes near, so the page is all that is left.
-      */}
+      
       <div
         className={cn(
           "z-30 flex items-center gap-2 px-4 py-2 md:px-8",
@@ -304,9 +300,9 @@ export function PageView({ pageId }: { pageId: string }) {
         />
       ) : null}
 
-      {/* `--reading-width` comes from the typography preference; on mobile it uses full width. */}
+      
       <div className="relative z-10 mx-auto w-full max-w-full sm:max-w-[var(--reading-width,46rem)] px-4 pb-24 pb-safe sm:px-5 md:px-8">
-        {/* Icon + title. The icon sits on the cover edge; the title stays below it on mobile, alongside it on desktop. */}
+        
         <div
           className={cn(
             "group flex flex-col items-start sm:flex-row sm:items-center",
@@ -375,7 +371,7 @@ export function PageView({ pageId }: { pageId: string }) {
           </div>
         </div>
 
-        {/* Tags + metadata */}
+        
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {page.tags.map((tag) => (
             <span
@@ -425,7 +421,7 @@ export function PageView({ pageId }: { pageId: string }) {
           </span>
         </div>
 
-        {/* Editor — light theme: white sheet on the canvas; dark stays flat. Full width on mobile. */}
+        
         <div className="mt-4 sm:mt-6 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-1 py-2 sm:px-4 sm:py-3 dark:border-transparent dark:bg-transparent dark:px-0 dark:py-0 md:px-5">
           <BlockEditor
             page={page}
@@ -446,7 +442,7 @@ export function PageView({ pageId }: { pageId: string }) {
           />
         </div>
 
-        {/* Extracted intelligence */}
+        
         {page.extractedOCRText || page.transcriptText ? (
           <div className="mt-8 space-y-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
@@ -465,7 +461,7 @@ export function PageView({ pageId }: { pageId: string }) {
           </div>
         ) : null}
 
-        {/* Backlinks */}
+        
         <div className="mt-8 border-t border-[var(--border)] pt-5">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
             Backlinks ({backlinks.length})
@@ -493,7 +489,7 @@ export function PageView({ pageId }: { pageId: string }) {
         </div>
       </div>
 
-      {/* Version history drawer */}
+      
       {versionsOpen ? (
         <motion.div
           initial={{ x: 320, opacity: 0 }}

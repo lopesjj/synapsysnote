@@ -6,11 +6,6 @@ import type {
   RichTextSpan,
 } from "@/types/models";
 
-/**
- * Demo corpus used by the local adapter (and by `npm run seed` against a real
- * Firestore project). It exists so a fresh install opens on a workspace that
- * already feels lived-in instead of an empty shell.
- */
 
 let counter = 0;
 const uid = (prefix: string) => `${prefix}_${(counter += 1).toString().padStart(3, "0")}`;

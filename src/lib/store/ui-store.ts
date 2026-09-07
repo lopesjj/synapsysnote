@@ -11,34 +11,15 @@ import type {
   UserPreferences,
 } from "@/types/models";
 
-/**
- * Global interface state.
- *
- * Everything the *chrome* needs to know but no server ever owns lives here:
- * sidebar geometry, Zen mode, how the note list is laid out and the reader's
- * typography. Workspace documents stay in `WorkspaceProvider` (realtime
- * adapter subscriptions) and remote reads go through TanStack Query — this
- * store deliberately holds no note content.
- *
- * Durable slices are persisted to localStorage so a reload restores the exact
- * workspace the user left, and `useUserPreferencesSync` mirrors them to
- * `users/{uid}.preferences` so the same layout follows them across devices.
- */
 
 export type NotesLayout = NotesLayoutPreference;
 export type NotesSortKey = NotesSortPreference;
 export type NotesDensity = NotesDensityPreference;
 export type EditorWidth = EditorWidthPreference;
 
-/**
- * Slice that is persisted locally and mirrored to `users/{uid}.preferences`.
- * `Required` over the model type guarantees a concrete value for every key the
- * profile may omit, so no component has to handle `undefined`.
- */
 export type UiPreferences = Required<Omit<UserPreferences, "theme">>;
 
 interface UiState extends UiPreferences {
-  /* Transient — intentionally never persisted. */
   zenMode: boolean;
   mobileSidebarOpen: boolean;
   paletteOpen: boolean;
@@ -64,7 +45,6 @@ interface UiState extends UiPreferences {
   setEditorFontSize: (value: number) => void;
   setEditorWidth: (value: EditorWidth) => void;
   setShowSaveIndicator: (value: boolean) => void;
-  /** Applies a preference set loaded from the user profile without re-persisting a partial object. */
   hydratePreferences: (value: Partial<UiPreferences>) => void;
 }
 
@@ -92,12 +72,10 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-/** Strips unknown keys so a stale profile document can never widen the store. */
 export function pickPreferences(source: Partial<UiPreferences>): Partial<UiPreferences> {
   const result: Partial<UiPreferences> = {};
   for (const key of PREFERENCE_KEYS) {
     if (source[key] !== undefined) {
-      // Index-signature assignment across a heterogeneous record needs the cast.
       (result as Record<string, unknown>)[key] = source[key];
     }
   }
@@ -163,17 +141,11 @@ export const useUiStore = create<UiState>()(
       },
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => pickPreferences(state) as UiPreferences,
-      /**
-       * Rehydration is deferred to `<UiStoreHydrator>` so the first client
-       * render matches the prerendered HTML instead of tripping React's
-       * hydration diff on a persisted layout.
-       */
       skipHydration: true,
     }
   )
 );
 
-/** Applies the persisted preferences after mount. Render once, near the root. */
 export function useRehydrateUiStore(): void {
   useEffect(() => {
     void Promise.resolve(useUiStore.persist.rehydrate()).then(() => {
@@ -188,7 +160,6 @@ export function useRehydrateUiStore(): void {
   }, []);
 }
 
-/** Read the durable slice without subscribing (used by the profile mirror). */
 export function currentPreferences(): UiPreferences {
   return pickPreferences(useUiStore.getState()) as UiPreferences;
 }

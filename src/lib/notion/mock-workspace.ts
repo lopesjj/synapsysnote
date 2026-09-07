@@ -1,15 +1,5 @@
 import type { AppBlock, NotionTreeNode, RichTextSpan } from "@/types/models";
 
-/**
- * Fixture that mirrors the shape returned by `POST /v1/search` + `GET /v1/blocks/{id}/children`
- * for a mid-sized Notion workspace.
- *
- * It powers two things:
- *   1. The credential-free demo (local adapter) — so the Import Wizard, the
- *      progress worker and the converted output can be reviewed before anyone
- *      creates a Notion integration.
- *   2. The Cloud Functions test-suite fixtures (`functions/src/notion/__fixtures__`).
- */
 
 export const NOTION_MOCK_TREE: NotionTreeNode[] = [
   {
@@ -96,7 +86,6 @@ const text = (value: string, annotations?: RichTextSpan["annotations"]): RichTex
   { text: value, annotations },
 ];
 
-/** Deterministic body used when the demo worker "converts" a Notion page. */
 export function mockConvertedBlocks(node: NotionTreeNode): AppBlock[] {
   const base: AppBlock[] = [
     {
@@ -177,7 +166,6 @@ export function mockConvertedBlocks(node: NotionTreeNode): AppBlock[] {
   return base;
 }
 
-/** Rough file counts per node, used to make the demo progress bar believable. */
 export function mockFileCount(node: NotionTreeNode): number {
   if (node.type === "database") return 3;
   return (node.title.length % 4) + 1;
@@ -206,7 +194,6 @@ export function findNode(nodes: NotionTreeNode[], id: string): NotionTreeNode | 
   return null;
 }
 
-/** Parent lookup table, mirroring how the worker preserves hierarchy. */
 export function parentMap(nodes: NotionTreeNode[]): Record<string, string | null> {
   const map: Record<string, string | null> = {};
   const walk = (list: NotionTreeNode[], parent: string | null) => {

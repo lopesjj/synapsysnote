@@ -14,13 +14,6 @@ import { cn, isMac } from "@/lib/utils";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { isNestedNotebook } from "@/lib/data/notebook-copy";
 
-/**
- * ETAPA 6 — Command Palette (Cmd/Ctrl + K).
- *
- * Blends actions with hybrid search results. Matches coming from OCR text or
- * from a voice-note transcript are labeled, because "why did this page match?"
- * is the first question users ask of a search that reads inside images.
- */
 export function CommandPalette({
   open,
   onOpenChange,
@@ -39,7 +32,6 @@ export function CommandPalette({
   const { theme, toggle } = useTheme();
   const [query, setQuery] = useState("");
 
-  /** Runs a chrome action and dismisses the palette. */
   const run = (action: () => void) => {
     onOpenChange(false);
     action();

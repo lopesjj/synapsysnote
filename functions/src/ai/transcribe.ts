@@ -6,14 +6,6 @@ import * as logger from "firebase-functions/logger";
 import { bucket, pagesRef } from "../lib/firebase";
 import type { AppBlock } from "../types";
 
-/**
- * ETAPA 4 — Voice notes with Gemini.
- *
- * Gemini accepts audio inline, so one call returns the transcript, a short
- * summary and action items. Both the Storage trigger and the callable share the
- * same implementation: the callable keeps latency low while the user is
- * watching, the trigger guarantees nothing is missed.
- */
 
 const REGION = process.env.FUNCTIONS_REGION || "us-central1";
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -71,7 +63,6 @@ async function transcribeStoragePath(storagePath: string): Promise<GeminiAudioRe
       actionItems: parsed.actionItems ?? [],
     };
   } catch {
-    // Model returned prose instead of JSON — keep it rather than losing the work.
     return { transcript: raw, summary: "", actionItems: [] };
   }
 }
@@ -134,7 +125,6 @@ export const transcribeAudio = onCall(
   }
 );
 
-/** Safety net for audio uploaded outside the app (sync clients, retries). */
 export const transcribeOnUpload = onObjectFinalized(
   { region: REGION, secrets: SECRETS, memory: "1GiB", timeoutSeconds: 540 },
   async (event) => {
@@ -149,7 +139,6 @@ export const transcribeOnUpload = onObjectFinalized(
       const page = await pagesRef(workspaceId).doc(pageId).get();
       if (!page.exists) return;
       const blocks = JSON.stringify(page.get("blocks") ?? []);
-      // The callable already handled it.
       if (blocks.includes(`"transcript"`) && blocks.includes(storagePath)) return;
 
       const result = await transcribeStoragePath(storagePath);

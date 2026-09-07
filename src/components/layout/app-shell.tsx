@@ -26,12 +26,6 @@ import { useWorkspaceNavHistory } from "@/hooks/use-workspace-nav-history";
 import { Tooltip } from "@/components/ui/primitives";
 import { cn, isMac } from "@/lib/utils";
 
-/**
- * Application chrome: sidebar, palette, dialogs and global shortcuts.
- *
- * Mobile gets an overlay sidebar; desktop keeps it docked, collapsible and
- * resizable. Zen mode hides every piece of chrome so only the page remains.
- */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, loading, loggingOut } = useAuth();
@@ -62,10 +56,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
-    // A deliberate "Sair" click clears the user before the caller's own
-    // navigateTo(?logout=1) runs. Without the loggingOut guard, this effect
-    // wins that race and bounces to ?session=sync_failed, which never tells
-    // the login host to drop its own (separate-origin) Firebase session.
     if (!loading && !user && !loggingOut) {
       navigateTo(loginHref("/?session=sync_failed"), router, "replace");
     }
@@ -116,9 +106,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // ⌘B is the spec'd sidebar shortcut but it is also "bold" inside the
-      // editor, so it only reaches the sidebar when nothing editable has focus.
-      // ⌘\ always works, for people typing with the editor focused.
       if (key === "b" && !isEditingText(event.target)) {
         event.preventDefault();
         store.toggleSidebar();
@@ -242,7 +229,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ) : null}
       </main>
 
-      {/* Bottom Navigation — mobile only */}
+      
       {!chromeHidden ? <BottomNav /> : null}
 
       <CommandPalette
@@ -264,7 +251,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 const COLLAPSED_SIDEBAR_WIDTH = 56;
 const SIDEBAR_SLIDE = { duration: 0.85, ease: [0.22, 1, 0.36, 1] as const };
 
-/** Docked desktop sidebar: width slides while the two faces crossfade. */
 function DesktopSidebar() {
   const collapsed = useUiStore((state) => state.sidebarCollapsed);
   const width = useUiStore((state) => state.sidebarWidth);
@@ -304,7 +290,6 @@ function DesktopSidebar() {
   );
 }
 
-/** True when the shortcut would collide with typing (editor, input, textarea). */
 function isEditingText(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
@@ -312,10 +297,6 @@ function isEditingText(target: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
-/**
- * Bottom navigation bar — mobile only (md:hidden).
- * Gives one-thumb access to the most common actions.
- */
 function BottomNav() {
   const router = useRouter();
   const pathname = usePathname();
@@ -382,7 +363,6 @@ function BottomNav() {
   );
 }
 
-/** Drag handle that lets the sidebar be sized to taste. */
 function SidebarResizer() {
   const setSidebarWidth = useUiStore((state) => state.setSidebarWidth);
   const [dragging, setDragging] = useState(false);
@@ -392,8 +372,6 @@ function SidebarResizer() {
     if (!dragging) return;
 
     const onMove = (event: PointerEvent) => {
-      // Coalesce to one update per frame: the store drives a layout-affecting
-      // width and pointermove can fire far more often than that.
       if (frame.current !== null) return;
       frame.current = requestAnimationFrame(() => {
         frame.current = null;
@@ -440,7 +418,7 @@ function SidebarResizer() {
         dragging ? "bg-[var(--accent)]" : "hover:bg-[var(--accent)]"
       )}
     >
-      {/* Widened hit area without widening the visible hairline. */}
+      
       <span className="absolute inset-y-0 -left-1.5 -right-1.5 block" />
     </div>
   );

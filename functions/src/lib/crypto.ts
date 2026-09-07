@@ -1,10 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
-/**
- * Same AES-256-GCM envelope used by the Next.js OAuth callback
- * (`src/lib/crypto/token-cipher.ts`). Both runtimes must read
- * `TOKEN_ENCRYPTION_KEY` from the same secret.
- */
 
 function key(): Buffer {
   const raw = process.env.TOKEN_ENCRYPTION_KEY;

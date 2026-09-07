@@ -14,7 +14,6 @@ Responda estritamente em JSON com o formato:
 {"transcript": "transcrição literal completa", "summary": "resumo em no máximo 2 frases", "actionItems": ["item"]}
 Não invente conteúdo: se o áudio estiver inaudível, devolva transcript vazio.`;
 
-/** Gemini rejects `audio/webm;codecs=opus` — only the type/subtype is valid. */
 export function audioMimeType(contentType: string | undefined): string {
   const raw = (contentType || "audio/webm").split(";")[0].trim().toLowerCase();
   return raw.startsWith("audio/") ? raw : "audio/webm";

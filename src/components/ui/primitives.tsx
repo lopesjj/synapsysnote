@@ -10,7 +10,6 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { Check, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/* -------------------------------------------------------------------- Input */
 
 export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
   ({ className, ...props }, ref) => (
@@ -43,7 +42,6 @@ export const Textarea = React.forwardRef<
 ));
 Textarea.displayName = "Textarea";
 
-/* ----------------------------------------------------------------- Checkbox */
 
 export const Checkbox = React.forwardRef<
   React.ComponentRef<typeof CheckboxPrimitive.Root>,
@@ -70,7 +68,6 @@ export const Checkbox = React.forwardRef<
 ));
 Checkbox.displayName = "Checkbox";
 
-/* ----------------------------------------------------------------- Progress */
 
 export function Progress({
   value,
@@ -98,7 +95,6 @@ export function Progress({
   );
 }
 
-/* ---------------------------------------------------------------- Separator */
 
 export const Separator = React.forwardRef<
   React.ComponentRef<typeof SeparatorPrimitive.Root>,
@@ -117,7 +113,6 @@ export const Separator = React.forwardRef<
 ));
 Separator.displayName = "Separator";
 
-/* ------------------------------------------------------------------- Switch */
 
 export const Switch = React.forwardRef<
   React.ComponentRef<typeof SwitchPrimitive.Root>,
@@ -137,7 +132,6 @@ export const Switch = React.forwardRef<
 ));
 Switch.displayName = "Switch";
 
-/* --------------------------------------------------------------------- Tabs */
 
 export const Tabs = TabsPrimitive.Root;
 
@@ -174,7 +168,6 @@ TabsTrigger.displayName = "TabsTrigger";
 
 export const TabsContent = TabsPrimitive.Content;
 
-/* ------------------------------------------------------------------ Tooltip */
 
 export const TooltipProvider = TooltipPrimitive.Provider;
 
@@ -206,7 +199,6 @@ export function Tooltip({
   );
 }
 
-/* ---------------------------------------------------------------------- Kbd */
 
 export function Kbd({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
@@ -221,7 +213,6 @@ export function Kbd({ children, className }: { children: React.ReactNode; classN
   );
 }
 
-/* -------------------------------------------------------------------- Badge */
 
 export function Badge({
   children,
@@ -252,13 +243,11 @@ export function Badge({
   );
 }
 
-/* ----------------------------------------------------------------- Skeleton */
 
 export function Skeleton({ className }: { className?: string }) {
   return <div className={cn("animate-pulse rounded-[var(--radius-xs)] bg-[var(--surface-2)]", className)} />;
 }
 
-/* --------------------------------------------------------------- EmptyState */
 
 export function EmptyState({
   icon,

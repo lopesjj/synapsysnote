@@ -15,11 +15,6 @@ export interface MentionCandidate {
   breadcrumb?: string;
 }
 
-/**
- * `@` mentions. Selecting a page inserts a mention node; the editor writes the
- * referenced ids to `outgoingLinks` on save, which is what produces the
- * bidirectional backlinks panel.
- */
 export function createMentionSuggestion(
   getCandidates: () => MentionCandidate[]
 ): Omit<SuggestionOptions, "editor"> {

@@ -31,14 +31,12 @@ export function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-/** Deterministic pastel-ish hue used for tags and select options. */
 export function hashHue(value: string): number {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) hash = (hash * 31 + value.charCodeAt(i)) % 360;
   return hash;
 }
 
-/** Title sort that treats "Aula 2" as before "Aula 10". */
 export function compareNatural(a: string, b: string) {
   return a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" });
 }

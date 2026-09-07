@@ -1,4 +1,3 @@
-/** Brazilian phone numbers as typed in the sign-up form. */
 
 export function phoneDigits(value: string): string {
   let digits = value.replace(/\D/g, "");
@@ -6,7 +5,6 @@ export function phoneDigits(value: string): string {
   return digits.slice(0, 11);
 }
 
-/** `(11) 98765-4321` or `(11) 3456-7890`, growing as the user types. */
 export function formatPhoneBR(value: string): string {
   const digits = phoneDigits(value);
   if (!digits) return "";

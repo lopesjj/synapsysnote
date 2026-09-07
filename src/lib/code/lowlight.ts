@@ -9,7 +9,6 @@ import nginx from "highlight.js/lib/languages/nginx";
 import powershell from "highlight.js/lib/languages/powershell";
 import scala from "highlight.js/lib/languages/scala";
 
-/** Shared highlighter for the editor, previews and language detection. */
 export const editorLowlight = createLowlight(common);
 
 editorLowlight.register({

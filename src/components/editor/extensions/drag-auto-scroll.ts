@@ -5,10 +5,6 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 
 const key = new PluginKey("synapsysDragAutoScroll");
 
-/**
- * Encontra o contêiner com rolagem ativa pai do editor,
- * subindo a árvore DOM até achar overflow-y auto/scroll ou o elemento de documento.
- */
 function findScrollContainer(element: HTMLElement | null): HTMLElement {
   let current = element?.parentElement;
   while (current && current !== document.body) {
@@ -39,7 +35,6 @@ export const DragAutoScroll = Extension.create({
           let lastClientX = 0;
           let lastClientY = 0;
 
-          // Margem a partir do topo e da base para começar a rolar (em pixels)
           const SCROLL_ZONE_PX = 100;
           const MIN_SPEED = 4;
           const MAX_SPEED = 28;
@@ -57,8 +52,6 @@ export const DragAutoScroll = Extension.create({
               container.scrollTop += scrollSpeed;
             }
 
-            // Dispara um evento dragover sintético para que o ProseMirror atualize a
-            // posição da linha de inserção (caret de drop) enquanto a página se move sob o cursor
             try {
               const target = document.elementFromPoint(lastClientX, lastClientY) || view.dom;
               const syntheticDragOver = new DragEvent("dragover", {
@@ -107,7 +100,6 @@ export const DragAutoScroll = Extension.create({
             const topBoundary = rect.top + SCROLL_ZONE_PX;
             const bottomBoundary = rect.bottom - SCROLL_ZONE_PX;
 
-            // Se o cursor estiver na zona superior (acima do topBoundary)
             if (event.clientY < topBoundary && event.clientY >= rect.top - 40) {
               const distance = Math.max(0, topBoundary - event.clientY);
               const factor = Math.min(1, distance / SCROLL_ZONE_PX);
@@ -133,8 +125,6 @@ export const DragAutoScroll = Extension.create({
             stopLoop();
           };
 
-          // Escuta eventos globais de drag para cobrir tanto o drag nativo da imagem
-          // quanto o drag handle lateral de blocos
           window.addEventListener("dragstart", handleDragStart, { capture: true });
           window.addEventListener("dragover", handleDragOver, { capture: true, passive: true });
           window.addEventListener("dragend", handleDragEnd, { capture: true });

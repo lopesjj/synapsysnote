@@ -6,10 +6,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/**
- * Motion-aware dialog. Radix owns focus/aria; Framer Motion owns the entrance —
- * a short spring with a slight lift, matching the Linear/Raycast feel.
- */
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;

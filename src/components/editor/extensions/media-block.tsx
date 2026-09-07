@@ -11,11 +11,6 @@ import { cn, formatBytes, formatDuration } from "@/lib/utils";
 import { Badge } from "@/components/ui/primitives";
 import { useWorkspace } from "@/lib/data/provider";
 
-/**
- * One node type covers every binary attachment (image, audio, video, file).
- * It also renders the async enrichment produced by Cloud Functions: OCR text
- * from Cloud Vision and transcript/summary from Gemini.
- */
 function isPdf(mimeType: unknown, name: unknown) {
   if (typeof mimeType === "string" && mimeType.includes("pdf")) return true;
   return typeof name === "string" && /\.pdf($|\?)/i.test(name);
@@ -34,7 +29,6 @@ function snapWidth(percent: number) {
   return percent;
 }
 
-/** Prefer a compact size for icons/logos; photos and diagrams fill the column. */
 function smartDisplayWidth(naturalWidth: number, naturalHeight: number) {
   const ratio = naturalWidth / Math.max(1, naturalHeight);
   if (naturalWidth <= 360 && ratio > 0.7 && ratio < 1.4) return 36;
@@ -142,7 +136,7 @@ function ResizableImage({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      
       <img
         src={url}
         alt=""
@@ -259,7 +253,7 @@ function ResizablePdf({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Header com controles e ações (sem exibir nome do arquivo) */}
+      
       <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-[12px]">
         <div className="flex items-center gap-1.5">
           <FileText className="size-4 shrink-0 text-red-500" />
@@ -286,7 +280,7 @@ function ResizablePdf({
         </div>
       </div>
 
-      {/* Visualizador responsivo com fallback mobile */}
+      
       <div
         className="relative w-full overflow-hidden bg-[var(--surface)]"
         style={{ height: `${activeHeight}px` }}
@@ -297,7 +291,7 @@ function ResizablePdf({
           className="h-full w-full"
           aria-label={name || "PDF"}
         >
-          {/* Fallback caso o navegador mobile não suporte object direto */}
+          
           <iframe
             src={`https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`}
             title={name || "PDF"}
@@ -306,10 +300,10 @@ function ResizablePdf({
         </object>
       </div>
 
-      {/* Handles de redimensionamento */}
+      
       {editable ? (
         <>
-          {/* Handle lateral esquerdo */}
+          
           <button
             type="button"
             aria-label="Redimensionar largura à esquerda"
@@ -325,7 +319,7 @@ function ResizablePdf({
             <span className="h-10 w-1.5 rounded-full border border-white/80 bg-[var(--accent)] shadow-[0_1px_4px_rgba(15,44,76,0.35)]" />
           </button>
 
-          {/* Handle lateral direito */}
+          
           <button
             type="button"
             aria-label="Redimensionar largura à direita"
@@ -341,7 +335,7 @@ function ResizablePdf({
             <span className="h-10 w-1.5 rounded-full border border-white/80 bg-[var(--accent)] shadow-[0_1px_4px_rgba(15,44,76,0.35)]" />
           </button>
 
-          {/* Handle inferior vertical */}
+          
           <button
             type="button"
             aria-label="Redimensionar altura vertical"
@@ -357,7 +351,7 @@ function ResizablePdf({
             <span className="h-1.5 w-10 rounded-full border border-white/80 bg-[var(--accent)] shadow-[0_1px_4px_rgba(15,44,76,0.35)]" />
           </button>
 
-          {/* Handle diagonal de canto */}
+          
           <button
             type="button"
             aria-label="Redimensionar largura e altura"
@@ -373,7 +367,7 @@ function ResizablePdf({
             <span className="size-2.5 rounded-full border border-white/80 bg-[var(--accent)] shadow-[0_1px_4px_rgba(15,44,76,0.35)]" />
           </button>
 
-          {/* Indicador de dimensão */}
+          
           <span
             className={cn(
               "pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-[var(--text)]/85 px-2.5 py-0.5 text-[10px] text-[var(--surface)]",

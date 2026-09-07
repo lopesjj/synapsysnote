@@ -36,9 +36,7 @@ import {
 const REGION = process.env.FUNCTIONS_REGION || "us-central1";
 const SECRETS = ["TOKEN_ENCRYPTION_KEY"];
 
-/* ------------------------------------------------------------------ callables */
 
-/** ETAPA 3.2 — Feeds the wizard's tree. */
 export const listNotionTreeFn = onCall(
   { region: REGION, secrets: SECRETS, timeoutSeconds: 120, memory: "512MiB" },
   async (request) => {
@@ -52,11 +50,6 @@ export const listNotionTreeFn = onCall(
   }
 );
 
-/**
- * ETAPA 3.4 — Enqueues the job. Returns immediately; the heavy lifting happens
- * in the Firestore-triggered worker below, which is not bound by the HTTP
- * request timeout.
- */
 export const startNotionImport = onCall(
   { region: REGION, secrets: SECRETS, timeoutSeconds: 60 },
   async (request) => {
@@ -136,16 +129,7 @@ async function assertMember(workspaceId: string, uid: string) {
   }
 }
 
-/* -------------------------------------------------------------------- worker */
 
-/**
- * ETAPA 3.4 — Background worker.
- *
- * Runs up to 60 minutes with 1 GiB of memory and updates the job document after
- * every page and every file, which is what the wizard's real-time listener
- * renders. Failures are recorded per item: one broken page never aborts the
- * whole migration.
- */
 export const processNotionImportJob = onDocumentCreated(
   {
     document: "workspaces/{workspaceId}/import_jobs/{jobId}",
@@ -200,8 +184,6 @@ export const processNotionImportJob = onDocumentCreated(
         })),
       });
 
-      // Notion id → app document id, so children resolve their parent and
-      // internal links can be rewritten as mentions.
       const idMap = new Map<string, string>();
       const roles = new Map<string, ImportRole>();
       const topLevels = new Map<string, NotionBlock[]>();
@@ -276,7 +258,6 @@ export const processNotionImportJob = onDocumentCreated(
   }
 );
 
-/* ------------------------------------------------------------------- helpers */
 
 function collectIds(tree: NotionTreeNode[]): string[] {
   const ids: string[] = [];
@@ -396,7 +377,6 @@ async function importPage(args: ImportArgs): Promise<string> {
     path = [...((parentDoc.get("path") as string[]) ?? []), parentPageId];
   }
 
-  // Re-importing the same Notion page updates it in place instead of duplicating.
   const existing = await pagesRef(workspaceId)
     .where("notionPageId", "==", node.id)
     .limit(1)
@@ -475,13 +455,10 @@ async function importDatabase(args: ImportArgs): Promise<string> {
     { merge: true }
   );
 
-  // Rows are written in batches of 400 to stay under the 500-write limit.
   let cursor: string | undefined;
   let order = 0;
   do {
     const response = await throttled<NotionQueryResponse>(() =>
-      // The SDK's typed surface changes between Notion API versions; the query
-      // shape we depend on (results/has_more/next_cursor) has been stable.
       (notion as unknown as NotionQueryable).databases.query({
         database_id: node.id,
         page_size: 100,
@@ -499,7 +476,6 @@ async function importDatabase(args: ImportArgs): Promise<string> {
         properties
       );
 
-      // File properties also carry expiring URLs.
       if (job.options.downloadMedia) {
         for (const [propertyId, value] of Object.entries(values)) {
           if (!Array.isArray(value)) continue;
@@ -554,7 +530,6 @@ async function importDatabase(args: ImportArgs): Promise<string> {
   return ref.id;
 }
 
-/** Materializes the reverse index used by the backlinks panel. */
 async function rebuildBacklinks(workspaceId: string, idMap: Map<string, string>) {
   const appIds = new Set(idMap.values());
   if (!appIds.size) return;
@@ -593,15 +568,9 @@ async function rebuildBacklinks(workspaceId: string, idMap: Map<string, string>)
   await batch.commit();
 }
 
-/* --------------------------------------------------------- progress reporter */
 
 type JobRef = FirebaseFirestore.DocumentReference;
 
-/**
- * Every mutation lands on the job document so the wizard listener has live
- * numbers. Counters use `FieldValue.increment` to stay correct even if two
- * media downloads finish concurrently.
- */
 class ProgressReporter {
   private files = 0;
   private items: ImportJobItem[];

@@ -5,14 +5,6 @@ import type { NotionTreeNode } from "@/types/models";
 import { compareNatural } from "@/lib/utils";
 import { throttled } from "./throttle";
 
-/**
- * ETAPA 3.2 — Reads everything the integration can see and rebuilds the
- * hierarchy the wizard renders.
- *
- * `POST /v1/search` returns a flat list with a `parent` pointer, so the tree is
- * assembled locally; entries whose parent was not shared with the integration
- * are promoted to roots instead of being dropped.
- */
 export async function listNotionTree(notion: Client): Promise<NotionTreeNode[]> {
   const flat = new Map<string, NotionTreeNode & { parentId: string | null }>();
   let cursor: string | undefined;
@@ -97,7 +89,6 @@ function extractIcon(result: Record<string, never>): string | null {
   return null;
 }
 
-/** Depth-first order guarantees a parent is imported before its children. */
 export function orderForImport(tree: NotionTreeNode[], selected: Set<string>): NotionTreeNode[] {
   const ordered: NotionTreeNode[] = [];
   const walk = (nodes: NotionTreeNode[]) => {

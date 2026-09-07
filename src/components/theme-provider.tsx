@@ -18,11 +18,6 @@ function subscribe(callback: () => void) {
   };
 }
 
-/**
- * The DOM class is the single source of truth — it is set by `themeScript`
- * before the first paint, so reading it avoids both a flash and a hydration
- * mismatch. React just subscribes to changes.
- */
 function getSnapshot(): Theme {
   return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
@@ -54,10 +49,6 @@ export function useTheme() {
   );
 }
 
-/**
- * Applies the persisted theme before paint so the first frame never flashes the
- * wrong canvas color.
- */
 export const themeScript = `
 (function(){
   try {

@@ -543,11 +543,6 @@ interface TreeMetadata {
   roles: Record<string, ImportRole>;
 }
 
-/**
- * Runs a slice of the Notion import job within an active HTTP request context.
- * Returns { done: false } if more items remain, allowing the client to pump
- * the next step without hitting serverless timeouts and keeping 100% CPU.
- */
 export async function runNotionImportStep(
   workspaceId: string,
   jobId: string
@@ -597,7 +592,6 @@ export async function runNotionImportStep(
 
   const progress = new ProgressReporter(jobRef, jobData);
 
-  // 1. Fase de descoberta (quando o job ainda está pendente)
   if (jobData.status === "pending") {
     await progress.patch({
       status: "discovering",
@@ -659,7 +653,6 @@ export async function runNotionImportStep(
     return { done: true, status: "canceled" };
   }
 
-  // 2. Processamento em lote dos itens pendentes
   const treeMetadata = jobData.treeMetadata ?? {
     parents: {},
     orderedNodes: [],
@@ -683,7 +676,6 @@ export async function runNotionImportStep(
   let hasRoleUpdates = false;
 
   for (let i = 0; i < items.length; i++) {
-    // Evita estourar o tempo seguro da requisição HTTP (~32s)
     if (Date.now() - stepStart >= MAX_STEP_DURATION_MS) {
       break;
     }
@@ -791,9 +783,6 @@ export async function runNotionImportStep(
   };
 }
 
-/**
- * Executes all steps sequentially in a single process.
- */
 export async function runNotionImportJob(workspaceId: string, jobId: string): Promise<void> {
   let done = false;
   while (!done) {

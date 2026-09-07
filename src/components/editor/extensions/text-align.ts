@@ -37,10 +37,6 @@ function applyTextAlign(tr: Transaction, alignment: TextAlignValue): boolean {
   return changed;
 }
 
-/**
- * Block alignment. Body text defaults to justify; headings stay left until
- * the user picks something else.
- */
 export const TextAlign = Extension.create({
   name: "textAlign",
 

@@ -13,7 +13,6 @@ export function workspaceHeroSize(icon?: string | null) {
   return isIconUrl(icon?.trim() || "") ? WORKSPACE_ICON_HERO_PX : WORKSPACE_ICON_HERO_EMOJI_PX;
 }
 
-/** Halo so the hero icon sits on the cover without looking pasted on. */
 export const workspaceIconOnCoverClass =
   "bg-white shadow-[0_12px_32px_rgba(15,23,42,0.16)] ring-[6px] ring-[var(--canvas)]";
 
@@ -23,7 +22,6 @@ const VARIANT_PX: Record<WorkspaceIconVariant, number> = {
   nav: 18,
 };
 
-/** ISO code from a flag emoji, or from a stored "BR" / "br" text fallback. */
 export function flagCountryCode(value: string): string | null {
   const trimmed = value.trim();
   if (/^[A-Za-z]{2}$/.test(trimmed)) {
@@ -80,7 +78,7 @@ export function WorkspaceIcon({
         )}
         style={hero ? undefined : { width: px, height: px }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+        
         <img
           src={value}
           alt=""

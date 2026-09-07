@@ -40,7 +40,6 @@ import { cn } from "@/lib/utils";
 export interface BlockEditorProps {
   page: Page;
   editable?: boolean;
-  /** Toolbar, outline, status bar and the extra click-to-type region. */
   chrome?: boolean;
   mentionCandidates?: MentionCandidate[];
   onChange?: (payload: { blocks: AppBlock[]; outgoingLinks: string[] }) => void;
@@ -104,14 +103,6 @@ function filesFromDataTransfer(data: DataTransfer | null): File[] {
   return files;
 }
 
-/**
- * The editor surface.
- *
- * Loading strategy: the TipTap document is created once per page id. Remote
- * updates for the *same* page are not force-applied while the user is typing —
- * that would fight the caret — so the debounced writer stays authoritative
- * until the user navigates away.
- */
 export function BlockEditor({
   page,
   editable = true,
@@ -197,7 +188,6 @@ export function BlockEditor({
         const mediaType = isImage ? "image" : isVideo ? "video" : "file";
         const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-        // Instant local preview (0ms de carregamento inicial)
         const previewUrl = URL.createObjectURL(file);
 
         let targetPos: number;
@@ -231,7 +221,6 @@ export function BlockEditor({
 
         lastSelectionRef.current = instance.state.selection;
 
-        // Otimização ultra-rápida e upload assíncrono em segundo plano
         void (async () => {
           try {
             const prepared = await prepareEditorAttachment(file);
@@ -357,7 +346,6 @@ export function BlockEditor({
             `@${label}`,
           ];
         },
-        // TipTap invokes this on "@", never during React render.
         // eslint-disable-next-line react-hooks/refs
         suggestion: createMentionSuggestion(() => candidatesRef.current),
       }),
@@ -391,8 +379,6 @@ export function BlockEditor({
         },
         handleDrop: (view, event) => {
           if (!editable) return false;
-          // Moving a block inside the editor (images, files) must stay with
-          // ProseMirror — do not treat that as a new upload.
           if (view.dragging) return false;
           const files = filesFromDataTransfer(event.dataTransfer);
           if (files.length) {
@@ -439,11 +425,6 @@ export function BlockEditor({
   );
   editorRef.current = editor;
 
-  // Media added outside the editor (uploads, voice notes) arrives through the
-  // page document. A local Enter also grows `blocks` and comes back via the
-  // debounced save — that echo must not replace the doc or the caret jumps
-  // to the end of the note. Only apply when the store has *more* blocks than
-  // both the last snapshot and what the user already typed.
   useEffect(() => {
     if (!editor) return;
     if (trackedPageId.current !== page.id) {

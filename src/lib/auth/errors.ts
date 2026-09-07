@@ -1,14 +1,5 @@
-/**
- * Human-readable auth failures.
- *
- * Firebase error codes are stable but not presentable, and the OAuth
- * registration guard raises reasons Firebase has no code for. Everything the
- * sign-in screen can show is funnelled through `AuthError` so the UI never has
- * to pattern-match on provider strings.
- */
 
 export type AuthErrorReason =
-  /** OAuth succeeded but the e-mail has no account yet — sign-up is required first. */
   | "oauth-unregistered"
   /** The e-mail exists but was registered with a different provider. */
   | "wrong-provider"
@@ -75,7 +66,6 @@ const CODE_MAP: Record<string, AuthErrorReason> = {
   "auth/network-request-failed": "network",
 };
 
-/** Normalises anything thrown by the auth flow into a presentable `AuthError`. */
 export function toAuthError(error: unknown): AuthError {
   if (error instanceof AuthError) return error;
 

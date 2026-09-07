@@ -5,14 +5,6 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import { pagesRef } from "../lib/firebase";
 
-/**
- * ETAPA 4 — Semantic layer.
- *
- * Each page keeps a 768-dimension embedding of title + body + OCR text +
- * transcript, stored as a Firestore vector value. `semanticSearch` runs
- * `findNearest` against it; the Command Palette merges those hits with the
- * client-side lexical pass to form the hybrid ranking.
- */
 
 const REGION = process.env.FUNCTIONS_REGION || "us-central1";
 const SECRETS = ["GEMINI_API_KEY"];
@@ -41,10 +33,6 @@ function documentText(data: FirebaseFirestore.DocumentData): string {
     .slice(0, 8_000);
 }
 
-/**
- * Re-embeds a page when its searchable text changes. Skipped when only the
- * embedding itself was written, which would otherwise loop forever.
- */
 export const embedPageOnWrite = onDocumentWritten(
   {
     document: "workspaces/{workspaceId}/pages/{pageId}",
@@ -103,7 +91,6 @@ export const semanticSearch = onCall(
         id: doc.id,
         title: doc.get("title"),
         snippet: String(doc.get("plainText") ?? "").slice(0, 180),
-        // Cosine distance → similarity, so the client can blend the two scores.
         score: 1 - Number(doc.get("vectorDistance") ?? 1),
       })),
     };

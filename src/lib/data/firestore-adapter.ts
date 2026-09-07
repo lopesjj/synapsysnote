@@ -56,7 +56,6 @@ import type {
 
 const SERVER_OWNED = ["extractedOCRText", "transcriptText", "embedding", "embeddingUpdatedAt"];
 
-/** Firestore caps a batch at 500 writes; leave headroom for the notebook docs. */
 const BATCH_LIMIT = 400;
 
 async function commitWrites(ops: Array<(batch: ReturnType<typeof writeBatch>) => void>) {
@@ -67,7 +66,6 @@ async function commitWrites(ops: Array<(batch: ReturnType<typeof writeBatch>) =>
   }
 }
 
-/** Stay under the 1 MiB document cap with room for metadata and indexes. */
 const MAX_PAGE_JSON_BYTES = 900_000;
 
 function stripUndefined<T>(value: T): T {
@@ -85,16 +83,7 @@ function stripUndefined<T>(value: T): T {
   return value;
 }
 
-/**
- * ETAPA 2 — Production adapter.
- *
- * Every read is an `onSnapshot` listener so the UI is real-time by default and
- * keeps rendering from the offline cache when the connection drops. Secrets
- * (Notion tokens, Vision, Gemini) stay on the server: Notion import runs through
- * Next.js routes backed by Firebase Admin.
- */
 
-/** Firestore Timestamps and plain numbers both flow through the same model. */
 function ms(value: unknown): number {
   if (typeof value === "number") return value;
   if (value && typeof value === "object" && "toMillis" in value) {
@@ -179,8 +168,6 @@ export class FirestoreAdapter implements DataAdapter {
         }
       }
 
-      // Creating the member doc is allowed for the personal-workspace owner even
-      // when we cannot read it yet (isMember requires the doc to already exist).
       try {
         await setDoc(
           memberRef,
@@ -210,7 +197,6 @@ export class FirestoreAdapter implements DataAdapter {
     return doc(getDb(), "workspaces", this.workspaceId, name, id);
   }
 
-  /* ------------------------------------------------------------ read paths */
 
   subscribeNotebooks(cb: (notebooks: Notebook[]) => void): Unsubscribe {
     return onSnapshot(query(this.col("notebooks"), orderBy("order", "asc")), (snap) => {
@@ -327,7 +313,6 @@ export class FirestoreAdapter implements DataAdapter {
     });
   }
 
-  /* ------------------------------------------------------------ notebooks */
 
   async createNotebook(input: {
     name: string;
@@ -461,7 +446,6 @@ export class FirestoreAdapter implements DataAdapter {
     await commitWrites(ops);
   }
 
-  /* ---------------------------------------------------------------- pages */
 
   async createPage(input: CreatePageInput): Promise<Page> {
     const id = `page_${nanoid(10)}`;
@@ -500,8 +484,6 @@ export class FirestoreAdapter implements DataAdapter {
       updatedAt: Date.now(),
       order: Date.now(),
     };
-    // `extractedOCRText`, `transcriptText` and `embedding` are server-owned;
-    // the rules reject them on create, so they are stripped here.
     const writable = Object.fromEntries(
       Object.entries(page).filter(([key]) => !SERVER_OWNED.includes(key))
     );
@@ -609,9 +591,6 @@ export class FirestoreAdapter implements DataAdapter {
       updatedAt: serverTimestamp(),
     });
 
-    // Descendants carry a materialised path and a denormalised notebookId, so
-    // the whole subtree has to follow the move or it detaches from its parent.
-    // `array-contains` on `path` is a single-field query — no composite index.
     const descendants = await getDocs(query(this.col("pages"), where("path", "array-contains", id)));
     for (const patch of subtreePatches(descendants.docs.map(mapPage), id, path, notebookId)) {
       batch.update(this.docRef("pages", patch.pageId), {
@@ -709,7 +688,6 @@ export class FirestoreAdapter implements DataAdapter {
     }
   }
 
-  /* ------------------------------------------------------------- versions */
 
   async listVersions(pageId: string): Promise<PageVersion[]> {
     const snap = await getDocs(
@@ -744,7 +722,6 @@ export class FirestoreAdapter implements DataAdapter {
     });
   }
 
-  /* ------------------------------------------------------------ databases */
 
   async createDatabase(input: { name: string; notebookId?: string | null }): Promise<AppDatabase> {
     const id = `db_${nanoid(8)}`;
@@ -820,7 +797,6 @@ export class FirestoreAdapter implements DataAdapter {
     await deleteDoc(doc(this.docRef("databases", databaseId), "rows", rowId));
   }
 
-  /* --------------------------------------------------------------- Notion */
 
   async fetchNotionTree(): Promise<NotionTreeNode[]> {
     const result = await firebaseJson<{ tree: NotionTreeNode[] }>(
@@ -835,8 +811,6 @@ export class FirestoreAdapter implements DataAdapter {
       body: JSON.stringify({ ...input, workspaceId: this.workspaceId }),
     });
 
-    // Executa os passos do worker via requisições HTTP ativas sequenciais,
-    // garantindo 100% de CPU no Cloud Run sem risco de timeout.
     void this.pumpImportWorker(result.jobId);
 
     return result.jobId;
@@ -896,8 +870,6 @@ export class FirestoreAdapter implements DataAdapter {
   }
 
   async connectNotion() {
-    // Session-bound start: the server stamps this user's uid into OAuth state
-    // so the callback stores the Notion token on their workspace only.
     const result = await firebaseJson<{ redirectUrl: string }>("/api/notion/authorize", {
       method: "POST",
       body: JSON.stringify({ workspaceId: this.workspaceId }),
@@ -912,7 +884,6 @@ export class FirestoreAdapter implements DataAdapter {
     });
   }
 
-  /* ---------------------------------------------------------------- media */
 
   async saveAudioNote(pageId: string, blob: Blob, durationSeconds: number) {
     const fileId = `${Date.now()}-${nanoid(6)}.webm`;

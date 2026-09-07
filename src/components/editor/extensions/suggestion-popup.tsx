@@ -18,10 +18,6 @@ export interface SuggestionListHandle {
   onKeyDown: (props: { event: KeyboardEvent }) => boolean;
 }
 
-/**
- * Shared keyboard-driven list behind both `/` commands and `@` mentions.
- * Arrow keys move, Enter selects, Escape is handled by the suggestion plugin.
- */
 export const SuggestionList = forwardRef<SuggestionListHandle, { items: SuggestionItem[]; emptyLabel?: string }>(
   ({ items, emptyLabel = "Nada encontrado" }, ref) => {
     const [selected, setSelected] = useState(0);

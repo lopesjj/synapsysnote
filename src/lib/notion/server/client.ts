@@ -4,10 +4,6 @@ import { Client } from "@notionhq/client";
 import { adminDb } from "@/lib/firebase/admin";
 import { decryptToken } from "@/lib/crypto/token-cipher";
 
-/**
- * Builds an authenticated Notion client by decrypting the token stored during
- * the OAuth callback. Ciphertext lives in the `secure` subcollection.
- */
 export async function getNotionClient(workspaceId: string): Promise<Client> {
   const ref = adminDb()
     .collection("workspaces")

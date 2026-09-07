@@ -26,7 +26,6 @@ export const integrationRef = (workspaceId: string, integrationId: string) =>
 export const attachmentsRef = (workspaceId: string) =>
   workspaceRef(workspaceId).collection("attachments");
 
-/** Throws unless the caller is a member of the workspace with a writing role. */
 export async function assertWorkspaceEditor(workspaceId: string, uid: string): Promise<void> {
   const member = await workspaceRef(workspaceId).collection("members").doc(uid).get();
   if (!member.exists) throw new Error("permission-denied: not a workspace member");

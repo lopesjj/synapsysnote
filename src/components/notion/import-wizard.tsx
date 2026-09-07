@@ -25,13 +25,6 @@ import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 
 type Step = "connect" | "select" | "preview" | "progress";
 
-/**
- * ETAPA 6 — Notion Import Wizard.
- *
- * Four steps: connect the workspace, pick pages from the hierarchical tree,
- * review exactly what will happen, then watch the background worker report
- * progress per page and per file through the job document.
- */
 export function ImportWizard({
   open,
   onOpenChange,
@@ -279,7 +272,6 @@ function StepDot({ active, done }: { active?: boolean; done?: boolean }) {
   );
 }
 
-/* ------------------------------------------------------------- Step: connect */
 
 function ConnectStep({ connecting, onConnect }: { connecting: boolean; onConnect: () => void }) {
   return (
@@ -302,7 +294,6 @@ function ConnectStep({ connecting, onConnect }: { connecting: boolean; onConnect
   );
 }
 
-/* -------------------------------------------------------------- Step: select */
 
 function SelectStep({
   tree,
@@ -446,7 +437,6 @@ function SelectStep({
   );
 }
 
-/* ------------------------------------------------------------- Step: preview */
 
 function PreviewStep({
   summary,
@@ -579,7 +569,6 @@ function SummaryCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-/* ------------------------------------------------------------ Step: progress */
 
 function ProgressStep({
   job,

@@ -4,15 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { AppBlock, BlockMedia, BlockType, RichTextSpan } from "@/types/models";
 import { fromTableRows, toTableRows } from "@/lib/data/table-rows";
 
-/**
- * ETAPA 3.3 — Recursive Notion AST → app block format converter.
- *
- * Pure and side-effect free except for the two injected callbacks: fetching
- * children (paginated Notion API) and rehosting media (Cloud Storage). That
- * makes the mapping table unit-testable without touching the network.
- */
 
-/* Loose structural types: the official SDK unions are exhaustive but unwieldy. */
 interface NotionRichText {
   type: "text" | "mention" | "equation";
   plain_text: string;
@@ -50,20 +42,13 @@ export interface NotionBlock {
 }
 
 export interface ConvertContext {
-  /** Paginated `GET /v1/blocks/{id}/children`. */
   fetchChildren: (blockId: string) => Promise<NotionBlock[]>;
-  /**
-   * Streams a Notion-hosted asset into Cloud Storage and returns permanent
-   * metadata. Omitted when the caller disabled media download.
-   */
   rehostMedia?: (input: {
     url: string;
     suggestedName: string;
     blockId: string;
   }) => Promise<BlockMedia>;
-  /** Maps an already-imported Notion page id to its app page id (for links). */
   resolvePageLink?: (notionPageId: string) => string | undefined;
-  /** Guard against pathological nesting / synced-block cycles. */
   maxDepth?: number;
 }
 
@@ -118,7 +103,6 @@ const NOTION_HIGHLIGHT_COLORS: Record<string, string> = {
   red: "#FECACA",
 };
 
-/** Drops `undefined` so Admin SDK writes never trip Firestore's document validator. */
 export function omitUndefined<T>(value: T): T {
   if (Array.isArray(value)) return value.map((item) => omitUndefined(item)) as T;
   if (value && typeof value === "object") {
@@ -164,7 +148,6 @@ function withAnnotations(span: RichTextSpan, item: NotionRichText): RichTextSpan
   return Object.keys(annotations).length ? { ...span, annotations } : span;
 }
 
-/** Notion rich text → app rich text, preserving annotations, links and mentions. */
 export function notionRichTextToSpans(
   richText: NotionRichText[] | undefined,
   ctx?: ConvertContext
@@ -236,10 +219,6 @@ function guessName(url: string, fallback: string): string {
   }
 }
 
-/**
- * Converts a single Notion block (and, recursively, its children).
- * Returns `null` for blocks that carry no content in this app (e.g. breadcrumbs).
- */
 export async function notionBlockToAppBlock(
   block: NotionBlock,
   ctx: ConvertContext,
@@ -249,7 +228,6 @@ export async function notionBlockToAppBlock(
   const payload = block[block.type] as Record<string, unknown> | undefined;
   const type = TYPE_MAP[block.type];
 
-  // Structural containers are flattened: their children are hoisted by the caller.
   if (block.type === "column_list" || block.type === "column" || block.type === "synced_block") {
     const children =
       block.has_children && depth < maxDepth
@@ -348,7 +326,7 @@ export async function notionBlockToAppBlock(
             })
         );
       }
-      return appBlock; // table children are consumed above
+      return appBlock; 
 
     case "image":
     case "video":
@@ -362,8 +340,6 @@ export async function notionBlockToAppBlock(
       const suggestedName = file.name ?? guessName(url, `${block.type}-${block.id}`);
 
       if (ctx.rehostMedia && file.type === "file") {
-        // Notion's S3 URLs are presigned and expire in ~1h, so the asset must be
-        // copied into our own bucket before the block is persisted.
         appBlock.media = {
           ...(await ctx.rehostMedia({ url, suggestedName, blockId: block.id })),
           caption,
@@ -406,7 +382,6 @@ export async function notionBlocksToAppBlocks(
       };
     }
     if (!converted) continue;
-    // Flattened containers contribute their children directly.
     if (
       converted.type === "paragraph" &&
       !converted.richText?.length &&
@@ -421,7 +396,6 @@ export async function notionBlocksToAppBlocks(
   return out;
 }
 
-/** Flattens converted blocks into the searchable text stored on the page. */
 export function blocksToPlainText(blocks: AppBlock[]): string {
   const parts: string[] = [];
   const walk = (list: AppBlock[]) => {
@@ -444,7 +418,6 @@ export function blocksToPlainText(blocks: AppBlock[]): string {
   return parts.filter(Boolean).join("\n");
 }
 
-/** Counts how many assets a page will push through the media pipeline. */
 export function countMediaBlocks(blocks: NotionBlock[]): number {
   return blocks.filter((block) =>
     ["image", "video", "audio", "file", "pdf"].includes(block.type)

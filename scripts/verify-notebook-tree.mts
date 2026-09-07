@@ -1,7 +1,3 @@
-/**
- * Hierarchy helpers for nested notebooks.
- * Run with: npm run verify:notebook-tree
- */
 
 import assert from "node:assert/strict";
 import {

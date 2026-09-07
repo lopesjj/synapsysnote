@@ -27,13 +27,6 @@ import { ensureSuggestionPopup } from "./suggestion-tippy";
 import { emptyTableGrid } from "./table-block";
 import type { Instance as TippyInstance } from "tippy.js";
 
-/**
- * ETAPA 5 — Slash commands.
- *
- * `/` opens a filtered palette anchored to the caret. Media entries delegate to
- * the host page through callbacks, because uploading needs the workspace
- * adapter (Cloud Storage) rather than editor state.
- */
 
 export interface SlashCommandHandlers {
   onRequestUpload: () => void;

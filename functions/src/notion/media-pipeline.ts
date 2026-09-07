@@ -5,18 +5,6 @@ import * as logger from "firebase-functions/logger";
 import { bucket } from "../lib/firebase";
 import type { BlockMedia } from "../types";
 
-/**
- * ETAPA 3.3 (crítico) — Media rehosting.
- *
- * Notion serves uploaded files through S3 presigned URLs that expire about an
- * hour after the API response. Persisting those URLs would leave every imported
- * page with dead images by the next day, so each asset is streamed straight from
- * Notion into Cloud Storage and the block is rewritten to point at the permanent
- * download URL.
- *
- * Streaming (rather than buffering) keeps memory flat regardless of file size,
- * which matters when a single Notion page carries a 200 MB screen recording.
- */
 
 const MAX_BYTES = Number(process.env.IMPORT_MAX_FILE_BYTES ?? 250 * 1024 * 1024);
 
@@ -96,15 +84,10 @@ export async function rehostNotionFile(input: {
     mimeType: contentType,
     sizeBytes: bytes,
     bytes,
-    // OCR / transcription enrich this later through their own triggers.
     pending: contentType.startsWith("image/") || contentType === "application/pdf",
   };
 }
 
-/**
- * Minimal pass-through stream that reports chunk sizes, used to enforce the
- * size cap without loading the file into memory.
- */
 class TransformStreamCounter {
   readonly stream: NodeJS.ReadWriteStream;
 

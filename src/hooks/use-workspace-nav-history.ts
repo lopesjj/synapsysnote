@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useNavHistory } from "@/lib/store/nav-history";
 
-/** Keeps the header back/forward trail in sync with the current workspace route. */
 export function useWorkspaceNavHistory(): void {
   const pathname = usePathname();
   const record = useNavHistory((state) => state.record);

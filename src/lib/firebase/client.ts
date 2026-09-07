@@ -1,11 +1,5 @@
 "use client";
 
-/**
- * Firebase client SDK bootstrap.
- *
- * Import this module only from authenticated app surfaces. The landing page
- * must not pull it in — use `@/lib/firebase/config` for the public flag.
- */
 
 import { getApp, getApps, initializeApp, type FirebaseApp, type FirebaseOptions } from "firebase/app";
 import {
@@ -54,11 +48,6 @@ export function getFirebaseApp(): FirebaseApp {
   return app;
 }
 
-/**
- * Firestore with native offline persistence. `persistentMultipleTabManager`
- * keeps several browser tabs consistent while still serving cached reads when
- * the network drops.
- */
 export function getDb(): Firestore {
   if (firestore) return firestore;
   const instance = getFirebaseApp();

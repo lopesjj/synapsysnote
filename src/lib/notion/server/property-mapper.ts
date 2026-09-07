@@ -4,12 +4,6 @@ import { randomUUID } from "node:crypto";
 import type { PropertyDef, PropertyType, RichTextSpan } from "@/types/models";
 import { notionRichTextToSpans } from "./block-converter";
 
-/**
- * ETAPA 3.3 — Notion database schema and page properties → app database model.
- *
- * Property types with no local equivalent (rollup, formula, relation to a
- * database that was not imported) degrade to read-only text so no data is lost.
- */
 
 const NOTION_COLORS: Record<string, string> = {
   default: "#6B7280",
@@ -78,7 +72,6 @@ export function mapDatabaseSchema(
     };
   });
 
-  // A database without an explicit title property still needs one locally.
   if (!defs.some((def) => def.type === "title")) {
     defs.unshift({ id: "p_title", name: "Nome", type: "title", order: -1, width: 320 });
   }
@@ -92,7 +85,6 @@ interface NotionPropertyValue {
   [key: string]: unknown;
 }
 
-/** Converts one Notion page's properties into the app row `values` map. */
 export function mapPropertyValues(
   properties: Record<string, NotionPropertyValue>,
   defs: PropertyDef[]
@@ -142,7 +134,6 @@ function extractValue(value: NotionPropertyValue): unknown {
     case "people":
       return (value.people as { name?: string; id: string }[]).map((p) => p.name ?? p.id);
     case "files":
-      // URLs are replaced by permanent Storage links during the media pass.
       return (value.files as { name: string; file?: { url: string }; external?: { url: string } }[]).map(
         (file) => ({ name: file.name, url: file.file?.url ?? file.external?.url ?? "" })
       );
@@ -165,7 +156,6 @@ function extractValue(value: NotionPropertyValue): unknown {
   }
 }
 
-/** Default views created for every imported database. */
 export function defaultViews(properties: PropertyDef[]) {
   const groupBy = properties.find((property) => property.type === "select");
   return [

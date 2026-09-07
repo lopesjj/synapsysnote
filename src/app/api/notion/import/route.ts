@@ -5,13 +5,6 @@ import { enqueueNotionImport, runNotionImportStep } from "@/lib/notion/server/ru
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-/**
- * POST /api/notion/import
- *
- * Enqueues an import job via Firebase Admin and returns the jobId.
- * The client then pumps steps via PUT /api/notion/import while the wizard
- * listens to the job document for live progress.
- */
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
@@ -56,12 +49,6 @@ export async function POST(request: Request) {
   }
 }
 
-/**
- * PUT /api/notion/import  { workspaceId, jobId }
- *
- * Runs a slice/batch of the import job within an active HTTP connection.
- * Guarantees 100% CPU on Google Cloud Run without hitting serverless timeouts.
- */
 export async function PUT(request: Request) {
   try {
     const body = (await request.json()) as { workspaceId?: string; jobId?: string };

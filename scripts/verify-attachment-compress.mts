@@ -1,9 +1,3 @@
-/**
- * Files at or under 5 MB must not be rewritten. Oversize detection is only
- * for images and PDFs.
- *
- * Run with: npm run verify:attachment-compress
- */
 
 import assert from "node:assert/strict";
 import {

@@ -15,9 +15,6 @@ export async function changeFirebasePassword(currentPassword: string, nextPasswo
   }
 
   try {
-    // A Google account has a verified e-mail but no Firebase password. Linking
-    // one here keeps the same UID and profile, so later e-mail/password and
-    // Google logins are two ways into one account instead of duplicate users.
     if (!current.providerData.some((provider) => provider.providerId === "password")) {
       await linkWithCredential(current, EmailAuthProvider.credential(current.email, nextPassword));
       await current.reload();

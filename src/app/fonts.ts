@@ -1,17 +1,3 @@
-/**
- * Self-hosted font loading.
- *
- * `next/font` downloads each family at build time and emits a preloaded
- * `@font-face` plus a CSS variable, so there is no runtime request to Google
- * and no layout shift. Every family here is referenced by exactly one entry of
- * `EDITOR_FONTS` in `src/lib/typography.ts`; keep the two lists in step.
- *
- * The options have to be written out literally at each call — the Next compiler
- * plugin reads them statically and rejects spread objects or variables.
- *
- * Non-variable families are pinned to the weights the app renders (400 body,
- * 500/600 for headings and UI) instead of shipping the whole range.
- */
 
 import {
   Crimson_Pro,
@@ -110,7 +96,6 @@ export const ibmPlexMono = IBM_Plex_Mono({
   weight: ["400", "500"],
 });
 
-/** Every font variable, for the `<html>` class list. */
 export const fontVariables = [
   geistSans.variable,
   inter.variable,

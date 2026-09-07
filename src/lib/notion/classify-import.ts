@@ -1,13 +1,5 @@
 import type { AppBlock } from "@/types/models";
 
-/**
- * Decides whether a Notion item should become a notebook (página/caderno) or
- * a note (nota), given children and body content.
- *
- * A container with children and no real body is a notebook: root → página,
- * nested → caderno. A leaf, or anything with real writing, is a nota.
- * Notion databases / CSV exports always stay as notes (or AppDatabase).
- */
 
 const APP_STRUCTURAL = new Set(["child_page", "child_database", "divider"]);
 
@@ -41,7 +33,6 @@ export function shouldImportAsNotebook(input: {
   childCount: number;
   blocks?: AppBlock[];
   notionBlocks?: ReadonlyArray<{ type: string; [key: string]: unknown }>;
-  /** CSV / Notion database — never a notebook. */
   forcePage?: boolean;
 }): boolean {
   if (input.forcePage) return false;
@@ -103,10 +94,6 @@ export function countChildPageBlocks(
   return count;
 }
 
-/**
- * Walks Notion parents and returns the nearest imported notebook and note.
- * Used so a nota lands in its caderno/página and only nests under another nota.
- */
 export function resolveImportPlacement(input: {
   notionId: string;
   parents: Map<string, string | null>;
@@ -166,10 +153,6 @@ function appBlockText(block: AppBlock): string {
   return `${spans} ${extra}`.trim();
 }
 
-/**
- * Notion's Markdown export turns child pages into a list of relative `.md`
- * links. Those are the zip equivalent of `child_page` blocks — not body copy.
- */
 function isChildDocumentLink(block: AppBlock): boolean {
   if (block.type !== "paragraph" && block.type !== "bulleted_list_item") return false;
   const spans = block.richText ?? [];

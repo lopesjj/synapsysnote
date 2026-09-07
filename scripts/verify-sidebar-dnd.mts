@@ -1,14 +1,3 @@
-/**
- * Checks for the sidebar's drag-and-drop resolution.
- *
- * Browser drag automation is unreliable enough that it cannot tell a broken
- * drop from a mis-synthesised gesture, so the decision layer is asserted
- * directly here. The case that motivated it: a notebook drag resolving to a
- * *page* inside the target, because an expanded notebook's page list is far
- * taller than its own header row.
- *
- * Run with: npm run verify:sidebar-dnd
- */
 
 import assert from "node:assert/strict";
 import { encodeId, planSidebarDrop } from "../src/components/layout/sidebar-dnd";
@@ -49,13 +38,6 @@ function page(
   };
 }
 
-/**
- *   work                       personal
- *     plan            (0)        journal   (0)
- *       meeting       (0)
- *       retro         (1)
- *     tasks           (1)
- */
 const snapshot = {
   notebooks: [notebook("work", 0), notebook("personal", 100), notebook("archive", 200)],
   pages: [
@@ -86,8 +68,6 @@ check("a notebook dropped on another notebook nests under it", () => {
 });
 
 check("a notebook dropped on a page reorders to that page's notebook", () => {
-  // The regression: an expanded notebook's pages cover most of its height, so
-  // this is the common outcome of a real notebook drag.
   const plan = planSidebarDrop(nb("archive"), pg("meeting"), snapshot);
   assert.deepEqual(plan, {
     kind: "reorder-notebooks",
@@ -106,7 +86,6 @@ check("a page dropped on a notebook header moves it to that notebook's root", ()
     pageId: "meeting",
     notebookId: "personal",
     parentPageId: null,
-    // Appended after the notebook's existing root pages.
     pageIds: ["journal", "meeting"],
   });
 });
@@ -127,7 +106,6 @@ check("a page dropped on a page in another notebook re-parents and places it", (
     pageId: "journal",
     notebookId: "work",
     parentPageId: "plan",
-    // Lands immediately before the row it was dropped on.
     pageIds: ["meeting", "journal", "retro"],
   });
 });
@@ -161,7 +139,6 @@ check("a page cannot be dropped into its own subtree", () => {
 });
 
 check("a stale materialised path still blocks a cyclic move", () => {
-  // `path` is written asynchronously, so the parent chain has to be walked too.
   const stale = {
     ...snapshot,
     pages: snapshot.pages.map((candidate) =>

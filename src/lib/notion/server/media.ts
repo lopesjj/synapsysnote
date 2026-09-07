@@ -23,11 +23,6 @@ function sanitize(name: string): string {
   );
 }
 
-/**
- * Streams a Notion-hosted asset into Cloud Storage and returns a permanent URL.
- * Falls back to the original URL when Storage is not configured, so the page
- * still imports — the link will expire, which the wizard already warns about.
- */
 export async function rehostNotionFile(input: {
   workspaceId: string;
   jobId: string;
@@ -115,7 +110,6 @@ export async function rehostNotionFile(input: {
       pending: contentType.startsWith("image/") || contentType === "application/pdf",
     };
   } catch {
-    // Storage unavailable — keep the Notion URL so the import still completes.
     return {
       url: input.url,
       name: safeName,

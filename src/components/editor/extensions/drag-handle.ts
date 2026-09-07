@@ -4,14 +4,6 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey, NodeSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 
-/**
- * ETAPA 5 — Lateral drag handles.
- *
- * A single floating control follows the hovered top-level block. Dragging hands
- * a `NodeSelection` slice to ProseMirror's own drag machinery, so drop
- * positions, undo and collaborative mapping all keep working. The `+` button
- * inserts an empty paragraph right after the hovered block.
- */
 
 const key = new PluginKey("synapsysDragHandle");
 
@@ -32,7 +24,6 @@ function topLevelPosAt(view: EditorView, event: MouseEvent): { pos: number; dom:
     if (!(dom instanceof HTMLElement)) return null;
     return { pos, dom };
   } catch {
-    // Coordinates outside any resolvable node (gaps, decorations).
     return null;
   }
 }
@@ -127,8 +118,6 @@ export const DragHandle = Extension.create({
 
           const parent = view.dom.parentElement;
           if (parent) {
-            // The handle is absolutely positioned against this element, so it
-            // must establish a containing block.
             if (getComputedStyle(parent).position === "static") parent.style.position = "relative";
             parent.appendChild(container);
           }

@@ -5,11 +5,6 @@ import * as logger from "firebase-functions/logger";
 import { assertWorkspaceEditor, bucket, db, pagesRef } from "../lib/firebase";
 import type { AppBlock } from "../types";
 
-/**
- * Trash retention: pages soft-deleted more than 30 days ago are removed for
- * good, together with any Storage object they own. Version snapshots follow the
- * same window.
- */
 
 const REGION = process.env.FUNCTIONS_REGION || "us-central1";
 const RETENTION_DAYS = Number(process.env.TRASH_RETENTION_DAYS ?? 30);
@@ -40,7 +35,6 @@ export const purgeExpiredTrash = onSchedule(
   }
 );
 
-/** Immediate hard delete requested from the trash screen. */
 export const purgePage = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login obrigatório");
   const { workspaceId, pageId } = request.data as { workspaceId: string; pageId: string };
@@ -68,7 +62,6 @@ export const purgePage = onCall({ region: REGION }, async (request) => {
   return { ok: true };
 });
 
-/** Restores a page and clears its deletion timestamp. */
 export const restorePage = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login obrigatório");
   const { workspaceId, pageId } = request.data as { workspaceId: string; pageId: string };

@@ -1,4 +1,3 @@
-/** How long a "keep me signed in" session lasts. */
 export const REMEMBER_DAYS = 7;
 
 const REMEMBER_MS = REMEMBER_DAYS * 24 * 60 * 60 * 1000;
@@ -42,7 +41,6 @@ export function isRememberExpired(): boolean {
   return until !== null && until <= Date.now();
 }
 
-/** Legacy infinite sessions get a fresh 7-day window instead of being dropped. */
 export function adoptLegacySession() {
   if (readUntil() !== null) return;
   markRemembered(true);

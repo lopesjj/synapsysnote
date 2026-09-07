@@ -7,7 +7,6 @@ export type CoverPreset = {
   style?: CSSProperties;
 };
 
-/** Stored as `coverUrl` so existing teal/dusk/forest/sand/ink ids keep working. */
 export const COVER_PRESETS: CoverPreset[] = [
   {
     id: "cover:teal",

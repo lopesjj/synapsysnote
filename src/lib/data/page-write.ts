@@ -2,10 +2,6 @@ import type { AppBlock, Page } from "@/types/models";
 
 const IGNORED_KEYS = new Set(["updatedAt", "updatedBy", "id"]);
 
-/**
- * TipTap mints a new block id on every serialize. Comparing without those ids
- * keeps a no-op save from rewriting the page (and bumping `updatedAt`).
- */
 export function stripBlockIds(blocks: AppBlock[]): unknown[] {
   return blocks.map(({ id: _id, children, ...rest }) => ({
     ...rest,
@@ -22,7 +18,6 @@ export function canonicalizePagePatch(patch: Partial<Page> | Record<string, unkn
   return out;
 }
 
-/** True when every field in `patch` already matches `baseline`. */
 export function pagePatchIsNoop(
   baseline: Partial<Page> | Record<string, unknown>,
   patch: Partial<Page> | Record<string, unknown>

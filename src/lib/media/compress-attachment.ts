@@ -14,11 +14,6 @@ export function replaceExtension(name: string, ext: string): string {
 const MAX_WEB_EDGE = 2048;
 const HIGH_QUALITY = 0.86;
 
-/**
- * Otimiza imagens para carregamento ultrarrápido na web sem qualquer perda perceptível
- * de fidelidade visual (limite de 2048px de resolução e compressão de alta qualidade 86%).
- * Imagens leves (< 600 KB) e GIFs/SVGs são preservados intactos.
- */
 export async function optimizeImageForFastLoad(file: File): Promise<File> {
   if (file.type === "image/gif" || file.type === "image/svg+xml") {
     return file;
@@ -55,10 +50,6 @@ export async function optimizeImageForFastLoad(file: File): Promise<File> {
   }
 }
 
-/**
- * Images and PDFs over 5 MB are reduced in a loop until they fit (or a
- * safety floor is hit). Smaller files and other types pass through.
- */
 export async function prepareEditorAttachment(file: File): Promise<File> {
   if (file.type.startsWith("image/")) {
     const optimized = await optimizeImageForFastLoad(file);

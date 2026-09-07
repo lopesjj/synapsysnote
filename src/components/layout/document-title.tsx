@@ -73,8 +73,6 @@ export function useDocumentTitle() {
       if (document.title !== resolved) document.title = resolved;
     };
     apply();
-    // Next replaces the <title> node on navigation. Watch the head so we
-    // keep the suffix after the pipe instead of falling back to the app name.
     const observer = new MutationObserver(apply);
     observer.observe(document.head, {
       childList: true,

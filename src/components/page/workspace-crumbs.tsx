@@ -12,10 +12,6 @@ import type { Notebook, Page } from "@/types/models";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { useUiStore } from "@/lib/store/ui-store";
 
-/**
- * Clickable trail for a notebook or a note: every ancestor caderno and
- * ancestor page is a link so the header can walk the hierarchy.
- */
 export function WorkspaceCrumbs({
   notebook,
   page,
@@ -29,8 +25,6 @@ export function WorkspaceCrumbs({
   const { canBack, canForward, goBack, goForward } = useNavArrows();
 
   const notebookTrail = notebook ? notebookAncestors(notebooks, notebook.id) : [];
-  // On a notebook page the last ancestor is the current caderno — it is shown
-  // as `currentLabel`, not as a second crumb. On a note every caderno is a link.
   const linkedNotebooks = page ? notebookTrail : notebookTrail.slice(0, -1);
   const pageTrail = page
     ? page.path
@@ -122,7 +116,7 @@ export function WorkspaceCrumbs({
         </Tooltip>
       </div>
 
-      {/* Em telas sm+ exibe o trail completo de crumbs */}
+      
       {crumbs.map((crumb, index) => {
         const label = crumb.kind === "notebook" ? crumb.item.name : crumb.item.title || "Sem título";
         const icon =
@@ -154,7 +148,7 @@ export function WorkspaceCrumbs({
 
       {currentLabel ? (
         <span className="flex min-w-0 items-center gap-1.5">
-          {/* Separador só aparece no sm+ junto com os crumbs intermediários */}
+          
           {crumbs.length ? <span className={cn(slash, "hidden sm:inline")}>/</span> : null}
           {notebook && !page ? (
             <WorkspaceIcon icon={notebook.emoji} fallback="📓" size={13} />

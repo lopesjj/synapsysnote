@@ -110,8 +110,6 @@ export default function LandingPage() {
       const existing = await loadUserProfile(signedIn.uid);
       if (!profileNeedsCompletion(signedIn, existing)) navigateTo(appHref("/home"), router);
     } catch (error) {
-      // The OAuth guard rejects e-mails without an account; that needs an
-      // explanation rather than a generic failure toast.
       toast.error(error instanceof Error ? error.message : "Falha na autenticação", {
         duration: 7000,
       });

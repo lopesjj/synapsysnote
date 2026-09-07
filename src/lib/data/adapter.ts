@@ -25,27 +25,13 @@ export interface CreateImportJobInput {
   selection: { notionIds: string[]; importAll: boolean };
   targetNotebookId: string | null;
   options: ImportJob["options"];
-  /** Titles resolved from the wizard tree so progress rows render immediately. */
   items: { notionId: string; title: string; type: "page" | "database" }[];
 }
 
-/**
- * ETAPA 2 — Storage-agnostic contract.
- *
- * Two implementations satisfy it:
- *   • `FirestoreAdapter` — production: onSnapshot listeners, offline cache,
- *     Cloud Functions for the heavy lifting.
- *   • `LocalAdapter` — zero-credential demo: same reactive semantics backed by
- *     localStorage, with a simulated import worker so the whole Notion flow can
- *     be exercised end to end before Firebase is provisioned.
- *
- * The UI only ever talks to this interface.
- */
 export interface DataAdapter {
   readonly mode: "firestore" | "local";
   readonly workspaceId: string;
 
-  /** Creates the workspace + membership if they do not exist yet. */
   ensureWorkspace(): Promise<void>;
 
   subscribeNotebooks(cb: (notebooks: Notebook[]) => void): Unsubscribe;
@@ -85,7 +71,6 @@ export interface DataAdapter {
   upsertRow(databaseId: string, row: Partial<DatabaseRow> & { id?: string }): Promise<DatabaseRow>;
   deleteRow(databaseId: string, rowId: string): Promise<void>;
 
-  /** Import Wizard step 1: read the shared Notion tree. */
   fetchNotionTree(): Promise<NotionTreeNode[]>;
   createImportJob(input: CreateImportJobInput): Promise<string>;
   resumeImportJob?(jobId: string): Promise<void>;
@@ -94,15 +79,10 @@ export interface DataAdapter {
   connectNotion(): Promise<{ redirectUrl: string } | { connected: NotionIntegration }>;
   disconnectNotion(): Promise<void>;
 
-  /** Voice notes: persists audio and requests transcription. */
   saveAudioNote(pageId: string, blob: Blob, durationSeconds: number): Promise<void>;
-  /** Re-run Gemini on a voice note that is still `pending` (or failed). */
   retryMediaProcessing(pageId: string, storagePath: string): Promise<void>;
-  /** Attachments: uploads the file and requests OCR when it is an image/PDF. */
   saveAttachment(pageId: string, file: File): Promise<void>;
-  /** Uploads an attachment to storage, returning its URL and storage path. */
   uploadAttachment(pageId: string, file: File): Promise<{ url: string; storagePath?: string }>;
 
-  /** Page/notebook icon image — stored like other uploads, URL written on the doc. */
   uploadWorkspaceIcon(file: File): Promise<string>;
 }

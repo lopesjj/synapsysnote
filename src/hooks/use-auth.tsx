@@ -65,16 +65,13 @@ export interface AppUser {
   email: string;
   displayName: string;
   photoURL: string | null;
-  /** Provider ids linked to the account (`password`, `google.com`, `github.com`). */
   providers: string[];
 }
 
 interface AuthContextValue {
   user: AppUser | null;
   loading: boolean;
-  /** True only while a successful logout is navigating away from the app. */
   loggingOut: boolean;
-  /** "firebase" when credentials are present, "demo" for the local fallback. */
   mode: "firebase" | "demo";
   signInWithProvider: (provider: OAuthProviderId, remember?: boolean) => Promise<AppUser>;
   signInWithEmail: (email: string, password: string, remember?: boolean) => Promise<AppUser>;
@@ -111,7 +108,6 @@ function clearLogoutIntent(): void {
   window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash}`);
 }
 
-/** `useSyncExternalStore` requires a stable snapshot reference between store updates. */
 let demoSnapshotRaw: string | null = null;
 let demoSnapshot: AppUser | null = null;
 
@@ -153,9 +149,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<AppUser | null>(null);
   const [firebaseLoading, setFirebaseLoading] = useState(configured);
   const [loggingOut, setLoggingOut] = useState(false);
-  // Firebase emits an auth change before the interactive login function
-  // returns. Keep that temporary state out of the UI until the cross-host
-  // session cookie is ready, otherwise / can jump to app too early.
   const interactiveSignIn = useRef(false);
 
   useEffect(() => {
@@ -169,9 +162,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         firebaseAuth(),
       ]);
       if (cancelled) return;
-      // Firebase persistence is isolated by origin. When logout starts on
-      // `app`, this second pass on the apex clears its own SDK session before
-      // the landing page can see the old user and redirect back to /home.
       if (hasLogoutIntent()) {
         suppressSessionHydrate();
         await clearCrossHostSession().catch(() => {});
@@ -231,9 +221,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [configured]);
 
-  // A signed-in Firebase account always wins; the demo user is the fallback so
-  // "explore without an account" keeps working even on a configured deployment
-  // (the data provider then routes writes to the local adapter).
   const user = configured ? firebaseUser ?? demoUser : demoUser;
   const loading = configured ? firebaseLoading && !demoUser : false;
 
@@ -271,18 +258,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const credential = await signInWithPopup(auth, provider);
           authenticated = true;
 
-          /**
-           * Federated sign-in must not silently provision accounts: the product
-           * rule is that an e-mail has to exist in Authentication before any
-           * OAuth provider can be used with it. Firebase creates the account as
-           * part of the popup, so the only reliable signal is `isNewUser` — when
-           * it is set we roll the account back and refuse the session.
-           */
           if (getAdditionalUserInfo(credential)?.isNewUser) {
             try {
               await deleteUser(credential.user);
             } catch {
-              // Deletion can require a fresh token; signing out still denies access.
               await signOut(auth);
             }
             throw createAuthError("oauth-unregistered");
@@ -293,8 +272,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return next;
         } catch (error) {
           if (authenticated) {
-            // The provider is active at this point. Roll it back when the
-            // parent-domain handoff fails so no partial login reaches `app`.
             suppressSessionHydrate();
             await clearCrossHostSession().catch(() => {});
             await signOut(auth).catch(() => {});
@@ -361,7 +338,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ]);
         try {
           const cred = await createUserWithEmailAndPassword(auth, email, password);
-          // Written before the first render of /app so the greeting has a name.
           await updateProfile(cred.user, { displayName: name });
           const next = { ...toAppUser(cred.user), displayName: name };
           await completeUserRegistration({
@@ -441,7 +417,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
         } catch (error) {
           const mapped = toAuthError(error);
-          // Do not reveal whether the address has an account.
           if (mapped.reason === "invalid-credentials") return;
           throw mapped;
         }
@@ -496,8 +471,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
 
       async signOut() {
-        // A failed cookie delete must not look like a completed logout: the
-        // app host would otherwise restore that server session on reload.
         setLoggingOut(true);
         try {
           await clearCrossHostSession();

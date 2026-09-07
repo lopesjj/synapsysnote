@@ -23,10 +23,6 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, Tabs, TabsList, TabsTrigger } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 
-/**
- * ETAPA 6 — Flexible database surface: Table and Kanban over the same rows,
- * with inline editing everywhere and drag-and-drop between Kanban columns.
- */
 export function DatabaseView({ database }: { database: AppDatabase }) {
   const { adapter } = useWorkspace();
   const [view, setView] = useState<"table" | "kanban">(database.views[0]?.type === "kanban" ? "kanban" : "table");
@@ -98,7 +94,6 @@ export function DatabaseView({ database }: { database: AppDatabase }) {
   );
 }
 
-/* ---------------------------------------------------------------- Table view */
 
 function TableView({
   database,
@@ -176,7 +171,6 @@ function TableView({
   );
 }
 
-/* --------------------------------------------------------------- Kanban view */
 
 function KanbanView({
   database,

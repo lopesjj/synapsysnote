@@ -15,14 +15,8 @@ import { currentPreferences, useUiStore } from "@/lib/store/ui-store";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "./use-auth";
 
-/** How long to coalesce preference changes before writing the profile document. */
 const PREFERENCE_WRITE_DELAY = 900;
 
-/**
- * Loads `users/{uid}` (creating it on first sign-in) through TanStack Query.
- * The profile is the source of truth for the name shown in the UI and for the
- * preferences that must survive a device change.
- */
 export function useUserProfile() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -30,7 +24,6 @@ export function useUserProfile() {
   const query = useQuery<UserProfile | null>({
     queryKey: queryKeys.userProfile(user?.uid ?? "anonymous"),
     enabled: Boolean(user),
-    // The profile rarely changes and every mutation updates the cache directly.
     staleTime: 5 * 60_000,
     queryFn: async () => {
       if (!user) return null;
@@ -68,14 +61,6 @@ export function useUserProfile() {
   return { profile: query.data ?? null, loading: query.isLoading, rename, complete };
 }
 
-/**
- * Two-way bridge between the profile document and the Zustand UI store.
- *
- * On sign-in the stored preferences are pushed into the store (so a new device
- * inherits the layout); afterwards every local change is written back debounced.
- * The initial hydration is guarded by a ref so it can never be mistaken for a
- * user edit and echo straight back to Firestore.
- */
 export function useUserPreferencesSync(): void {
   const { user } = useAuth();
   const { profile } = useUserProfile();
@@ -96,15 +81,11 @@ export function useUserPreferencesSync(): void {
   }, [hydratePreferences, profile, setTheme, theme, user]);
 
   useEffect(() => {
-    // Only write once the profile has been hydrated, otherwise the first render
-    // would race `ensureUserProfile` and overwrite the stored preferences with
-    // whatever defaults this device happens to have.
     if (!user || hydratedFor.current !== user.uid) return;
 
     const schedule = () => {
       const preferences: UserPreferences = { ...currentPreferences(), theme };
       const serialized = JSON.stringify(preferences);
-      // The store also holds transient flags (open dialogs); ignore those.
       if (serialized === lastWritten.current) return;
 
       if (timer.current) clearTimeout(timer.current);

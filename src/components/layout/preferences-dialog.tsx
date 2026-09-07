@@ -30,13 +30,6 @@ import {
 import { fontById, fontsByCategory } from "@/lib/typography";
 import { cn, isMac } from "@/lib/utils";
 
-/**
- * Preferences panel (⌘,).
- *
- * Everything here writes to the Zustand store, which persists locally and is
- * mirrored to `users/{uid}.preferences` — so the choices follow the account
- * rather than the browser.
- */
 export function PreferencesDialog({
   open,
   onOpenChange,
@@ -334,8 +327,6 @@ function ProfileSection() {
   const { user, mode } = useAuth();
   const { profile, rename } = useUserProfile();
 
-  // Only the user's edit is state; the field itself falls back to the profile,
-  // which arrives asynchronously and must not be copied into state.
   const [draft, setDraft] = useState<string | null>(null);
   const current = profile?.displayName ?? user?.displayName ?? "";
   const name = draft ?? current;

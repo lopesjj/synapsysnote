@@ -8,11 +8,6 @@ import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button";
 import { formatDuration } from "@/lib/utils";
 
-/**
- * Evernote-style voice capture. Records with MediaRecorder, shows a live level
- * meter, and hands the blob to the adapter — which uploads it to Cloud Storage
- * and asks Gemini for a transcript plus summary.
- */
 export function AudioRecorder({
   open,
   onOpenChange,

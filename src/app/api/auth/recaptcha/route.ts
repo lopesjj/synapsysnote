@@ -3,11 +3,6 @@ import { assessRecaptchaToken, verifyRecaptchaSecret } from "@/lib/recaptcha/ass
 
 export const runtime = "nodejs";
 
-/**
- * POST /api/auth/recaptcha
- *
- * Classic siteverify first, then Enterprise CreateAssessment.
- */
 export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => ({}))) as { token?: string };

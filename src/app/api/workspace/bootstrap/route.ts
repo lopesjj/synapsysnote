@@ -3,12 +3,6 @@ import { jsonError } from "@/lib/api/errors";
 
 export const runtime = "nodejs";
 
-/**
- * POST /api/workspace/bootstrap
- *
- * Provisions the signed-in user's workspace and owner membership through the
- * Admin SDK so the first write is never rejected by security rules.
- */
 export async function POST(request: Request) {
   try {
     const user = await requireUser(request);

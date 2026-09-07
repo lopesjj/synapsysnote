@@ -25,16 +25,6 @@ interface NotionTokenResponse {
   error_description?: string;
 }
 
-/**
- * ETAPA 3.1 — OAuth 2.0 callback.
- *
- * Exchanges the authorization code for a bot token, encrypts it and writes it to
- * `/workspaces/{workspaceId}/integrations/notion`. The document is written with
- * the Admin SDK because the security rules deny every client write on that path;
- * the ciphertext lives in the `secure` subcollection, which is denied even for
- * reads, so the browser can render connection status without ever seeing the
- * credential.
- */
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const integrationsUrl = (query?: { error?: string; connected?: string }) => {
@@ -118,7 +108,6 @@ export async function GET(request: Request) {
       { merge: true }
     );
 
-    // Ciphertext is isolated in a subcollection that no client rule can read.
     tx.set(integrationRef.collection("secure").doc("token"), {
       accessTokenCipher: encryptToken(payload.access_token),
       rotatedAt: FieldValue.serverTimestamp(),

@@ -4,12 +4,6 @@ import { clearSessionCookie, sessionExpiresInMs, setSessionCookie } from "@/lib/
 
 export const runtime = "nodejs";
 
-/**
- * POST /api/auth/session
- *
- * Exchanges a Firebase ID token for a session cookie scoped to the parent
- * domain so `synapsysnt.com.br` and `app.synapsysnt.com.br` share the login.
- */
 export async function POST(request: Request) {
   try {
     if (!isAdminConfigured()) {

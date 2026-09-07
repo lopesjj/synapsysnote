@@ -1,12 +1,3 @@
-/**
- * Public Firebase web config. Safe to import from any client component — this
- * file must never import the Firebase SDK, so the landing page stays light.
- *
- * The values below are the Web SDK keys of project `synapsysnote`. They are
- * designed to live in the browser; access is enforced by Auth authorized
- * domains plus `firestore.rules` / `storage.rules`. Environment variables
- * override the defaults so emulators or another project can take over.
- */
 
 export const SYNAPSYS_FIREBASE_WEB = {
   apiKey: "AIzaSyCohAmoFuvjw-OXao3a_9yn0b-H22reprw",

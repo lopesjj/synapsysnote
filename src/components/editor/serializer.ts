@@ -2,13 +2,6 @@ import { nanoid } from "nanoid";
 import type { AppBlock, BlockType, RichTextSpan } from "@/types/models";
 import { fromTableRows, toTableRows } from "@/lib/data/table-rows";
 
-/**
- * ETAPA 5 — Bridge between the storage format (`AppBlock[]`, which is also the
- * Notion conversion target) and the ProseMirror document TipTap edits.
- *
- * Keeping the persisted shape independent from the editor's schema means the
- * import pipeline, search indexer and any future editor share one contract.
- */
 
 type JSONContent = {
   type?: string;
@@ -18,7 +11,6 @@ type JSONContent = {
   marks?: { type: string; attrs?: Record<string, unknown> }[];
 };
 
-/* ----------------------------- inline: app -> tiptap ---------------------- */
 
 function spansToInline(spans: RichTextSpan[] | undefined): JSONContent[] {
   if (!spans?.length) return [];
@@ -59,7 +51,6 @@ function spansToInline(spans: RichTextSpan[] | undefined): JSONContent[] {
   return out;
 }
 
-/* ----------------------------- inline: tiptap -> app ---------------------- */
 
 function inlineToSpans(content: JSONContent[] | undefined): RichTextSpan[] {
   if (!content?.length) return [];
@@ -103,7 +94,6 @@ function inlineToSpans(content: JSONContent[] | undefined): RichTextSpan[] {
   return spans;
 }
 
-/* ------------------------------ blocks: app -> tiptap --------------------- */
 
 const LIST_WRAPPERS: Partial<Record<BlockType, { wrapper: string; item: string }>> = {
   bulleted_list_item: { wrapper: "bulletList", item: "listItem" },
@@ -267,7 +257,6 @@ export function blocksToNodes(blocks: AppBlock[]): JSONContent[] {
     const listConfig = LIST_WRAPPERS[block.type];
 
     if (listConfig) {
-      // Collapse a run of sibling list blocks into a single list node.
       const items: JSONContent[] = [];
       while (index < blocks.length && blocks[index].type === block.type) {
         const current = blocks[index];
@@ -299,7 +288,6 @@ export function blocksToDoc(blocks: AppBlock[]): JSONContent {
   return { type: "doc", content: content.length ? content : [{ type: "paragraph" }] };
 }
 
-/* ------------------------------ blocks: tiptap -> app --------------------- */
 
 function nodeToBlocks(node: JSONContent): AppBlock[] {
   const id = () => `blk_${nanoid(8)}`;
@@ -432,7 +420,6 @@ export function docToBlocks(doc: JSONContent): AppBlock[] {
   return (doc.content ?? []).flatMap(nodeToBlocks);
 }
 
-/** Flattened text used for the client index, previews and embeddings. */
 export function blocksToPlainText(blocks: AppBlock[]): string {
   const out: string[] = [];
   const walk = (list: AppBlock[]) => {
@@ -454,7 +441,6 @@ export function blocksToPlainText(blocks: AppBlock[]): string {
   return out.filter(Boolean).join("\n");
 }
 
-/** Page ids referenced by @-mentions — the source of truth for backlinks. */
 export function collectMentionIds(blocks: AppBlock[]): string[] {
   const ids = new Set<string>();
   const walk = (list: AppBlock[]) => {

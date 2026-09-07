@@ -1,13 +1,5 @@
 import tippy, { type Instance as TippyInstance, type Props as TippyProps } from "tippy.js";
 
-/**
- * Shared Tippy mount for `/` and `@` suggestion lists.
- *
- * The lists already draw their own chrome, so the box is unstyled — we only
- * need Tippy for positioning. `clientRect` is sometimes missing on the first
- * `onStart` (the caret has not been measured yet); callers should call
- * `ensureSuggestionPopup` again from `onUpdate`.
- */
 export function ensureSuggestionPopup(
   popup: TippyInstance | null,
   getRect: (() => DOMRect) | null | undefined,

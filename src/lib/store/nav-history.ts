@@ -13,10 +13,6 @@ interface NavHistoryState {
   forward: () => string | null;
 }
 
-/**
- * In-session trail of workspace routes so the header can step to the last
- * open note or caderno without relying on the browser's mixed history.
- */
 export const useNavHistory = create<NavHistoryState>((set, get) => ({
   stack: [],
   index: -1,

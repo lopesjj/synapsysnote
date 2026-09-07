@@ -54,7 +54,6 @@ for (const language of CODE_LANGUAGES) {
   for (const alias of language.aliases ?? []) ALIAS_TO_ID[alias] = language.id;
 }
 
-/** highlight.js grammar id used for a catalog / user-facing id. */
 const HIGHLIGHT_ID: Record<string, string> = {
   html: "xml",
   bash: "bash",
@@ -104,10 +103,6 @@ function heuristicLanguage(code: string): string | null {
   return null;
 }
 
-/**
- * Guess the language from tags, shebangs, structure and highlight.js grammars.
- * Returns plaintext when the snippet is too short or ambiguous.
- */
 export function detectCodeLanguage(code: string): { language: string; confidence: number } {
   const sample = code.trim();
   if (sample.length < 8) return { language: "plaintext", confidence: 0 };

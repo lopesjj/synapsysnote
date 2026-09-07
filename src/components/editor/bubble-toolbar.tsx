@@ -20,11 +20,6 @@ import { HIGHLIGHT_COLORS, TEXT_COLORS, type PaletteColor } from "./editor-color
 
 type Panel = "turn" | "color" | "highlight" | "link" | null;
 
-/**
- * Keep the editor selection when interacting with the floating toolbar.
- * Without this, the click collapses the range and TipTap hides the menu
- * before the color/format command can run.
- */
 function keepSelection(event: React.MouseEvent) {
   event.preventDefault();
 }
@@ -58,10 +53,6 @@ function SwatchGrid({
   );
 }
 
-/**
- * Floating format toolbar over a text selection. Color and highlight live in
- * inline panels (not portaled menus) so the selection stays intact.
- */
 export function BubbleToolbar({ editor }: { editor: Editor }) {
   const [panel, setPanel] = useState<Panel>(null);
   const [linkValue, setLinkValue] = useState("");

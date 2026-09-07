@@ -1,18 +1,10 @@
 import { cn } from "@/lib/utils";
 
-/**
- * Synapsys Note brand lockups.
- *
- * The mark sits beside the wordmark by default. `vertical` stacks them for
- * rare tight spots; `reversed` flips the reading order.
- */
 
-/** Intrinsic aspect ratio of the wordmark asset. */
 const WORDMARK_RATIO = 299 / 874;
 
 export type LogoOrientation = "horizontal" | "vertical";
 
-/** Mark size shared by the expanded lockup and the collapsed sidebar rail. */
 export const SIDEBAR_MARK_SIZE = 42;
 
 export function SynapsysMark({
@@ -52,24 +44,13 @@ function Wordmark({ width, className }: { width: number; className?: string }) {
 
 interface LockupProps {
   className?: string;
-  /** Height of the symbol in pixels; the lettering is scaled to match. */
   size?: number;
   orientation?: LogoOrientation;
-  /** Puts the lettering before the symbol (right-to-left, or text above). */
   reversed?: boolean;
-  /** Hides the lettering — used by the collapsed sidebar rail. */
   markOnly?: boolean;
-  /**
-   * Lettering height as a fraction of the mark. App chrome stays compact
-   * (~0.78); the landing lockup uses a higher value so both sit as one mark.
-   */
   letteringScale?: number;
 }
 
-/**
- * The complete lockup. `SynapsysWordmark` and `SynapsysLockup` below are thin
- * presets over this component so call sites stay readable.
- */
 function letteringWidthFor(size: number, vertical: boolean, scale = 0.78) {
   return vertical ? Math.round(size * 1.55) : Math.round((size * scale) / WORDMARK_RATIO);
 }
@@ -103,7 +84,6 @@ export function SynapsysLogo({
   );
 }
 
-/** Compact horizontal lockup for app chrome. */
 export function SynapsysWordmark({
   className,
   size = 32,
@@ -113,7 +93,6 @@ export function SynapsysWordmark({
 }: {
   className?: string;
   size?: number;
-  /** Kept for call-site compatibility: `false` renders the symbol alone. */
   subtitle?: boolean;
   orientation?: LogoOrientation;
   reversed?: boolean;
@@ -129,7 +108,6 @@ export function SynapsysWordmark({
   );
 }
 
-/** Sidebar lettering only — same size as the original lockup, never scales with width. */
 export function SynapsysLettering({
   className,
   size = SIDEBAR_MARK_SIZE,
@@ -140,7 +118,6 @@ export function SynapsysLettering({
   return <Wordmark width={letteringWidthFor(size, false)} className={className} />;
 }
 
-/** Large horizontal lockup for the landing hero. */
 export function SynapsysLockup({
   className,
   size = 88,

@@ -123,7 +123,6 @@ export function IconPicker({
   );
 }
 
-/** File input lives outside the dropdown so choosing a file still applies after the menu closes. */
 export function IconPickerMenu({
   trigger,
   icons,

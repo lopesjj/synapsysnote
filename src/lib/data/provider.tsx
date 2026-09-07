@@ -23,11 +23,6 @@ import { getLocalAdapter } from "./local-adapter";
 import { childrenOf, notebookAncestors } from "./notebook-tree";
 import { compareNatural } from "@/lib/utils";
 
-/**
- * Single place where the app binds to a storage backend. Components consume
- * `useWorkspace()` and never learn whether they are talking to Firestore or to
- * the local demo store.
- */
 
 export interface PageTreeNode {
   page: Page;
@@ -41,7 +36,6 @@ interface WorkspaceContextValue {
   mode: "firestore" | "local";
   notebooks: Notebook[];
   pages: Page[];
-  /** Pages excluding the trash. */
   livePages: Page[];
   trashedPages: Page[];
   databases: AppDatabase[];
@@ -65,7 +59,6 @@ function workspaceIdFor(uid: string): string {
   return `ws_${uid}`;
 }
 
-/** Trash retention required by the spec. */
 export const TRASH_RETENTION_DAYS = 30;
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
@@ -75,7 +68,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [databases, setDatabases] = useState<AppDatabase[]>([]);
   const [importJobs, setImportJobs] = useState<ImportJob[]>([]);
   const [integration, setIntegration] = useState<NotionIntegration | null>(null);
-  /** Which adapter has already delivered its first page snapshot. */
   const [loadedAdapter, setLoadedAdapter] = useState<DataAdapter | null>(null);
 
   const adapter = useMemo<DataAdapter>(() => {
@@ -135,8 +127,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (!byParent.has(key)) byParent.set(key, []);
         byParent.get(key)!.push(page);
       }
-      // `order` is what sidebar drag-and-drop writes, so it has to win; title
-      // is only the tie-breaker for pages that have never been reordered.
       const build = (parentId: string | null, depth: number): PageTreeNode[] =>
         (byParent.get(parentId) ?? [])
           .sort((a, b) => a.order - b.order || compareNatural(a.title, b.title))

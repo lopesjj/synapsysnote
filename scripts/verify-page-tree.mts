@@ -1,25 +1,9 @@
-/**
- * Checks that moving a page carries its whole subtree with it.
- *
- * `Page.path` and `Page.notebookId` are derived data. The sidebar builds its
- * tree by grouping on `notebookId` and `parentPageId`, so a descendant left
- * behind in the old notebook silently re-roots itself there — the subtree looks
- * like it vanished from the notebook it was dragged into.
- *
- * Exercises the real `LocalAdapter` against a stub localStorage rather than a
- * mock, so the assertions cover the code the demo mode actually runs.
- *
- * Run with: npm run verify:page-tree
- */
 
 import assert from "node:assert/strict";
 import { rebasePath } from "../src/lib/data/page-tree";
 import { LocalAdapter } from "../src/lib/data/local-adapter";
 import type { Notebook, Page } from "../src/types/models";
 
-/* -------------------------------------------------------------------------- */
-/* Pure path rebasing                                                          */
-/* -------------------------------------------------------------------------- */
 
 assert.deepEqual(
   rebasePath(["root", "mid", "moved", "child"], "moved", ["newRoot"]),
@@ -38,9 +22,6 @@ assert.deepEqual(
 );
 console.log("  rebasePath: prefix replaced, suffix preserved, unrelated untouched");
 
-/* -------------------------------------------------------------------------- */
-/* The adapter, end to end                                                     */
-/* -------------------------------------------------------------------------- */
 
 function installBrowserStubs() {
   const store = new Map<string, string>();
@@ -54,7 +35,6 @@ function installBrowserStubs() {
       return store.size;
     },
   };
-  // The adapter only reaches for persistence and object URLs.
   Object.assign(globalThis, {
     window: { localStorage, addEventListener() {}, removeEventListener() {}, dispatchEvent() {} },
     localStorage,
@@ -89,7 +69,6 @@ async function main() {
 
   assert.deepEqual(find(grandchild.id).path, [parent.id, child.id], "path is materialised on create");
 
-  /* Move the parent into another notebook. */
   await adapter.movePage(parent.id, { notebookId: destination.id, parentPageId: null });
 
   assert.equal(find(parent.id).notebookId, destination.id, "the moved page changes notebook");
@@ -112,7 +91,6 @@ async function main() {
   assert.equal(find(child.id).parentPageId, parent.id, "parent links are untouched by the move");
   console.log("  movePage: the subtree follows, paths rebased, parent links intact");
 
-  /* Re-parent within the same notebook without naming a notebook. */
   await adapter.movePage(grandchild.id, { parentPageId: parent.id });
 
   assert.equal(
@@ -123,7 +101,6 @@ async function main() {
   assert.deepEqual(find(grandchild.id).path, [parent.id], "re-parenting rebases the path");
   console.log("  movePage: an omitted notebookId is preserved, not cleared");
 
-  /* Cascade delete: a notebook takes its nested cadernos and notes with it. */
   const cascadeRoot = await adapter.createNotebook({ name: "Raiz cascade" });
   const cascadeChild = await adapter.createNotebook({
     name: "Caderno cascade",

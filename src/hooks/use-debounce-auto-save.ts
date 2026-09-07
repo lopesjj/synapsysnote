@@ -5,15 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
 
 interface Options<T> {
-  /** Idle time before a write is issued. */
   delay?: number;
-  /** Hard ceiling: flush even while the user keeps typing. */
   maxWait?: number;
-  /**
-   * Identity of the document being saved. When it changes, the previous
-   * pending write is flushed against the old `onSave` before the new one
-   * starts — navigating between notes must never write page A into page B.
-   */
   resetKey?: string;
   onSave: (value: T) => Promise<void>;
   onError?: (error: unknown) => void;
@@ -33,15 +26,6 @@ function mergePending<T>(current: T | null, next: T): T {
   return next;
 }
 
-/**
- * Editor persistence primitive. Coalesces keystrokes (and undo/redo bursts)
- * into one write, serializes overlapping flushes, retries on failure, and
- * flushes on unmount / tab hide so navigating away never drops the last edit.
- *
- * `onSave` / `onError` are stored in refs so a new arrow on each render cannot
- * retrigger the visibility-change effect — that used to flush on every
- * keystroke and stack identical error toasts.
- */
 export function useDebounceAutoSave<T>({
   delay = 900,
   maxWait = 6000,

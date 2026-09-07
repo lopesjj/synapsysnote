@@ -2,14 +2,6 @@ import type { UserPreferences, UserProfile } from "@/types/models";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
 import { isValidPhoneBR } from "@/lib/phone";
 
-/**
- * `users/{userId}` access layer.
- *
- * Mirrors the two-backend strategy of `DataAdapter`: Firestore when credentials
- * exist, otherwise localStorage so the demo mode keeps working. Profiles are
- * read once per session and written debounced, so a plain module of functions
- * is enough — no realtime subscription is warranted.
- */
 
 const LOCAL_KEY = "synapsys.profile.v1";
 
@@ -30,7 +22,6 @@ export function profileNeedsCompletion(
   return !isValidPhoneBR(profile?.phone ?? "");
 }
 
-/** Demo sessions and unconfigured deployments keep the profile in localStorage. */
 function isLocalProfile(uid: string): boolean {
   return !isFirebaseConfigured() || uid === "demo-user";
 }
@@ -81,7 +72,6 @@ function buildProfile(
   };
 }
 
-/** Reads `users/{uid}` without creating a document. */
 export async function loadUserProfile(uid: string): Promise<UserProfile | null> {
   if (isLocalProfile(uid)) return readLocal(uid);
 
@@ -90,13 +80,6 @@ export async function loadUserProfile(uid: string): Promise<UserProfile | null> 
   return snap.exists() ? (snap.data() as UserProfile) : null;
 }
 
-/**
- * Loads the profile, creating it on first sign-in.
- *
- * The identity fields are refreshed from the auth provider on every call: when
- * someone renames their Google account the workspace should follow, and the
- * `providers` list is what the UI uses to explain which sign-in methods work.
- */
 export async function ensureUserProfile(identity: ProfileIdentity): Promise<UserProfile> {
   const now = Date.now();
 
@@ -118,12 +101,10 @@ export async function ensureUserProfile(identity: ProfileIdentity): Promise<User
 
   const profile = buildProfile(identity, previous, now, completed);
 
-  // merge keeps any field a newer client version may have added.
   await setDoc(ref, profile, { merge: true });
   return profile;
 }
 
-/** Writes the complementary sign-up fields and marks the account complete. */
 export async function completeUserRegistration(identity: ProfileIdentity): Promise<UserProfile> {
   const now = Date.now();
 
@@ -145,7 +126,6 @@ export async function completeUserRegistration(identity: ProfileIdentity): Promi
   return profile;
 }
 
-/** Patches identity fields (used by the "edit profile" dialog). */
 export async function updateUserProfile(
   uid: string,
   patch: Partial<Pick<UserProfile, "displayName" | "photoURL" | "phone" | "providers">>
@@ -160,12 +140,6 @@ export async function updateUserProfile(
   await setDoc(ref, { uid, ...patch, updatedAt: Date.now() }, { merge: true });
 }
 
-/**
- * Persists the preference slice.
- *
- * Written as a nested merge so concurrent sessions editing different keys do
- * not clobber each other's values.
- */
 export async function saveUserPreferences(
   uid: string,
   preferences: UserPreferences

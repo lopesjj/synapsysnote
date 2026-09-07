@@ -1,4 +1,3 @@
-/** ISO 3166-1 alpha-2 codes we render as flag images (Windows shows these as "BR"). */
 export const FLAG_CODES = [
   "BR",
   "PT",

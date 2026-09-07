@@ -27,15 +27,6 @@ import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { cn, compareNatural } from "@/lib/utils";
 import type { Page } from "@/types/models";
 
-/**
- * The note list, in the three shapes the classic apps established: a compact
- * list, a card grid, and the dual pane where the list sits beside a live
- * preview. The chosen layout, sort key and density come from the user's
- * preferences, so this view looks the same on every device.
- *
- * Used by "Todas as notas", by a notebook and by a tag — the only difference
- * between them is the incoming scope.
- */
 
 export interface NotesScope {
   notebookId?: string | null;
@@ -77,8 +68,6 @@ export function NotesExplorer({
   const [notebookFilter, setNotebookFilter] = useState<string | null>(
     scope.notebookId ?? null
   );
-  // Which row the user clicked in the dual pane. The *effective* selection is
-  // derived below, so a filter change cannot leave a stale note on screen.
   const [pickedId, setPickedId] = useState<string | null>(null);
 
   const pages = useMemo(() => {
@@ -104,7 +93,6 @@ export function NotesExplorer({
     return filtered.sort((a, b) => (direction === "asc" ? compare(a, b) : compare(b, a)));
   }, [direction, favoritesOnly, livePages, notebookFilter, query, scope.tag, sort]);
 
-  // Fall back to the first row whenever the picked note is filtered out.
   const selected = pages.find((page) => page.id === pickedId) ?? pages[0] ?? null;
   const selectedId = selected?.id ?? null;
   const activeNotebook = notebooks.find((notebook) => notebook.id === notebookFilter);
@@ -453,11 +441,8 @@ function NoteMeta({ page, className }: { page: Page; className?: string }) {
   );
 }
 
-/** First readable text of a note, taken from the indexed plain text. */
 function excerpt(page: Page, length: number): string {
   const text = page.plainText.replace(/\s+/g, " ").trim();
-  // The title is usually the first line of plainText; drop it so the preview
-  // adds information instead of repeating the heading next to it.
   const withoutTitle = text.startsWith(page.title) ? text.slice(page.title.length).trim() : text;
   return withoutTitle.slice(0, length);
 }

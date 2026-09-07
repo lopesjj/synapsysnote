@@ -1,9 +1,5 @@
 import "server-only";
 
-/**
- * Notion allows ~3 requests/second per integration. Every call in the pipeline
- * goes through this helper, which paces requests and retries on 429/5xx.
- */
 export async function throttled<T>(fn: () => Promise<T>, attempt = 0): Promise<T> {
   try {
     const result = await fn();

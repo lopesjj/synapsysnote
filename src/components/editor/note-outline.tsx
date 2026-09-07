@@ -36,7 +36,6 @@ function activeHeadingPos(editor: Editor, headings: HeadingItem[]): number | nul
   return current;
 }
 
-/** Compact outline in the toolbar so it never steals the reading column. */
 export function NoteOutline({ editor }: { editor: Editor }) {
   useEditorTick(editor);
   const headings = collectHeadings(editor);

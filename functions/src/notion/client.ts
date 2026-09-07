@@ -2,11 +2,6 @@ import { Client } from "@notionhq/client";
 import { integrationRef } from "../lib/firebase";
 import { decryptToken } from "../lib/crypto";
 
-/**
- * Builds an authenticated Notion client for a workspace by decrypting the token
- * stored during the OAuth callback. The ciphertext lives in the `secure`
- * subcollection, unreadable by any client rule.
- */
 export async function getNotionClient(workspaceId: string): Promise<Client> {
   const ref = integrationRef(workspaceId, "notion");
   const [integration, secret] = await Promise.all([
@@ -27,11 +22,6 @@ export async function getNotionClient(workspaceId: string): Promise<Client> {
   });
 }
 
-/**
- * Notion allows ~3 requests/second per integration. Every call in the pipeline
- * goes through this helper, which paces requests and retries on 429/5xx with
- * exponential backoff plus jitter.
- */
 export async function throttled<T>(fn: () => Promise<T>, attempt = 0): Promise<T> {
   try {
     const result = await fn();

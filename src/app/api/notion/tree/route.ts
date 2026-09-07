@@ -6,12 +6,6 @@ import { listNotionTree } from "@/lib/notion/server/tree";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-/**
- * GET /api/notion/tree?workspaceId=…
- *
- * Returns the hierarchical Notion tree for the Import Wizard using the Admin
- * SDK (no Cloud Function required).
- */
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);

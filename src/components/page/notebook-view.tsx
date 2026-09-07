@@ -121,11 +121,6 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     setDropTarget(null);
   };
 
-  // Wired to onDragMove (not onDragOver): onDragOver only fires when the
-  // "over" target itself changes, so during a slow drag the mode computed
-  // the instant you entered a row (often "before", near its top edge) would
-  // otherwise stay frozen even after the cursor reaches the row's center.
-  // onDragMove fires on every pointer movement, so the zone keeps recomputing.
   const onNotebookDragMove = (event: DragMoveEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) {
@@ -145,7 +140,6 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     const overRect = over.rect;
     if (!overRect) return;
 
-    // Coordenada REAL do cursor do usuário para máxima precisão e controle
     const cursorY = pointerYRef.current || (active.rect.current.translated ? active.rect.current.translated.top + active.rect.current.translated.height / 2 : overRect.top + overRect.height / 2);
     const relativeY = (cursorY - overRect.top) / overRect.height;
 
@@ -155,7 +149,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     } else if (relativeY > 0.75) {
       mode = "after";
     } else {
-      mode = "inside"; // 50% central da área do caderno é para Inserir Dentro
+      mode = "inside"; 
     }
 
     dropTargetRef.current = { id: overId, mode };
@@ -183,7 +177,6 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     const target = childNotebooks.find((n) => n.id === targetId);
     if (!dragged || !target) return;
 
-    // INSERIR DENTRO DO CADERNO
     if (targetState.mode === "inside") {
       if (isNotebookDescendant(notebooks, target.id, dragged.id)) {
         toast.error("Não é possível mover um caderno para dentro de seus subcadernos.");
@@ -198,7 +191,6 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
       return;
     }
 
-    // REORDENAR ENTRE CADERNOS
     try {
       const fromIndex = childNotebooks.findIndex((n) => n.id === dragged.id);
       let toIndex = childNotebooks.findIndex((n) => n.id === target.id);
@@ -671,7 +663,7 @@ function NotebookRow({
         !isDropTarget && "hover:bg-[var(--surface-hover)]"
       )}
     >
-      {/* Indicador visual de REORDENAR ACIMA */}
+      
       {isDropTarget && dropMode === "before" && (
         <div className="pointer-events-none absolute inset-x-0 -top-1.5 z-30 flex items-center">
           <div className="h-1 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_10px_var(--accent)]" />
@@ -681,7 +673,7 @@ function NotebookRow({
         </div>
       )}
 
-      {/* Indicador visual de REORDENAR ABAIXO */}
+      
       {isDropTarget && dropMode === "after" && (
         <div className="pointer-events-none absolute inset-x-0 -bottom-1.5 z-30 flex items-center">
           <div className="h-1 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_10px_var(--accent)]" />
@@ -691,7 +683,7 @@ function NotebookRow({
         </div>
       )}
 
-      {/* Indicador visual de INSERIR DENTRO */}
+      
       {isDropTarget && dropMode === "inside" && (
         <div className="pointer-events-none absolute inset-y-1.5 right-3 z-30 flex items-center">
           <span className="flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3.5 py-1.5 text-[12px] font-bold text-white shadow-xl ring-2 ring-white/30 animate-in fade-in zoom-in-95 duration-100">

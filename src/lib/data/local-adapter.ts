@@ -39,13 +39,6 @@ import {
   type ImportRole,
 } from "@/lib/notion/classify-import";
 
-/**
- * ETAPA 2 — Credential-free adapter.
- *
- * Mirrors the Firestore adapter's reactive contract on top of localStorage, and
- * runs an in-browser stand-in for `processNotionImportJob` so the wizard,
- * progress document and converted output behave exactly like production.
- */
 
 const STORAGE_KEY = "synapsys.workspace.v1";
 
@@ -81,11 +74,6 @@ function nowMs() {
   return Date.now();
 }
 
-/**
- * Object URLs die on reload, which would leave demo attachments broken. Small
- * files are inlined as data URLs so they survive; large ones keep the object URL
- * rather than blowing the localStorage quota.
- */
 const INLINE_LIMIT_BYTES = 1_500_000;
 
 async function toPersistableUrl(blob: Blob): Promise<string> {
@@ -113,7 +101,6 @@ export class LocalAdapter implements DataAdapter {
     this.state = this.load();
   }
 
-  /* ----------------------------------------------------------- persistence */
 
   private load(): LocalState {
     if (typeof window !== "undefined") {
@@ -170,7 +157,6 @@ export class LocalAdapter implements DataAdapter {
     /* Demo workspace is seeded in the constructor. */
   }
 
-  /* ------------------------------------------------------------ read paths */
 
   subscribeNotebooks(cb: (notebooks: Notebook[]) => void) {
     return this.subscribe(() => cb([...this.state.notebooks].sort((a, b) => a.order - b.order)));
@@ -194,7 +180,6 @@ export class LocalAdapter implements DataAdapter {
     return this.subscribe(() => cb(this.state.integration));
   }
 
-  /* ----------------------------------------------------------- notebooks */
 
   async createNotebook(input: {
     name: string;
@@ -271,7 +256,6 @@ export class LocalAdapter implements DataAdapter {
     this.emit();
   }
 
-  /* --------------------------------------------------------------- pages */
 
   async createPage(input: CreatePageInput): Promise<Page> {
     const parent = input.parentPageId
@@ -347,7 +331,6 @@ export class LocalAdapter implements DataAdapter {
     for (const { id, order } of updates) await this.updateNotebook(id, { order });
   }
 
-  /** Keeps `backlinks` as the exact inverse of `outgoingLinks`. */
   private reindexBacklinks() {
     const incoming = new Map<string, Set<string>>();
     for (const page of this.state.pages) {
@@ -370,12 +353,8 @@ export class LocalAdapter implements DataAdapter {
       ? this.state.pages.find((p) => p.id === target.parentPageId)
       : null;
     const path = parent ? [...parent.path, parent.id] : [];
-    // An omitted notebookId means "keep it"; spreading `undefined` into the
-    // patch would erase the value instead.
     const notebookId = target.notebookId !== undefined ? target.notebookId : page.notebookId;
 
-    // Descendants carry a materialised path and a denormalised notebookId, so
-    // the whole subtree has to follow the move or it detaches from its parent.
     for (const patch of subtreePatches(this.state.pages, id, path, notebookId)) {
       await this.updatePage(patch.pageId, { path: patch.path, notebookId: patch.notebookId });
     }
@@ -416,7 +395,6 @@ export class LocalAdapter implements DataAdapter {
     this.emit();
   }
 
-  /* ------------------------------------------------------------ versions */
 
   async listVersions(pageId: string): Promise<PageVersion[]> {
     return this.state.versions
@@ -436,7 +414,6 @@ export class LocalAdapter implements DataAdapter {
       label,
       createdAt: nowMs(),
     });
-    // Keep the local demo bounded; production trims by TTL policy instead.
     this.state.versions = this.state.versions.slice(-120);
     this.emit();
   }
@@ -447,7 +424,6 @@ export class LocalAdapter implements DataAdapter {
     await this.updatePage(pageId, { title: version.title, blocks: version.blocks });
   }
 
-  /* ----------------------------------------------------------- databases */
 
   async createDatabase(input: { name: string; notebookId?: string | null }): Promise<AppDatabase> {
     const database: AppDatabase = {
@@ -524,10 +500,8 @@ export class LocalAdapter implements DataAdapter {
     this.emit();
   }
 
-  /* --------------------------------------------------------------- Notion */
 
   async fetchNotionTree(): Promise<NotionTreeNode[]> {
-    // Network shape parity: the wizard shows a skeleton while this resolves.
     await new Promise((resolve) => setTimeout(resolve, 420));
     return NOTION_MOCK_TREE;
   }
@@ -606,12 +580,6 @@ export class LocalAdapter implements DataAdapter {
     this.emit();
   }
 
-  /**
-   * In-browser stand-in for the Cloud Function worker. It walks the selection in
-   * the same order the real pipeline does — discover, convert, rehost media,
-   * write — and updates the job document after every item so the wizard's
-   * real-time listener has something to render.
-   */
   private runSimulatedWorker(jobId: string) {
     const job = this.state.jobs.find((j) => j.id === jobId);
     if (!job) return;
@@ -813,7 +781,6 @@ export class LocalAdapter implements DataAdapter {
     this.timers.set(jobId, setTimeout(step, 900));
   }
 
-  /* ---------------------------------------------------------------- media */
 
   async saveAudioNote(pageId: string, blob: Blob, durationSeconds: number) {
     const page = this.state.pages.find((p) => p.id === pageId);
@@ -837,7 +804,6 @@ export class LocalAdapter implements DataAdapter {
     ];
     await this.updatePage(pageId, { blocks });
 
-    // Stand-in for the Gemini transcription function.
     setTimeout(() => {
       void this.finishDemoTranscript(pageId, blockId);
     }, 2200);
@@ -899,7 +865,6 @@ export class LocalAdapter implements DataAdapter {
     await this.updatePage(pageId, { blocks });
 
     if (!isImage) return;
-    // Stand-in for the Cloud Vision OCR function.
     setTimeout(() => {
       const target = this.state.pages.find((p) => p.id === pageId);
       if (!target) return;

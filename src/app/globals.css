@@ -2,12 +2,6 @@
 @import "katex/dist/katex.min.css";
 @import "tippy.js/dist/tippy.css";
 
-/*
- * Synapsys Note — Design System
- * Teal/navy canvases, hairline borders, generous negative space and the original
- * Synapsys Note lockup (mark left, stacked wordmark right).
- */
-
 @theme {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
@@ -31,7 +25,6 @@
   --ease-luxury: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ---------- Light mode (default) ---------- */
 :root {
   --canvas: #f4f7fa;
   --surface: #ffffff;
@@ -59,7 +52,6 @@
   --nav-row-py: 0.375rem;
 }
 
-/* ---------- Dark mode ---------- */
 .dark {
   --canvas: #07111c;
   --surface: #0d1824;
@@ -171,7 +163,6 @@
     border-color: var(--border);
   }
 
-  /* Subtle top-lit gradient used on hero surfaces and modals. */
   .lux-gradient {
     background-image: radial-gradient(
         120% 100% at 50% -20%,
@@ -186,7 +177,6 @@
     -webkit-user-select: none;
   }
 
-  /* Navy wordmark becomes light on the dark canvas; the colorful mark is untouched. */
   .dark .synapsys-wordmark {
     filter: brightness(0) invert(1);
     opacity: 0.92;
@@ -197,20 +187,11 @@
   }
 }
 
-/*
- * Reading typography.
- *
- * `--font-editor` and `--font-editor-size` are set inline by the app shell from
- * the user's preferences (see `src/lib/typography.ts`). Everything below sizes
- * in `em` so a single font-size change rescales headings, code and callouts
- * proportionally instead of only the body text.
- */
 .reading-surface {
   font-family: var(--font-editor, var(--font-sans));
   font-size: var(--font-editor-size, 1rem);
 }
 
-/* ---------- Editor (ProseMirror) ---------- */
 .synapsys-editor {
   font-family: var(--font-editor, var(--font-sans));
   font-size: var(--font-editor-size, 1rem);
@@ -244,12 +225,10 @@
   hyphens: auto;
 }
 
-/* Word-style first-line indent (≈ 1.25 cm / 0.5"). */
 .synapsys-editor .ProseMirror p[data-indent-first="true"] {
   text-indent: 1.25cm;
 }
 
-/* Word-style progressive line and paragraph indent (≈ 1.25 cm / 0.5" per level). */
 .synapsys-editor .ProseMirror [data-indent="1"] { padding-left: min(1.25cm, 15vw); }
 .synapsys-editor .ProseMirror [data-indent="2"] { padding-left: min(2.5cm, 30vw); }
 .synapsys-editor .ProseMirror [data-indent="3"] { padding-left: min(3.75cm, 45vw); }
@@ -258,7 +237,6 @@
 .synapsys-editor .ProseMirror [data-indent="6"] { padding-left: min(7.5cm, 75vw); }
 .synapsys-editor .ProseMirror [data-indent="7"] { padding-left: min(8.75cm, 80vw); }
 .synapsys-editor .ProseMirror [data-indent="8"] { padding-left: min(10cm, 85vw); }
-
 
 .synapsys-editor .ProseMirror h1 {
   font-size: 1.875em;
@@ -309,7 +287,6 @@
   margin: 1.25rem 0;
 }
 
-/* Consecutive dividers keep the same gap so a run of lines stays even. */
 .synapsys-editor .ProseMirror hr + hr,
 .synapsys-editor .ProseMirror hr:has(+ hr) {
   margin-top: 1.25rem;
@@ -434,13 +411,11 @@
   border-radius: 6px;
 }
 
-/* Image resize handles sit on the photo; keep the node from clipping them. */
 .synapsys-editor .ProseMirror .react-renderer.node-mediaBlock,
 .synapsys-editor .ProseMirror [data-media] {
   overflow: visible;
 }
 
-/* Syntax highlighting (lowlight / highlight.js token classes) */
 .hljs-comment,
 .hljs-quote,
 .hljs-doctag {
@@ -505,7 +480,6 @@
   font-weight: 650;
 }
 
-/* KaTeX inherits app typography rather than its own serif stack. */
 .katex {
   font-size: 1.02em;
 }
@@ -534,7 +508,6 @@
   animation: shimmer 1.8s infinite;
 }
 
-/* Tippy is only used to position slash/mention lists; they draw their own chrome. */
 .tippy-box[data-theme~="synapsys"] {
   background: transparent;
   color: inherit;
@@ -547,12 +520,6 @@
   display: none;
 }
 
-/* ─── Mobile / iOS safe area ─────────────────────────────────────────────── */
-
-/*
- * Oculta scrollbar em dispositivos touch (pointer: coarse).
- * O scroll continua funcionando — só a barra visual é removida.
- */
 @media (pointer: coarse) {
   ::-webkit-scrollbar {
     display: none;
@@ -562,21 +529,15 @@
   }
 }
 
-/*
- * Utilitários de safe-area para notch e home indicator do iOS.
- * Uso: classe `pb-safe`, `pt-safe`, `px-safe` etc.
- */
 .pb-safe  { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
 .pt-safe  { padding-top:    max(0.5rem, env(safe-area-inset-top)); }
 .pl-safe  { padding-left:   max(0.5rem, env(safe-area-inset-left)); }
 .pr-safe  { padding-right:  max(0.5rem, env(safe-area-inset-right)); }
 
-/* Bottom nav container */
 .bottom-nav-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Garante área mínima de toque de 44px em elementos interativos no mobile */
 @media (pointer: coarse) {
   [data-sidebar] a[href],
   [data-sidebar] button {

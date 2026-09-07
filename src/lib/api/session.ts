@@ -37,11 +37,6 @@ export function workspaceIdFor(uid: string): string {
   return `ws_${uid}`;
 }
 
-/**
- * Creates the personal workspace and owner membership when they do not exist
- * yet. Used by both the bootstrap route and the Notion import routes so a first
- * login never hits a permission-denied from the rules.
- */
 export async function ensureWorkspace(user: AuthedUser, requestedId?: string): Promise<string> {
   const workspaceId = requestedId || workspaceIdFor(user.uid);
   const db = adminDb();
@@ -90,7 +85,6 @@ export async function ensureWorkspace(user: AuthedUser, requestedId?: string): P
 
 const LEGACY_INBOX_ID = "nb_inbox";
 
-/** Drops the old bootstrap inbox so it never comes back. */
 async function removeLegacyInbox(wsRef: DocumentReference) {
   const inboxRef = wsRef.collection("notebooks").doc(LEGACY_INBOX_ID);
   const inbox = await inboxRef.get();
@@ -128,7 +122,6 @@ export async function requireWorkspaceEditor(
     .get();
 
   if (!member.exists) {
-    // First call after sign-in: provision then retry.
     await ensureWorkspace(user, workspaceId);
     const again = await adminDb()
       .collection("workspaces")

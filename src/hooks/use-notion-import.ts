@@ -6,18 +6,10 @@ import { useWorkspace } from "@/lib/data/provider";
 import { findNode, flattenTree } from "@/lib/notion/mock-workspace";
 
 export interface ImportSelection {
-  /** Ids explicitly checked by the user (children are resolved on submit). */
   ids: Set<string>;
   importAll: boolean;
 }
 
-/**
- * ETAPA 2 — `useNotionImport`
- *
- * Owns everything the Import Wizard needs: loading the Notion tree, checkbox
- * state with parent/child propagation, job creation and the live progress
- * document produced by the background worker.
- */
 export function useNotionImport() {
   const { adapter, integration, importJobs, activeImportJob, notebooks, livePages, databases } =
     useWorkspace();
@@ -104,7 +96,6 @@ export function useNotionImport() {
     [flat]
   );
 
-  /** Tri-state checkbox support for parents with partially selected children. */
   const stateOf = useCallback(
     (id: string): "checked" | "unchecked" | "indeterminate" => {
       if (selected.has(id)) return "checked";
@@ -150,7 +141,6 @@ export function useNotionImport() {
       }
       setSubmitting(true);
       try {
-        // Import parents before children so `parentPageId` always resolves.
         const ordered = flat.filter((node) => selected.has(node.id));
         const id = await adapter.createImportJob({
           selection: { notionIds: ordered.map((n) => n.id), importAll },
@@ -223,9 +213,7 @@ export function useNotionImport() {
     if (!totalUnits) return 0;
 
     const rawPct = Math.floor((doneUnits / totalUnits) * 100);
-    // Enquanto estiver em andamento (pending, discovering, running), nunca atinge 100% (máximo 99%)
     const runningPct = Math.min(99, Math.max(1, rawPct));
-    // Monotônico: nunca retrocede, sempre progressivo
     maxProgressRef.current = Math.max(maxProgressRef.current, runningPct);
     return maxProgressRef.current;
   }, [job]);

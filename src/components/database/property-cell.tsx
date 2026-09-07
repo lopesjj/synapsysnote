@@ -223,7 +223,6 @@ function DateCell({
   );
 }
 
-/** Inline editor for a single database cell; the type drives the affordance. */
 export function PropertyCell({
   property,
   value,

@@ -1,18 +1,6 @@
 import type { Notebook, Page } from "@/types/models";
 import { childrenOf, isNotebookDescendant, parentIdOf } from "@/lib/data/notebook-tree";
 
-/**
- * Drop resolution for the sidebar tree.
- *
- * Kept apart from the component and free of any dnd-kit import so the
- * decision — "given what was dragged and what it landed on, what should
- * change?" — can be asserted directly. `scripts/verify-sidebar-dnd.mts` covers
- * the cases that are awkward to reproduce by hand, including a notebook landing
- * on a page (which happens constantly, because an expanded notebook's page list
- * is far taller than its own header row).
- *
- * The component's only job is to apply the returned plan through the adapter.
- */
 
 export type DragKind = "notebook" | "page";
 
@@ -34,11 +22,9 @@ export function decodeId(value: string | number): DragId | null {
   return { kind, id: raw.slice(separator + 1) };
 }
 
-/** Order is stored sparsely; a drop renumbers the affected list in fixed steps. */
 export const ORDER_STEP = 100;
 
 export type DropPlan =
-  /** New sibling order for notebooks that share a parent. */
   | { kind: "reorder-notebooks"; notebookIds: string[] }
   /** Notebook moved under another caderno (or back to the root). */
   | {
@@ -63,9 +49,7 @@ export type DropPlan =
   | { kind: "reorder-pages"; pageIds: string[] };
 
 export interface SidebarSnapshot {
-  /** Notebooks in their current display order. */
   notebooks: Notebook[];
-  /** Every page not in the trash. */
   pages: Page[];
 }
 
@@ -76,7 +60,6 @@ function moveItem<T>(items: T[], from: number, to: number): T[] {
   return next;
 }
 
-/** Display order within one parent: explicit order first, title as tie-breaker. */
 function bySiblingOrder(a: Page, b: Page): number {
   return a.order - b.order || a.title.localeCompare(b.title, "pt-BR");
 }
@@ -87,12 +70,9 @@ function siblingsOf(pages: Page[], notebookId: string | null, parentPageId: stri
     .sort(bySiblingOrder);
 }
 
-/** True when `candidate` sits inside `ancestorId`'s subtree. */
 function isDescendant(pages: Page[], candidate: Page, ancestorId: string): boolean {
   if (candidate.path.includes(ancestorId)) return true;
 
-  // `path` is materialised on write and can lag a just-moved page, so walk the
-  // parent chain as well before allowing a re-parent.
   const byId = new Map(pages.map((page) => [page.id, page]));
   const seen = new Set<string>();
   let current = candidate.parentPageId;
@@ -104,11 +84,6 @@ function isDescendant(pages: Page[], candidate: Page, ancestorId: string): boole
   return false;
 }
 
-/**
- * Resolves a drop into the single change it should produce, or `null` when the
- * drop is a no-op (same position, unknown ids, or a move that would put a page
- * inside its own subtree).
- */
 export function planSidebarDrop(
   activeRawId: string | number,
   overRawId: string | number | null | undefined,
@@ -126,9 +101,6 @@ export function planSidebarDrop(
     const dragged = notebooks.find((notebook) => notebook.id === active.id);
     if (!dragged) return null;
 
-    // Collision detection scopes notebook drags to notebooks, but a page target
-    // still resolves cleanly to the notebook holding it rather than dropping
-    // the reorder on the floor.
     const targetNotebookId =
       over.kind === "notebook"
         ? over.id
@@ -143,7 +115,6 @@ export function planSidebarDrop(
     const targetParent = parentIdOf(target);
     const siblings = childrenOf(notebooks, draggedParent);
 
-    // Explicit reorder intent between siblings
     if (intent === "reorder") {
       if (targetParent === draggedParent) {
         const from = siblings.findIndex((notebook) => notebook.id === dragged.id);
@@ -156,7 +127,6 @@ export function planSidebarDrop(
       }
     }
 
-    // Explicit inside intent or dropping directly onto another notebook header
     if (intent === "inside" || over.kind === "notebook") {
       if (draggedParent === target.id) return null;
       const destination = childrenOf(notebooks, target.id).filter(
@@ -196,7 +166,6 @@ export function planSidebarDrop(
   const page = pages.find((candidate) => candidate.id === active.id);
   if (!page) return null;
 
-  /* Dropped on a notebook header: move to that notebook's root. */
   if (over.kind === "notebook") {
     if (page.notebookId === over.id && !page.parentPageId) return null;
 
@@ -214,11 +183,8 @@ export function planSidebarDrop(
 
   const target = pages.find((candidate) => candidate.id === over.id);
   if (!target || target.id === page.id) return null;
-  // Re-parenting a page under its own descendant would detach the subtree.
   if (isDescendant(pages, target, page.id)) return null;
 
-  // Explicit "inside" intent: nest the page as a subpage of the target,
-  // mirroring how a notebook nests under another notebook.
   if (intent === "inside") {
     if (page.notebookId === target.notebookId && page.parentPageId === target.id) return null;
     const destination = siblingsOf(pages, target.notebookId, target.id).filter(
@@ -247,7 +213,6 @@ export function planSidebarDrop(
     };
   }
 
-  // Different parent: land immediately before the row it was dropped on.
   const destination = siblings.filter((sibling) => sibling.id !== page.id);
   const insertAt = destination.findIndex((sibling) => sibling.id === target.id);
   const ordered = destination.map((sibling) => sibling.id);

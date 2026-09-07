@@ -1,26 +1,11 @@
-/**
- * Editorial typography catalogue.
- *
- * Every family is loaded through `next/font` in `src/app/fonts.ts`, which
- * self-hosts the files and exposes each one as a CSS variable. This module is
- * the presentation-side half: the human name, the classification and the
- * one-line note the preferences panel shows so the choice means something.
- *
- * The picker writes `EditorFont.id` into `users/{uid}.preferences.editorFontId`
- * and the shell resolves it to `--font-editor`, which the editor, the note list
- * and the page title all inherit.
- */
 
 export type FontCategory = "sans" | "serif" | "mono";
 
 export interface EditorFont {
   id: string;
-  /** Family name as its designer publishes it. */
   name: string;
   category: FontCategory;
-  /** CSS variable declared by `next/font` plus a matching system fallback. */
   stack: string;
-  /** Why someone would pick this one. */
   note: string;
 }
 
@@ -130,7 +115,6 @@ export function fontById(id: string | undefined): EditorFont {
   return EDITOR_FONTS.find((font) => font.id === id) ?? FALLBACK;
 }
 
-/** Groups the catalogue for the preferences panel, preserving declaration order. */
 export function fontsByCategory(): { category: FontCategory; label: string; fonts: EditorFont[] }[] {
   return (["sans", "serif", "mono"] as FontCategory[]).map((category) => ({
     category,
@@ -139,7 +123,6 @@ export function fontsByCategory(): { category: FontCategory; label: string; font
   }));
 }
 
-/** Max content width of the editor column, per reading-width preference. */
 export const EDITOR_WIDTHS: Record<"narrow" | "normal" | "wide", string> = {
   narrow: "48rem",
   normal: "64rem",
