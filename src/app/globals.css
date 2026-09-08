@@ -544,3 +544,299 @@
     min-height: 44px;
   }
 }
+
+.dark .synapsys-editor [style*="color: #2563EB"],
+.dark .synapsys-editor [style*="color: #2563eb"],
+.dark .synapsys-editor [style*="color: rgb(37, 99, 235)"],
+.dark .synapsys-editor [style*="color:rgb(37,99,235)"],
+.dark .synapsys-editor [color="#2563EB"],
+.dark .synapsys-editor [color="#2563eb"],
+.dark [data-table-block] [style*="color: #2563EB"],
+.dark [data-table-block] [style*="color: #2563eb"],
+.dark [data-table-block] [style*="color: rgb(37, 99, 235)"],
+.dark [data-table-block] [style*="color:rgb(37,99,235)"],
+.dark [data-table-block] [color="#2563EB"],
+.dark [data-table-block] [color="#2563eb"] {
+  color: #60a5fa !important;
+}
+
+.dark .synapsys-editor [style*="color: #DC2626"],
+.dark .synapsys-editor [style*="color: #dc2626"],
+.dark .synapsys-editor [style*="color: rgb(220, 38, 38)"],
+.dark .synapsys-editor [style*="color:rgb(220,38,38)"],
+.dark .synapsys-editor [color="#DC2626"],
+.dark .synapsys-editor [color="#dc2626"],
+.dark [data-table-block] [style*="color: #DC2626"],
+.dark [data-table-block] [style*="color: #dc2626"],
+.dark [data-table-block] [style*="color: rgb(220, 38, 38)"],
+.dark [data-table-block] [style*="color:rgb(220,38,38)"],
+.dark [data-table-block] [color="#DC2626"],
+.dark [data-table-block] [color="#dc2626"] {
+  color: #f87171 !important;
+}
+
+.dark .synapsys-editor [style*="color: #059669"],
+.dark .synapsys-editor [style*="color: rgb(5, 150, 105)"],
+.dark .synapsys-editor [style*="color:rgb(5,150,105)"],
+.dark .synapsys-editor [color="#059669"],
+.dark [data-table-block] [style*="color: #059669"],
+.dark [data-table-block] [style*="color: rgb(5, 150, 105)"],
+.dark [data-table-block] [style*="color:rgb(5,150,105)"],
+.dark [data-table-block] [color="#059669"] {
+  color: #34d399 !important;
+}
+
+.dark .synapsys-editor [style*="color: #4B5563"],
+.dark .synapsys-editor [style*="color: rgb(75, 85, 99)"],
+.dark .synapsys-editor [style*="color:rgb(75,85,99)"],
+.dark .synapsys-editor [color="#4B5563"],
+.dark [data-table-block] [style*="color: #4B5563"],
+.dark [data-table-block] [style*="color: rgb(75, 85, 99)"],
+.dark [data-table-block] [style*="color:rgb(75,85,99)"],
+.dark [data-table-block] [color="#4B5563"] {
+  color: #94a3b8 !important;
+}
+
+.dark .synapsys-editor [style*="color: #92400E"],
+.dark .synapsys-editor [style*="color: rgb(146, 64, 14)"],
+.dark .synapsys-editor [style*="color:rgb(146,64,14)"],
+.dark .synapsys-editor [color="#92400E"],
+.dark [data-table-block] [style*="color: #92400E"],
+.dark [data-table-block] [style*="color: rgb(146, 64, 14)"],
+.dark [data-table-block] [style*="color:rgb(146,64,14)"],
+.dark [data-table-block] [color="#92400E"] {
+  color: #fb923c !important;
+}
+
+.dark .synapsys-editor [style*="color: #EA580C"],
+.dark .synapsys-editor [style*="color: rgb(234, 88, 12)"],
+.dark .synapsys-editor [style*="color:rgb(234,88,12)"],
+.dark .synapsys-editor [color="#EA580C"],
+.dark [data-table-block] [style*="color: #EA580C"],
+.dark [data-table-block] [style*="color: rgb(234, 88, 12)"],
+.dark [data-table-block] [style*="color:rgb(234,88,12)"],
+.dark [data-table-block] [color="#EA580C"] {
+  color: #fb923c !important;
+}
+
+.dark .synapsys-editor [style*="color: #D97706"],
+.dark .synapsys-editor [style*="color: rgb(217, 119, 6)"],
+.dark .synapsys-editor [style*="color:rgb(217,119,6)"],
+.dark .synapsys-editor [color="#D97706"],
+.dark [data-table-block] [style*="color: #D97706"],
+.dark [data-table-block] [style*="color: rgb(217, 119, 6)"],
+.dark [data-table-block] [style*="color:rgb(217,119,6)"],
+.dark [data-table-block] [color="#D97706"] {
+  color: #fbbf24 !important;
+}
+
+.dark .synapsys-editor [style*="color: #CA8A04"],
+.dark .synapsys-editor [style*="color: rgb(202, 138, 4)"],
+.dark .synapsys-editor [style*="color:rgb(202,138,4)"],
+.dark .synapsys-editor [color="#CA8A04"],
+.dark [data-table-block] [style*="color: #CA8A04"],
+.dark [data-table-block] [style*="color: rgb(202, 138, 4)"],
+.dark [data-table-block] [style*="color:rgb(202,138,4)"],
+.dark [data-table-block] [color="#CA8A04"] {
+  color: #fde047 !important;
+}
+
+.dark .synapsys-editor [style*="color: #65A30D"],
+.dark .synapsys-editor [style*="color: rgb(101, 163, 13)"],
+.dark .synapsys-editor [style*="color:rgb(101,163,13)"],
+.dark .synapsys-editor [color="#65A30D"],
+.dark [data-table-block] [style*="color: #65A30D"],
+.dark [data-table-block] [style*="color: rgb(101, 163, 13)"],
+.dark [data-table-block] [style*="color:rgb(101,163,13)"],
+.dark [data-table-block] [color="#65A30D"] {
+  color: #a3e635 !important;
+}
+
+.dark .synapsys-editor [style*="color: #0D9488"],
+.dark .synapsys-editor [style*="color: rgb(13, 148, 136)"],
+.dark .synapsys-editor [style*="color:rgb(13,148,136)"],
+.dark .synapsys-editor [color="#0D9488"],
+.dark [data-table-block] [style*="color: #0D9488"],
+.dark [data-table-block] [style*="color: rgb(13, 148, 136)"],
+.dark [data-table-block] [style*="color:rgb(13,148,136)"],
+.dark [data-table-block] [color="#0D9488"] {
+  color: #2dd4bf !important;
+}
+
+.dark .synapsys-editor [style*="color: #0891B2"],
+.dark .synapsys-editor [style*="color: rgb(8, 145, 178)"],
+.dark .synapsys-editor [style*="color:rgb(8,145,178)"],
+.dark .synapsys-editor [color="#0891B2"],
+.dark [data-table-block] [style*="color: #0891B2"],
+.dark [data-table-block] [style*="color: rgb(8, 145, 178)"],
+.dark [data-table-block] [style*="color:rgb(8,145,178)"],
+.dark [data-table-block] [color="#0891B2"] {
+  color: #38bdf8 !important;
+}
+
+.dark .synapsys-editor [style*="color: #4F46E5"],
+.dark .synapsys-editor [style*="color: rgb(79, 70, 229)"],
+.dark .synapsys-editor [style*="color:rgb(79,70,229)"],
+.dark .synapsys-editor [color="#4F46E5"],
+.dark [data-table-block] [style*="color: #4F46E5"],
+.dark [data-table-block] [style*="color: rgb(79, 70, 229)"],
+.dark [data-table-block] [style*="color:rgb(79,70,229)"],
+.dark [data-table-block] [color="#4F46E5"] {
+  color: #818cf8 !important;
+}
+
+.dark .synapsys-editor [style*="color: #7C3AED"],
+.dark .synapsys-editor [style*="color: rgb(124, 58, 237)"],
+.dark .synapsys-editor [style*="color:rgb(124,58,237)"],
+.dark .synapsys-editor [color="#7C3AED"],
+.dark [data-table-block] [style*="color: #7C3AED"],
+.dark [data-table-block] [style*="color: rgb(124, 58, 237)"],
+.dark [data-table-block] [style*="color:rgb(124,58,237)"],
+.dark [data-table-block] [color="#7C3AED"] {
+  color: #a78bfa !important;
+}
+
+.dark .synapsys-editor [style*="color: #9333EA"],
+.dark .synapsys-editor [style*="color: rgb(147, 51, 234)"],
+.dark .synapsys-editor [style*="color:rgb(147,51,234)"],
+.dark .synapsys-editor [color="#9333EA"],
+.dark [data-table-block] [style*="color: #9333EA"],
+.dark [data-table-block] [style*="color: rgb(147, 51, 234)"],
+.dark [data-table-block] [style*="color:rgb(147,51,234)"],
+.dark [data-table-block] [color="#9333EA"] {
+  color: #c084fc !important;
+}
+
+.dark .synapsys-editor [style*="color: #C026D3"],
+.dark .synapsys-editor [style*="color: rgb(192, 38, 211)"],
+.dark .synapsys-editor [style*="color:rgb(192,38,211)"],
+.dark .synapsys-editor [color="#C026D3"],
+.dark [data-table-block] [style*="color: #C026D3"],
+.dark [data-table-block] [style*="color: rgb(192, 38, 211)"],
+.dark [data-table-block] [style*="color:rgb(192,38,211)"],
+.dark [data-table-block] [color="#C026D3"] {
+  color: #e879f9 !important;
+}
+
+.dark .synapsys-editor [style*="color: #DB2777"],
+.dark .synapsys-editor [style*="color: rgb(219, 39, 119)"],
+.dark .synapsys-editor [style*="color:rgb(219,39,119)"],
+.dark .synapsys-editor [color="#DB2777"],
+.dark [data-table-block] [style*="color: #DB2777"],
+.dark [data-table-block] [style*="color: rgb(219, 39, 119)"],
+.dark [data-table-block] [style*="color:rgb(219,39,119)"],
+.dark [data-table-block] [color="#DB2777"] {
+  color: #f472b6 !important;
+}
+
+.dark .synapsys-editor mark,
+.dark [data-table-block] mark {
+  color: inherit !important;
+  border-radius: 3px;
+  padding-inline: 0.15em;
+}
+
+.dark .synapsys-editor mark[style*="#FDE68A"],
+.dark .synapsys-editor mark[style*="rgb(253, 230, 138)"],
+.dark [data-table-block] mark[style*="#FDE68A"],
+.dark [data-table-block] mark[style*="rgb(253, 230, 138)"] {
+  background-color: rgba(250, 204, 21, 0.28) !important;
+}
+
+.dark .synapsys-editor mark[style*="#FED7AA"],
+.dark .synapsys-editor mark[style*="rgb(254, 215, 170)"],
+.dark [data-table-block] mark[style*="#FED7AA"],
+.dark [data-table-block] mark[style*="rgb(254, 215, 170)"] {
+  background-color: rgba(251, 146, 60, 0.28) !important;
+}
+
+.dark .synapsys-editor mark[style*="#FECACA"],
+.dark .synapsys-editor mark[style*="rgb(254, 202, 202)"],
+.dark [data-table-block] mark[style*="#FECACA"],
+.dark [data-table-block] mark[style*="rgb(254, 202, 202)"] {
+  background-color: rgba(248, 113, 113, 0.28) !important;
+}
+
+.dark .synapsys-editor mark[style*="#BFDBFE"],
+.dark .synapsys-editor mark[style*="rgb(191, 219, 254)"],
+.dark [data-table-block] mark[style*="#BFDBFE"],
+.dark [data-table-block] mark[style*="rgb(191, 219, 254)"] {
+  background-color: rgba(96, 165, 250, 0.28) !important;
+}
+
+.dark .synapsys-editor mark[style*="#BBF7D0"],
+.dark .synapsys-editor mark[style*="rgb(187, 247, 208)"],
+.dark [data-table-block] mark[style*="#BBF7D0"],
+.dark [data-table-block] mark[style*="rgb(187, 247, 208)"] {
+  background-color: rgba(52, 211, 153, 0.28) !important;
+}
+
+.dark .synapsys-editor mark[style*="#E9D5FF"],
+.dark .synapsys-editor mark[style*="rgb(233, 213, 255)"],
+.dark [data-table-block] mark[style*="#E9D5FF"],
+.dark [data-table-block] mark[style*="rgb(233, 213, 255)"] {
+  background-color: rgba(192, 132, 252, 0.28) !important;
+}
+
+.dark .synapsys-editor mark[style*="#FECDD3"],
+.dark .synapsys-editor mark[style*="rgb(254, 205, 211)"],
+.dark [data-table-block] mark[style*="#FECDD3"],
+.dark [data-table-block] mark[style*="rgb(254, 205, 211)"] {
+  background-color: rgba(244, 114, 182, 0.28) !important;
+}
+
+.dark .synapsys-editor mark[style*="#E5E7EB"],
+.dark .synapsys-editor mark[style*="rgb(229, 231, 235)"],
+.dark [data-table-block] mark[style*="#E5E7EB"],
+.dark [data-table-block] mark[style*="rgb(229, 231, 235)"] {
+  background-color: rgba(148, 163, 184, 0.28) !important;
+}
+
+.dark .synapsys-editor mark[style*="#A5F3FC"],
+.dark .synapsys-editor mark[style*="rgb(165, 243, 252)"],
+.dark [data-table-block] mark[style*="#A5F3FC"],
+.dark [data-table-block] mark[style*="rgb(165, 243, 252)"] {
+  background-color: rgba(56, 189, 248, 0.28) !important;
+}
+
+.dark .synapsys-editor mark[style*="#99F6E4"],
+.dark .synapsys-editor mark[style*="rgb(153, 246, 228)"],
+.dark [data-table-block] mark[style*="#99F6E4"],
+.dark [data-table-block] mark[style*="rgb(153, 246, 228)"] {
+  background-color: rgba(45, 212, 191, 0.28) !important;
+}
+
+.dark .synapsys-editor mark[style*="#D9F99D"],
+.dark .synapsys-editor mark[style*="rgb(217, 249, 157)"],
+.dark [data-table-block] mark[style*="#D9F99D"],
+.dark [data-table-block] mark[style*="rgb(217, 249, 157)"] {
+  background-color: rgba(163, 230, 53, 0.28) !important;
+}
+
+.dark .synapsys-editor mark[style*="#C7D2FE"],
+.dark .synapsys-editor mark[style*="rgb(199, 210, 254)"],
+.dark [data-table-block] mark[style*="#C7D2FE"],
+.dark [data-table-block] mark[style*="rgb(199, 210, 254)"] {
+  background-color: rgba(129, 140, 248, 0.28) !important;
+}
+
+.dark .synapsys-editor mark[style*="#DDD6FE"],
+.dark .synapsys-editor mark[style*="rgb(221, 214, 254)"],
+.dark [data-table-block] mark[style*="#DDD6FE"],
+.dark [data-table-block] mark[style*="rgb(221, 214, 254)"] {
+  background-color: rgba(167, 139, 250, 0.28) !important;
+}
+
+.dark .synapsys-editor mark[style*="#F5D0FE"],
+.dark .synapsys-editor mark[style*="rgb(245, 208, 254)"],
+.dark [data-table-block] mark[style*="#F5D0FE"],
+.dark [data-table-block] mark[style*="rgb(245, 208, 254)"] {
+  background-color: rgba(232, 121, 249, 0.28) !important;
+}
+
+.dark .synapsys-editor mark[style*="#E7D5C5"],
+.dark .synapsys-editor mark[style*="rgb(231, 213, 197)"],
+.dark [data-table-block] mark[style*="#E7D5C5"],
+.dark [data-table-block] mark[style*="rgb(231, 213, 197)"] {
+  background-color: rgba(217, 119, 6, 0.28) !important;
+}

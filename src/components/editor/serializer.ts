@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import type { AppBlock, BlockType, RichTextSpan } from "@/types/models";
-import { fromTableRows, toTableRows } from "@/lib/data/table-rows";
+import { fromTableRows, fromTableRowsAlignments, toTableRows } from "@/lib/data/table-rows";
 
 
 type JSONContent = {
@@ -238,9 +238,10 @@ function blockToNode(block: AppBlock): JSONContent | null {
         type: "tableBlock",
         attrs: {
           hasColumnHeader: Boolean(block.props?.hasColumnHeader),
-          rows: fromTableRows(block.props?.tableRows).map((row) =>
-            row.map((cell) => cell.map((span) => span.text).join(""))
-          ),
+          rows: fromTableRows(block.props?.tableRows),
+          colWidths: block.props?.colWidths ?? [],
+          rowHeights: block.props?.rowHeights ?? [],
+          cellAlignments: fromTableRowsAlignments(block.props?.tableRows),
         },
       };
     default:
@@ -356,14 +357,17 @@ function nodeToBlocks(node: JSONContent): AppBlock[] {
         },
       ];
     case "tableBlock": {
-      const rows = (node.attrs?.rows as string[][] | undefined) ?? [];
+      const rows = (node.attrs?.rows as RichTextSpan[][][] | undefined) ?? [];
+      const cellAlignments = (node.attrs?.cellAlignments as any) ?? [];
       return [
         {
           id: id(),
           type: "table",
           props: {
             hasColumnHeader: Boolean(node.attrs?.hasColumnHeader),
-            tableRows: toTableRows(rows.map((row) => row.map((cell) => [{ text: cell }]))),
+            tableRows: toTableRows(rows, cellAlignments),
+            colWidths: (node.attrs?.colWidths as number[] | undefined) ?? [],
+            rowHeights: (node.attrs?.rowHeights as number[] | undefined) ?? [],
           },
         },
       ];

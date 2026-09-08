@@ -75,7 +75,7 @@ function stripUndefined<T>(value: T): T {
   if (value && typeof value === "object" && (value as object).constructor === Object) {
     const out: Record<string, unknown> = {};
     for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-      if (nested === undefined) continue;
+      if (nested === undefined || key === "cellAlignments") continue;
       out[key] = stripUndefined(nested);
     }
     return out as T;

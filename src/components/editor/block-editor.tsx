@@ -490,7 +490,7 @@ export function BlockEditor({
         <EditorContent editor={editor} />
         {chrome ? (
           <>
-            <div className="min-h-28 cursor-text" onClick={focusEnd} />
+            <div className="min-h-6 cursor-text" onClick={focusEnd} />
             <EditorStatusBar editor={editor} />
           </>
         ) : null}
@@ -548,7 +548,7 @@ function EditorStatusBar({ editor }: { editor: Editor }) {
   const words = editor.storage.characterCount?.words() ?? 0;
   const characters = editor.storage.characterCount?.characters() ?? 0;
   return (
-    <div className="mt-6 flex items-center justify-between border-t border-[var(--border)] pt-3 text-[11px] text-faint">
+    <div className="mt-2 flex items-center justify-between border-t border-[var(--border)] pt-2 text-[11px] text-faint">
       <span>
         {words} {words === 1 ? "palavra" : "palavras"} · {characters} caracteres
       </span>

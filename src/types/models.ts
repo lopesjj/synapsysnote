@@ -68,6 +68,8 @@ export interface BlockMedia {
 
 export interface TableCell {
   spans: RichTextSpan[];
+  horizontalAlign?: "left" | "center" | "right";
+  verticalAlign?: "top" | "middle" | "bottom";
 }
 
 export interface TableRow {
@@ -91,6 +93,8 @@ export interface AppBlock {
     targetId?: string;
     tableRows?: TableRow[];
     hasColumnHeader?: boolean;
+    colWidths?: number[];
+    rowHeights?: number[];
     indentFirst?: boolean;
     indent?: number;
     textAlign?: "left" | "center" | "right" | "justify";
