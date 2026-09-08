@@ -11,16 +11,18 @@ import { formatRelative } from "@/lib/utils";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 
 export default function TrashPage() {
-  const { trashedPages, adapter } = useWorkspace();
+  const { trashedPages, trashedDatabases = [], adapter } = useWorkspace();
   const [emptying, setEmptying] = useState(false);
+  const [activeActionId, setActiveActionId] = useState<string | null>(null);
+
+  const totalTrashedCount = trashedPages.length + trashedDatabases.length;
 
   const expiresOn = (deletedAt: number | null) =>
     new Date((deletedAt ?? 0) + TRASH_RETENTION_DAYS * 86_400_000).toLocaleDateString("pt-BR");
 
   const emptyTrash = async () => {
-    const count = trashedPages.length;
-    if (!count) return;
-    const label = count === 1 ? "1 página" : `${count} páginas`;
+    if (!totalTrashedCount) return;
+    const label = totalTrashedCount === 1 ? "1 item" : `${totalTrashedCount} itens`;
     if (
       !window.confirm(
         `Excluir definitivamente ${label} da lixeira? Esta ação não pode ser desfeita.`
@@ -31,7 +33,7 @@ export default function TrashPage() {
     setEmptying(true);
     try {
       await adapter.emptyTrash();
-      toast.success(count === 1 ? "Lixeira esvaziada" : `${count} páginas excluídas definitivamente`);
+      toast.success("Lixeira esvaziada definitivamente");
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Não foi possível esvaziar a lixeira. Tente novamente."
@@ -52,19 +54,19 @@ export default function TrashPage() {
             <div>
               <h1 className="text-[22px] font-semibold tracking-[-0.025em] text-ink">Lixeira</h1>
               <p className="mt-0.5 text-[12px] text-faint">
-                {trashedPages.length
-                  ? `${trashedPages.length} ${trashedPages.length === 1 ? "página" : "páginas"} · recuperáveis por ${TRASH_RETENTION_DAYS} dias`
+                {totalTrashedCount
+                  ? `${totalTrashedCount} ${totalTrashedCount === 1 ? "item" : "itens"} · recuperáveis por ${TRASH_RETENTION_DAYS} dias`
                   : `Itens excluídos ficam aqui por ${TRASH_RETENTION_DAYS} dias`}
               </p>
             </div>
           </div>
         </div>
-        {trashedPages.length ? (
+        {totalTrashedCount ? (
           <Button
             variant="danger"
             size="sm"
             className="w-full shrink-0 rounded-full px-3.5 sm:w-auto"
-            disabled={emptying}
+            disabled={emptying || activeActionId !== null}
             onClick={() => void emptyTrash()}
           >
             <Trash2 />
@@ -73,84 +75,157 @@ export default function TrashPage() {
         ) : null}
       </div>
 
-      <div className="mt-8">
-        {trashedPages.length ? (
+      <div className="mt-8 space-y-6">
+        {trashedPages.length > 0 && (
           <div className="overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-panel)]">
-            {trashedPages.map((page, index) => (
-              <div
-                key={page.id}
-                className="group flex items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-[var(--surface-hover)]"
-                style={
-                  index < trashedPages.length - 1
-                    ? { borderBottom: "1px solid var(--border)" }
-                    : undefined
-                }
-              >
-                <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-[var(--surface-2)]">
-                  <WorkspaceIcon icon={page.icon} fallback="📄" variant="list" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-medium tracking-[-0.01em] text-ink">
-                    {page.title || "Sem título"}
-                  </p>
-                  <p className="mt-0.5 text-[11.5px] text-faint">
-                    Excluída {formatRelative(page.deletedAt)} · até {expiresOn(page.deletedAt)}
-                  </p>
+            <div className="border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-faint">
+              Páginas ({trashedPages.length})
+            </div>
+            {trashedPages.map((page, index) => {
+              const isItemBusy = emptying || activeActionId === page.id;
+              return (
+                <div
+                  key={page.id}
+                  className="group flex items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-[var(--surface-hover)]"
+                  style={
+                    index < trashedPages.length - 1
+                      ? { borderBottom: "1px solid var(--border)" }
+                      : undefined
+                  }
+                >
+                  <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-[var(--surface-2)]">
+                    <WorkspaceIcon icon={page.icon} fallback="📄" variant="list" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[14px] font-medium tracking-[-0.01em] text-ink">
+                      {page.title || "Sem título"}
+                    </p>
+                    <p className="mt-0.5 text-[11.5px] text-faint">
+                      Excluída {formatRelative(page.deletedAt)} · até {expiresOn(page.deletedAt)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="rounded-full text-muted hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                      disabled={isItemBusy}
+                      onClick={async () => {
+                        setActiveActionId(page.id);
+                        try {
+                          await adapter.restorePage(page.id);
+                          toast.success("Página restaurada");
+                        } catch (error) {
+                          toast.error(
+                            error instanceof Error
+                              ? error.message
+                              : "Não foi possível restaurar. Tente novamente."
+                          );
+                        } finally {
+                          setActiveActionId(null);
+                        }
+                      }}
+                    >
+                      <RotateCcw /> Restaurar
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="rounded-full hover:bg-red-50 hover:text-[var(--danger)] dark:hover:bg-red-950/40"
+                      aria-label="Excluir definitivamente"
+                      disabled={isItemBusy}
+                      onClick={async () => {
+                        if (
+                          !window.confirm(
+                            `Excluir "${page.title || "Sem título"}" definitivamente? Esta ação não pode ser desfeita.`
+                          )
+                        ) {
+                          return;
+                        }
+                        setActiveActionId(page.id);
+                        try {
+                          await adapter.purgePage(page.id);
+                          toast.success("Página excluída definitivamente");
+                        } catch (error) {
+                          toast.error(
+                            error instanceof Error
+                              ? error.message
+                              : "Não foi possível excluir. Tente novamente."
+                          );
+                        } finally {
+                          setActiveActionId(null);
+                        }
+                      }}
+                    >
+                      <Trash2 className="text-[var(--danger)]" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="rounded-full text-muted hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
-                    disabled={emptying}
-                    onClick={async () => {
-                      try {
-                        await adapter.restorePage(page.id);
-                        toast.success("Página restaurada");
-                      } catch (error) {
-                        toast.error(
-                          error instanceof Error
-                            ? error.message
-                            : "Não foi possível restaurar. Tente novamente."
-                        );
-                      }
-                    }}
-                  >
-                    <RotateCcw /> Restaurar
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="rounded-full hover:bg-red-50 hover:text-[var(--danger)] dark:hover:bg-red-950/40"
-                    aria-label="Excluir definitivamente"
-                    disabled={emptying}
-                    onClick={async () => {
-                      if (
-                        !window.confirm(
-                          `Excluir "${page.title || "Sem título"}" definitivamente? Esta ação não pode ser desfeita.`
-                        )
-                      ) {
-                        return;
-                      }
-                      try {
-                        await adapter.purgePage(page.id);
-                        toast.success("Página excluída definitivamente");
-                      } catch (error) {
-                        toast.error(
-                          error instanceof Error
-                            ? error.message
-                            : "Não foi possível excluir. Tente novamente."
-                        );
-                      }
-                    }}
-                  >
-                    <Trash2 className="text-[var(--danger)]" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-        ) : (
+        )}
+
+        {trashedDatabases.length > 0 && (
+          <div className="overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-panel)]">
+            <div className="border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-faint">
+              Bases de dados ({trashedDatabases.length})
+            </div>
+            {trashedDatabases.map((db, index) => {
+              const isItemBusy = emptying || activeActionId === db.id;
+              return (
+                <div
+                  key={db.id}
+                  className="group flex items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-[var(--surface-hover)]"
+                  style={
+                    index < trashedDatabases.length - 1
+                      ? { borderBottom: "1px solid var(--border)" }
+                      : undefined
+                  }
+                >
+                  <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-[var(--surface-2)]">
+                    <WorkspaceIcon icon={db.icon} fallback="🗂️" variant="list" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[14px] font-medium tracking-[-0.01em] text-ink">
+                      {db.name || "Sem nome"}
+                    </p>
+                    <p className="mt-0.5 text-[11.5px] text-faint">
+                      Excluída {formatRelative(db.deletedAt)} · até {expiresOn(db.deletedAt)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="rounded-full text-muted hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                      disabled={isItemBusy}
+                      onClick={async () => {
+                        setActiveActionId(db.id);
+                        try {
+                          await adapter.updateDatabase(db.id, { deletedAt: null });
+                          toast.success("Base de dados restaurada");
+                        } catch (error) {
+                          toast.error(
+                            error instanceof Error
+                              ? error.message
+                              : "Não foi possível restaurar. Tente novamente."
+                          );
+                        } finally {
+                          setActiveActionId(null);
+                        }
+                      }}
+                    >
+                      <RotateCcw /> Restaurar
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {totalTrashedCount === 0 && (
           <EmptyState
             title="A lixeira está vazia"
             description="Nada foi excluído nos últimos 30 dias."

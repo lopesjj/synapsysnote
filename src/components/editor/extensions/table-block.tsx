@@ -36,6 +36,22 @@ export type CellAlignment = {
   vertical?: "top" | "middle" | "bottom";
 };
 
+export type TableMultiAction =
+  | { type: "annotation"; key: keyof RichTextAnnotations }
+  | { type: "color"; color: string | null }
+  | { type: "highlight"; highlight: string | null }
+  | { type: "align-horizontal"; align: "left" | "center" | "right" }
+  | { type: "align-vertical"; align: "top" | "middle" | "bottom" }
+  | { type: "clear" };
+
+export function dispatchTableMultiAction(action: TableMultiAction): boolean {
+  if (typeof window === "undefined") return false;
+  const activeMultiToolbar = document.querySelector("[data-multi-table-toolbar]");
+  if (!activeMultiToolbar) return false;
+  window.dispatchEvent(new CustomEvent("synapsys:table-multi-action", { detail: action }));
+  return true;
+}
+
 let activeDraggedTablePos: number | null = null;
 
 export function emptyTableGrid(rows = 3, cols = 3): TableGrid {
@@ -211,6 +227,7 @@ function EditableCell({
 
   useEffect(() => {
     if (isSelectionActive) {
+      focusedRef.current = false;
       setSelectionRect(null);
       setColorPicker(null);
     }
@@ -218,10 +235,11 @@ function EditableCell({
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || focusedRef.current) return;
+    if (!el) return;
+    if (focusedRef.current && !isSelectionActive) return;
     const html = spansToHtml(spans);
     if (el.innerHTML !== html) el.innerHTML = html;
-  }, [spans]);
+  }, [spans, isSelectionActive]);
 
   const sync = () => {
     const el = ref.current;
@@ -323,14 +341,14 @@ function EditableCell({
     return (
       <div
         className={cn(
-          "flex flex-col w-full",
+          "flex flex-col w-full h-full min-h-full",
           verticalAlign === "middle" ? "justify-center" : verticalAlign === "bottom" ? "justify-end" : "justify-start"
         )}
         style={minHeight ? { minHeight: `${minHeight}px` } : undefined}
       >
         <div
           className={cn(
-            "whitespace-pre-wrap break-words",
+            "w-full whitespace-pre-wrap break-words",
             horizontalAlign === "center" ? "text-center" : horizontalAlign === "right" ? "text-right" : "text-left",
             className
           )}
@@ -505,7 +523,7 @@ function EditableCell({
   return (
     <div
       className={cn(
-        "relative flex flex-col w-full",
+        "relative flex flex-col w-full h-full min-h-full",
         verticalAlign === "middle" ? "justify-center" : verticalAlign === "bottom" ? "justify-end" : "justify-start"
       )}
       style={minHeight ? { minHeight: `${minHeight}px` } : undefined}
@@ -523,7 +541,7 @@ function EditableCell({
         data-placeholder={placeholder}
         style={{ textAlign: horizontalAlign }}
         className={cn(
-          "min-w-0 whitespace-pre-wrap break-words outline-none empty:before:pointer-events-none empty:before:text-faint dark:empty:before:text-slate-500 empty:before:content-[attr(data-placeholder)] text-ink dark:text-slate-100",
+          "min-w-0 w-full whitespace-pre-wrap break-words outline-none empty:before:pointer-events-none empty:before:text-faint dark:empty:before:text-slate-500 empty:before:content-[attr(data-placeholder)] text-ink dark:text-slate-100",
           horizontalAlign === "center" ? "text-center" : horizontalAlign === "right" ? "text-right" : "text-left",
           className
         )}
@@ -698,11 +716,13 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
   }, [selectionEnd]);
 
   const getSelectedCoords = (): { row: number; col: number }[] => {
-    if (!selectionStart || !selectionEnd) return [];
-    const minR = Math.min(selectionStart.row, selectionEnd.row);
-    const maxR = Math.max(selectionStart.row, selectionEnd.row);
-    const minC = Math.min(selectionStart.col, selectionEnd.col);
-    const maxC = Math.max(selectionStart.col, selectionEnd.col);
+    const s = selectionStartRef.current || selectionStart;
+    const end = selectionEndRef.current || selectionEnd;
+    if (!s || !end) return [];
+    const minR = Math.min(s.row, end.row);
+    const maxR = Math.max(s.row, end.row);
+    const minC = Math.min(s.col, end.col);
+    const maxC = Math.max(s.col, end.col);
     const coords: { row: number; col: number }[] = [];
     for (let r = minR; r <= maxR; r++) {
       for (let c = minC; c <= maxC; c++) {
@@ -810,7 +830,8 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
       }
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!isMouseDownRef.current) return;
       const wasSelecting = isSelectingRef.current;
       isMouseDownRef.current = false;
       dragOriginRef.current = null;
@@ -818,27 +839,39 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
       isSelectingRef.current = false;
 
       const s = selectionStartRef.current;
-      const e = selectionEndRef.current;
-      if (wasSelecting && s && e && (s.row !== e.row || s.col !== e.col)) {
+      const endCoord = selectionEndRef.current;
+      if (wasSelecting && s && endCoord && (s.row !== endCoord.row || s.col !== endCoord.col)) {
         updateMultiToolbarPosition();
       } else if (!wasSelecting) {
-        setSelectionStart(null);
-        setSelectionEnd(null);
-        setMultiToolbarRect(null);
+        const target = e.target as HTMLElement | null;
+        const isToolbar =
+          target?.closest("[data-multi-table-toolbar]") ||
+          target?.closest("[data-table-toolbar]") ||
+          target?.closest("[data-editor-toolbar]");
+        if (!isToolbar && !e.shiftKey) {
+          setSelectionStart(null);
+          setSelectionEnd(null);
+          setMultiToolbarRect(null);
+        }
       }
     };
 
     const handleDocMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (!tableRef.current) return;
-      if (!tableRef.current.contains(target)) {
-        const isMultiToolbar = target?.closest("[data-multi-table-toolbar]");
-        if (!isMultiToolbar) {
-          if (selectionStartRef.current && selectionEndRef.current) {
-            setSelectionStart(null);
-            setSelectionEnd(null);
-            setMultiToolbarRect(null);
-          }
+      const isInsideTable = tableRef.current.contains(target);
+      const isToolbar =
+        target?.closest("[data-multi-table-toolbar]") ||
+        target?.closest("[data-table-toolbar]") ||
+        target?.closest("[data-editor-toolbar]") ||
+        target?.closest(".editor-toolbar") ||
+        target?.closest("[data-radix-popper-content-wrapper]");
+
+      if (!isInsideTable && !isToolbar) {
+        if (selectionStartRef.current && selectionEndRef.current) {
+          setSelectionStart(null);
+          setSelectionEnd(null);
+          setMultiToolbarRect(null);
         }
       }
     };
@@ -860,6 +893,7 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
         e.preventDefault();
         const coords = getSelectedCoords();
         commit(clearMultiCells(rows, coords));
+        setTimeout(updateMultiToolbarPosition, 0);
         return;
       }
 
@@ -868,14 +902,17 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
         e.preventDefault();
         const coords = getSelectedCoords();
         commit(toggleMultiAnnotation(rows, coords, "bold"));
+        setTimeout(updateMultiToolbarPosition, 0);
       } else if (meta && e.key.toLowerCase() === "i") {
         e.preventDefault();
         const coords = getSelectedCoords();
         commit(toggleMultiAnnotation(rows, coords, "italic"));
+        setTimeout(updateMultiToolbarPosition, 0);
       } else if (meta && e.key.toLowerCase() === "u") {
         e.preventDefault();
         const coords = getSelectedCoords();
         commit(toggleMultiAnnotation(rows, coords, "underline"));
+        setTimeout(updateMultiToolbarPosition, 0);
       }
     };
 
@@ -969,18 +1006,21 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
     const coords = getSelectedCoords();
     if (!coords.length) return;
     commit(toggleMultiAnnotation(rows, coords, key));
+    setTimeout(updateMultiToolbarPosition, 0);
   };
 
   const handleMultiApplyColor = (color: string | null) => {
     const coords = getSelectedCoords();
     if (!coords.length) return;
     commit(applyMultiColor(rows, coords, color));
+    setTimeout(updateMultiToolbarPosition, 0);
   };
 
   const handleMultiApplyHighlight = (highlight: string | null) => {
     const coords = getSelectedCoords();
     if (!coords.length) return;
     commit(applyMultiHighlight(rows, coords, highlight));
+    setTimeout(updateMultiToolbarPosition, 0);
   };
 
   const handleMultiAlignHorizontal = (align: "left" | "center" | "right") => {
@@ -997,7 +1037,8 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
         next[row][col] = { ...next[row][col], horizontal: align };
       }
     }
-    commit(rows, colWidths, hasHeader, rowHeights, next);
+    commit(cloneGrid(rows), colWidths, hasHeader, rowHeights, next);
+    setTimeout(updateMultiToolbarPosition, 0);
   };
 
   const handleMultiAlignVertical = (align: "top" | "middle" | "bottom") => {
@@ -1014,14 +1055,42 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
         next[row][col] = { ...next[row][col], vertical: align };
       }
     }
-    commit(rows, colWidths, hasHeader, rowHeights, next);
+    commit(cloneGrid(rows), colWidths, hasHeader, rowHeights, next);
+    setTimeout(updateMultiToolbarPosition, 0);
   };
 
   const handleMultiClearContent = () => {
     const coords = getSelectedCoords();
     if (!coords.length) return;
     commit(clearMultiCells(rows, coords));
+    setTimeout(updateMultiToolbarPosition, 0);
   };
+
+  useEffect(() => {
+    if (!hasMultiSelection) return;
+    const onAction = (e: Event) => {
+      const custom = e as CustomEvent<TableMultiAction>;
+      if (!custom.detail) return;
+      const action = custom.detail;
+      if (action.type === "annotation") {
+        handleMultiToggleAnnotation(action.key);
+      } else if (action.type === "color") {
+        handleMultiApplyColor(action.color);
+      } else if (action.type === "highlight") {
+        handleMultiApplyHighlight(action.highlight);
+      } else if (action.type === "align-horizontal") {
+        handleMultiAlignHorizontal(action.align);
+      } else if (action.type === "align-vertical") {
+        handleMultiAlignVertical(action.align);
+      } else if (action.type === "clear") {
+        handleMultiClearContent();
+      }
+    };
+    window.addEventListener("synapsys:table-multi-action", onAction);
+    return () => {
+      window.removeEventListener("synapsys:table-multi-action", onAction);
+    };
+  }, [hasMultiSelection, rows, colWidths, hasHeader, rowHeights, rawCellAlignments]);
 
   const getCellAlignment = (r: number, c: number): CellAlignment => {
     return rawCellAlignments?.[r]?.[c] ?? { horizontal: "left", vertical: "top" };
@@ -1234,6 +1303,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
               <button
                 type="button"
                 title="Negrito (Ctrl+B)"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={() => handleMultiToggleAnnotation("bold")}
                 className="rounded-[var(--radius-xs)] p-1.5 text-muted dark:text-slate-300 transition hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white"
               >
@@ -1242,6 +1315,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
               <button
                 type="button"
                 title="Itálico (Ctrl+I)"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={() => handleMultiToggleAnnotation("italic")}
                 className="rounded-[var(--radius-xs)] p-1.5 text-muted dark:text-slate-300 transition hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white"
               >
@@ -1250,6 +1327,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
               <button
                 type="button"
                 title="Sublinhado (Ctrl+U)"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={() => handleMultiToggleAnnotation("underline")}
                 className="rounded-[var(--radius-xs)] p-1.5 text-muted dark:text-slate-300 transition hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white"
               >
@@ -1258,6 +1339,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
               <button
                 type="button"
                 title="Tachado"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={() => handleMultiToggleAnnotation("strikethrough")}
                 className="rounded-[var(--radius-xs)] p-1.5 text-muted dark:text-slate-300 transition hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white"
               >
@@ -1269,6 +1354,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
               <button
                 type="button"
                 title="Cor do texto"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={() => setMultiColorPicker((cur) => (cur === "text" ? null : "text"))}
                 className={cn(
                   "rounded-[var(--radius-xs)] p-1.5 text-muted dark:text-slate-300 transition hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white",
@@ -1284,6 +1373,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
               <button
                 type="button"
                 title="Destaque"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={() => setMultiColorPicker((cur) => (cur === "highlight" ? null : "highlight"))}
                 className={cn(
                   "rounded-[var(--radius-xs)] p-1.5 text-muted dark:text-slate-300 transition hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white",
@@ -1304,6 +1397,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
                   key={align}
                   type="button"
                   title={label}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
                   onClick={() => handleMultiAlignHorizontal(align)}
                   className="rounded-[var(--radius-xs)] p-1.5 text-muted dark:text-slate-300 transition hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white"
                 >
@@ -1322,6 +1419,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
                   key={align}
                   type="button"
                   title={label}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
                   onClick={() => handleMultiAlignVertical(align)}
                   className="rounded-[var(--radius-xs)] p-1.5 text-muted dark:text-slate-300 transition hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white"
                 >
@@ -1334,6 +1435,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
               <button
                 type="button"
                 title="Limpar conteúdo das células selecionadas"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={handleMultiClearContent}
                 className="rounded-[var(--radius-xs)] p-1.5 text-muted dark:text-slate-300 transition hover:bg-[var(--surface-hover)] hover:text-[var(--danger)] dark:hover:text-red-400"
               >
@@ -1352,6 +1457,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
                       key={color.label}
                       type="button"
                       title={color.label}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
                       onClick={() => {
                         handleMultiApplyColor(color.value);
                         setMultiColorPicker(null);
@@ -1375,6 +1484,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
                       key={color.label}
                       type="button"
                       title={color.label}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
                       onClick={() => {
                         handleMultiApplyHighlight(color.value);
                         setMultiColorPicker(null);
@@ -1584,8 +1697,13 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
       </div>
       {editable ? (
         <div
-          className="mt-1.5 flex flex-wrap items-center gap-2 text-[11.5px] text-muted dark:text-slate-400"
+          data-table-toolbar="true"
+          data-multi-table-toolbar="true"
+          className="mt-1.5 flex flex-wrap items-center gap-2 text-[11.5px] text-muted dark:text-slate-400 select-none"
           contentEditable={false}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+          }}
         >
           <div
             data-drag-handle
@@ -1602,6 +1720,7 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
 
           <button
             type="button"
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={addRow}
             className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white"
           >
@@ -1609,6 +1728,7 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
           </button>
           <button
             type="button"
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={addCol}
             className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white"
           >
@@ -1617,6 +1737,7 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
           {colCount > 1 ? (
             <button
               type="button"
+              onMouseDown={(e) => e.stopPropagation()}
               onClick={() => removeCol(colCount - 1)}
               className="rounded px-1.5 py-0.5 hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white"
             >
@@ -1625,6 +1746,7 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
           ) : null}
           <button
             type="button"
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={() => commit(cloneGrid(rows), colWidths, !hasHeader)}
             className="rounded px-1.5 py-0.5 hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white"
           >
@@ -1679,6 +1801,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
                       key={align}
                       type="button"
                       title={label}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
                       onClick={() => applyActiveHorizontal(align)}
                       className={cn(
                         "rounded p-1 text-muted dark:text-slate-400 transition hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white",
@@ -1702,6 +1828,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
                       key={align}
                       type="button"
                       title={label}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
                       onClick={() => applyActiveVertical(align)}
                       className={cn(
                         "rounded p-1 text-muted dark:text-slate-400 transition hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white",
@@ -1719,6 +1849,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
                     <button
                       type="button"
                       title="Limpar conteúdo das células selecionadas"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
                       onClick={handleMultiClearContent}
                       className="rounded px-1 py-0.5 text-[10px] hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-[var(--danger)] dark:hover:text-red-400 text-muted dark:text-slate-300"
                     >
@@ -1731,6 +1865,10 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
                     <button
                       type="button"
                       title="Aplicar alinhamento na coluna inteira"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
                       onClick={() => setColAlignment(activeCell.col, activeAlign)}
                       className="rounded px-1 py-0.5 text-[10px] hover:bg-[var(--surface-hover)] dark:hover:bg-white/10 hover:text-ink dark:hover:text-white text-muted dark:text-slate-300"
                     >

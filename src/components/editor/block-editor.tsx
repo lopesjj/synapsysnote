@@ -483,7 +483,7 @@ export function BlockEditor({
   return (
     <div className={cn("synapsys-editor relative", !chrome && "synapsys-editor--preview")}>
       {chrome ? (
-        <div className="sticky top-[41px] z-10 -mx-1 sm:-mx-4 md:-mx-5 mb-3 border-b border-[var(--border)] bg-[var(--surface)] px-1 sm:px-2 md:px-3 py-1.5 backdrop-blur-xl dark:bg-[var(--canvas)]/90">
+        <div data-editor-toolbar="true" className="sticky top-[41px] z-10 -mx-1 sm:-mx-4 md:-mx-5 mb-3 border-b border-[var(--border)] bg-[var(--surface)] px-1 sm:px-2 md:px-3 py-1.5 backdrop-blur-xl dark:bg-[var(--canvas)]/90">
           <div className="flex flex-wrap items-center justify-center gap-0.5">
             <EditorToolbar
               editor={editor}

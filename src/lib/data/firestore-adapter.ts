@@ -623,12 +623,29 @@ export class FirestoreAdapter implements DataAdapter {
   }
 
   private async pageSubtreeRefs(id: string) {
-    const [page, descendants] = await Promise.all([
+    const [page, descendants, directChildren] = await Promise.all([
       getDoc(this.docRef("pages", id)),
       getDocs(query(this.col("pages"), where("path", "array-contains", id))),
+      getDocs(query(this.col("pages"), where("parentPageId", "==", id))),
     ]);
-    const refs = descendants.docs.map((snap) => snap.ref);
-    if (page.exists()) refs.unshift(page.ref);
+    const seen = new Set<string>();
+    const refs: ReturnType<typeof doc>[] = [];
+    if (page.exists()) {
+      refs.push(page.ref);
+      seen.add(page.id);
+    }
+    for (const snap of descendants.docs) {
+      if (!seen.has(snap.id)) {
+        refs.push(snap.ref);
+        seen.add(snap.id);
+      }
+    }
+    for (const snap of directChildren.docs) {
+      if (!seen.has(snap.id)) {
+        refs.push(snap.ref);
+        seen.add(snap.id);
+      }
+    }
     return refs;
   }
 
@@ -646,16 +663,74 @@ export class FirestoreAdapter implements DataAdapter {
   }
 
   async restorePage(id: string) {
+    const pageSnap = await getDoc(this.docRef("pages", id));
+    if (!pageSnap.exists()) return;
+    const pageData = pageSnap.data();
+
+    // Se o pai estiver na lixeira ou não existir, desvincula da hierarquia e promove à raiz
+    let needDetachFromParent = false;
+    if (pageData.parentPageId) {
+      const parentSnap = await getDoc(this.docRef("pages", pageData.parentPageId));
+      if (!parentSnap.exists() || parentSnap.data().deletedAt) {
+        needDetachFromParent = true;
+      }
+    }
+
     const refs = await this.pageSubtreeRefs(id);
-    await commitWrites(
-      refs.map((ref) => (batch) =>
-        batch.update(ref, {
+    const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
+
+    if (needDetachFromParent) {
+      const newPath: string[] = [];
+      const notebookId = (pageData.notebookId as string | null | undefined) ?? null;
+      ops.push((batch) =>
+        batch.update(pageSnap.ref, {
+          parentPageId: null,
+          path: newPath,
           deletedAt: null,
           updatedBy: this.userId,
           updatedAt: serverTimestamp(),
         })
-      )
-    );
+      );
+
+      const descendants = await getDocs(query(this.col("pages"), where("path", "array-contains", id)));
+      for (const patch of subtreePatches(descendants.docs.map(mapPage), id, newPath, notebookId)) {
+        ops.push((batch) =>
+          batch.update(this.docRef("pages", patch.pageId), {
+            path: patch.path,
+            notebookId: patch.notebookId,
+            deletedAt: null,
+            updatedBy: this.userId,
+            updatedAt: serverTimestamp(),
+          })
+        );
+      }
+
+      const patchedIds = new Set(descendants.docs.map((d) => d.id));
+      patchedIds.add(id);
+      for (const ref of refs) {
+        if (!patchedIds.has(ref.id)) {
+          ops.push((batch) =>
+            batch.update(ref, {
+              deletedAt: null,
+              updatedBy: this.userId,
+              updatedAt: serverTimestamp(),
+            })
+          );
+        }
+      }
+    } else {
+      for (const ref of refs) {
+        ops.push((batch) =>
+          batch.update(ref, {
+            deletedAt: null,
+            updatedBy: this.userId,
+            updatedAt: serverTimestamp(),
+          })
+        );
+      }
+    }
+
+    await commitWrites(ops);
   }
 
   async purgePage(id: string) {
@@ -672,7 +747,15 @@ export class FirestoreAdapter implements DataAdapter {
         });
       } catch {
         const refs = await this.pageSubtreeRefs(id);
-        await commitWrites(refs.map((ref) => (batch) => batch.delete(ref)));
+        const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
+        for (const ref of refs) {
+          const versionsSnap = await getDocs(collection(ref, "versions"));
+          for (const v of versionsSnap.docs) {
+            ops.push((batch) => batch.delete(v.ref));
+          }
+          ops.push((batch) => batch.delete(ref));
+        }
+        await commitWrites(ops);
       }
     }
   }

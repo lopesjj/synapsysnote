@@ -8,6 +8,21 @@ import type { AppBlock } from "@/types/models";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+function extractStoragePathFromUrl(url: unknown): string | null {
+  if (typeof url !== "string") return null;
+  if (!url.includes("firebasestorage.googleapis.com") && !url.includes("firebasestorage.app")) {
+    if (url.startsWith("workspaces/") || url.startsWith("users/")) return url;
+    return null;
+  }
+  try {
+    const match = url.match(/\/o\/([^?]+)/);
+    if (match && match[1]) {
+      return decodeURIComponent(match[1]);
+    }
+  } catch {}
+  return null;
+}
+
 function extractStoragePaths(blocks: unknown[]): string[] {
   const paths: string[] = [];
   const walk = (list: unknown[]) => {
@@ -16,6 +31,10 @@ function extractStoragePaths(blocks: unknown[]): string[] {
       const b = item as AppBlock;
       if (b.media?.storagePath) {
         paths.push(b.media.storagePath);
+      }
+      if (b.media?.url) {
+        const p = extractStoragePathFromUrl(b.media.url);
+        if (p) paths.push(p);
       }
       if (Array.isArray(b.children) && b.children.length) {
         walk(b.children);
@@ -36,6 +55,15 @@ async function deletePageStorageAndDoc(
 
   const storagePaths = new Set<string>(extractStoragePaths(blocks));
 
+  if (pageData.coverUrl) {
+    const p = extractStoragePathFromUrl(pageData.coverUrl);
+    if (p) storagePaths.add(p);
+  }
+  if (pageData.icon) {
+    const p = extractStoragePathFromUrl(pageData.icon);
+    if (p) storagePaths.add(p);
+  }
+
   const versionsSnap = await pageDoc.ref.collection("versions").get();
   for (const vDoc of versionsSnap.docs) {
     const vBlocks = (vDoc.data().blocks ?? []) as unknown[];
@@ -50,16 +78,29 @@ async function deletePageStorageAndDoc(
     await Promise.allSettled([
       bucket.deleteFiles({ prefix: `workspaces/${workspaceId}/uploads/${pageId}/` }),
       bucket.deleteFiles({ prefix: `workspaces/${workspaceId}/audio/${pageId}/` }),
-      ...Array.from(storagePaths).map((p) => bucket.file(p).delete()),
+      ...Array.from(storagePaths).map((p) =>
+        bucket
+          .file(p)
+          .delete()
+          .catch(() => {})
+      ),
     ]);
   }
 
-  const batch = adminDb().batch();
-  for (const vDoc of versionsSnap.docs) {
-    batch.delete(vDoc.ref);
+  // Deletar versões e o documento em batches de até 400 operações
+  const refsToDelete: FirebaseFirestore.DocumentReference[] = [
+    ...versionsSnap.docs.map((v) => v.ref),
+    pageDoc.ref,
+  ];
+
+  const db = adminDb();
+  for (let i = 0; i < refsToDelete.length; i += 400) {
+    const batch = db.batch();
+    for (const ref of refsToDelete.slice(i, i + 400)) {
+      batch.delete(ref);
+    }
+    await batch.commit();
   }
-  batch.delete(pageDoc.ref);
-  await batch.commit();
 }
 
 export async function POST(request: Request) {
@@ -83,8 +124,11 @@ export async function POST(request: Request) {
 
     if (emptyAll) {
       const trashedPages = await pagesCol.where("deletedAt", "!=", null).get();
-      for (const pDoc of trashedPages.docs) {
-        await deletePageStorageAndDoc(workspaceId, pDoc);
+      // Processar em concorrência controlada (chunks de 5 páginas)
+      const pageDocs = trashedPages.docs;
+      for (let i = 0; i < pageDocs.length; i += 5) {
+        const chunk = pageDocs.slice(i, i + 5);
+        await Promise.all(chunk.map((pDoc) => deletePageStorageAndDoc(workspaceId, pDoc)));
       }
 
       const trashedDatabases = await databasesCol.where("deletedAt", "!=", null).get();
@@ -97,34 +141,58 @@ export async function POST(request: Request) {
             for (const val of Object.values(values)) {
               if (Array.isArray(val)) {
                 for (const item of val) {
-                  if (item?.storagePath && typeof item.storagePath === "string") {
-                    await bucket.file(item.storagePath).delete().catch(() => {});
+                  const storagePath =
+                    item?.storagePath ||
+                    (item?.url ? extractStoragePathFromUrl(item.url) : null);
+                  if (storagePath && typeof storagePath === "string") {
+                    await bucket.file(storagePath).delete().catch(() => {});
                   }
                 }
               }
             }
           }
         }
-        const batch = db.batch();
-        for (const rowDoc of rowsSnap.docs) {
-          batch.delete(rowDoc.ref);
+
+        const refsToDelete = [...rowsSnap.docs.map((r) => r.ref), dDoc.ref];
+        for (let i = 0; i < refsToDelete.length; i += 400) {
+          const batch = db.batch();
+          for (const ref of refsToDelete.slice(i, i + 400)) {
+            batch.delete(ref);
+          }
+          await batch.commit();
         }
-        batch.delete(dDoc.ref);
-        await batch.commit();
       }
 
       return Response.json({ ok: true, purgedPages: trashedPages.size, purgedDatabases: trashedDatabases.size });
     }
 
     if (pageId) {
-      const [targetDoc, descendantsSnap] = await Promise.all([
+      const [targetDoc, descendantsSnap, directChildrenSnap] = await Promise.all([
         pagesCol.doc(pageId).get(),
         pagesCol.where("path", "array-contains", pageId).get(),
+        pagesCol.where("parentPageId", "==", pageId).get(),
       ]);
 
-      const docsToPurge: FirebaseFirestore.DocumentSnapshot[] = descendantsSnap.docs.slice();
+      const seenIds = new Set<string>();
+      const docsToPurge: FirebaseFirestore.DocumentSnapshot[] = [];
+
       if (targetDoc.exists) {
-        docsToPurge.unshift(targetDoc);
+        docsToPurge.push(targetDoc);
+        seenIds.add(targetDoc.id);
+      }
+
+      for (const d of descendantsSnap.docs) {
+        if (!seenIds.has(d.id)) {
+          seenIds.add(d.id);
+          docsToPurge.push(d);
+        }
+      }
+
+      for (const d of directChildrenSnap.docs) {
+        if (!seenIds.has(d.id)) {
+          seenIds.add(d.id);
+          docsToPurge.push(d);
+        }
       }
 
       for (const doc of docsToPurge) {

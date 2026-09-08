@@ -376,21 +376,54 @@ export class LocalAdapter implements DataAdapter {
   }
 
   async restorePage(id: string) {
-    const ids = new Set(pageSubtree(this.state.pages, id).map((page) => page.id));
-    this.state.pages = this.state.pages.map((page) =>
-      ids.has(page.id) ? { ...page, deletedAt: null } : page
-    );
+    const page = this.state.pages.find((p) => p.id === id);
+    if (!page) return;
+
+    let needDetach = false;
+    if (page.parentPageId) {
+      const parent = this.state.pages.find((p) => p.id === page.parentPageId);
+      if (!parent || parent.deletedAt) {
+        needDetach = true;
+      }
+    }
+
+    const ids = new Set(pageSubtree(this.state.pages, id).map((p) => p.id));
+    if (needDetach) {
+      const patches = new Map(
+        subtreePatches(this.state.pages, id, [], page.notebookId).map((patch) => [patch.pageId, patch])
+      );
+      this.state.pages = this.state.pages.map((p) => {
+        if (p.id === id) {
+          return { ...p, parentPageId: null, path: [], deletedAt: null };
+        }
+        const patch = patches.get(p.id);
+        if (patch) {
+          return { ...p, path: patch.path, notebookId: patch.notebookId, deletedAt: null };
+        }
+        if (ids.has(p.id)) {
+          return { ...p, deletedAt: null };
+        }
+        return p;
+      });
+    } else {
+      this.state.pages = this.state.pages.map((p) =>
+        ids.has(p.id) ? { ...p, deletedAt: null } : p
+      );
+    }
     this.emit();
   }
 
   async purgePage(id: string) {
     const ids = new Set(pageSubtree(this.state.pages, id).map((page) => page.id));
     this.state.pages = this.state.pages.filter((page) => !ids.has(page.id));
+    this.state.versions = this.state.versions.filter((v) => !ids.has(v.pageId));
     this.emit();
   }
 
   async emptyTrash() {
+    const trashedPageIds = new Set(this.state.pages.filter((page) => page.deletedAt).map((p) => p.id));
     this.state.pages = this.state.pages.filter((page) => !page.deletedAt);
+    this.state.versions = this.state.versions.filter((v) => !trashedPageIds.has(v.pageId));
     this.state.databases = this.state.databases.filter((database) => !database.deletedAt);
     this.emit();
   }

@@ -33,6 +33,7 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
 import { Input } from "@/components/ui/primitives";
 import { HIGHLIGHT_COLORS, TEXT_COLORS } from "./editor-colors";
 import { currentTextAlign, type TextAlignValue } from "./extensions/text-align";
+import { dispatchTableMultiAction } from "./extensions/table-block";
 
 const ALIGN_TOOLS: { value: TextAlignValue; label: string; icon: typeof AlignLeft }[] = [
   { value: "left", label: "Alinhar à esquerda", icon: AlignLeft },
@@ -174,28 +175,40 @@ export function EditorToolbar({
       <ToolButton
         label="Negrito"
         active={editor.isActive("bold")}
-        onClick={() => editor.chain().focus().toggleBold().run()}
+        onClick={() => {
+          if (dispatchTableMultiAction({ type: "annotation", key: "bold" })) return;
+          editor.chain().focus().toggleBold().run();
+        }}
       >
         <Bold className="size-3.5" />
       </ToolButton>
       <ToolButton
         label="Itálico"
         active={editor.isActive("italic")}
-        onClick={() => editor.chain().focus().toggleItalic().run()}
+        onClick={() => {
+          if (dispatchTableMultiAction({ type: "annotation", key: "italic" })) return;
+          editor.chain().focus().toggleItalic().run();
+        }}
       >
         <Italic className="size-3.5" />
       </ToolButton>
       <ToolButton
         label="Sublinhado"
         active={editor.isActive("underline")}
-        onClick={() => editor.chain().focus().toggleUnderline().run()}
+        onClick={() => {
+          if (dispatchTableMultiAction({ type: "annotation", key: "underline" })) return;
+          editor.chain().focus().toggleUnderline().run();
+        }}
       >
         <UnderlineIcon className="size-3.5" />
       </ToolButton>
       <ToolButton
         label="Tachado"
         active={editor.isActive("strike")}
-        onClick={() => editor.chain().focus().toggleStrike().run()}
+        onClick={() => {
+          if (dispatchTableMultiAction({ type: "annotation", key: "strikethrough" })) return;
+          editor.chain().focus().toggleStrike().run();
+        }}
       >
         <Strikethrough className="size-3.5" />
       </ToolButton>
@@ -229,11 +242,12 @@ export function EditorToolbar({
                 type="button"
                 title={color.label}
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() =>
+                onClick={() => {
+                  if (dispatchTableMultiAction({ type: "color", color: color.value })) return;
                   color.value
                     ? editor.chain().focus().setColor(color.value).run()
-                    : editor.chain().focus().unsetColor().run()
-                }
+                    : editor.chain().focus().unsetColor().run();
+                }}
                 className="size-6 rounded-full border border-[var(--border)]"
                 style={{ background: color.value ?? "var(--text)" }}
               />
@@ -267,11 +281,12 @@ export function EditorToolbar({
                 type="button"
                 title={color.label}
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() =>
+                onClick={() => {
+                  if (dispatchTableMultiAction({ type: "highlight", highlight: color.value })) return;
                   color.value
                     ? editor.chain().focus().toggleHighlight({ color: color.value }).run()
-                    : editor.chain().focus().unsetHighlight().run()
-                }
+                    : editor.chain().focus().unsetHighlight().run();
+                }}
                 className="size-6 rounded-md border border-[var(--border)]"
                 style={{ background: color.value ?? "var(--surface)" }}
               />
@@ -395,7 +410,12 @@ export function EditorToolbar({
           key={item.value}
           label={item.label}
           active={align === item.value}
-          onClick={() => editor.chain().focus().setTextAlign(item.value).run()}
+          onClick={() => {
+            if (item.value !== "justify" && dispatchTableMultiAction({ type: "align-horizontal", align: item.value })) {
+              return;
+            }
+            editor.chain().focus().setTextAlign(item.value).run();
+          }}
         >
           <item.icon className="size-3.5" />
         </ToolButton>

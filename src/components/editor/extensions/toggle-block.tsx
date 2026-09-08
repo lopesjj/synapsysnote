@@ -3,6 +3,7 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
+import { TextSelection } from "@tiptap/pm/state";
 import { ChevronRight, Palette, Trash2 } from "lucide-react";
 import { TEXT_COLORS, HIGHLIGHT_COLORS } from "@/components/editor/editor-colors";
 import { Menu, MenuContent, MenuTrigger } from "@/components/ui/menu";
@@ -260,6 +261,7 @@ function ToggleView({ node, updateAttributes, editor, deleteNode, getPos }: Node
           />
         </button>
         <input
+          data-toggle-summary-input="true"
           value={summary}
           readOnly={!editor.isEditable}
           onChange={(event) => updateAttributes({ summary: event.target.value })}
@@ -432,6 +434,130 @@ export const ToggleBlock = Node.create({
         }
 
         return this.editor.commands.splitBlock();
+      },
+
+      Backspace: () => {
+        const { state, view } = this.editor;
+        const { selection } = state;
+        if (!selection.empty) return false;
+
+        const { $from } = selection;
+
+        let toggleDepth = -1;
+        for (let depth = $from.depth; depth > 0; depth--) {
+          if ($from.node(depth).type.name === this.name) {
+            toggleDepth = depth;
+            break;
+          }
+        }
+
+        if (toggleDepth === -1) return false;
+
+        if (this.editor.isActive("listItem") || this.editor.isActive("taskItem")) {
+          return false;
+        }
+
+        if ($from.parentOffset !== 0) {
+          return false;
+        }
+
+        const directChildDepth = toggleDepth + 1;
+        if ($from.depth < directChildDepth) return false;
+
+        const toggleNode = $from.node(toggleDepth);
+        const togglePos = $from.before(toggleDepth);
+        const childIndex = $from.index(toggleDepth);
+        const currentChild = toggleNode.child(childIndex);
+        const isCurrentEmpty = currentChild.textContent === "" && currentChild.childCount === 0;
+
+        // CASO 1: Cursor no início do PRIMEIRO bloco do toggle -> voltar para a linha superior (título do toggle)
+        if (childIndex === 0) {
+          const currentSummary = (toggleNode.attrs.summary as string) || "";
+          const childBeforePos = $from.before(directChildDepth);
+          const childAfterPos = $from.after(directChildDepth);
+          const childText = currentChild.textContent;
+
+          const tr = state.tr;
+
+          if (isCurrentEmpty) {
+            if (toggleNode.childCount > 1) {
+              tr.delete(childBeforePos, childAfterPos);
+            }
+          } else {
+            const newSummary = currentSummary + childText;
+            tr.setNodeMarkup(togglePos, undefined, {
+              ...toggleNode.attrs,
+              summary: newSummary,
+            });
+            if (toggleNode.childCount > 1) {
+              tr.delete(childBeforePos, childAfterPos);
+            } else {
+              tr.replaceWith(childBeforePos, childAfterPos, state.schema.nodes.paragraph.create());
+            }
+          }
+
+          if (tr.docChanged) {
+            view.dispatch(tr);
+          }
+
+          const targetCursorPos = currentSummary.length;
+          const focusInput = () => {
+            const domNode = view.nodeDOM(togglePos) as HTMLElement | null;
+            const input =
+              domNode?.querySelector<HTMLInputElement>("input[data-toggle-summary-input]") ||
+              domNode?.querySelector<HTMLInputElement>("input");
+            if (input) {
+              input.focus();
+              input.setSelectionRange(targetCursorPos, targetCursorPos);
+            }
+          };
+          focusInput();
+          requestAnimationFrame(focusInput);
+          setTimeout(focusInput, 0);
+
+          return true;
+        }
+
+        // CASO 2: Cursor no início de um bloco subsequente (childIndex > 0) -> voltar para a linha superior anterior
+        const prevChild = toggleNode.child(childIndex - 1);
+        const currentBeforePos = $from.before(directChildDepth);
+        const currentAfterPos = $from.after(directChildDepth);
+        const prevBeforePos = currentBeforePos - prevChild.nodeSize;
+        const prevAfterPos = currentBeforePos;
+
+        const isPrevEmpty = prevChild.textContent === "" && prevChild.childCount === 0;
+
+        const tr = state.tr;
+
+        if (isCurrentEmpty) {
+          tr.delete(currentBeforePos, currentAfterPos);
+          const targetPos = currentBeforePos - 1;
+          tr.setSelection(TextSelection.create(tr.doc, Math.max(0, targetPos)));
+          view.dispatch(tr.scrollIntoView());
+          view.focus();
+          return true;
+        }
+
+        if (isPrevEmpty) {
+          tr.delete(prevBeforePos, prevAfterPos);
+          const targetPos = prevBeforePos + 1;
+          tr.setSelection(TextSelection.create(tr.doc, targetPos));
+          view.dispatch(tr.scrollIntoView());
+          view.focus();
+          return true;
+        }
+
+        if (prevChild.isTextblock && currentChild.isTextblock) {
+          const prevTextLength = prevChild.content.size;
+          const joinPos = prevBeforePos + 1 + prevTextLength;
+          tr.delete(currentBeforePos - 1, currentBeforePos + 1);
+          tr.setSelection(TextSelection.create(tr.doc, joinPos));
+          view.dispatch(tr.scrollIntoView());
+          view.focus();
+          return true;
+        }
+
+        return false;
       },
     };
   },

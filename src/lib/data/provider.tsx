@@ -39,6 +39,7 @@ interface WorkspaceContextValue {
   livePages: Page[];
   trashedPages: Page[];
   databases: AppDatabase[];
+  trashedDatabases: AppDatabase[];
   importJobs: ImportJob[];
   activeImportJob: ImportJob | null;
   integration: NotionIntegration | null;
@@ -192,6 +193,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       livePages,
       trashedPages,
       databases,
+      trashedDatabases: databases.filter((d) => Boolean(d.deletedAt)),
       importJobs,
       activeImportJob,
       integration,

@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-09-08T22:32:35.471Z",
+  "durationMs": 47497,
+  "storageTotal": 5087,
+  "validCount": 5087,
+  "orphanCount": 0,
+  "orphanTotalBytes": 0,
+  "missingInStorageCount": 0,
+  "orphanFilesSample": [],
+  "allOrphanNames": [],
+  "missingFilesSample": []
+}
