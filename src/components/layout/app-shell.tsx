@@ -56,6 +56,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
+    if (preferencesOpen || importOpen || paletteOpen) {
+      useUiStore.getState().setMobileSidebarOpen(false);
+    }
+  }, [preferencesOpen, importOpen, paletteOpen]);
+
+  useEffect(() => {
     if (!loading && !user && !loggingOut) {
       navigateTo(loginHref("/?session=sync_failed"), router, "replace");
     }

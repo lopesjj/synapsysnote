@@ -611,7 +611,10 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           ) : null}
         </NavLink>
         <button
-          onClick={() => useUiStore.getState().setImportOpen(true)}
+          onClick={() => {
+            useUiStore.getState().setMobileSidebarOpen(false);
+            useUiStore.getState().setImportOpen(true);
+          }}
           className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
         >
           <Import className="size-3.5" />

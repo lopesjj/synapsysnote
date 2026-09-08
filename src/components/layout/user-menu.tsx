@@ -130,10 +130,20 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
         <MenuSeparator />
 
         <div className="p-1">
-          <MenuItem onSelect={() => useUiStore.getState().setPreferencesOpen(true)}>
+          <MenuItem
+            onSelect={() => {
+              useUiStore.getState().setMobileSidebarOpen(false);
+              useUiStore.getState().setPreferencesOpen(true);
+            }}
+          >
             <Settings2 /> Preferências
           </MenuItem>
-          <MenuItem onSelect={() => setChangePasswordOpen(true)}>
+          <MenuItem
+            onSelect={() => {
+              useUiStore.getState().setMobileSidebarOpen(false);
+              setChangePasswordOpen(true);
+            }}
+          >
             <KeyRound /> Alterar senha
           </MenuItem>
           <MenuItem onSelect={() => router.push("/home/integrations")}>

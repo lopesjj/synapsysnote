@@ -35,7 +35,7 @@ export function DialogShell({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.16 }}
-                className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px]"
+                className="fixed inset-0 z-90 bg-black/50 backdrop-blur-[2px]"
               />
             </DialogPrimitive.Overlay>
             <DialogPrimitive.Content asChild forceMount onOpenAutoFocus={(e) => e.preventDefault()}>
@@ -45,7 +45,7 @@ export function DialogShell({
                 exit={{ opacity: 0, y: 8, scale: 0.99 }}
                 transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
                 className={cn(
-                  "fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2",
+                  "fixed left-1/2 top-1/2 z-100 w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2",
                   "overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-float)]",
                   className
                 )}
