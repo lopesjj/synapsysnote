@@ -1,6 +1,8 @@
 import "server-only";
 
 
+import { existsSync, readFileSync } from "node:fs";
+import { resolve, isAbsolute } from "node:path";
 import { cert, getApp, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
@@ -8,9 +10,68 @@ import { getStorage } from "firebase-admin/storage";
 
 const ADMIN_APP = "synapsys-admin";
 
+export interface ServiceAccountCredentials {
+  project_id?: string;
+  client_email?: string;
+  private_key?: string;
+}
+
+export function resolveServiceAccountCredentials(): ServiceAccountCredentials | null {
+  // 1. JSON direto ou Base64 em FIREBASE_SERVICE_ACCOUNT_JSON
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
+  if (raw) {
+    if (raw.startsWith("{")) {
+      try {
+        return JSON.parse(raw) as ServiceAccountCredentials;
+      } catch (err) {
+        console.error("[firebase-admin] Falha ao analisar FIREBASE_SERVICE_ACCOUNT_JSON:", err);
+      }
+    }
+    try {
+      const decoded = Buffer.from(raw, "base64").toString("utf-8");
+      if (decoded.trim().startsWith("{")) {
+        return JSON.parse(decoded) as ServiceAccountCredentials;
+      }
+    } catch {
+      // não é base64
+    }
+    // Caso seja caminho de arquivo informado na variável
+    try {
+      const resolved = isAbsolute(raw) ? raw : resolve(process.cwd(), raw);
+      if (existsSync(resolved)) {
+        return JSON.parse(readFileSync(resolved, "utf-8")) as ServiceAccountCredentials;
+      }
+    } catch {}
+  }
+
+  // 2. Caminho de arquivo em GOOGLE_APPLICATION_CREDENTIALS
+  const credsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
+  if (credsPath) {
+    try {
+      const resolved = isAbsolute(credsPath) ? credsPath : resolve(process.cwd(), credsPath);
+      if (existsSync(resolved)) {
+        return JSON.parse(readFileSync(resolved, "utf-8")) as ServiceAccountCredentials;
+      }
+    } catch (err) {
+      console.error("[firebase-admin] Falha ao carregar GOOGLE_APPLICATION_CREDENTIALS:", err);
+    }
+  }
+
+  // 3. Fallback no localhost: arquivo de chave adminsdk no diretório raiz do projeto
+  try {
+    const localKey = resolve(process.cwd(), "synapsysnote-firebase-adminsdk-fbsvc-dee68a0f58.json");
+    if (existsSync(localKey)) {
+      return JSON.parse(readFileSync(localKey, "utf-8")) as ServiceAccountCredentials;
+    }
+  } catch {}
+
+  return null;
+}
+
 export function isAdminConfigured(): boolean {
   return Boolean(
-    process.env.FIREBASE_SERVICE_ACCOUNT_JSON ||
+    resolveServiceAccountCredentials() ||
+      process.env.FIREBASE_SERVICE_ACCOUNT_JSON ||
       process.env.GOOGLE_APPLICATION_CREDENTIALS ||
       process.env.FIREBASE_PROJECT_ID ||
       process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
@@ -21,29 +82,25 @@ export function getAdminApp(): App {
   const existing = getApps().find((a) => a.name === ADMIN_APP);
   if (existing) return existing;
 
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const creds = resolveServiceAccountCredentials();
   const storageBucket =
     process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
   const projectId =
+    creds?.project_id ||
     process.env.FIREBASE_PROJECT_ID ||
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
     "synapsysnote";
 
-  if (raw) {
-    const parsed = JSON.parse(raw) as {
-      project_id: string;
-      client_email: string;
-      private_key: string;
-    };
+  if (creds?.client_email && creds?.private_key) {
     return initializeApp(
       {
         credential: cert({
-          projectId: parsed.project_id,
-          clientEmail: parsed.client_email,
-          privateKey: parsed.private_key.replace(/\\n/g, "\n"),
+          projectId: creds.project_id || projectId,
+          clientEmail: creds.client_email,
+          privateKey: creds.private_key.replace(/\\n/g, "\n"),
         }),
         storageBucket,
-        projectId: parsed.project_id || projectId,
+        projectId,
       },
       ADMIN_APP
     );

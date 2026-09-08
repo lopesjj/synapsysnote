@@ -1,9 +1,9 @@
 import "server-only";
 
-import { readFileSync } from "node:fs";
 import { GoogleAuth } from "google-auth-library";
 import { SYNAPSYS_FIREBASE_WEB } from "@/lib/firebase/config";
 import { getRecaptchaSiteKey } from "@/lib/recaptcha";
+import { resolveServiceAccountCredentials } from "@/lib/firebase/admin";
 
 const PROJECT_ID =
   process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || SYNAPSYS_FIREBASE_WEB.projectId;
@@ -21,21 +21,12 @@ type ServiceAccount = {
 };
 
 function loadServiceAccount(): ServiceAccount | null {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
-  if (raw) {
-    const parsed = JSON.parse(raw) as ServiceAccount;
-    return {
-      ...parsed,
-      private_key: parsed.private_key.replace(/\\n/g, "\n"),
-    };
-  }
-
-  const filePath = process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
-  if (!filePath) return null;
-  const parsed = JSON.parse(readFileSync(filePath, "utf8")) as ServiceAccount;
+  const creds = resolveServiceAccountCredentials();
+  if (!creds?.client_email || !creds?.private_key) return null;
   return {
-    ...parsed,
-    private_key: parsed.private_key.replace(/\\n/g, "\n"),
+    client_email: creds.client_email,
+    private_key: creds.private_key.replace(/\\n/g, "\n"),
+    project_id: creds.project_id,
   };
 }
 
