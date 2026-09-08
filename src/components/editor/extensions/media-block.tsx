@@ -10,6 +10,7 @@ import { AudioLines, Download, ExternalLink, FileText, Loader2, ScanText, Sparkl
 import { cn, formatBytes, formatDuration } from "@/lib/utils";
 import { Badge } from "@/components/ui/primitives";
 import { useWorkspace } from "@/lib/data/provider";
+import { useImageLightboxStore } from "@/lib/store/image-lightbox-store";
 
 function isPdf(mimeType: unknown, name: unknown) {
   if (typeof mimeType === "string" && mimeType.includes("pdf")) return true;
@@ -72,12 +73,14 @@ function ResizableImage({
   editable,
   selected,
   onWidth,
+  onDoubleClick,
 }: {
   url: string;
   width: number | null;
   editable: boolean;
   selected: boolean;
   onWidth: (percent: number) => void;
+  onDoubleClick?: () => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
@@ -141,7 +144,8 @@ function ResizableImage({
         src={url}
         alt=""
         onLoad={onNaturalSize}
-        className="h-auto max-h-[min(80vh,880px)] w-full rounded-[var(--radius-md)] object-contain [-webkit-user-drag:none]"
+        onDoubleClick={onDoubleClick}
+        className="h-auto max-h-[min(80vh,880px)] w-full cursor-zoom-in rounded-[var(--radius-md)] object-contain [-webkit-user-drag:none]"
         draggable={false}
         aria-hidden
         loading="eager"
@@ -425,6 +429,28 @@ function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) 
     }
   };
 
+  const handleOpenLightbox = () => {
+    const images: { url: string; name?: string }[] = [];
+    editor.state.doc.descendants((docNode) => {
+      if (
+        docNode.type.name === "mediaBlock" &&
+        docNode.attrs.mediaType === "image" &&
+        docNode.attrs.url
+      ) {
+        images.push({
+          url: String(docNode.attrs.url),
+          name: docNode.attrs.name ? String(docNode.attrs.name) : undefined,
+        });
+      }
+    });
+    const currentUrl = String(url);
+    const idx = images.findIndex((img) => img.url === currentUrl);
+    useImageLightboxStore.getState().openLightbox(
+      images.length ? images : [{ url: currentUrl, name: name ? String(name) : undefined }],
+      idx >= 0 ? idx : 0
+    );
+  };
+
   return (
     <NodeViewWrapper className="my-3 overflow-visible" data-media>
       {mediaType === "image" && url ? (
@@ -434,6 +460,7 @@ function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) 
           editable={editor.isEditable}
           selected={selected}
           onWidth={(percent) => updateAttributes({ displayWidth: percent })}
+          onDoubleClick={handleOpenLightbox}
         />
       ) : null}
 
