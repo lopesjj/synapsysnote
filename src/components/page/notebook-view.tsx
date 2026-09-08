@@ -789,6 +789,7 @@ function NotebookRow({
         {...listeners}
         aria-label={`Arrastar para reordenar ou mover ${notebook.name}`}
         className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-faint opacity-40 transition hover:bg-[var(--surface-hover)] hover:text-ink hover:opacity-100 active:cursor-grabbing group-hover:opacity-80"
+        onClick={(e) => e.stopPropagation()}
       >
         <GripVertical className="size-4" />
       </button>
@@ -797,7 +798,7 @@ function NotebookRow({
         href={`/home/n/${notebook.id}`}
         prefetch={true}
         onMouseEnter={() => router.prefetch(`/home/n/${notebook.id}`)}
-        className="flex min-w-0 flex-1 items-center gap-3"
+        className="flex min-w-0 flex-1 self-stretch items-center gap-3 -my-3 py-3"
       >
         <WorkspaceIcon icon={notebook.emoji} fallback="📓" variant="list" />
         <span className="min-w-0 flex-1">
@@ -807,10 +808,10 @@ function NotebookRow({
             {noteCount} {noteCount === 1 ? "nota" : "notas"}
           </span>
         </span>
+        <span className="hidden shrink-0 text-[11.5px] text-faint sm:block">
+          {formatRelative(notebook.updatedAt)}
+        </span>
       </Link>
-      <span className="hidden shrink-0 text-[11.5px] text-faint sm:block">
-        {formatRelative(notebook.updatedAt)}
-      </span>
       <Tooltip label={duplicateNotebookLabel(notebook)}>
         <Button
           variant="ghost"
@@ -880,8 +881,19 @@ function NoteRow({
   return (
     <div
       ref={setNodeRef}
+      onClick={(event) => {
+        const target = event.target as HTMLElement;
+        if (target.closest("button") || target.closest("[role='tooltip']")) return;
+        if (target.closest("a")) return;
+        if (event.metaKey || event.ctrlKey) {
+          window.open(`/home/p/${page.id}`, "_blank");
+        } else {
+          useUiStore.getState().closeMenu();
+          router.push(`/home/p/${page.id}`);
+        }
+      }}
       className={cn(
-        "group relative flex items-center gap-2 px-3 py-3 transition hover:bg-[var(--surface-hover)]",
+        "group relative flex cursor-pointer items-center gap-2 px-3 py-2.5 transition hover:bg-[var(--surface-hover)]",
         isDragging && "opacity-30"
       )}
     >
@@ -904,6 +916,7 @@ function NoteRow({
         {...listeners}
         aria-label={`Arrastar para reordenar ${page.title || "Sem título"}`}
         className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-faint opacity-40 transition hover:bg-[var(--surface-hover)] hover:text-ink hover:opacity-100 active:cursor-grabbing group-hover:opacity-80"
+        onClick={(e) => e.stopPropagation()}
       >
         <GripVertical className="size-4" />
       </button>
@@ -913,21 +926,16 @@ function NoteRow({
         prefetch={true}
         onMouseEnter={() => router.prefetch(`/home/p/${page.id}`)}
         onClick={() => useUiStore.getState().closeMenu()}
-        className="flex min-w-0 flex-1 items-center gap-3"
+        className="flex min-w-0 flex-1 self-stretch items-center gap-3 -my-2.5 py-2.5"
       >
         <WorkspaceIcon icon={page.icon} fallback="📄" variant="list" />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13.5px] font-medium text-ink">
-            {page.title || "Sem título"}
-          </span>
-          <span className="mt-0.5 block truncate text-[11.5px] text-muted">
-            {excerpt(page) || "Nota vazia"}
-          </span>
+        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">
+          {page.title || "Sem título"}
+        </span>
+        <span className="hidden shrink-0 text-[11.5px] text-faint sm:block">
+          {formatRelative(page.updatedAt)}
         </span>
       </Link>
-      <span className="hidden shrink-0 text-[11.5px] text-faint sm:block">
-        {formatRelative(page.updatedAt)}
-      </span>
       <Tooltip label="Duplicar nota">
         <Button
           variant="ghost"
@@ -952,10 +960,4 @@ function NoteRow({
       </Tooltip>
     </div>
   );
-}
-
-function excerpt(page: Page): string {
-  const text = page.plainText.replace(/\s+/g, " ").trim();
-  const withoutTitle = text.startsWith(page.title) ? text.slice(page.title.length).trim() : text;
-  return withoutTitle.slice(0, 120);
 }
