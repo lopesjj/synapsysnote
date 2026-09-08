@@ -25,18 +25,37 @@ export function proxy(request: NextRequest) {
 
   if (pathname.startsWith("/api/")) return NextResponse.next();
 
+  const hasSession = Boolean(request.cookies.get("synapsys_session")?.value);
+
   if (hostname === WWW_LOGIN_HOST) {
+    if (pathname === "/" && hasSession) {
+      return redirectToHost(request, APP_HOST, "/home");
+    }
     return redirectToHost(request, LOGIN_HOST);
   }
 
   if (hostname === LOGIN_HOST) {
+    if (pathname === "/" && hasSession) {
+      return redirectToHost(request, APP_HOST, "/home");
+    }
     const destination = appPath(pathname);
     if (destination) return redirectToHost(request, APP_HOST, destination);
     return NextResponse.next();
   }
 
   if (hostname === APP_HOST && (pathname === "/" || pathname.startsWith("/auth/"))) {
+    if (pathname === "/" && hasSession) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/home";
+      return NextResponse.redirect(url);
+    }
     return redirectToHost(request, LOGIN_HOST);
+  }
+
+  if (pathname === "/" && hasSession) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/home";
+    return NextResponse.redirect(url);
   }
 
   return NextResponse.next();

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth, type OAuthProviderId } from "@/hooks/use-auth";
+import { useAuth, hasActiveSessionHint, type OAuthProviderId } from "@/hooks/use-auth";
 import { useUserProfile } from "@/hooks/use-user-profile";
 import { SynapsysLockup } from "@/components/brand/logo";
 import { AuthField } from "@/components/auth/auth-field";
@@ -46,6 +46,7 @@ export default function LandingPage() {
   const [oauthBusy, setOauthBusy] = useState<OAuthProviderId | null>(null);
   const [captcha, setCaptcha] = useState<string | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
+  const [sessionHint] = useState(() => hasActiveSessionHint());
   const needsCompletion = profileNeedsCompletion(user, profile);
 
   useEffect(() => {
@@ -67,11 +68,22 @@ export default function LandingPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("mode") === "resetPassword" && params.get("oobCode")) return;
+    if (params.get("logout") === "1") return;
     if (isSplitHosts() && params.get("session") === "sync_failed") return;
-    if (!loading && !profileLoading && user && !needsCompletion) {
+
+    if (user && !profileLoading && !needsCompletion) {
+      navigateTo(appHref("/home"), router, "replace");
+      return;
+    }
+
+    if (sessionHint && !user && !loading) {
+      return;
+    }
+
+    if (sessionHint && loading) {
       navigateTo(appHref("/home"), router, "replace");
     }
-  }, [loading, needsCompletion, profileLoading, router, user]);
+  }, [loading, needsCompletion, profileLoading, router, sessionHint, user]);
 
   const refreshCaptcha = () => {
     setCaptcha(null);
@@ -173,57 +185,15 @@ export default function LandingPage() {
         </div>
 
         <div className="mx-auto w-full max-w-sm sm:max-w-none lux-gradient rounded-[var(--radius-xl)] border border-[var(--border)] p-6 shadow-[var(--shadow-float)]">
-          {user && profileLoading ? (
-            <div className="flex justify-center py-10">
-              <Loader2 className="size-5 animate-spin text-muted" />
+          {user && !profileLoading && needsCompletion ? (
+            <CompleteRegistrationForm />
+          ) : (user || (sessionHint && loading)) && !needsCompletion ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
+              <Loader2 className="size-6 animate-spin text-[var(--accent)]" />
+              <p className="text-[13px] font-medium text-ink">Acessando seu ambiente de estudos...</p>
+              <p className="text-[11.5px] text-muted">Redirecionando para a página inicial</p>
             </div>
-          ) : null}
-          {user && !profileLoading && needsCompletion ? <CompleteRegistrationForm /> : null}
-          {user && !profileLoading && !needsCompletion ? (
-            <div className="space-y-4 py-2 text-center">
-              <p className="text-[15px] font-medium text-ink">
-                Conectado como <span className="font-semibold text-[var(--accent)]">{user.email || user.displayName}</span>
-              </p>
-              <p className="text-[13px] leading-relaxed text-muted">
-                Sua conta está ativa. Clique abaixo para entrar no seu ambiente de estudos.
-              </p>
-              <Button
-                variant="primary"
-                size="lg"
-                className="w-full"
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    await persistCrossHostSession(true);
-                    navigateTo(appHref("/home"), router);
-                  } catch (err) {
-                    toast.error(err instanceof Error ? err.message : "Falha ao sincronizar sessão");
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-                disabled={busy}
-              >
-                {busy ? <Loader2 className="animate-spin" /> : null}
-                Acessar Synapsys Note
-              </Button>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    await signOut();
-                    window.location.replace(loginHref("/?logout=1"));
-                  } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Não foi possível sair da conta");
-                  }
-                }}
-                className="w-full text-center text-[12.5px] text-muted transition hover:text-ink"
-              >
-                Sair da conta
-              </button>
-            </div>
-          ) : null}
-          {user ? null : tab === "reset" ? (
+          ) : tab === "reset" ? (
             <>
               <p className="text-[15px] font-medium tracking-[-0.015em] text-ink">Esqueceu a senha</p>
               <p className="mt-1 text-[13px] leading-relaxed text-muted">

@@ -80,6 +80,7 @@ export default function WorkspaceHome() {
     notebooks,
     notebookById,
     rootNotebooks,
+    ready,
   } = useWorkspace();
 
   const recent = useMemo(
@@ -192,6 +193,20 @@ export default function WorkspaceHome() {
             ))}
           </div>
         </section>
+      ) : !ready ? (
+        <section className="mt-9">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div className="space-y-1.5">
+              <div className="h-4 w-20 animate-pulse rounded bg-[var(--surface-2)]" />
+              <div className="h-3 w-36 animate-pulse rounded bg-[var(--surface-2)]" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="h-28 animate-pulse rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]" />
+            <div className="h-28 animate-pulse rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]" />
+            <div className="h-28 animate-pulse rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]" />
+          </div>
+        </section>
       ) : null}
 
       <div
@@ -211,6 +226,7 @@ export default function WorkspaceHome() {
             {recent.length ? (
               <Link
                 href="/home/notes"
+                prefetch={true}
                 className="inline-flex items-center gap-0.5 text-[12px] font-medium text-[var(--accent)] hover:underline"
               >
                 Ver todas
@@ -224,6 +240,11 @@ export default function WorkspaceHome() {
               {recent.map((page) => (
                 <NoteCard key={page.id} page={page} notebook={notebookById(page.notebookId ?? "")} />
               ))}
+            </div>
+          ) : !ready ? (
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              <div className="h-24 animate-pulse rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]" />
+              <div className="h-24 animate-pulse rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]" />
             </div>
           ) : (
             <EmptyState
@@ -247,6 +268,7 @@ export default function WorkspaceHome() {
                 <Link
                   key={page.id}
                   href={`/home/p/${page.id}`}
+                  prefetch={true}
                   onClick={() => useUiStore.getState().closeMenu()}
                   className="flex items-center gap-2.5 border-b border-[var(--border)] px-3 py-2.5 last:border-b-0 transition hover:bg-[var(--surface-hover)]"
                 >
@@ -274,6 +296,7 @@ function PageCard({
   notebooks: Notebook[];
   livePages: Page[];
 }) {
+  const router = useRouter();
   const uploaded = isIconUrl(notebook.emoji ?? "");
   const subtree = notebookSubtreeIds(notebooks, notebook.id);
   const count = livePages.filter(
@@ -283,6 +306,8 @@ function PageCard({
   return (
     <Link
       href={`/home/n/${notebook.id}`}
+      prefetch={true}
+      onMouseEnter={() => router.prefetch(`/home/n/${notebook.id}`)}
       className="group block overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-panel)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/45 hover:shadow-[var(--shadow-float)]"
     >
       <CoverStrip coverUrl={notebook.coverUrl} className="h-[4.5rem] w-full" />
@@ -310,9 +335,12 @@ function PageCard({
 }
 
 function NoteCard({ page, notebook }: { page: Page; notebook?: Notebook }) {
+  const router = useRouter();
   return (
     <Link
       href={`/home/p/${page.id}`}
+      prefetch={true}
+      onMouseEnter={() => router.prefetch(`/home/p/${page.id}`)}
       onClick={() => useUiStore.getState().closeMenu()}
       className="group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] transition hover:border-[var(--accent)]/45 hover:shadow-[var(--shadow-panel)]"
     >

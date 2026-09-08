@@ -59,12 +59,34 @@ function workspaceIdFor(uid: string): string {
   return `ws_${uid}`;
 }
 
+function readLocalStore<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeLocalStore(key: string, value: unknown) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
 export const TRASH_RETENTION_DAYS = 30;
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [notebooks, setNotebooks] = useState<Notebook[]>([]);
-  const [pages, setPages] = useState<Page[]>([]);
+  const userKey = user?.uid ?? "default";
+  const [notebooks, setNotebooks] = useState<Notebook[]>(() =>
+    readLocalStore<Notebook[]>(`synapsys.cache.notebooks.${userKey}`, [])
+  );
+  const [pages, setPages] = useState<Page[]>(() =>
+    readLocalStore<Page[]>(`synapsys.cache.pages.${userKey}`, [])
+  );
   const [databases, setDatabases] = useState<AppDatabase[]>([]);
   const [importJobs, setImportJobs] = useState<ImportJob[]>([]);
   const [integration, setIntegration] = useState<NotionIntegration | null>(null);
@@ -78,31 +100,53 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   useEffect(() => {
+    if (user?.uid) {
+      const cachedNbs = readLocalStore<Notebook[]>(`synapsys.cache.notebooks.${user.uid}`, []);
+      const cachedPgs = readLocalStore<Page[]>(`synapsys.cache.pages.${user.uid}`, []);
+      if (cachedNbs.length > 0) setNotebooks(cachedNbs);
+      if (cachedPgs.length > 0) setPages(cachedPgs);
+    }
+  }, [user?.uid]);
+
+  useEffect(() => {
     let cancelled = false;
     const unsubs: Array<() => void> = [];
 
-    void (async () => {
-      await adapter.ensureWorkspace();
-      if (cancelled) return;
-      unsubs.push(
-        adapter.subscribeNotebooks(setNotebooks),
-        adapter.subscribePages((next) => {
-          setPages(next);
-          setLoadedAdapter(adapter);
-        }),
-        adapter.subscribeDatabases(setDatabases),
-        adapter.subscribeImportJobs(setImportJobs),
-        adapter.subscribeIntegration(setIntegration)
-      );
-    })();
+    unsubs.push(
+      adapter.subscribeNotebooks((next) => {
+        if (cancelled) return;
+        setNotebooks(next);
+        writeLocalStore(`synapsys.cache.notebooks.${userKey}`, next);
+      }),
+      adapter.subscribePages((next) => {
+        if (cancelled) return;
+        setPages(next);
+        setLoadedAdapter(adapter);
+        writeLocalStore(`synapsys.cache.pages.${userKey}`, next);
+      }),
+      adapter.subscribeDatabases((next) => {
+        if (cancelled) return;
+        setDatabases(next);
+      }),
+      adapter.subscribeImportJobs((next) => {
+        if (cancelled) return;
+        setImportJobs(next);
+      }),
+      adapter.subscribeIntegration((next) => {
+        if (cancelled) return;
+        setIntegration(next);
+      })
+    );
+
+    void adapter.ensureWorkspace();
 
     return () => {
       cancelled = true;
       unsubs.forEach((unsub) => unsub());
     };
-  }, [adapter]);
+  }, [adapter, userKey]);
 
-  const ready = loadedAdapter === adapter;
+  const ready = loadedAdapter === adapter || notebooks.length > 0 || pages.length > 0;
 
   const value = useMemo<WorkspaceContextValue>(() => {
     const livePages = pages.filter((p) => !p.deletedAt);

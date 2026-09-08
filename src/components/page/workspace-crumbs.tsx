@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useWorkspace } from "@/lib/data/provider";
 import { notebookAncestors } from "@/lib/data/notebook-tree";
@@ -21,6 +22,7 @@ export function WorkspaceCrumbs({
   page?: Page | null;
   inverted?: boolean;
 }) {
+  const router = useRouter();
   const { notebooks, pages } = useWorkspace();
   const { canBack, canForward, goBack, goForward } = useNavArrows();
 
@@ -132,6 +134,8 @@ export function WorkspaceCrumbs({
             {index > 0 ? <span className={slash}>/</span> : null}
             <Link
               href={crumb.href}
+              prefetch={true}
+              onMouseEnter={() => router.prefetch(crumb.href)}
               onClick={() => {
                 if (crumb.href.startsWith("/home/p/")) {
                   useUiStore.getState().closeMenu();

@@ -462,6 +462,8 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                     <Link
                       key={database.id}
                       href={`/home/db/${database.id}`}
+                      prefetch={true}
+                      onMouseEnter={() => router.prefetch(`/home/db/${database.id}`)}
                       draggable={false}
                       className={cn(
                         "flex items-center gap-1.5 rounded-[var(--radius-xs)] py-1 pr-2 text-[13.5px] transition hover:bg-[var(--surface-hover)]",
@@ -654,6 +656,8 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                 <Link
                   key={page.id}
                   href={`/home/p/${page.id}`}
+                  prefetch={true}
+                  onMouseEnter={() => router.prefetch(`/home/p/${page.id}`)}
                   onClick={closeMenuBar}
                   className="flex items-center gap-2 rounded-[var(--radius-xs)] px-2 py-1 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
                 >
@@ -699,6 +703,8 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                   <Link
                     key={tag.name}
                     href={`/home/tag/${encodeURIComponent(tag.name)}`}
+                    prefetch={true}
+                    onMouseEnter={() => router.prefetch(`/home/tag/${encodeURIComponent(tag.name)}`)}
                     className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-muted transition hover:border-[var(--accent)] hover:text-ink"
                   >
                     {tag.name}
@@ -762,9 +768,12 @@ function NavLink({
   icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const router = useRouter();
   return (
     <Link
       href={href}
+      prefetch={true}
+      onMouseEnter={() => router.prefetch(href)}
       className={cn(
         "flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] transition hover:bg-[var(--surface-hover)]",
         active ? "font-medium text-ink" : "text-muted hover:text-ink"
@@ -889,6 +898,8 @@ function NotebookRow({
             </button>
             <Link
               href={`/home/n/${notebook.id}`}
+              prefetch={true}
+              onMouseEnter={() => router.prefetch(`/home/n/${notebook.id}`)}
               draggable={false}
               className={cn(
                 "flex min-w-0 flex-1 items-center gap-1.5 text-left",
@@ -998,6 +1009,7 @@ function SortablePageRow({
   onDuplicate: () => Promise<void>;
   onTrash: () => Promise<void>;
 }) {
+  const router = useRouter();
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useSortable({
     id: encodeId("page", node.page.id),
   });
@@ -1055,6 +1067,8 @@ function SortablePageRow({
       </button>
       <Link
         href={`/home/p/${node.page.id}`}
+        prefetch={true}
+        onMouseEnter={() => router.prefetch(`/home/p/${node.page.id}`)}
         draggable={false}
         onClick={closeMenuBar}
         className={cn(

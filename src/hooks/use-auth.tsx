@@ -142,12 +142,56 @@ function writeDemoUser(next: AppUser | null) {
   window.dispatchEvent(new Event(DEMO_EVENT));
 }
 
+const CACHED_USER_KEY = "synapsys.auth_user";
+const AUTH_ACTIVE_KEY = "synapsys.auth_active";
+
+export function hasActiveSessionHint(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return Boolean(
+      window.localStorage.getItem(AUTH_ACTIVE_KEY) ||
+      window.localStorage.getItem(CACHED_USER_KEY) ||
+      document.cookie.includes("synapsys_session=")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function readCachedUser(): AppUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    if (isRememberExpired()) {
+      window.localStorage.removeItem(CACHED_USER_KEY);
+      window.localStorage.removeItem(AUTH_ACTIVE_KEY);
+      return null;
+    }
+    const raw = window.localStorage.getItem(CACHED_USER_KEY);
+    return raw ? (JSON.parse(raw) as AppUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedUser(user: AppUser | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (user) {
+      window.localStorage.setItem(CACHED_USER_KEY, JSON.stringify(user));
+      window.localStorage.setItem(AUTH_ACTIVE_KEY, "1");
+    } else {
+      window.localStorage.removeItem(CACHED_USER_KEY);
+      window.localStorage.removeItem(AUTH_ACTIVE_KEY);
+    }
+  } catch {}
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const configured = isFirebaseConfigured();
   const demoUser = useSyncExternalStore(subscribeDemo, readDemoUser, () => null);
 
-  const [firebaseUser, setFirebaseUser] = useState<AppUser | null>(null);
-  const [firebaseLoading, setFirebaseLoading] = useState(configured);
+  const [firebaseUser, setFirebaseUser] = useState<AppUser | null>(() => readCachedUser());
+  const [firebaseLoading, setFirebaseLoading] = useState(() => configured && !readCachedUser());
   const [loggingOut, setLoggingOut] = useState(false);
   const interactiveSignIn = useRef(false);
 
@@ -191,7 +235,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unsub = onAuthStateChanged(auth, (fbUser) => {
         if (fbUser) {
           if (interactiveSignIn.current) return;
-          setFirebaseUser(toAppUser(fbUser));
+          const nextUser = toAppUser(fbUser);
+          writeCachedUser(nextUser);
+          setFirebaseUser(nextUser);
           setFirebaseLoading(false);
           return;
         }
@@ -200,12 +246,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         void hydrateFromSessionCookie()
           .then((ok) => {
             if (!ok && !cancelled) {
+              writeCachedUser(null);
               setFirebaseUser(null);
               setFirebaseLoading(false);
             }
           })
           .catch(() => {
             if (!cancelled) {
+              writeCachedUser(null);
               setFirebaseUser(null);
               setFirebaseLoading(false);
             }
@@ -268,6 +316,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           const next = toAppUser(credential.user);
           await persistCrossHostSession(remember);
+          writeCachedUser(next);
           setFirebaseUser(next);
           return next;
         } catch (error) {
@@ -275,6 +324,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             suppressSessionHydrate();
             await clearCrossHostSession().catch(() => {});
             await signOut(auth).catch(() => {});
+            writeCachedUser(null);
             setFirebaseUser(null);
           }
           throw toAuthError(error);
@@ -302,6 +352,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           authenticated = true;
           const next = toAppUser(cred.user);
           await persistCrossHostSession(remember);
+          writeCachedUser(next);
           setFirebaseUser(next);
           return next;
         } catch (error) {
@@ -309,6 +360,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             suppressSessionHydrate();
             await clearCrossHostSession().catch(() => {});
             await signOut(auth).catch(() => {});
+            writeCachedUser(null);
             setFirebaseUser(null);
           }
           throw toAuthError(error);
@@ -349,6 +401,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             providers: next.providers,
           });
           await persistCrossHostSession(true);
+          writeCachedUser(next);
           setFirebaseUser(next);
           return next;
         } catch (error) {
@@ -482,6 +535,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               // state below; Firebase reconciles its local storage next load.
             });
           }
+          writeCachedUser(null);
           writeDemoUser(null);
           setFirebaseUser(null);
           clearRemembered();
@@ -490,7 +544,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               sessionStorage.removeItem("synapsys.session.openNotebooks");
               sessionStorage.removeItem("synapsys.session.expandedPages");
             } catch {
-              // ignore
             }
           }
           // Keep this true until the caller completes its full navigation.

@@ -793,7 +793,12 @@ function NotebookRow({
         <GripVertical className="size-4" />
       </button>
 
-      <Link href={`/home/n/${notebook.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+      <Link
+        href={`/home/n/${notebook.id}`}
+        prefetch={true}
+        onMouseEnter={() => router.prefetch(`/home/n/${notebook.id}`)}
+        className="flex min-w-0 flex-1 items-center gap-3"
+      >
         <WorkspaceIcon icon={notebook.emoji} fallback="📓" variant="list" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13.5px] font-medium text-ink">{notebook.name}</span>
@@ -905,6 +910,8 @@ function NoteRow({
 
       <Link
         href={`/home/p/${page.id}`}
+        prefetch={true}
+        onMouseEnter={() => router.prefetch(`/home/p/${page.id}`)}
         onClick={() => useUiStore.getState().closeMenu()}
         className="flex min-w-0 flex-1 items-center gap-3"
       >

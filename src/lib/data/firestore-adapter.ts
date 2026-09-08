@@ -122,6 +122,22 @@ export class FirestoreAdapter implements DataAdapter {
   private bootstrapped = false;
   private lastPagePatch = new Map<string, Record<string, unknown>>();
 
+  private isLocallyBootstrapped(): boolean {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(`synapsys.bootstrapped.${this.workspaceId}`) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  private markLocallyBootstrapped() {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(`synapsys.bootstrapped.${this.workspaceId}`, "1");
+    } catch {}
+  }
+
   private rememberPagePatch(id: string, patch: Record<string, unknown>) {
     this.lastPagePatch.set(id, {
       ...(this.lastPagePatch.get(id) ?? {}),
@@ -130,7 +146,10 @@ export class FirestoreAdapter implements DataAdapter {
   }
 
   async ensureWorkspace() {
-    if (this.bootstrapped) return;
+    if (this.bootstrapped || this.isLocallyBootstrapped()) {
+      this.bootstrapped = true;
+      return;
+    }
     try {
       await firebaseJson("/api/workspace/bootstrap", {
         method: "POST",
@@ -138,10 +157,9 @@ export class FirestoreAdapter implements DataAdapter {
       });
       await this.purgeLegacyInbox();
       this.bootstrapped = true;
+      this.markLocallyBootstrapped();
       return;
     } catch {
-      // Admin may be missing; fall through to a client-side create that the
-      // security rules allow for the first owner.
     }
     try {
       const wsRef = doc(getDb(), "workspaces", this.workspaceId);
@@ -179,10 +197,10 @@ export class FirestoreAdapter implements DataAdapter {
           { merge: true }
         );
       } catch {
-        // Already a member, or the client is not allowed to rewrite membership.
       }
 
       this.bootstrapped = true;
+      this.markLocallyBootstrapped();
     } catch (error) {
       console.error("Falha ao provisionar workspace", error);
     }

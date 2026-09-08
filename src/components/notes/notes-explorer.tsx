@@ -259,6 +259,7 @@ export function NotesExplorer({
               <button
                 key={page.id}
                 onClick={() => setPickedId(page.id)}
+                onMouseEnter={() => router.prefetch(`/home/p/${page.id}`)}
                 onDoubleClick={() => {
                   useUiStore.getState().closeMenu();
                   router.push(`/home/p/${page.id}`);
@@ -292,6 +293,8 @@ export function NotesExplorer({
                   <Button variant="secondary" asChild>
                     <Link
                       href={`/home/p/${selected.id}`}
+                      prefetch={true}
+                      onMouseEnter={() => router.prefetch(`/home/p/${selected.id}`)}
                       onClick={() => useUiStore.getState().closeMenu()}
                     >
                       Abrir
@@ -324,6 +327,8 @@ export function NotesExplorer({
               <Link
                 key={page.id}
                 href={`/home/p/${page.id}`}
+                prefetch={true}
+                onMouseEnter={() => router.prefetch(`/home/p/${page.id}`)}
                 onClick={() => useUiStore.getState().closeMenu()}
                 className={cn(
                   "panel group flex flex-col transition hover:border-[var(--accent)]",
@@ -355,6 +360,8 @@ export function NotesExplorer({
             <Link
               key={page.id}
               href={`/home/p/${page.id}`}
+              prefetch={true}
+              onMouseEnter={() => router.prefetch(`/home/p/${page.id}`)}
               onClick={() => useUiStore.getState().closeMenu()}
               className={cn(
                 "flex items-center gap-3 border-b border-[var(--border)] px-5 transition hover:bg-[var(--surface-hover)] sm:px-8",
