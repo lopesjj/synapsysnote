@@ -45,7 +45,7 @@ export function DialogShell({
                 exit={{ opacity: 0, y: 8, scale: 0.99 }}
                 transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
                 className={cn(
-                  "fixed left-1/2 top-1/2 z-100 w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2",
+                  "fixed left-1/2 top-1/2 z-100 flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col",
                   "overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-float)]",
                   className
                 )}
@@ -80,7 +80,7 @@ export function DialogHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-start gap-3 border-b border-[var(--border)] px-5 py-4", className)}>
+    <div className={cn("flex shrink-0 items-start gap-3 border-b border-[var(--border)] px-5 py-4", className)}>
       {icon ? (
         <div className="mt-0.5 flex size-8 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--accent-soft)] text-[var(--accent)]">
           {icon}
@@ -104,7 +104,7 @@ export function DialogFooter({ children, className }: { children: React.ReactNod
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface-2)]/50 px-5 py-3.5",
+        "flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface-2)]/50 px-5 py-3.5",
         className
       )}
     >

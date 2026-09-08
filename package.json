@@ -1,6 +1,6 @@
 {
   "name": "synapsys-note",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "private": true,
   "description": "Plataforma de produtividade e gestão de conhecimento (PKM) com editor de blocos, bases de dados flexíveis, OCR, notas de voz e importação nativa do Notion sobre Firebase.",
   "scripts": {
@@ -9,12 +9,13 @@
     "start": "next start --port 43127",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run verify:sidebar-dnd && npm run verify:page-tree && npm run verify:notebook-tree && npm run verify:media-enrichment && npm run verify:attachment-compress",
+    "verify": "npm run verify:sidebar-dnd && npm run verify:page-tree && npm run verify:notebook-tree && npm run verify:media-enrichment && npm run verify:attachment-compress && npm run verify:notion-database-notebook",
     "verify:sidebar-dnd": "tsx scripts/verify-sidebar-dnd.mts",
     "verify:page-tree": "tsx scripts/verify-page-tree.mts",
     "verify:notebook-tree": "tsx scripts/verify-notebook-tree.mts",
     "verify:media-enrichment": "tsx scripts/verify-media-enrichment.mts",
     "verify:attachment-compress": "tsx scripts/verify-attachment-compress.mts",
+    "verify:notion-database-notebook": "tsx scripts/verify-notion-database-notebook.mts",
     "functions:build": "npm --prefix functions run build",
     "functions:typecheck": "npm --prefix functions run typecheck",
     "emulators": "firebase emulators:start --only auth,firestore,functions,storage",

@@ -8,13 +8,15 @@ import {
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
+  closestCenter,
+  pointerWithin,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
   SortableContext,
   sortableKeyboardCoordinates,
@@ -53,6 +55,25 @@ import { IconPickerMenu } from "@/components/ui/icon-picker";
 import { CoverPicker } from "./cover-picker";
 
 export type DropMode = "before" | "after" | "inside";
+type DragKind = "notebook" | "note";
+
+function encodeId(kind: DragKind, id: string): string {
+  return `${kind}:${id}`;
+}
+
+function decodeId(value: string | number): { kind: DragKind; id: string } | null {
+  const raw = String(value);
+  const separator = raw.indexOf(":");
+  if (separator < 0) return null;
+  const kind = raw.slice(0, separator);
+  if (kind !== "notebook" && kind !== "note") return null;
+  return { kind: kind as DragKind, id: raw.slice(separator + 1) };
+}
+
+const detectCollisions: CollisionDetection = (args) => {
+  const within = pointerWithin(args);
+  return within.length ? within : closestCenter(args);
+};
 
 function moveItem<T>(items: T[], from: number, to: number): T[] {
   const next = items.slice();
@@ -87,10 +108,18 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
   );
 
   const [activeNotebookId, setActiveNotebookId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ id: string; mode: DropMode } | null>(null);
-  const dropTargetRef = useRef<{ id: string; mode: DropMode } | null>(null);
-  const pointerYRef = useRef<number>(0);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    id: string;
+    kind: DragKind;
+    mode: DropMode;
+  } | null>(null);
+  const dropTargetRef = useRef<{
+    id: string;
+    kind: DragKind;
+    mode: DropMode;
+  } | null>(null);
+  const pointerYRef = useRef<number>(0);
 
   useEffect(() => {
     const handlePointerMove = (e: PointerEvent) => {
@@ -115,13 +144,20 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     [activeNoteId, notes]
   );
 
-  const onNotebookDragStart = (event: DragStartEvent) => {
+  const onDragStart = (event: DragStartEvent) => {
     dropTargetRef.current = null;
-    setActiveNotebookId(String(event.active.id));
     setDropTarget(null);
+    const decoded = decodeId(event.active.id);
+    if (decoded?.kind === "notebook") {
+      setActiveNotebookId(decoded.id);
+      setActiveNoteId(null);
+    } else if (decoded?.kind === "note") {
+      setActiveNoteId(decoded.id);
+      setActiveNotebookId(null);
+    }
   };
 
-  const onNotebookDragMove = (event: DragMoveEvent) => {
+  const onDragMove = (event: DragMoveEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) {
       dropTargetRef.current = null;
@@ -129,9 +165,9 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
       return;
     }
 
-    const overId = String(over.id);
-    const targetNb = childNotebooks.find((n) => n.id === overId);
-    if (!targetNb) {
+    const activeDecoded = decodeId(active.id);
+    const overDecoded = decodeId(over.id);
+    if (!activeDecoded || !overDecoded) {
       dropTargetRef.current = null;
       setDropTarget(null);
       return;
@@ -140,60 +176,79 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     const overRect = over.rect;
     if (!overRect) return;
 
-    const cursorY = pointerYRef.current || (active.rect.current.translated ? active.rect.current.translated.top + active.rect.current.translated.height / 2 : overRect.top + overRect.height / 2);
+    const cursorY =
+      pointerYRef.current ||
+      (active.rect.current.translated
+        ? active.rect.current.translated.top + active.rect.current.translated.height / 2
+        : overRect.top + overRect.height / 2);
     const relativeY = (cursorY - overRect.top) / overRect.height;
 
-    let mode: DropMode = "inside";
-    if (relativeY < 0.25) {
-      mode = "before";
-    } else if (relativeY > 0.75) {
-      mode = "after";
-    } else {
-      mode = "inside"; 
-    }
-
-    dropTargetRef.current = { id: overId, mode };
-    setDropTarget({ id: overId, mode });
-  };
-
-  const onNotebookDragCancel = () => {
-    dropTargetRef.current = null;
-    setActiveNotebookId(null);
-    setDropTarget(null);
-  };
-
-  const onNotebookDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    const targetState = dropTargetRef.current ?? dropTarget;
-    dropTargetRef.current = null;
-    setActiveNotebookId(null);
-    setDropTarget(null);
-
-    if (!over || active.id === over.id || !targetState) return;
-
-    const draggedId = String(active.id);
-    const targetId = String(over.id);
-    const dragged = childNotebooks.find((n) => n.id === draggedId);
-    const target = childNotebooks.find((n) => n.id === targetId);
-    if (!dragged || !target) return;
-
-    if (targetState.mode === "inside") {
-      if (isNotebookDescendant(notebooks, target.id, dragged.id)) {
-        toast.error("Não é possível mover um caderno para dentro de seus subcadernos.");
-        return;
-      }
-      try {
-        await adapter.moveNotebook(dragged.id, { parentId: target.id });
-        toast.success(`Caderno “${dragged.name}” inserido dentro de “${target.name}”`);
-      } catch {
-        toast.error("Não foi possível mover o caderno.");
+    if (activeDecoded.kind === "notebook") {
+      if (overDecoded.kind === "notebook") {
+        let mode: DropMode = "inside";
+        if (relativeY < 0.25) mode = "before";
+        else if (relativeY > 0.75) mode = "after";
+        dropTargetRef.current = { id: overDecoded.id, kind: "notebook", mode };
+        setDropTarget({ id: overDecoded.id, kind: "notebook", mode });
+      } else {
+        dropTargetRef.current = null;
+        setDropTarget(null);
       }
       return;
     }
 
-    try {
-      const fromIndex = childNotebooks.findIndex((n) => n.id === dragged.id);
-      let toIndex = childNotebooks.findIndex((n) => n.id === target.id);
+    if (activeDecoded.kind === "note") {
+      if (overDecoded.kind === "notebook") {
+        dropTargetRef.current = { id: overDecoded.id, kind: "notebook", mode: "inside" };
+        setDropTarget({ id: overDecoded.id, kind: "notebook", mode: "inside" });
+      } else if (overDecoded.kind === "note") {
+        const mode: DropMode = relativeY < 0.5 ? "before" : "after";
+        dropTargetRef.current = { id: overDecoded.id, kind: "note", mode };
+        setDropTarget({ id: overDecoded.id, kind: "note", mode });
+      } else {
+        dropTargetRef.current = null;
+        setDropTarget(null);
+      }
+    }
+  };
+
+  const onDragCancel = () => {
+    dropTargetRef.current = null;
+    setActiveNotebookId(null);
+    setActiveNoteId(null);
+    setDropTarget(null);
+  };
+
+  const onDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    const targetState = dropTargetRef.current ?? dropTarget;
+    dropTargetRef.current = null;
+    setActiveNotebookId(null);
+    setActiveNoteId(null);
+    setDropTarget(null);
+
+    if (!over || active.id === over.id || !targetState) return;
+
+    const activeDecoded = decodeId(active.id);
+    const overDecoded = decodeId(over.id);
+    if (!activeDecoded || !overDecoded) return;
+
+    if (activeDecoded.kind === "note" && overDecoded.kind === "notebook") {
+      const note = notes.find((p) => p.id === activeDecoded.id);
+      const target = childNotebooks.find((n) => n.id === overDecoded.id);
+      if (!note || !target) return;
+      try {
+        await adapter.movePage(note.id, { notebookId: target.id, parentPageId: null });
+        toast.success(`Nota “${note.title || "Sem título"}” movida para o caderno “${target.name}”`);
+      } catch {
+        toast.error("Não foi possível mover a nota para o caderno.");
+      }
+      return;
+    }
+
+    if (activeDecoded.kind === "note" && overDecoded.kind === "note") {
+      const fromIndex = notes.findIndex((p) => p.id === activeDecoded.id);
+      let toIndex = notes.findIndex((p) => p.id === overDecoded.id);
       if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
 
       if (targetState.mode === "after" && fromIndex > toIndex) {
@@ -201,44 +256,60 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
       } else if (targetState.mode === "before" && fromIndex < toIndex) {
         toIndex -= 1;
       }
+      toIndex = Math.max(0, Math.min(notes.length - 1, toIndex));
 
-      toIndex = Math.max(0, Math.min(childNotebooks.length - 1, toIndex));
-      const reordered = moveItem(childNotebooks, fromIndex, toIndex);
-
-      await adapter.applyNotebookOrders(
-        reordered.map((n, index) => ({ id: n.id, order: index * 100 }))
-      );
-      toast.success("Ordem dos cadernos atualizada");
-    } catch {
-      toast.error("Não foi possível reordenar os cadernos.");
+      const reordered = moveItem(notes, fromIndex, toIndex);
+      try {
+        await adapter.applyPageOrders(
+          reordered.map((p, index) => ({ id: p.id, order: index * 100 }))
+        );
+        toast.success("Ordem das notas atualizada");
+      } catch {
+        toast.error("Não foi possível reordenar as notas.");
+      }
+      return;
     }
-  };
 
-  const onNoteDragStart = (event: DragStartEvent) => {
-    setActiveNoteId(String(event.active.id));
-  };
+    if (activeDecoded.kind === "notebook" && overDecoded.kind === "notebook") {
+      const dragged = childNotebooks.find((n) => n.id === activeDecoded.id);
+      const target = childNotebooks.find((n) => n.id === overDecoded.id);
+      if (!dragged || !target) return;
 
-  const onNoteDragCancel = () => {
-    setActiveNoteId(null);
-  };
+      if (targetState.mode === "inside") {
+        if (isNotebookDescendant(notebooks, target.id, dragged.id)) {
+          toast.error("Não é possível mover um caderno para dentro de seus subcadernos.");
+          return;
+        }
+        try {
+          await adapter.moveNotebook(dragged.id, { parentId: target.id });
+          toast.success(`Caderno “${dragged.name}” inserido dentro de “${target.name}”`);
+        } catch {
+          toast.error("Não foi possível mover o caderno.");
+        }
+        return;
+      }
 
-  const onNoteDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveNoteId(null);
-    if (!over || active.id === over.id) return;
+      try {
+        const fromIndex = childNotebooks.findIndex((n) => n.id === dragged.id);
+        let toIndex = childNotebooks.findIndex((n) => n.id === target.id);
+        if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
 
-    const fromIndex = notes.findIndex((p) => p.id === active.id);
-    const toIndex = notes.findIndex((p) => p.id === over.id);
-    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
+        if (targetState.mode === "after" && fromIndex > toIndex) {
+          toIndex += 1;
+        } else if (targetState.mode === "before" && fromIndex < toIndex) {
+          toIndex -= 1;
+        }
+        toIndex = Math.max(0, Math.min(childNotebooks.length - 1, toIndex));
 
-    const reordered = moveItem(notes, fromIndex, toIndex);
-    try {
-      await adapter.applyPageOrders(
-        reordered.map((p, index) => ({ id: p.id, order: index * 100 }))
-      );
-      toast.success("Ordem das notas atualizada");
-    } catch {
-      toast.error("Não foi possível reordenar as notas.");
+        const reordered = moveItem(childNotebooks, fromIndex, toIndex);
+        await adapter.applyNotebookOrders(
+          reordered.map((n, index) => ({ id: n.id, order: index * 100 }))
+        );
+        toast.success("Ordem dos cadernos atualizada");
+      } catch {
+        toast.error("Não foi possível reordenar os cadernos.");
+      }
+      return;
     }
   };
 
@@ -473,32 +544,32 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
             />
           </div>
         ) : (
-          <div className="mt-8 space-y-8">
-            {childNotebooks.length ? (
-              <section>
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
-                    {NOTEBOOK_COPY.childrenHeading}
-                  </h2>
-                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                    <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-0.5 font-medium text-muted shadow-2xs">
-                      <span>↕</span> Bordas: <strong>Reordenar</strong>
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-2.5 py-0.5 font-semibold text-[var(--accent)] shadow-2xs">
-                      <FolderPlus className="size-3.5" /> Centro: <strong>Mover para dentro</strong>
-                    </span>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={detectCollisions}
+            onDragStart={onDragStart}
+            onDragMove={onDragMove}
+            onDragCancel={onDragCancel}
+            onDragEnd={onDragEnd}
+          >
+            <div className="mt-8 space-y-8">
+              {childNotebooks.length ? (
+                <section>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
+                      {NOTEBOOK_COPY.childrenHeading}
+                    </h2>
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-0.5 font-medium text-muted shadow-2xs">
+                        <span>↕</span> Bordas: <strong>Reordenar</strong>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-2.5 py-0.5 font-semibold text-[var(--accent)] shadow-2xs">
+                        <FolderPlus className="size-3.5" /> Centro: <strong>Mover para dentro</strong>
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <DndContext
-                  sensors={sensors}
-                  modifiers={[restrictToVerticalAxis]}
-                  onDragStart={onNotebookDragStart}
-                  onDragMove={onNotebookDragMove}
-                  onDragCancel={onNotebookDragCancel}
-                  onDragEnd={onNotebookDragEnd}
-                >
                   <SortableContext
-                    items={childNotebooks.map((c) => c.id)}
+                    items={childNotebooks.map((c) => encodeId("notebook", c.id))}
                     strategy={verticalListSortingStrategy}
                   >
                     <div className="divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]">
@@ -508,69 +579,40 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                           notebook={child}
                           isDropTarget={dropTarget?.id === child.id}
                           dropMode={dropTarget?.id === child.id ? dropTarget.mode : undefined}
+                          isNoteDragging={Boolean(activeNoteId)}
                         />
                       ))}
                     </div>
                   </SortableContext>
-                  <DragOverlay>
-                    {activeNotebook ? (
-                      <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border-2 border-[var(--accent)] bg-[var(--surface)] px-4 py-3 shadow-[var(--shadow-float)] ring-4 ring-[var(--accent)]/20">
-                        <GripVertical className="size-4 text-[var(--accent)]" />
-                        <WorkspaceIcon icon={activeNotebook.emoji} fallback="📓" variant="list" />
-                        <span className="truncate text-[13.5px] font-bold text-ink">
-                          {activeNotebook.name}
-                        </span>
-                        {dropTarget?.mode === "inside" ? (
-                          <span className="ml-auto flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3 py-1 text-[11.5px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
-                            <FolderPlus className="size-3.5" />
-                            Soltar para inserir DENTRO
-                          </span>
-                        ) : dropTarget?.mode === "before" ? (
-                          <span className="ml-auto flex items-center gap-1 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-3 py-1 text-[11px] font-bold shadow-md animate-in fade-in duration-100">
-                            <span>↕</span> Reordenar acima
-                          </span>
-                        ) : dropTarget?.mode === "after" ? (
-                          <span className="ml-auto flex items-center gap-1 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-3 py-1 text-[11px] font-bold shadow-md animate-in fade-in duration-100">
-                            <span>↕</span> Reordenar abaixo
-                          </span>
-                        ) : (
-                          <span className="ml-auto text-[11px] font-medium text-faint">
-                            Arraste para uma posição
-                          </span>
-                        )}
-                      </div>
-                    ) : null}
-                  </DragOverlay>
-                </DndContext>
-              </section>
-            ) : null}
+                </section>
+              ) : null}
 
-            {notes.length || notebookDatabases.length ? (
-              <section>
-                <div className="mb-2 flex items-center justify-between">
-                  <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
-                    Notas
-                  </h2>
-                  {notes.length > 1 ? (
-                    <span className="text-[10.5px] text-faint">
-                      Arraste para reordenar notas
-                    </span>
-                  ) : null}
-                </div>
-                <DndContext
-                  sensors={sensors}
-                  modifiers={[restrictToVerticalAxis]}
-                  onDragStart={onNoteDragStart}
-                  onDragCancel={onNoteDragCancel}
-                  onDragEnd={onNoteDragEnd}
-                >
+              {notes.length || notebookDatabases.length ? (
+                <section>
+                  <div className="mb-2 flex items-center justify-between">
+                    <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
+                      Notas
+                    </h2>
+                    {notes.length > 1 || childNotebooks.length > 0 ? (
+                      <span className="text-[10.5px] text-faint">
+                        {childNotebooks.length > 0
+                          ? "Arraste para reordenar ou solte em um caderno acima para mover"
+                          : "Arraste para reordenar notas"}
+                      </span>
+                    ) : null}
+                  </div>
                   <SortableContext
-                    items={notes.map((p) => p.id)}
+                    items={notes.map((p) => encodeId("note", p.id))}
                     strategy={verticalListSortingStrategy}
                   >
                     <div className="divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]">
                       {notes.map((page) => (
-                        <NoteRow key={page.id} page={page} />
+                        <NoteRow
+                          key={page.id}
+                          page={page}
+                          isDropTarget={dropTarget?.id === page.id}
+                          dropMode={dropTarget?.id === page.id ? dropTarget.mode : undefined}
+                        />
                       ))}
                       {notebookDatabases.map((database) => (
                         <Link
@@ -587,21 +629,60 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                       ))}
                     </div>
                   </SortableContext>
-                  <DragOverlay>
-                    {activeNote ? (
-                      <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border-2 border-[var(--accent)] bg-[var(--surface)] px-4 py-3 shadow-[var(--shadow-float)] ring-4 ring-[var(--accent)]/15">
-                        <GripVertical className="size-4 text-[var(--accent)]" />
-                        <WorkspaceIcon icon={activeNote.icon} fallback="📄" variant="list" />
-                        <span className="truncate text-[13.5px] font-semibold text-ink">
-                          {activeNote.title || "Sem título"}
-                        </span>
-                      </div>
-                    ) : null}
-                  </DragOverlay>
-                </DndContext>
-              </section>
-            ) : null}
-          </div>
+                </section>
+              ) : null}
+            </div>
+
+            <DragOverlay>
+              {activeNote ? (
+                <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border-2 border-[var(--accent)] bg-[var(--surface)] px-4 py-3 shadow-[var(--shadow-float)] ring-4 ring-[var(--accent)]/15">
+                  <GripVertical className="size-4 text-[var(--accent)]" />
+                  <WorkspaceIcon icon={activeNote.icon} fallback="📄" variant="list" />
+                  <span className="truncate text-[13.5px] font-semibold text-ink">
+                    {activeNote.title || "Sem título"}
+                  </span>
+                  {dropTarget?.kind === "notebook" ? (
+                    <span className="ml-auto flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3 py-1 text-[11.5px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
+                      <FolderPlus className="size-3.5" />
+                      Mover para o caderno
+                    </span>
+                  ) : (
+                    <span className="ml-auto text-[11px] font-medium text-faint">
+                      {childNotebooks.length > 0 ? "Solte em um caderno ou reordene" : "Reordenar"}
+                    </span>
+                  )}
+                </div>
+              ) : null}
+
+              {activeNotebook ? (
+                <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border-2 border-[var(--accent)] bg-[var(--surface)] px-4 py-3 shadow-[var(--shadow-float)] ring-4 ring-[var(--accent)]/20">
+                  <GripVertical className="size-4 text-[var(--accent)]" />
+                  <WorkspaceIcon icon={activeNotebook.emoji} fallback="📓" variant="list" />
+                  <span className="truncate text-[13.5px] font-bold text-ink">
+                    {activeNotebook.name}
+                  </span>
+                  {dropTarget?.mode === "inside" ? (
+                    <span className="ml-auto flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3 py-1 text-[11.5px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
+                      <FolderPlus className="size-3.5" />
+                      Soltar para inserir DENTRO
+                    </span>
+                  ) : dropTarget?.mode === "before" ? (
+                    <span className="ml-auto flex items-center gap-1 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-3 py-1 text-[11px] font-bold shadow-md animate-in fade-in duration-100">
+                      <span>↕</span> Reordenar acima
+                    </span>
+                  ) : dropTarget?.mode === "after" ? (
+                    <span className="ml-auto flex items-center gap-1 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-3 py-1 text-[11px] font-bold shadow-md animate-in fade-in duration-100">
+                      <span>↕</span> Reordenar abaixo
+                    </span>
+                  ) : (
+                    <span className="ml-auto text-[11px] font-medium text-faint">
+                      Arraste para uma posição
+                    </span>
+                  )}
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         )}
       </div>
     </div>
@@ -612,10 +693,12 @@ function NotebookRow({
   notebook,
   isDropTarget,
   dropMode,
+  isNoteDragging,
 }: {
   notebook: Notebook;
   isDropTarget?: boolean;
   dropMode?: DropMode;
+  isNoteDragging?: boolean;
 }) {
   const router = useRouter();
   const { adapter, livePages, notebooks } = useWorkspace();
@@ -625,7 +708,7 @@ function NotebookRow({
     setNodeRef,
     setActivatorNodeRef,
     isDragging,
-  } = useSortable({ id: notebook.id });
+  } = useSortable({ id: encodeId("notebook", notebook.id) });
 
   const subtreeIds = notebookSubtreeIds(notebooks, notebook.id);
   const nested = childrenOf(notebooks, notebook.id).length;
@@ -659,12 +742,11 @@ function NotebookRow({
       className={cn(
         "group relative flex items-center gap-2 px-3 py-3 transition-all",
         isDragging && "opacity-25",
-        isDropTarget && dropMode === "inside" && "bg-[var(--accent-soft)] ring-2 ring-inset ring-[var(--accent)] z-20 scale-[1.01] shadow-md rounded-[var(--radius-md)]",
+        isDropTarget && (dropMode === "inside" || isNoteDragging) && "bg-[var(--accent-soft)] ring-2 ring-inset ring-[var(--accent)] z-20 scale-[1.01] shadow-md rounded-[var(--radius-md)]",
         !isDropTarget && "hover:bg-[var(--surface-hover)]"
       )}
     >
-      
-      {isDropTarget && dropMode === "before" && (
+      {isDropTarget && !isNoteDragging && dropMode === "before" && (
         <div className="pointer-events-none absolute inset-x-0 -top-1.5 z-30 flex items-center">
           <div className="h-1 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_10px_var(--accent)]" />
           <span className="absolute left-6 -top-3.5 flex items-center gap-1.5 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-3 py-0.5 text-[11px] font-bold shadow-md animate-in fade-in duration-100">
@@ -673,8 +755,7 @@ function NotebookRow({
         </div>
       )}
 
-      
-      {isDropTarget && dropMode === "after" && (
+      {isDropTarget && !isNoteDragging && dropMode === "after" && (
         <div className="pointer-events-none absolute inset-x-0 -bottom-1.5 z-30 flex items-center">
           <div className="h-1 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_10px_var(--accent)]" />
           <span className="absolute left-6 -bottom-3.5 flex items-center gap-1.5 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-3 py-0.5 text-[11px] font-bold shadow-md animate-in fade-in duration-100">
@@ -683,8 +764,16 @@ function NotebookRow({
         </div>
       )}
 
-      
-      {isDropTarget && dropMode === "inside" && (
+      {isDropTarget && isNoteDragging && (
+        <div className="pointer-events-none absolute inset-y-1.5 right-3 z-30 flex items-center">
+          <span className="flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3.5 py-1.5 text-[12px] font-bold text-white shadow-xl ring-2 ring-white/30 animate-in fade-in zoom-in-95 duration-100">
+            <FolderPlus className="size-4" />
+            <span>Mover nota para cá</span>
+          </span>
+        </div>
+      )}
+
+      {isDropTarget && !isNoteDragging && dropMode === "inside" && (
         <div className="pointer-events-none absolute inset-y-1.5 right-3 z-30 flex items-center">
           <span className="flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3.5 py-1.5 text-[12px] font-bold text-white shadow-xl ring-2 ring-white/30 animate-in fade-in zoom-in-95 duration-100">
             <FolderPlus className="size-4" />
@@ -743,7 +832,15 @@ function NotebookRow({
   );
 }
 
-function NoteRow({ page }: { page: Page }) {
+function NoteRow({
+  page,
+  isDropTarget,
+  dropMode,
+}: {
+  page: Page;
+  isDropTarget?: boolean;
+  dropMode?: DropMode;
+}) {
   const router = useRouter();
   const { adapter } = useWorkspace();
   const {
@@ -752,7 +849,7 @@ function NoteRow({ page }: { page: Page }) {
     setNodeRef,
     setActivatorNodeRef,
     isDragging,
-  } = useSortable({ id: page.id });
+  } = useSortable({ id: encodeId("note", page.id) });
 
   const duplicate = async (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -783,6 +880,18 @@ function NoteRow({ page }: { page: Page }) {
         isDragging && "opacity-30"
       )}
     >
+      {isDropTarget && dropMode === "before" && (
+        <div className="pointer-events-none absolute inset-x-0 -top-0.5 z-30 flex items-center">
+          <div className="h-0.5 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
+        </div>
+      )}
+
+      {isDropTarget && dropMode === "after" && (
+        <div className="pointer-events-none absolute inset-x-0 -bottom-0.5 z-30 flex items-center">
+          <div className="h-0.5 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
+        </div>
+      )}
+
       <button
         type="button"
         ref={setActivatorNodeRef}

@@ -120,7 +120,7 @@ export function ImportWizard({
         }
       />
 
-      <div className="relative min-h-[380px]">
+      <div className="relative min-h-0 flex-1 overflow-y-auto">
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
@@ -324,6 +324,30 @@ function SelectStep({
     return count(tree);
   }, [tree]);
 
+  const expandAll = () => {
+    const next: Record<string, boolean> = {};
+    const walk = (nodes: NotionTreeNode[]) => {
+      for (const n of nodes) {
+        next[n.id] = true;
+        if (n.children?.length) walk(n.children);
+      }
+    };
+    walk(tree);
+    setExpanded(next);
+  };
+
+  const collapseAll = () => {
+    const next: Record<string, boolean> = {};
+    const walk = (nodes: NotionTreeNode[]) => {
+      for (const n of nodes) {
+        next[n.id] = false;
+        if (n.children?.length) walk(n.children);
+      }
+    };
+    walk(tree);
+    setExpanded(next);
+  };
+
   if (loading) {
     return (
       <div className="space-y-2 px-5 py-5">
@@ -353,7 +377,7 @@ function SelectStep({
   const renderNodes = (nodes: NotionTreeNode[], depth = 0) =>
     nodes.map((node) => {
       const state = stateOf(node.id);
-      const open = expanded[node.id] ?? depth === 0;
+      const open = expanded[node.id] ?? depth <= 1;
       const hasChildren = Boolean(node.children?.length);
       return (
         <div key={node.id}>
@@ -382,7 +406,7 @@ function SelectStep({
             <span className="w-4 shrink-0 text-center text-[13px]">
               <WorkspaceIcon
                 icon={node.icon}
-                fallback={node.type === "database" ? "🗂️" : "📄"}
+                fallback={hasChildren ? "📓" : node.type === "database" ? "🗂️" : "📄"}
                 size={14}
               />
             </span>
@@ -396,9 +420,13 @@ function SelectStep({
             ) : null}
 
             {node.type === "database" ? (
-              <Badge tone="accent">{node.childCount ?? 0} registros</Badge>
+              hasChildren ? (
+                <Badge tone="accent">{node.children!.length} notas</Badge>
+              ) : (
+                <Badge tone="accent">{node.childCount ?? 0} registros</Badge>
+              )
             ) : hasChildren ? (
-              <span className="text-[11px] text-faint">{node.children!.length} subpáginas</span>
+              <span className="text-[11px] text-faint">{node.children!.length} itens</span>
             ) : null}
           </div>
 
@@ -422,7 +450,7 @@ function SelectStep({
   return (
     <div>
       <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-2.5">
-        <label className="flex items-center gap-2.5 text-[12.5px] text-ink">
+        <label className="flex cursor-pointer items-center gap-2.5 text-[12.5px] text-ink">
           <Checkbox
             checked={selectedCount === total && total > 0}
             onCheckedChange={(value) => toggleAll(value === true)}
@@ -430,9 +458,28 @@ function SelectStep({
           Importar todo o workspace
           <span className="text-faint">({total} itens)</span>
         </label>
-        <span className="text-[11.5px] text-muted">{selectedCount} selecionados</span>
+        <div className="flex items-center gap-3 text-[11.5px]">
+          <div className="flex items-center gap-1.5 text-muted">
+            <button
+              type="button"
+              onClick={expandAll}
+              className="transition hover:text-ink hover:underline"
+            >
+              Expandir tudo
+            </button>
+            <span className="text-faint">·</span>
+            <button
+              type="button"
+              onClick={collapseAll}
+              className="transition hover:text-ink hover:underline"
+            >
+              Recolher tudo
+            </button>
+          </div>
+          <span className="font-medium text-ink">{selectedCount} selecionados</span>
+        </div>
       </div>
-      <div className="max-h-[320px] overflow-y-auto px-2 py-2">{renderNodes(tree)}</div>
+      <div className="max-h-[min(55vh,480px)] min-h-[180px] overflow-y-auto px-2 py-2">{renderNodes(tree)}</div>
     </div>
   );
 }
@@ -469,7 +516,7 @@ function PreviewStep({
       key: "preserveHierarchy" as const,
       title: "Preservar hierarquia",
       description:
-        "Pastas vazias viram página ou caderno; itens com texto viram nota e entram no caderno mais próximo.",
+        "Pastas, cadernos e bases com notas viram cadernos automaticamente; notas e aulas entram organizadas dentro dos seus cadernos correspondentes.",
     },
     {
       key: "runOcr" as const,
@@ -502,8 +549,8 @@ function PreviewStep({
           Destino das notas soltas
         </p>
         <p className="text-[11.5px] leading-relaxed text-muted">
-          Pastas e páginas-container do Notion já viram página ou caderno sozinhas. Escolha abaixo só
-          onde cair notas que não tiverem uma pasta.
+          Pastas, páginas agregadoras e bases com notas viram cadernos automaticamente. Escolha abaixo
+          apenas onde organizar notas avulsas que não possuam caderno pai.
         </p>
         <div className="flex flex-wrap gap-2">
           {notebooks.map((notebook) => (

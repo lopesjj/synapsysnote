@@ -5,6 +5,11 @@ import type { NotionTreeNode } from "@/types/models";
 import { compareNatural } from "@/lib/utils";
 import { throttled } from "./throttle";
 
+export function normalizeNotionId(id?: string | null): string {
+  if (!id) return "";
+  return id.replace(/-/g, "").toLowerCase();
+}
+
 export async function listNotionTree(notion: Client): Promise<NotionTreeNode[]> {
   const flat = new Map<string, NotionTreeNode & { parentId: string | null }>();
   let cursor: string | undefined;
@@ -28,7 +33,7 @@ export async function listNotionTree(notion: Client): Promise<NotionTreeNode[]> 
         block_id?: string;
       };
 
-      flat.set(id, {
+      flat.set(normalizeNotionId(id), {
         id,
         title: extractTitle(result, object),
         type: object === "database" ? "database" : "page",
@@ -44,7 +49,8 @@ export async function listNotionTree(notion: Client): Promise<NotionTreeNode[]> 
 
   const roots: NotionTreeNode[] = [];
   for (const node of flat.values()) {
-    const parent = node.parentId ? flat.get(node.parentId) : null;
+    const parentKey = node.parentId ? normalizeNotionId(node.parentId) : "";
+    const parent = parentKey ? flat.get(parentKey) : null;
     if (parent) parent.children!.push(node);
     else roots.push(node);
   }
@@ -53,7 +59,7 @@ export async function listNotionTree(notion: Client): Promise<NotionTreeNode[]> 
     nodes
       .map((node) => ({
         ...node,
-        childCount: node.type === "database" ? node.children?.length : undefined,
+        childCount: node.children?.length ?? 0,
         children: node.children?.length ? prune(node.children) : undefined,
       }))
       .sort((a, b) => compareNatural(a.title, b.title));
@@ -106,6 +112,7 @@ export function buildParentMap(tree: NotionTreeNode[]): Map<string, string | nul
   const walk = (nodes: NotionTreeNode[], parent: string | null) => {
     for (const node of nodes) {
       map.set(node.id, parent);
+      map.set(normalizeNotionId(node.id), parent);
       if (node.children?.length) walk(node.children, node.id);
     }
   };

@@ -1,11 +1,13 @@
 import type { AppBlock } from "@/types/models";
 
 
-const APP_STRUCTURAL = new Set(["child_page", "child_database", "divider"]);
+const APP_STRUCTURAL = new Set(["child_page", "child_database", "link_to_page", "divider"]);
 
 const NOTION_STRUCTURAL = new Set([
   "child_page",
   "child_database",
+  "link_to_page",
+  "link_to_database",
   "divider",
   "table_of_contents",
   "breadcrumb",
@@ -34,9 +36,11 @@ export function shouldImportAsNotebook(input: {
   blocks?: AppBlock[];
   notionBlocks?: ReadonlyArray<{ type: string; [key: string]: unknown }>;
   forcePage?: boolean;
+  isDatabase?: boolean;
 }): boolean {
   if (input.forcePage) return false;
   if (input.childCount <= 0) return false;
+  if (input.isDatabase) return true;
   if (input.notionBlocks) return !hasSubstantiveNotionBlocks(input.notionBlocks);
   return !hasSubstantiveContent(input.blocks ?? []);
 }
@@ -86,7 +90,14 @@ export function countChildPageBlocks(
   let count = 0;
   const walk = (list: ReadonlyArray<{ type: string; children?: AppBlock[] }>) => {
     for (const block of list) {
-      if (block.type === "child_page" || block.type === "child_database") count += 1;
+      if (
+        block.type === "child_page" ||
+        block.type === "child_database" ||
+        block.type === "link_to_page" ||
+        block.type === "link_to_database"
+      ) {
+        count += 1;
+      }
       if (block.children?.length) walk(block.children);
     }
   };
@@ -113,8 +124,13 @@ export function resolveImportPlacement(input: {
   while (cursor) {
     const role = input.roles.get(cursor);
     const appId = input.idMap.get(cursor);
-    if (role === "notebook" && appId && !notebookId) notebookId = appId;
-    if (role === "page" && appId && !parentPageId) parentPageId = appId;
+    if (role === "notebook" && appId && !notebookId) {
+      notebookId = appId;
+      break;
+    }
+    if (role === "page" && appId && !parentPageId) {
+      parentPageId = appId;
+    }
     cursor = input.parents.get(cursor) ?? null;
   }
 

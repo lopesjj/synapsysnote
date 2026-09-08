@@ -19,7 +19,7 @@ import {
   pagesRef,
 } from "./client";
 import { throttled } from "./throttle";
-import { buildParentMap, listNotionTree, orderForImport } from "./tree";
+import { buildParentMap, listNotionTree, normalizeNotionId, orderForImport } from "./tree";
 import {
   blocksToPlainText,
   omitUndefined,
@@ -38,6 +38,18 @@ import { defaultViews, mapDatabaseSchema, mapPropertyValues } from "./property-m
 import { rehostNotionFile } from "./media";
 
 type JobOptions = ImportJob["options"];
+
+function countChildrenInParentMap(parents: Map<string, string | null>, parentId: string): number {
+  const norm = normalizeNotionId(parentId);
+  let count = 0;
+  for (const [childId, pId] of parents.entries()) {
+    if (!pId) continue;
+    if (normalizeNotionId(pId) === norm && normalizeNotionId(childId) !== norm) {
+      count += 1;
+    }
+  }
+  return count;
+}
 
 function collectIds(tree: NotionTreeNode[]): string[] {
   const ids: string[] = [];
@@ -193,13 +205,39 @@ interface ImportArgs {
 }
 
 async function importNotebook(args: ImportArgs): Promise<string> {
-  const { workspaceId, node, parents, idMap, roles } = args;
+  const { workspaceId, jobId, node, parents, idMap, roles, progress } = args;
   const parentId = resolveNotebookParentId({
     notionId: node.id,
     parents,
     roles,
     idMap,
   });
+
+  let icon = node.icon ?? "📓";
+  if (node.icon && /^https?:\/\//i.test(node.icon) && progress.options.downloadMedia) {
+    try {
+      const rehosted = await rehostNotionFile({
+        workspaceId,
+        jobId,
+        url: node.icon,
+        suggestedName: `${node.title || "caderno"}-icon.png`,
+      });
+      await progress.fileDone(rehosted.bytes);
+      icon = rehosted.url;
+    } catch {
+      icon = "📓";
+    }
+  }
+
+  const oldPage = await pagesRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
+  if (!oldPage.empty) {
+    await oldPage.docs[0].ref.delete();
+  }
+
+  const oldDb = await databasesRef(workspaceId).where("notionDatabaseId", "==", node.id).limit(1).get();
+  if (!oldDb.empty) {
+    await oldDb.docs[0].ref.delete();
+  }
 
   const existing = await notebooksRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
   const ref = existing.empty
@@ -210,7 +248,7 @@ async function importNotebook(args: ImportArgs): Promise<string> {
     {
       id: ref.id,
       name: node.title,
-      emoji: node.icon ?? "📓",
+      emoji: icon,
       color: "#0E7490",
       parentId,
       notionPageId: node.id,
@@ -278,13 +316,39 @@ async function importPage(args: ImportArgs): Promise<string> {
     path = [...((parentDoc.get("path") as string[]) ?? []), parentPageId];
   }
 
+  let icon = node.icon ?? "📄";
+  if (node.icon && /^https?:\/\//i.test(node.icon) && progress.options.downloadMedia) {
+    try {
+      const rehosted = await rehostNotionFile({
+        workspaceId,
+        jobId,
+        url: node.icon,
+        suggestedName: `${node.title || "pagina"}-icon.png`,
+      });
+      await progress.fileDone(rehosted.bytes);
+      icon = rehosted.url;
+    } catch {
+      icon = "📄";
+    }
+  }
+
+  const oldNotebook = await notebooksRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
+  if (!oldNotebook.empty) {
+    await oldNotebook.docs[0].ref.delete();
+  }
+
+  const oldDb = await databasesRef(workspaceId).where("notionDatabaseId", "==", node.id).limit(1).get();
+  if (!oldDb.empty) {
+    await oldDb.docs[0].ref.delete();
+  }
+
   const existing = await pagesRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
   const ref = existing.empty ? pagesRef(workspaceId).doc(`page_${randomUUID().slice(0, 10)}`) : existing.docs[0].ref;
 
   await ref.set(
     {
       title: node.title,
-      icon: node.icon ?? "📄",
+      icon,
       id: ref.id,
       notebookId,
       parentPageId,
@@ -347,6 +411,32 @@ async function importDatabase(args: ImportArgs): Promise<string> {
     preserveHierarchy: progress.options.preserveHierarchy,
   });
 
+  let icon = node.icon ?? "🗂️";
+  if (node.icon && /^https?:\/\//i.test(node.icon) && progress.options.downloadMedia) {
+    try {
+      const rehosted = await rehostNotionFile({
+        workspaceId,
+        jobId,
+        url: node.icon,
+        suggestedName: `${node.title || "base"}-icon.png`,
+      });
+      await progress.fileDone(rehosted.bytes);
+      icon = rehosted.url;
+    } catch {
+      icon = "🗂️";
+    }
+  }
+
+  const oldPage = await pagesRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
+  if (!oldPage.empty) {
+    await oldPage.docs[0].ref.delete();
+  }
+
+  const oldNotebook = await notebooksRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
+  if (!oldNotebook.empty) {
+    await oldNotebook.docs[0].ref.delete();
+  }
+
   const existing = await databasesRef(workspaceId)
     .where("notionDatabaseId", "==", node.id)
     .limit(1)
@@ -358,7 +448,7 @@ async function importDatabase(args: ImportArgs): Promise<string> {
   await ref.set(
     {
       name: node.title,
-      icon: node.icon ?? "🗂️",
+      icon,
       id: ref.id,
       description: "Importada do Notion.",
       notebookId,
@@ -621,7 +711,11 @@ export async function runNotionImportStep(
           title: node.title,
           type: node.type,
           icon: node.icon ?? null,
-          childCount: node.children?.length ?? 0,
+          childCount: Math.max(
+            node.children?.length ?? 0,
+            node.childCount ?? 0,
+            countChildrenInParentMap(parents, node.id)
+          ),
         })),
         roles: {},
       };
@@ -701,18 +795,31 @@ export async function runNotionImportStep(
     };
 
     try {
+      const effectiveChildCount = Math.max(
+        node.childCount ?? 0,
+        node.children?.length ?? 0,
+        countChildrenInParentMap(parents, item.notionId)
+      );
+
       let role: ImportRole =
         roles.get(item.notionId) ?? (item.type === "database" ? "database" : "page");
 
       let cachedTopLevel: NotionBlock[] | undefined;
-      if (item.type !== "database") {
+      if (item.type === "database") {
+        if (jobData.options.preserveHierarchy && effectiveChildCount > 0) {
+          role = "notebook";
+          roles.set(item.notionId, role);
+          treeMetadata.roles[item.notionId] = role;
+          hasRoleUpdates = true;
+        }
+      } else {
         cachedTopLevel = await fetchAllChildren(notion, item.notionId);
         await progress.addFiles(countMediaBlocks(cachedTopLevel));
 
         const asNotebook =
           jobData.options.preserveHierarchy &&
           shouldImportAsNotebook({
-            childCount: Math.max(node.children?.length ?? 0, countChildPageBlocks(cachedTopLevel)),
+            childCount: Math.max(effectiveChildCount, countChildPageBlocks(cachedTopLevel)),
             notionBlocks: cachedTopLevel,
           });
         role = asNotebook ? "notebook" : "page";

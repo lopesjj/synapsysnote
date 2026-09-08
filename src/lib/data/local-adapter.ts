@@ -589,14 +589,19 @@ export class LocalAdapter implements DataAdapter {
     const roles = new Map<string, ImportRole>();
     for (const item of job.items) {
       const treeNode = findNode(NOTION_MOCK_TREE, item.notionId);
+      const childCount = treeNode?.children?.length ?? 0;
       if (item.type === "database" || treeNode?.type === "database") {
-        roles.set(item.notionId, "database");
+        if (job.options.preserveHierarchy && childCount > 0) {
+          roles.set(item.notionId, "notebook");
+        } else {
+          roles.set(item.notionId, "database");
+        }
         continue;
       }
       const asNotebook =
         job.options.preserveHierarchy &&
         shouldImportAsNotebook({
-          childCount: treeNode?.children?.length ?? 0,
+          childCount,
           blocks: [],
         });
       roles.set(item.notionId, asNotebook ? "notebook" : "page");
@@ -647,8 +652,11 @@ export class LocalAdapter implements DataAdapter {
       });
 
       if (roles.get(item.notionId) === "notebook") {
+        this.state.pages = this.state.pages.filter((p) => p.notionPageId !== node.id);
+        this.state.databases = this.state.databases.filter((d) => d.notionDatabaseId !== node.id);
+        const existingNb = this.state.notebooks.find((nb) => nb.notionPageId === node.id);
         const notebook: Notebook = {
-          id: `nb_${nanoid(8)}`,
+          id: existingNb?.id ?? `nb_${nanoid(8)}`,
           name: node.title,
           emoji: node.icon ?? "📓",
           color: "#0E7490",
@@ -658,15 +666,22 @@ export class LocalAdapter implements DataAdapter {
             roles,
             idMap: notionToAppId,
           }),
-          order: Date.now(),
-          createdAt: nowMs(),
+          order: existingNb?.order ?? Date.now(),
+          createdAt: existingNb?.createdAt ?? nowMs(),
           updatedAt: nowMs(),
         };
-        this.state.notebooks.push(notebook);
+        if (existingNb) {
+          Object.assign(existingNb, notebook);
+        } else {
+          this.state.notebooks.push(notebook);
+        }
         notionToAppId.set(node.id, notebook.id);
       } else if (node.type === "database") {
+        this.state.pages = this.state.pages.filter((p) => p.notionPageId !== node.id);
+        this.state.notebooks = this.state.notebooks.filter((nb) => nb.notionPageId !== node.id);
+        const existingDb = this.state.databases.find((d) => d.notionDatabaseId === node.id);
         const database: AppDatabase = {
-          id: `db_${nanoid(8)}`,
+          id: existingDb?.id ?? `db_${nanoid(8)}`,
           name: node.title,
           icon: node.icon ?? "🗂️",
           description: "Importada do Notion.",
@@ -674,7 +689,7 @@ export class LocalAdapter implements DataAdapter {
           parentPageId: placement.parentPageId,
           notionDatabaseId: node.id,
           deletedAt: null,
-          createdAt: nowMs(),
+          createdAt: existingDb?.createdAt ?? nowMs(),
           updatedAt: nowMs(),
           properties: [
             { id: "p_title", name: "Nome", type: "title", order: 0, width: 300, notionPropertyId: "title" },
@@ -712,14 +727,21 @@ export class LocalAdapter implements DataAdapter {
             },
           })),
         };
-        this.state.databases.push(database);
+        if (existingDb) {
+          Object.assign(existingDb, database);
+        } else {
+          this.state.databases.push(database);
+        }
         notionToAppId.set(node.id, database.id);
       } else {
+        this.state.notebooks = this.state.notebooks.filter((nb) => nb.notionPageId !== node.id);
+        this.state.databases = this.state.databases.filter((d) => d.notionDatabaseId !== node.id);
+        const existingPage = this.state.pages.find((p) => p.notionPageId === node.id);
         const parentPage = placement.parentPageId
           ? this.state.pages.find((p) => p.id === placement.parentPageId)
           : undefined;
         const page: Page = {
-          id: `page_${nanoid(10)}`,
+          id: existingPage?.id ?? `page_${nanoid(10)}`,
           title: node.title,
           icon: node.icon ?? "📄",
           coverUrl: null,
@@ -745,11 +767,15 @@ export class LocalAdapter implements DataAdapter {
           importJobId: jobId,
           createdBy: "demo-user",
           updatedBy: "demo-user",
-          createdAt: nowMs(),
+          createdAt: existingPage?.createdAt ?? nowMs(),
           updatedAt: nowMs(),
-          order: this.state.pages.length,
+          order: existingPage?.order ?? this.state.pages.length,
         };
-        this.state.pages.push(page);
+        if (existingPage) {
+          Object.assign(existingPage, page);
+        } else {
+          this.state.pages.push(page);
+        }
         notionToAppId.set(node.id, page.id);
       }
 
