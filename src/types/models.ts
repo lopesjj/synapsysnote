@@ -83,10 +83,12 @@ export interface AppBlock {
   children?: AppBlock[];
   props?: {
     checked?: boolean;
+    open?: boolean;
     language?: string;
     autoDetect?: boolean;
     emoji?: string;
     color?: string;
+    backgroundColor?: string;
     expression?: string;
     url?: string;
     title?: string;

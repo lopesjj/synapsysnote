@@ -194,7 +194,9 @@ function blockToNode(block: AppBlock): JSONContent | null {
         type: "toggleBlock",
         attrs: {
           summary: (block.richText ?? []).map((s) => s.text).join(""),
-          open: true,
+          open: block.props?.open !== undefined ? Boolean(block.props.open) : true,
+          textColor: block.props?.color ?? null,
+          backgroundColor: block.props?.backgroundColor ?? null,
         },
         content: blocksToNodes(block.children ?? [{ id: nanoid(), type: "paragraph" }]),
       };
@@ -353,6 +355,11 @@ function nodeToBlocks(node: JSONContent): AppBlock[] {
           id: id(),
           type: "toggle",
           richText: [{ text: (node.attrs?.summary as string) ?? "" }],
+          props: {
+            open: node.attrs?.open !== undefined ? Boolean(node.attrs.open) : true,
+            color: (node.attrs?.textColor as string) || undefined,
+            backgroundColor: (node.attrs?.backgroundColor as string) || undefined,
+          },
           children: (node.content ?? []).flatMap(nodeToBlocks),
         },
       ];

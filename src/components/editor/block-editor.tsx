@@ -434,24 +434,33 @@ export function BlockEditor({
       return;
     }
     if (!editable) {
-      editor.commands.setContent(blocksToDoc(page.blocks), { emitUpdate: false });
+      const timer = setTimeout(() => {
+        if (!editor.isDestroyed) {
+          editor.commands.setContent(blocksToDoc(page.blocks), { emitUpdate: false });
+        }
+      }, 0);
       storeBlockCount.current = page.blocks.length;
       emittedBlockCount.current = page.blocks.length;
-      return;
+      return () => clearTimeout(timer);
     }
     const incoming = page.blocks.length;
     if (incoming > storeBlockCount.current && incoming > emittedBlockCount.current) {
       const { from, to } = editor.state.selection;
       const focused = editor.isFocused;
-      editor.commands.setContent(blocksToDoc(page.blocks), { emitUpdate: false });
-      if (focused) {
-        const size = editor.state.doc.content.size;
-        editor
-          .chain()
-          .setTextSelection({ from: Math.min(from, size), to: Math.min(to, size) })
-          .focus()
-          .run();
-      }
+      const timer = setTimeout(() => {
+        if (editor.isDestroyed) return;
+        editor.commands.setContent(blocksToDoc(page.blocks), { emitUpdate: false });
+        if (focused) {
+          const size = editor.state.doc.content.size;
+          editor
+            .chain()
+            .setTextSelection({ from: Math.min(from, size), to: Math.min(to, size) })
+            .focus()
+            .run();
+        }
+      }, 0);
+      storeBlockCount.current = incoming;
+      return () => clearTimeout(timer);
     } else {
       applyRemoteMediaEnrichment(editor, page.blocks, applyingRemote);
     }
