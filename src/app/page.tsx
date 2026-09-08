@@ -19,6 +19,12 @@ import { verifyRecaptchaToken } from "@/lib/recaptcha";
 import { Checkbox, Input } from "@/components/ui/primitives";
 import { appHref, isSplitHosts, loginHref, navigateTo } from "@/lib/domains";
 import { persistCrossHostSession } from "@/lib/auth/cross-host-session";
+import {
+  LOGIN_ATTEMPTS_THRESHOLD,
+  getFailedLoginAttempts,
+  recordFailedLoginAttempt,
+  clearFailedLoginAttempts,
+} from "@/lib/auth/login-attempts";
 
 const SIGNUP_ENABLED = false;
 
@@ -46,8 +52,18 @@ export default function LandingPage() {
   const [oauthBusy, setOauthBusy] = useState<OAuthProviderId | null>(null);
   const [captcha, setCaptcha] = useState<string | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
+  const [failedAttempts, setFailedAttempts] = useState(0);
   const [sessionHint] = useState(() => hasActiveSessionHint());
   const needsCompletion = profileNeedsCompletion(user, profile);
+
+  useEffect(() => {
+    setFailedAttempts(getFailedLoginAttempts(email));
+  }, [email]);
+
+  const isCaptchaRequired =
+    tab === "signin"
+      ? failedAttempts >= LOGIN_ATTEMPTS_THRESHOLD
+      : tab === "signup" || tab === "reset";
 
   useEffect(() => {
     document.title = formatTabTitle();
@@ -94,7 +110,9 @@ export default function LandingPage() {
     event.preventDefault();
     setBusy(true);
     try {
-      await verifyRecaptchaToken(captcha);
+      if (isCaptchaRequired) {
+        await verifyRecaptchaToken(captcha);
+      }
       if (tab === "signup") {
         if (!isValidPhoneBR(phone)) {
           toast.error("Informe um telefone válido com DDD.");
@@ -105,9 +123,17 @@ export default function LandingPage() {
         return;
       }
       const signedIn = await signInWithEmail(email, password, remember);
+      clearFailedLoginAttempts(email);
+      setFailedAttempts(0);
       const existing = await loadUserProfile(signedIn.uid);
       if (!profileNeedsCompletion(signedIn, existing)) navigateTo(appHref("/home"), router);
     } catch (error) {
+      const isMissingCaptchaError =
+        error instanceof Error && error.message.includes("não é um robô");
+      if (tab === "signin" && !isMissingCaptchaError) {
+        const nextAttempts = recordFailedLoginAttempt(email);
+        setFailedAttempts(nextAttempts);
+      }
       refreshCaptcha();
       toast.error(error instanceof Error ? error.message : "Não foi possível entrar");
     } finally {
@@ -119,6 +145,8 @@ export default function LandingPage() {
     setOauthBusy(provider);
     try {
       const signedIn = await signInWithProvider(provider, remember);
+      clearFailedLoginAttempts(signedIn.email || undefined);
+      setFailedAttempts(0);
       const existing = await loadUserProfile(signedIn.uid);
       if (!profileNeedsCompletion(signedIn, existing)) navigateTo(appHref("/home"), router);
     } catch (error) {
@@ -309,7 +337,9 @@ export default function LandingPage() {
               </div>
             ) : null}
 
-            <RecaptchaField key={`${tab}-${captchaKey}`} onChange={setCaptcha} />
+            {isCaptchaRequired ? (
+              <RecaptchaField key={`${tab}-${captchaKey}`} onChange={setCaptcha} />
+            ) : null}
 
             <Button type="submit" variant="primary" size="lg" className="w-full" disabled={busy}>
               {busy ? <Loader2 className="animate-spin" /> : null}

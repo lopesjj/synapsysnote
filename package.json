@@ -1,6 +1,6 @@
 {
   "name": "synapsys-note",
-  "version": "1.3.8",
+  "version": "1.4.8",
   "private": true,
   "description": "Plataforma de produtividade e gestão de conhecimento (PKM) com editor de blocos, bases de dados flexíveis, OCR, notas de voz e importação nativa do Notion sobre Firebase.",
   "scripts": {
@@ -9,7 +9,7 @@
     "start": "next start --port 43127",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run verify:sidebar-dnd && npm run verify:page-tree && npm run verify:notebook-tree && npm run verify:media-enrichment && npm run verify:attachment-compress && npm run verify:notion-database-notebook && npm run verify:toggle && npm run verify:image-lightbox && npm run verify:document-title && npm run verify:table-multi",
+    "verify": "npm run verify:sidebar-dnd && npm run verify:page-tree && npm run verify:notebook-tree && npm run verify:media-enrichment && npm run verify:attachment-compress && npm run verify:notion-database-notebook && npm run verify:toggle && npm run verify:image-lightbox && npm run verify:document-title && npm run verify:table-multi && npm run verify:login-attempts",
     "verify:sidebar-dnd": "tsx scripts/verify-sidebar-dnd.mts",
     "verify:page-tree": "tsx scripts/verify-page-tree.mts",
     "verify:notebook-tree": "tsx scripts/verify-notebook-tree.mts",
@@ -20,6 +20,7 @@
     "verify:image-lightbox": "tsx scripts/verify-image-lightbox.mts",
     "verify:document-title": "tsx scripts/verify-document-title.mts",
     "verify:table-multi": "tsx scripts/verify-table-multi.mts",
+    "verify:login-attempts": "tsx scripts/verify-login-attempts.mts",
     "functions:build": "npm --prefix functions run build",
     "functions:typecheck": "npm --prefix functions run typecheck",
     "emulators": "firebase emulators:start --only auth,firestore,functions,storage",
