@@ -31,7 +31,6 @@ import { HeadingShortcut } from "./extensions/heading-shortcut";
 import { createMentionSuggestion, type MentionCandidate } from "./extensions/mention-suggestion";
 import { BubbleToolbar } from "./bubble-toolbar";
 import { EditorToolbar, useEditorTick } from "./editor-toolbar";
-import { FindBar } from "./find-bar";
 import { NoteOutline } from "./note-outline";
 import { ImageLightbox } from "./image-lightbox";
 import { blocksToDoc, collectMentionIds, docToBlocks } from "./serializer";
@@ -117,7 +116,6 @@ export function BlockEditor({
 }: BlockEditorProps) {
   const router = useRouter();
   const { livePages, notebooks, adapter } = useWorkspace();
-  const [findOpen, setFindOpen] = useState(false);
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   const storeBlockCount = useRef(page.blocks.length);
   const emittedBlockCount = useRef(page.blocks.length);
@@ -260,9 +258,9 @@ export function BlockEditor({
 
             toast.success(
               isImage
-                ? "Imagem anexada. OCR em andamento."
+                ? "Imagem anexada."
                 : prepared.type === "application/pdf"
-                  ? "PDF anexado. OCR em andamento."
+                  ? "PDF anexado."
                   : "Arquivo anexado."
             );
           } catch (error) {
@@ -394,11 +392,6 @@ export function BlockEditor({
         handleKeyDown: (_view, event) => {
           if (!editable) return false;
           const meta = event.metaKey || event.ctrlKey;
-          if (meta && event.key.toLowerCase() === "f") {
-            event.preventDefault();
-            setFindOpen(true);
-            return true;
-          }
           if (meta && event.altKey && ["1", "2", "3", "0"].includes(event.key)) {
             event.preventDefault();
             const instance = editorRef.current;
@@ -488,10 +481,8 @@ export function BlockEditor({
             <EditorToolbar
               editor={editor}
               onRequestUpload={onRequestUpload ?? (() => undefined)}
-              onToggleFind={() => setFindOpen((open) => !open)}
             />
             {chrome ? <NoteOutline editor={editor} /> : null}
-            {findOpen ? <FindBar editor={editor} open={findOpen} onClose={() => setFindOpen(false)} /> : null}
           </div>
         </div>
       ) : null}

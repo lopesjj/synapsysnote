@@ -155,9 +155,9 @@ export function PageView({ pageId }: { pageId: string }) {
         await adapter.saveAttachment(pageId, prepared);
         toast.success(
           prepared.type.startsWith("image/")
-            ? "Imagem anexada. OCR em andamento."
+            ? "Imagem anexada."
             : prepared.type === "application/pdf"
-              ? "PDF anexado. OCR em andamento."
+              ? "PDF anexado."
               : "Arquivo anexado."
         );
       } catch (error) {

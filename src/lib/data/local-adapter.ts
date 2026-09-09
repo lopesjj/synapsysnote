@@ -783,9 +783,7 @@ export class LocalAdapter implements DataAdapter {
           path: parentPage ? [...parentPage.path, parentPage.id] : [],
           blocks,
           plainText: plainTextOf(blocks),
-          extractedOCRText: current.options.runOcr
-            ? "Texto extraído por OCR do anexo importado (demonstração)."
-            : "",
+          extractedOCRText: "",
           transcriptText: "",
           tags: ["notion"],
           outgoingLinks: [],
@@ -917,25 +915,12 @@ export class LocalAdapter implements DataAdapter {
           name: file.name,
           mimeType: file.type,
           sizeBytes: file.size,
-          pending: isImage,
+          pending: false,
         },
       },
     ];
     await this.updatePage(pageId, { blocks });
 
-    if (!isImage) return;
-    setTimeout(() => {
-      const target = this.state.pages.find((p) => p.id === pageId);
-      if (!target) return;
-      const ocrText = `Texto reconhecido em ${file.name} (demonstração). Com o Firebase conectado, a Cloud Vision devolve o texto real e ele passa a ser pesquisável.`;
-      const nextBlocks = target.blocks.map((b) =>
-        b.id === blockId && b.media ? { ...b, media: { ...b.media, pending: false, ocrText } } : b
-      );
-      void this.updatePage(pageId, {
-        blocks: nextBlocks,
-        extractedOCRText: `${target.extractedOCRText}\n${ocrText}`.trim(),
-      });
-    }, 1800);
   }
 
   async uploadWorkspaceIcon(file: File) {

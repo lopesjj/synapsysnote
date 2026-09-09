@@ -133,7 +133,7 @@ export function buildSeed(): {
       ),
       block("bulleted_list_item", "Next.js App Router + React Server Components para o shell."),
       block("bulleted_list_item", "Firestore com persistência offline como fonte da verdade reativa."),
-      block("bulleted_list_item", "Cloud Functions para Notion, OCR, transcrição e embeddings."),
+      block("bulleted_list_item", "Cloud Functions para Notion, transcrição e embeddings."),
       block("heading_2", "Orçamento de latência"),
       block(
         "paragraph",
@@ -226,7 +226,7 @@ export function buildSeed(): {
     blocks: [
       block("paragraph", "Tudo que entra aqui deve ser processado até sexta."),
       block("todo", "Transcrever áudio da call de descoberta", { props: { checked: false } }),
-      block("todo", "Anexar contrato assinado e rodar OCR", { props: { checked: false } }),
+      block("todo", "Anexar contrato assinado", { props: { checked: false } }),
       block("todo", "Arquivar notas duplicadas vindas do Notion", { props: { checked: true } }),
       block("divider"),
       block("paragraph", "Ideias soltas:"),
@@ -344,7 +344,7 @@ export function buildSeed(): {
         createdAt: minutes(4000),
         updatedAt: minutes(400),
         values: {
-          p_title: "OCR automático em anexos",
+          p_title: "Indexação automática de anexos",
           p_status: "Em revisão",
           p_owner: "Bruno",
           p_impact: 80,

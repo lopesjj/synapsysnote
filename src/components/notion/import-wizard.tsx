@@ -519,11 +519,6 @@ function PreviewStep({
         "Pastas, cadernos e bases com notas viram cadernos automaticamente; notas e aulas entram organizadas dentro dos seus cadernos correspondentes.",
     },
     {
-      key: "runOcr" as const,
-      title: "Rodar OCR nos anexos",
-      description: "Cloud Vision extrai o texto de imagens e PDFs para deixá-los pesquisáveis.",
-    },
-    {
       key: "createBacklinks" as const,
       title: "Reconstruir links internos",
       description: "Links entre páginas do Notion viram menções com backlinks bidirecionais.",

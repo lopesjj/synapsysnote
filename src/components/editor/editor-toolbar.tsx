@@ -22,7 +22,6 @@ import {
   Paperclip,
   Quote,
   Redo2,
-  Search,
   Strikethrough,
   Type,
   Underline as UnderlineIcon,
@@ -107,11 +106,9 @@ function ToolButton({
 export function EditorToolbar({
   editor,
   onRequestUpload,
-  onToggleFind,
 }: {
   editor: Editor;
   onRequestUpload: () => void;
-  onToggleFind: () => void;
 }) {
   useEditorTick(editor);
   const [linkOpen, setLinkOpen] = useState(false);
@@ -433,9 +430,6 @@ export function EditorToolbar({
 
       <ToolButton label="Anexar" onClick={onRequestUpload}>
         <Paperclip className="size-3.5" />
-      </ToolButton>
-      <ToolButton label="Localizar na nota" onClick={onToggleFind}>
-        <Search className="size-3.5" />
       </ToolButton>
     </>
   );

@@ -55,7 +55,6 @@ export function searchWorkspace(
       { field: "title", text: page.title, weight: 6 },
       { field: "tag", text: page.tags.join(" "), weight: 3 },
       { field: "body", text: page.plainText, weight: 1 },
-      { field: "ocr", text: page.extractedOCRText, weight: 2 },
       { field: "transcript", text: page.transcriptText, weight: 2 },
     ];
 
@@ -83,11 +82,9 @@ export function searchWorkspace(
     const ageDays = (now - page.updatedAt) / 86_400_000;
     score += Math.max(0, 2 - ageDays / 14);
 
-    const bodySource = matchedIn.has("ocr")
-      ? page.extractedOCRText
-      : matchedIn.has("transcript")
-        ? page.transcriptText
-        : page.plainText;
+    const bodySource = matchedIn.has("transcript")
+      ? page.transcriptText
+      : page.plainText;
 
     hits.push({
       id: page.id,

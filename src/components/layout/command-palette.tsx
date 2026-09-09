@@ -64,7 +64,6 @@ export function CommandPalette({
   };
 
   const matchLabel: Record<string, string> = {
-    ocr: "OCR",
     transcript: "transcrição",
     tag: "tag",
     title: "título",
@@ -100,7 +99,7 @@ export function CommandPalette({
                   autoFocus
                   value={query}
                   onValueChange={setQuery}
-                  placeholder="Buscar páginas, texto de imagens, transcrições ou executar um comando…"
+                  placeholder="Buscar páginas, transcrições ou executar um comando…"
                   className="h-12 w-full bg-transparent text-[13.5px] text-ink outline-none placeholder:text-faint"
                 />
                 <Kbd>esc</Kbd>
@@ -146,7 +145,7 @@ export function CommandPalette({
                         </span>
                         <span className="flex shrink-0 gap-1">
                           {hit.matchedIn
-                            .filter((m) => m === "ocr" || m === "transcript")
+                            .filter((m) => m === "transcript")
                             .map((m) => (
                               <span
                                 key={m}
