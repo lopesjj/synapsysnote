@@ -23,7 +23,7 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Copy, FilePlus, FolderPlus, GripVertical, ImageOff, MoreHorizontal, Trash2 } from "lucide-react";
+import { Copy, FilePlus, FolderPlus, GripVertical, ImageOff, MoreHorizontal, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useUiStore } from "@/lib/store/ui-store";
 import { useWorkspace } from "@/lib/data/provider";
@@ -101,6 +101,24 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
       .map((node) => node.page)
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || compareNatural(a.title, b.title));
   }, [notebookId, treeFor]);
+
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredChildNotebooks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return childNotebooks;
+    return childNotebooks.filter(
+      (nb) => nb.name.toLowerCase().includes(q) || (nb.description ?? "").toLowerCase().includes(q)
+    );
+  }, [childNotebooks, searchQuery]);
+
+  const filteredNotes = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return notes;
+    return notes.filter(
+      (n) => n.title.toLowerCase().includes(q) || n.plainText.toLowerCase().includes(q)
+    );
+  }, [notes, searchQuery]);
 
   const notebookDatabases = useMemo(
     () => databases.filter((database) => database.notebookId === notebookId && !database.deletedAt),
@@ -517,13 +535,38 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
           <span className="sm:ml-auto">Atualizado {formatRelative(notebook.updatedAt)}</span>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={() => void createSubnotebook()}>
-            <FolderPlus /> {NOTEBOOK_COPY.newChildAction}
-          </Button>
-          <Button variant="secondary" onClick={() => void createNote()}>
-            <FilePlus /> Nova nota
-          </Button>
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => void createSubnotebook()}>
+              <FolderPlus /> {NOTEBOOK_COPY.newChildAction}
+            </Button>
+            <Button variant="secondary" onClick={() => void createNote()}>
+              <FilePlus /> Nova nota
+            </Button>
+          </div>
+
+          {!empty ? (
+            <div className="relative w-full sm:w-64">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Pesquisar neste caderno..."
+                className="h-8 w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] pl-8 pr-7 text-[12.5px] text-ink placeholder:text-faint transition focus:border-[var(--accent)] focus:bg-[var(--surface)] focus:outline-none"
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-faint hover:text-ink"
+                  aria-label="Limpar pesquisa"
+                >
+                  <X className="size-3" />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {empty ? (
@@ -543,6 +586,20 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
               }
             />
           </div>
+        ) : searchQuery && !filteredChildNotebooks.length && !filteredNotes.length ? (
+          <div className="mt-8 rounded-[var(--radius-lg)] border border-dashed border-[var(--border)] p-8 text-center">
+            <p className="text-[13px] text-muted">
+              Nenhuma nota ou subcaderno encontrado para “{searchQuery}” neste caderno.
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3 text-xs"
+              onClick={() => setSearchQuery("")}
+            >
+              Limpar pesquisa
+            </Button>
+          </div>
         ) : (
           <DndContext
             sensors={sensors}
@@ -553,27 +610,29 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
             onDragEnd={onDragEnd}
           >
             <div className="mt-8 space-y-8">
-              {childNotebooks.length ? (
+              {filteredChildNotebooks.length ? (
                 <section>
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
                       {NOTEBOOK_COPY.childrenHeading}
                     </h2>
-                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                      <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-0.5 font-medium text-muted shadow-2xs">
-                        <span>↕</span> Bordas: <strong>Reordenar</strong>
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-2.5 py-0.5 font-semibold text-[var(--accent)] shadow-2xs">
-                        <FolderPlus className="size-3.5" /> Centro: <strong>Mover para dentro</strong>
-                      </span>
-                    </div>
+                    {!searchQuery ? (
+                      <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                        <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-0.5 font-medium text-muted shadow-2xs">
+                          <span>↕</span> Bordas: <strong>Reordenar</strong>
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-2.5 py-0.5 font-semibold text-[var(--accent)] shadow-2xs">
+                          <FolderPlus className="size-3.5" /> Centro: <strong>Mover para dentro</strong>
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
                   <SortableContext
-                    items={childNotebooks.map((c) => encodeId("notebook", c.id))}
+                    items={filteredChildNotebooks.map((c) => encodeId("notebook", c.id))}
                     strategy={verticalListSortingStrategy}
                   >
                     <div className="divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]">
-                      {childNotebooks.map((child) => (
+                      {filteredChildNotebooks.map((child) => (
                         <NotebookRow
                           key={child.id}
                           notebook={child}
@@ -587,13 +646,13 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                 </section>
               ) : null}
 
-              {notes.length || notebookDatabases.length ? (
+              {filteredNotes.length || (!searchQuery && notebookDatabases.length) ? (
                 <section>
                   <div className="mb-2 flex items-center justify-between">
                     <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
                       Notas
                     </h2>
-                    {notes.length > 1 || childNotebooks.length > 0 ? (
+                    {!searchQuery && (notes.length > 1 || childNotebooks.length > 0) ? (
                       <span className="text-[10.5px] text-faint">
                         {childNotebooks.length > 0
                           ? "Arraste para reordenar ou solte em um caderno acima para mover"
@@ -602,11 +661,11 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                     ) : null}
                   </div>
                   <SortableContext
-                    items={notes.map((p) => encodeId("note", p.id))}
+                    items={filteredNotes.map((p) => encodeId("note", p.id))}
                     strategy={verticalListSortingStrategy}
                   >
                     <div className="divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]">
-                      {notes.map((page) => (
+                      {filteredNotes.map((page) => (
                         <NoteRow
                           key={page.id}
                           page={page}
@@ -614,19 +673,20 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                           dropMode={dropTarget?.id === page.id ? dropTarget.mode : undefined}
                         />
                       ))}
-                      {notebookDatabases.map((database) => (
-                        <Link
-                          key={database.id}
-                          href={`/home/db/${database.id}`}
-                          className="flex items-center gap-3 px-4 py-3 transition hover:bg-[var(--surface-hover)]"
-                        >
-                          <WorkspaceIcon icon={database.icon} fallback="🗃️" size={16} />
-                          <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">
-                            {database.name}
-                          </span>
-                          <span className="text-[11px] text-faint">Base</span>
-                        </Link>
-                      ))}
+                      {!searchQuery &&
+                        notebookDatabases.map((database) => (
+                          <Link
+                            key={database.id}
+                            href={`/home/db/${database.id}`}
+                            className="flex items-center gap-3 px-4 py-3 transition hover:bg-[var(--surface-hover)]"
+                          >
+                            <WorkspaceIcon icon={database.icon} fallback="🗃️" size={16} />
+                            <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">
+                              {database.name}
+                            </span>
+                            <span className="text-[11px] text-faint">Base</span>
+                          </Link>
+                        ))}
                     </div>
                   </SortableContext>
                 </section>

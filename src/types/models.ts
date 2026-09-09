@@ -388,10 +388,11 @@ export interface NotionTreeNode {
 
 export interface SearchHit {
   id: string;
-  kind: "page" | "database" | "attachment";
+  kind: "page" | "notebook" | "database" | "attachment";
   title: string;
   snippet: string;
   score: number;
   matchedIn: ("title" | "body" | "ocr" | "transcript" | "tag")[];
   notebookId?: string | null;
+  icon?: string | null;
 }

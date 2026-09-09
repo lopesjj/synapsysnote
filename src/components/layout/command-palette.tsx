@@ -38,8 +38,23 @@ export function CommandPalette({
   };
 
   const hits = useMemo(
-    () => searchWorkspace(query, livePages, databases, 8),
-    [databases, livePages, query]
+    () => searchWorkspace(query, livePages, notebooks, 16),
+    [livePages, notebooks, query]
+  );
+
+  const notebookHits = useMemo(
+    () => hits.filter((h) => h.kind === "notebook"),
+    [hits]
+  );
+
+  const pageHits = useMemo(
+    () => hits.filter((h) => h.kind === "page"),
+    [hits]
+  );
+
+  const notebookMap = useMemo(
+    () => new Map(notebooks.map((n) => [n.id, n])),
+    [notebooks]
   );
 
   const recents = useMemo(
@@ -47,27 +62,12 @@ export function CommandPalette({
     [livePages]
   );
 
-  const notebookHits = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return [];
-    return notebooks
-      .filter((notebook) => notebook.name.toLowerCase().includes(needle))
-      .slice(0, 6);
-  }, [notebooks, query]);
-
   const go = (href: string) => {
     onOpenChange(false);
     if (href.startsWith("/home/p/")) {
       useUiStore.getState().closeMenu();
     }
     router.push(href);
-  };
-
-  const matchLabel: Record<string, string> = {
-    transcript: "transcrição",
-    tag: "tag",
-    title: "título",
-    body: "conteúdo",
   };
 
   return (
@@ -99,7 +99,7 @@ export function CommandPalette({
                   autoFocus
                   value={query}
                   onValueChange={setQuery}
-                  placeholder="Buscar páginas, transcrições ou executar um comando…"
+                  placeholder="Buscar em cadernos e páginas…"
                   className="h-12 w-full bg-transparent text-[13.5px] text-ink outline-none placeholder:text-faint"
                 />
                 <Kbd>esc</Kbd>
@@ -107,63 +107,65 @@ export function CommandPalette({
 
               <Command.List className="max-h-[52vh] overflow-y-auto p-1.5">
                 <Command.Empty className="px-3 py-8 text-center text-[12.5px] text-muted">
-                  Nada encontrado para “{query}”.
+                  Nada encontrado em cadernos ou páginas para “{query}”.
                 </Command.Empty>
 
                 {query && notebookHits.length ? (
-                  <Command.Group heading={<GroupLabel>Páginas</GroupLabel>}>
-                    {notebookHits.map((notebook) => (
+                  <Command.Group heading={<GroupLabel>Cadernos</GroupLabel>}>
+                    {notebookHits.map((hit) => (
                       <Command.Item
-                        key={notebook.id}
-                        value={`hit-notebook-${notebook.id}`}
-                        onSelect={() => go(`/home/n/${notebook.id}`)}
+                        key={`hit-notebook-${hit.id}`}
+                        value={`hit-notebook-${hit.id}`}
+                        onSelect={() => go(`/home/n/${hit.id}`)}
                         className={itemClass}
                       >
-                        <WorkspaceIcon icon={notebook.emoji} fallback="📓" size={14} />
-                        <span className="flex-1 truncate text-[13px] text-ink">{notebook.name}</span>
+                        <WorkspaceIcon icon={hit.icon ?? undefined} fallback="📓" size={14} />
+                        <div className="min-w-0 flex-1">
+                          <span className="block truncate text-[13px] font-medium text-ink">{hit.title}</span>
+                          {hit.snippet ? (
+                            <span className="block truncate text-[11.5px] text-muted">{hit.snippet}</span>
+                          ) : null}
+                        </div>
                       </Command.Item>
                     ))}
                   </Command.Group>
                 ) : null}
 
-                {query && hits.length ? (
-                  <Command.Group heading={<GroupLabel>Resultados</GroupLabel>}>
-                    {hits.map((hit) => (
-                      <Command.Item
-                        key={`${hit.kind}-${hit.id}`}
-                        value={`${hit.kind}-${hit.id}`}
-                        onSelect={() =>
-                          go(hit.kind === "page" ? `/home/p/${hit.id}` : `/home/db/${hit.id}`)
-                        }
-                        className={itemClass}
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[13px] text-ink">{hit.title}</span>
-                          {hit.snippet ? (
-                            <span className="block truncate text-[11.5px] text-muted">{hit.snippet}</span>
-                          ) : null}
-                        </span>
-                        <span className="flex shrink-0 gap-1">
-                          {hit.matchedIn
-                            .filter((m) => m === "transcript")
-                            .map((m) => (
-                              <span
-                                key={m}
-                                className="inline-flex items-center rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--accent)]"
-                              >
-                                {matchLabel[m]}
-                              </span>
-                            ))}
-                        </span>
-                      </Command.Item>
-                    ))}
+                {query && pageHits.length ? (
+                  <Command.Group heading={<GroupLabel>Páginas</GroupLabel>}>
+                    {pageHits.map((hit) => {
+                      const parentNotebook = hit.notebookId ? notebookMap.get(hit.notebookId) : null;
+                      return (
+                        <Command.Item
+                          key={`hit-page-${hit.id}`}
+                          value={`hit-page-${hit.id}`}
+                          onSelect={() => go(`/home/p/${hit.id}`)}
+                          className={itemClass}
+                        >
+                          <WorkspaceIcon icon={hit.icon ?? undefined} fallback="📄" size={14} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate text-[13px] text-ink">{hit.title}</span>
+                              {parentNotebook ? (
+                                <span className="shrink-0 rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px] text-muted">
+                                  {parentNotebook.name}
+                                </span>
+                              ) : null}
+                            </div>
+                            {hit.snippet ? (
+                              <span className="block truncate text-[11.5px] text-muted">{hit.snippet}</span>
+                            ) : null}
+                          </div>
+                        </Command.Item>
+                      );
+                    })}
                   </Command.Group>
                 ) : null}
 
                 {!query ? (
                   <>
                     {notebooks.length ? (
-                      <Command.Group heading={<GroupLabel>Páginas</GroupLabel>}>
+                      <Command.Group heading={<GroupLabel>Cadernos</GroupLabel>}>
                         {notebooks.slice(0, 6).map((notebook) => (
                           <Command.Item
                             key={notebook.id}
@@ -316,7 +318,7 @@ export function CommandPalette({
 
               <div className="flex items-center justify-between border-t border-[var(--border)] bg-[var(--surface-2)]/50 px-3 py-2 text-[11px] text-faint">
                 <span className="flex items-center gap-1.5">
-                  Busca híbrida: texto completo + vetores
+                  Pesquisar em cadernos e páginas
                 </span>
                 <span className="flex items-center gap-2">
                   <Kbd>↑</Kbd>
