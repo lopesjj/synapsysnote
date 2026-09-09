@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, Input, Tooltip } from "@/components/ui/primitives";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from "@/components/ui/menu";
 import { BlockEditor } from "@/components/editor/block-editor";
+import { getMentionCandidates } from "@/components/editor/extensions/mention-suggestion";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { cn, compareNatural } from "@/lib/utils";
 import type { Page } from "@/types/models";
@@ -98,15 +99,15 @@ export function NotesExplorer({
   const activeNotebook = notebooks.find((notebook) => notebook.id === notebookFilter);
   const mentionCandidates = useMemo(
     () =>
-      livePages
-        .filter((page) => page.id !== selectedId)
-        .map((page) => ({
-          id: page.id,
-          title: page.title,
-          icon: page.icon,
-          breadcrumb: notebooks.find((notebook) => notebook.id === page.notebookId)?.name,
-        })),
-    [livePages, notebooks, selectedId]
+      selectedId
+        ? getMentionCandidates({
+            currentPageId: selectedId,
+            currentNotebookId: selected?.notebookId ?? notebookFilter ?? null,
+            livePages,
+            notebooks,
+          })
+        : [],
+    [livePages, notebooks, selectedId, selected?.notebookId, notebookFilter]
   );
 
   const createNote = async () => {

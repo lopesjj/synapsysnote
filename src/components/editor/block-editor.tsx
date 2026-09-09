@@ -28,7 +28,11 @@ import { TextAlign } from "./extensions/text-align";
 import { SynapsysCodeBlock } from "./extensions/code-block";
 import { SlashCommand } from "./extensions/slash-command";
 import { HeadingShortcut } from "./extensions/heading-shortcut";
-import { createMentionSuggestion, type MentionCandidate } from "./extensions/mention-suggestion";
+import {
+  createMentionSuggestion,
+  getMentionCandidates,
+  type MentionCandidate,
+} from "./extensions/mention-suggestion";
 import { BubbleToolbar } from "./bubble-toolbar";
 import { EditorToolbar, useEditorTick } from "./editor-toolbar";
 import { NoteOutline } from "./note-outline";
@@ -107,7 +111,7 @@ export function BlockEditor({
   page,
   editable = true,
   chrome = true,
-  mentionCandidates = [],
+  mentionCandidates,
   onChange,
   onRequestUpload,
   onRequestAudio,
@@ -121,7 +125,19 @@ export function BlockEditor({
   const emittedBlockCount = useRef(page.blocks.length);
   const trackedPageId = useRef(page.id);
   const applyingRemote = useRef(false);
-  const candidatesRef = useRef(mentionCandidates);
+  const effectiveCandidates = useMemo(() => {
+    if (mentionCandidates !== undefined) {
+      return mentionCandidates;
+    }
+    return getMentionCandidates({
+      currentPageId: page.id,
+      currentNotebookId: page.notebookId,
+      livePages,
+      notebooks,
+    });
+  }, [mentionCandidates, page.id, page.notebookId, livePages, notebooks]);
+
+  const candidatesRef = useRef(effectiveCandidates);
   const mentionNavRef = useRef({ router, livePages, notebooks });
   mentionNavRef.current = { router, livePages, notebooks };
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
@@ -147,8 +163,8 @@ export function BlockEditor({
   const openMentionRef = useRef(openMention);
   openMentionRef.current = openMention;
   useEffect(() => {
-    candidatesRef.current = mentionCandidates;
-  }, [mentionCandidates]);
+    candidatesRef.current = effectiveCandidates;
+  }, [effectiveCandidates]);
 
   const handlers = useMemo(
     () => ({

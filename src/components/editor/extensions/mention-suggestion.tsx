@@ -8,11 +8,75 @@ import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { SuggestionList, type SuggestionItem, type SuggestionListHandle } from "./suggestion-popup";
 import { ensureSuggestionPopup } from "./suggestion-tippy";
 
+import type { Page, Notebook } from "@/types/models";
+import { parentIdOf } from "@/lib/data/notebook-tree";
+
 export interface MentionCandidate {
   id: string;
   title: string;
   icon?: string;
   breadcrumb?: string;
+}
+
+export function getMentionCandidates({
+  currentPageId,
+  currentNotebookId,
+  livePages,
+  notebooks,
+}: {
+  currentPageId: string;
+  currentNotebookId?: string | null;
+  livePages: Page[];
+  notebooks: Notebook[];
+}): MentionCandidate[] {
+  if (!currentNotebookId) {
+    return [];
+  }
+
+  const notebookMap = new Map(notebooks.map((n) => [n.id, n]));
+
+  // 1. Mostrar só notas do caderno da nota atual (excluindo a própria nota)
+  let candidatePages = livePages.filter(
+    (page) =>
+      page.notebookId === currentNotebookId &&
+      page.id !== currentPageId &&
+      !page.deletedAt &&
+      !page.archived
+  );
+
+  // 2. Se não tiver notas do caderno, puxar do caderno pai
+  if (candidatePages.length === 0) {
+    let cur = notebookMap.get(currentNotebookId);
+
+    while (cur) {
+      const pId = parentIdOf(cur);
+      if (!pId) break;
+      const parentPages = livePages.filter(
+        (page) =>
+          page.notebookId === pId &&
+          page.id !== currentPageId &&
+          !page.deletedAt &&
+          !page.archived
+      );
+      if (parentPages.length > 0) {
+        candidatePages = parentPages;
+        break;
+      }
+      cur = notebookMap.get(pId);
+    }
+  }
+
+  // Ordenar por atualização mais recente
+  const sorted = [...candidatePages].sort(
+    (a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)
+  );
+
+  return sorted.map((candidate) => ({
+    id: candidate.id,
+    title: candidate.title,
+    icon: candidate.icon,
+    breadcrumb: candidate.notebookId ? notebookMap.get(candidate.notebookId)?.name : undefined,
+  }));
 }
 
 export function createMentionSuggestion(

@@ -26,6 +26,7 @@ import { useWorkspace } from "@/lib/data/provider";
 import { useDebounceAutoSave } from "@/hooks/use-debounce-auto-save";
 import { useUiStore } from "@/lib/store/ui-store";
 import { BlockEditor } from "@/components/editor/block-editor";
+import { getMentionCandidates } from "@/components/editor/extensions/mention-suggestion";
 import { AudioRecorder } from "@/components/media/audio-recorder";
 import { Button } from "@/components/ui/button";
 import { Badge, Input, Tooltip } from "@/components/ui/primitives";
@@ -89,15 +90,15 @@ export function PageView({ pageId }: { pageId: string }) {
 
   const mentionCandidates = useMemo(
     () =>
-      livePages
-        .filter((candidate) => candidate.id !== pageId)
-        .map((candidate) => ({
-          id: candidate.id,
-          title: candidate.title,
-          icon: candidate.icon,
-          breadcrumb: notebooks.find((n) => n.id === candidate.notebookId)?.name,
-        })),
-    [livePages, notebooks, pageId]
+      pageId
+        ? getMentionCandidates({
+            currentPageId: pageId,
+            currentNotebookId: page?.notebookId ?? null,
+            livePages,
+            notebooks,
+          })
+        : [],
+    [livePages, notebooks, pageId, page?.notebookId]
   );
 
   const backlinks = useMemo(
