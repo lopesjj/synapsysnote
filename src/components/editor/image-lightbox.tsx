@@ -34,6 +34,12 @@ export function ImageLightbox() {
   useEffect(() => {
     if (isOpen) {
       resetTransform();
+      if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      requestAnimationFrame(() => {
+        containerRef.current?.focus();
+      });
     }
   }, [isOpen, currentIndex, resetTransform]);
 
@@ -156,7 +162,8 @@ export function ImageLightbox() {
   return createPortal(
     <div
       ref={containerRef}
-      className="fixed inset-0 z-[9999] flex select-none items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
+      tabIndex={-1}
+      className="fixed inset-0 z-[9999] flex select-none items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-200 outline-none"
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
     >

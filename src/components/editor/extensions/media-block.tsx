@@ -123,11 +123,72 @@ function ResizableImage({
     window.addEventListener("pointerup", up);
   };
 
+  const touchStartRef = useRef<{ time: number; x: number; y: number } | null>(null);
+  const lastTapRef = useRef<number>(0);
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLImageElement>) => {
+    // Desfoca o editor imediatamente para fechar ou evitar que o teclado mobile suba
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    if (e.touches.length === 1) {
+      touchStartRef.current = {
+        time: Date.now(),
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      };
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLImageElement>) => {
+    const start = touchStartRef.current;
+    if (!start) return;
+    const now = Date.now();
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+    const distX = Math.abs(touch.clientX - start.x);
+    const distY = Math.abs(touch.clientY - start.y);
+
+    // Se o movimento do dedo foi pequeno (toque/tap estático)
+    if (distX < 15 && distY < 15) {
+      if (now - lastTapRef.current < 350) {
+        // Duplo toque detectado!
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        onDoubleClick?.();
+        lastTapRef.current = 0;
+        return;
+      }
+      lastTapRef.current = now;
+    }
+  };
+
+  const handlePointerDownImage = (e: React.PointerEvent<HTMLImageElement>) => {
+    // Evita que o ProseMirror foque o editor e abra o teclado virtual
+    e.stopPropagation();
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent<HTMLImageElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    onDoubleClick?.();
+  };
+
   return (
     <div
       ref={boxRef}
+      contentEditable={false}
       className={cn(
-        "group/image relative mx-auto max-w-full",
+        "group/image relative mx-auto max-w-full select-none",
         editable && "cursor-grab active:cursor-grabbing",
         showHandles && "ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)]"
       )}
@@ -144,8 +205,11 @@ function ResizableImage({
         src={url}
         alt=""
         onLoad={onNaturalSize}
-        onDoubleClick={onDoubleClick}
-        className="h-auto max-h-[min(80vh,880px)] w-full cursor-zoom-in rounded-[var(--radius-md)] object-contain [-webkit-user-drag:none]"
+        onDoubleClick={handleDoubleClick}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onPointerDown={handlePointerDownImage}
+        className="h-auto max-h-[min(80vh,880px)] w-full cursor-zoom-in rounded-[var(--radius-md)] object-contain [-webkit-user-drag:none] select-none touch-manipulation"
         draggable={false}
         aria-hidden
         loading="eager"
@@ -430,6 +494,10 @@ function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) 
   };
 
   const handleOpenLightbox = () => {
+    editor.commands.blur();
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     const images: { url: string; name?: string }[] = [];
     editor.state.doc.descendants((docNode) => {
       if (
@@ -452,7 +520,7 @@ function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) 
   };
 
   return (
-    <NodeViewWrapper className="my-3 overflow-visible" data-media>
+    <NodeViewWrapper className="my-3 overflow-visible" data-media contentEditable={false}>
       {mediaType === "image" && url ? (
         <ResizableImage
           url={url as string}
