@@ -68,6 +68,7 @@ import {
   encodeId,
   planSidebarDrop,
   type DragId,
+  type DragKind,
 } from "./sidebar-dnd";
 
 function SidebarItemIcon({
@@ -237,15 +238,19 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   const [sidebarDropIntent, setSidebarDropIntent] = useState<{
     id: string;
     mode: "before" | "after" | "inside";
+    targetKind?: DragKind;
   } | null>(null);
   const sidebarDropIntentRef = useRef<{
     id: string;
     mode: "before" | "after" | "inside";
+    targetKind?: DragKind;
   } | null>(null);
+  const sidebarPointerXRef = useRef<number>(0);
   const sidebarPointerYRef = useRef<number>(0);
 
   useEffect(() => {
     const handlePointerMove = (e: PointerEvent) => {
+      sidebarPointerXRef.current = e.clientX;
       sidebarPointerYRef.current = e.clientY;
     };
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
@@ -310,7 +315,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
 
     const activeDecoded = decodeId(active.id);
     const overDecoded = decodeId(over.id);
-    if (!activeDecoded || !overDecoded || activeDecoded.kind !== overDecoded.kind) {
+    if (!activeDecoded || !overDecoded) {
       sidebarDropIntentRef.current = null;
       setSidebarDropIntent(null);
       return;
@@ -319,20 +324,53 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
     const overRect = over.rect;
     if (!overRect) return;
 
-    const cursorY = sidebarPointerYRef.current || (active.rect.current.translated ? active.rect.current.translated.top + active.rect.current.translated.height / 2 : overRect.top + overRect.height / 2);
-    const relativeY = (cursorY - overRect.top) / overRect.height;
+    const cursorX =
+      sidebarPointerXRef.current ||
+      (active.rect.current.translated
+        ? active.rect.current.translated.left + active.rect.current.translated.width / 2
+        : overRect.left + overRect.width / 2);
+    const cursorY =
+      sidebarPointerYRef.current ||
+      (active.rect.current.translated
+        ? active.rect.current.translated.top + active.rect.current.translated.height / 2
+        : overRect.top + overRect.height / 2);
+
+    const relativeX = overRect.width > 0 ? (cursorX - overRect.left) / overRect.width : 0.5;
+    const relativeY = overRect.height > 0 ? (cursorY - overRect.top) / overRect.height : 0.5;
 
     let mode: "before" | "after" | "inside" = "inside";
-    if (relativeY < 0.25) {
-      mode = "before";
-    } else if (relativeY > 0.75) {
-      mode = "after";
+
+    if (activeDecoded.kind === "page") {
+      if (overDecoded.kind === "notebook") {
+        // Ao arrastar nota sobre um caderno -> mover nota para dentro do caderno
+        mode = "inside";
+      } else {
+        // Ao arrastar nota sobre outra nota: SEMPRE reordena (acima/abaixo).
+        // Notas NÃO podem virar subpágina de outra nota.
+        mode = relativeY < 0.5 ? "before" : "after";
+      }
     } else {
-      mode = "inside"; 
+      // activeDecoded.kind === "notebook"
+      if (overDecoded.kind === "notebook") {
+        if (relativeX < 0.55) {
+          mode = relativeY < 0.5 ? "before" : "after";
+        } else {
+          if (relativeY < 0.2) {
+            mode = "before";
+          } else if (relativeY > 0.8) {
+            mode = "after";
+          } else {
+            mode = "inside";
+          }
+        }
+      } else {
+        mode = relativeY < 0.5 ? "before" : "after";
+      }
     }
 
-    sidebarDropIntentRef.current = { id: overDecoded.id, mode };
-    setSidebarDropIntent({ id: overDecoded.id, mode });
+    const intent = { id: overDecoded.id, mode, targetKind: overDecoded.kind };
+    sidebarDropIntentRef.current = intent;
+    setSidebarDropIntent(intent);
   };
 
   const onDragCancel = () => {
@@ -384,13 +422,26 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           notebookId: plan.notebookId,
           parentPageId: plan.parentPageId,
         });
+        if (plan.notebookId) {
+          setOpenNotebooks((prev) => ({ ...prev, [plan.notebookId!]: true }));
+        }
+        if (plan.parentPageId) {
+          setExpanded((prev) => ({ ...prev, [plan.parentPageId!]: true }));
+        }
+        toast.success(
+          plan.parentPageId
+            ? "Nota inserida como subpágina"
+            : "Nota movida para o caderno"
+        );
       }
 
       await adapter.applyPageOrders(
         plan.pageIds.map((id, index) => ({ id, order: index * ORDER_STEP }))
       );
 
-      if (plan.kind === "move-page") toast.success("Página movida");
+      if (plan.kind === "reorder-pages") {
+        toast.success("Ordem das notas atualizada");
+      }
     } catch {
       toast.error("Não foi possível reordenar. Tente novamente.");
     }
@@ -422,6 +473,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
             depth={depth}
             count={tree.length + notebookDatabases.length + nested.length}
             dropIntent={sidebarDropIntent?.id === notebook.id ? sidebarDropIntent.mode : undefined}
+            draggingKind={dragging?.kind}
             onToggle={() =>
               setOpenNotebooks((prev) => ({ ...prev, [notebook.id]: !open }))
             }
@@ -727,14 +779,12 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               <span className="max-w-[130px] truncate text-[13px] font-semibold text-ink">
                 {draggedLabel || "Sem título"}
               </span>
-              {sidebarDropIntent?.mode === "inside" ? (
+              {sidebarDropIntent?.mode === "inside" && (dragging.kind === "notebook" || sidebarDropIntent?.targetKind === "notebook") ? (
                 <span className="ml-auto flex items-center gap-1 rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold text-white shadow-sm animate-in fade-in zoom-in-95 duration-100">
-                  {dragging.kind === "notebook" ? (
-                    <FolderPlus className="size-3" />
-                  ) : (
-                    <FilePlus className="size-3" />
-                  )}
-                  {dragging.kind === "notebook" ? "Inserir dentro" : "Virar subpágina"}
+                  <FolderPlus className="size-3" />
+                  {dragging.kind === "notebook"
+                    ? "Inserir dentro"
+                    : "Mover para o caderno"}
                 </span>
               ) : sidebarDropIntent?.mode === "before" ? (
                 <span className="ml-auto rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[10px] font-bold shadow-sm animate-in fade-in duration-100">
@@ -798,6 +848,7 @@ function NotebookRow({
   onRename,
   onDelete,
   dropIntent,
+  draggingKind,
   children,
 }: {
   notebook: Notebook;
@@ -806,6 +857,7 @@ function NotebookRow({
   depth: number;
   count: number;
   dropIntent?: "before" | "after" | "inside";
+  draggingKind?: DragKind | null;
   onToggle: () => void;
   onCreatePage: () => void;
   onCreateSubnotebook: () => void;
@@ -862,7 +914,7 @@ function NotebookRow({
         {dropIntent === "inside" && (
           <div className="pointer-events-none absolute right-1.5 top-1/2 z-30 -translate-y-1/2 flex items-center gap-1 rounded-full bg-[var(--accent)] px-2.5 py-0.5 text-[10.5px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
             <FolderPlus className="size-3" />
-            <span>Inserir dentro</span>
+            <span>{draggingKind === "page" ? "Mover nota para cá" : "Inserir dentro"}</span>
           </div>
         )}
         {renaming ? (
