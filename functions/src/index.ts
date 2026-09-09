@@ -13,7 +13,6 @@ export {
   disconnectNotion,
 } from "./notion/import-job";
 
-export { runOcrOnUpload, reprocessOcr } from "./ai/ocr";
 export { transcribeAudio, transcribeOnUpload } from "./ai/transcribe";
 export { embedPageOnWrite, semanticSearch } from "./ai/embeddings";
 export { purgeExpiredTrash, purgePage, restorePage } from "./maintenance/trash";

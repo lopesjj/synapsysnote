@@ -469,8 +469,6 @@ export const ToggleBlock = Node.create({
         const childIndex = $from.index(toggleDepth);
         const currentChild = toggleNode.child(childIndex);
         const isCurrentEmpty = currentChild.textContent === "" && currentChild.childCount === 0;
-
-        // CASO 1: Cursor no início do PRIMEIRO bloco do toggle -> voltar para a linha superior (título do toggle)
         if (childIndex === 0) {
           const currentSummary = (toggleNode.attrs.summary as string) || "";
           const childBeforePos = $from.before(directChildDepth);
@@ -517,8 +515,6 @@ export const ToggleBlock = Node.create({
 
           return true;
         }
-
-        // CASO 2: Cursor no início de um bloco subsequente (childIndex > 0) -> voltar para a linha superior anterior
         const prevChild = toggleNode.child(childIndex - 1);
         const currentBeforePos = $from.before(directChildDepth);
         const currentAfterPos = $from.after(directChildDepth);

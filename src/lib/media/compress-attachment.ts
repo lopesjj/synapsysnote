@@ -1,10 +1,17 @@
-export const ATTACHMENT_SIZE_LIMIT = 5 * 1024 * 1024;
+export const IMAGE_SIZE_LIMIT = 1 * 1024 * 1024;
+export const PDF_SIZE_LIMIT = 3 * 1024 * 1024;
+export const ATTACHMENT_SIZE_LIMIT = PDF_SIZE_LIMIT;
 const MAX_ROUNDS = 18;
 const MIN_EDGE = 320;
 
 export function needsCompression(file: File): boolean {
-  if (file.size <= ATTACHMENT_SIZE_LIMIT) return false;
-  return file.type.startsWith("image/") || file.type === "application/pdf";
+  if (file.type.startsWith("image/")) {
+    return file.size > IMAGE_SIZE_LIMIT;
+  }
+  if (file.type === "application/pdf") {
+    return file.size > PDF_SIZE_LIMIT;
+  }
+  return false;
 }
 
 export function replaceExtension(name: string, ext: string): string {
@@ -30,7 +37,7 @@ export async function optimizeImageForFastLoad(file: File): Promise<File> {
       const targetWidth = Math.max(1, Math.round(bitmap.width * scale));
       const targetHeight = Math.max(1, Math.round(bitmap.height * scale));
 
-      if (scale === 1 && file.size < 1024 * 1024) {
+      if (scale === 1 && file.size <= IMAGE_SIZE_LIMIT) {
         return file;
       }
 
@@ -77,7 +84,7 @@ async function compressImageUntilFits(file: File): Promise<File> {
           lastModified: Date.now(),
         });
       }
-      if (best.size <= ATTACHMENT_SIZE_LIMIT) return best;
+      if (best.size <= IMAGE_SIZE_LIMIT) return best;
 
       if (quality > 0.32) {
         quality = Math.max(0.28, quality - 0.12);
@@ -88,8 +95,8 @@ async function compressImageUntilFits(file: File): Promise<File> {
       if (Math.max(width, height) <= MIN_EDGE && quality <= 0.28) break;
     }
 
-    if (best.size <= ATTACHMENT_SIZE_LIMIT) return best;
-    throw tooLarge(best.size);
+    if (best.size <= IMAGE_SIZE_LIMIT) return best;
+    throw tooLarge(best.size, 1);
   } finally {
     bitmap.close();
   }
@@ -106,7 +113,7 @@ async function compressPdfUntilFits(file: File): Promise<File> {
     if (blob.size < best.size) {
       best = new File([blob], file.name, { type: "application/pdf", lastModified: Date.now() });
     }
-    if (best.size <= ATTACHMENT_SIZE_LIMIT) return best;
+    if (best.size <= PDF_SIZE_LIMIT) return best;
 
     if (quality > 0.32) {
       quality = Math.max(0.26, quality - 0.1);
@@ -117,13 +124,13 @@ async function compressPdfUntilFits(file: File): Promise<File> {
     if (scale < 0.28 && quality <= 0.26) break;
   }
 
-  if (best.size <= ATTACHMENT_SIZE_LIMIT) return best;
-  throw tooLarge(best.size);
+  if (best.size <= PDF_SIZE_LIMIT) return best;
+  throw tooLarge(best.size, 3);
 }
 
-function tooLarge(size: number): Error {
+function tooLarge(size: number, limitMb: number): Error {
   return new Error(
-    `Este arquivo continua acima de 5 MB (${Math.ceil(size / (1024 * 1024))} MB) mesmo após comprimir. Tente um arquivo menor.`
+    `Este arquivo continua acima de ${limitMb} MB (${Math.ceil(size / (1024 * 1024))} MB) mesmo após comprimir. Tente um arquivo menor.`
   );
 }
 

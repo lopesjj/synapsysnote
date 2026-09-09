@@ -61,9 +61,7 @@ export const DragAutoScroll = Extension.create({
                 cancelable: true,
               });
               target.dispatchEvent(syntheticDragOver);
-            } catch {
-              // Navegadores sem suporte a instanciação sintética de DragEvent
-            }
+            } catch {}
 
             rafId = requestAnimationFrame(scrollStep);
           };
@@ -105,16 +103,12 @@ export const DragAutoScroll = Extension.create({
               const factor = Math.min(1, distance / SCROLL_ZONE_PX);
               scrollSpeed = -Math.round(MIN_SPEED + factor * (MAX_SPEED - MIN_SPEED));
               ensureLoopRunning();
-            }
-            // Se o cursor estiver na zona inferior (abaixo do bottomBoundary)
-            else if (event.clientY > bottomBoundary && event.clientY <= rect.bottom + 40) {
+            } else if (event.clientY > bottomBoundary && event.clientY <= rect.bottom + 40) {
               const distance = Math.max(0, event.clientY - bottomBoundary);
               const factor = Math.min(1, distance / SCROLL_ZONE_PX);
               scrollSpeed = Math.round(MIN_SPEED + factor * (MAX_SPEED - MIN_SPEED));
               ensureLoopRunning();
-            }
-            // Na zona neutra central
-            else {
+            } else {
               scrollSpeed = 0;
               stopLoop();
             }

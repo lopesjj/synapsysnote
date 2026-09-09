@@ -48,7 +48,6 @@ export function searchWorkspace(
   const hits: SearchHit[] = [];
   const now = Date.now();
 
-  // 1. Pesquisa dentro de Cadernos
   for (const notebook of notebooks) {
     const fields: { field: "title" | "body"; text: string; weight: number }[] = [
       { field: "title", text: notebook.name, weight: 7 },
@@ -87,7 +86,6 @@ export function searchWorkspace(
     });
   }
 
-  // 2. Pesquisa dentro de Páginas
   for (const page of pages) {
     if (page.deletedAt) continue;
 

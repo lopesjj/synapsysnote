@@ -35,7 +35,6 @@ export function getMentionCandidates({
 
   const notebookMap = new Map(notebooks.map((n) => [n.id, n]));
 
-  // 1. Mostrar só notas do caderno da nota atual (excluindo a própria nota)
   let candidatePages = livePages.filter(
     (page) =>
       page.notebookId === currentNotebookId &&
@@ -44,7 +43,6 @@ export function getMentionCandidates({
       !page.archived
   );
 
-  // 2. Se não tiver notas do caderno, puxar do caderno pai
   if (candidatePages.length === 0) {
     let cur = notebookMap.get(currentNotebookId);
 
@@ -66,7 +64,6 @@ export function getMentionCandidates({
     }
   }
 
-  // Ordenar por atualização mais recente
   const sorted = [...candidatePages].sort(
     (a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)
   );

@@ -45,7 +45,6 @@ const nIsolated = mockNotebook("nb_isolated", "Caderno Isolado", null);
 
 const notebooks = [nRoot, nParent, nChild, nIsolated];
 
-// Teste 1: Caderno com várias notas -> mostra somente as notas do mesmo caderno (excluindo a atual)
 {
   const p1 = mockPage("p1", "Nota 1 do Filho", "nb_child", { updatedAt: 2000 });
   const p2 = mockPage("p2", "Nota 2 do Filho", "nb_child", { updatedAt: 3000 });
@@ -65,7 +64,6 @@ const notebooks = [nRoot, nParent, nChild, nIsolated];
   console.log("✓ Teste 1 passou: Mostra apenas notas do mesmo caderno quando há notas");
 }
 
-// Teste 2: Caderno sem outras notas (apenas a atual) -> puxa do caderno pai
 {
   const p1 = mockPage("p1", "Nota Única do Filho", "nb_child");
   const pParent1 = mockPage("p_parent1", "Nota 1 do Pai", "nb_parent", { updatedAt: 4000 });
@@ -86,7 +84,6 @@ const notebooks = [nRoot, nParent, nChild, nIsolated];
   console.log("✓ Teste 2 passou: Puxa notas do caderno pai se o caderno atual não tiver notas");
 }
 
-// Teste 3: Caderno filho e pai vazios -> sobe para o avô (raiz)
 {
   const p1 = mockPage("p1", "Nota Única do Filho", "nb_child");
   const pRoot = mockPage("p_root", "Nota da Raiz", "nb_root");
@@ -104,7 +101,6 @@ const notebooks = [nRoot, nParent, nChild, nIsolated];
   console.log("✓ Teste 3 passou: Sobe para o avô quando o pai também estiver vazio");
 }
 
-// Teste 4: Caderno isolado (sem pai) com apenas 1 nota -> lista vazia
 {
   const pIso = mockPage("p_iso", "Nota Isolada", "nb_isolated");
 
@@ -121,7 +117,6 @@ const notebooks = [nRoot, nParent, nChild, nIsolated];
   console.log("✓ Teste 4 passou: Retorna vazio quando caderno não tem outras notas e não tem pai");
 }
 
-// Teste 5: Nota sem caderno -> lista vazia
 {
   const pNoNb = mockPage("p_none", "Sem Caderno", null);
   const pRoot = mockPage("p_root", "Nota da Raiz", "nb_root");
@@ -139,7 +134,6 @@ const notebooks = [nRoot, nParent, nChild, nIsolated];
   console.log("✓ Teste 5 passou: Retorna vazio para páginas sem caderno");
 }
 
-// Teste 6: Ignora páginas arquivadas ou deletadas
 {
   const p1 = mockPage("p1", "Nota Atual", "nb_child");
   const pArchived = mockPage("p_archived", "Nota Arquivada", "nb_child", { archived: true });
@@ -153,7 +147,6 @@ const notebooks = [nRoot, nParent, nChild, nIsolated];
     notebooks,
   });
 
-  // Como no nb_child só temos a atual, arquivada e deletada, deve puxar do pai!
   if (candidates.length !== 1 || candidates[0].id !== "p_parent") {
     throw new Error(`Teste 6 falhou: esperava p_parent, obteve ${JSON.stringify(candidates)}`);
   }

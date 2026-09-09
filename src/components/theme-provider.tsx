@@ -37,9 +37,7 @@ export function useTheme() {
     document.documentElement.classList.toggle("dark", next === "dark");
     try {
       window.localStorage.setItem(KEY, next);
-    } catch {
-      // Private mode: the theme simply resets on the next visit.
-    }
+    } catch {}
     window.dispatchEvent(new Event(EVENT));
   }, []);
 

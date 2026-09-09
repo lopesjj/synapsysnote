@@ -60,7 +60,6 @@ export interface BlockMedia {
   displayWidth?: number;
   durationSeconds?: number;
   caption?: RichTextSpan[];
-  ocrText?: string;
   transcript?: string;
   transcriptSummary?: string;
   pending?: boolean;
@@ -188,7 +187,7 @@ export interface Page {
   path: string[];
   blocks: AppBlock[];
   plainText: string;
-  extractedOCRText: string;
+  extractedOCRText?: string;
   transcriptText: string;
   tags: string[];
   outgoingLinks: string[];
@@ -365,7 +364,6 @@ export interface ImportJob {
   options: {
     downloadMedia: boolean;
     preserveHierarchy: boolean;
-    runOcr: boolean;
     createBacklinks: boolean;
   };
   requestedBy: string;
@@ -392,7 +390,7 @@ export interface SearchHit {
   title: string;
   snippet: string;
   score: number;
-  matchedIn: ("title" | "body" | "ocr" | "transcript" | "tag")[];
+  matchedIn: ("title" | "body" | "transcript" | "tag")[];
   notebookId?: string | null;
   icon?: string | null;
 }

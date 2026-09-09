@@ -8,6 +8,7 @@ export interface RichTextSpan {
     underline?: boolean;
     code?: boolean;
     color?: string;
+    highlight?: boolean | string;
   };
   href?: string | null;
   mention?:
@@ -51,7 +52,6 @@ export interface BlockMedia {
   height?: number;
   durationSeconds?: number;
   caption?: RichTextSpan[];
-  ocrText?: string;
   transcript?: string;
   transcriptSummary?: string;
   pending?: boolean;
@@ -132,7 +132,6 @@ export interface ImportJobDoc {
   options: {
     downloadMedia: boolean;
     preserveHierarchy: boolean;
-    runOcr: boolean;
     createBacklinks: boolean;
   };
   requestedBy: string;

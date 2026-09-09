@@ -217,9 +217,7 @@ function setSessionState<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
   try {
     sessionStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Ignore storage quota or privacy exceptions
-  }
+  } catch {}
 }
 
 export function Sidebar({ collapsed, width }: { collapsed: boolean; width: number }) {
@@ -342,15 +340,11 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
 
     if (activeDecoded.kind === "page") {
       if (overDecoded.kind === "notebook") {
-        // Ao arrastar nota sobre um caderno -> mover nota para dentro do caderno
         mode = "inside";
       } else {
-        // Ao arrastar nota sobre outra nota: SEMPRE reordena (acima/abaixo).
-        // Notas NÃO podem virar subpágina de outra nota.
         mode = relativeY < 0.5 ? "before" : "after";
       }
     } else {
-      // activeDecoded.kind === "notebook"
       if (overDecoded.kind === "notebook") {
         if (relativeX < 0.55) {
           mode = relativeY < 0.5 ? "before" : "after";

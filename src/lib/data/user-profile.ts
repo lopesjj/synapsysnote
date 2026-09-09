@@ -38,9 +38,7 @@ function readLocal(uid: string): UserProfile | null {
 function writeLocal(profile: UserProfile): void {
   try {
     window.localStorage.setItem(`${LOCAL_KEY}.${profile.uid}`, JSON.stringify(profile));
-  } catch {
-    // Private browsing: preferences stay in memory for this session only.
-  }
+  } catch {}
 }
 
 async function profileRef(uid: string) {

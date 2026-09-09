@@ -46,7 +46,6 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   const planLabel = mode === "demo" || user?.uid === "demo-user" ? "Convidado" : "Pro";
 
   const avatar = photoURL ? (
-    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={photoURL}
       alt=""
@@ -102,7 +101,6 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
           />
           <div className="relative flex items-center gap-3">
             {photoURL ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={photoURL}
                 alt=""

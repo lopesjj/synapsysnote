@@ -207,10 +207,10 @@ const COMMANDS: CommandDescriptor[] = [
   {
     id: "image",
     title: "Imagem ou arquivo",
-    subtitle: "OCR automático em imagens e PDFs",
+    subtitle: "Imagem (até 1 MB) ou PDF (até 3 MB)",
     group: "Mídia",
     icon: <ImageIcon />,
-    keywords: ["imagem", "arquivo", "upload", "anexo", "ocr"],
+    keywords: ["imagem", "arquivo", "upload", "anexo", "pdf"],
     action: ({ editor, range, handlers }) => {
       editor.chain().focus().deleteRange(range).run();
       handlers.onRequestUpload();

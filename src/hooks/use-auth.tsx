@@ -221,10 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (isRememberExpired()) {
         suppressSessionHydrate();
-        await clearCrossHostSession().catch(() => {
-          // An explicit logout reports a cookie-clear failure. Here we still
-          // expire the local session so a stale remember marker cannot linger.
-        });
+        await clearCrossHostSession().catch(() => {});
         await signOut(auth);
         clearRemembered();
         writeDemoUser(null);
@@ -434,10 +431,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (email && email !== (current.email ?? "")) {
           try {
             await updateEmail(current, email);
-          } catch {
-            // Profile still stores the confirmed address; Auth email stays if the
-            // provider requires a fresh login to change it.
-          }
+          } catch {}
         }
 
         const next = { ...toAppUser(current), email: email || current.email || "", displayName: name };
@@ -512,10 +506,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!auth.currentUser) return;
         const next = toAppUser(auth.currentUser);
         setFirebaseUser(next);
-        void updateUserProfile(next.uid, { providers: next.providers }).catch(() => {
-          // Firebase Auth is authoritative. A later profile refresh will
-          // mirror the provider list if this display-only write is unavailable.
-        });
+        void updateUserProfile(next.uid, { providers: next.providers }).catch(() => {});
       },
 
       async continueAsGuest() {
@@ -530,10 +521,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           suppressSessionHydrate();
           if (configured) {
             const [{ signOut }, auth] = await Promise.all([import("firebase/auth"), firebaseAuth()]);
-            await signOut(auth).catch(() => {
-              // The shared server session is already gone. Clear rendered
-              // state below; Firebase reconciles its local storage next load.
-            });
+            await signOut(auth).catch(() => {});
           }
           writeCachedUser(null);
           writeDemoUser(null);
@@ -546,8 +534,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             } catch {
             }
           }
-          // Keep this true until the caller completes its full navigation.
-          // AppShell then cannot race it with ?session=sync_failed.
         } catch (error) {
           setLoggingOut(false);
           throw error;

@@ -1,7 +1,7 @@
 {
   "name": "synapsys-note-functions",
   "version": "1.0.0",
-  "description": "Cloud Functions for Synapsys Note: Notion import pipeline, OCR, transcription and embeddings.",
+  "description": "Cloud Functions for Synapsys Note: Notion import pipeline, transcription and embeddings.",
   "private": true,
   "main": "lib/index.js",
   "engines": {
@@ -17,7 +17,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@google-cloud/vision": "^5.3.4",
     "@google/genai": "^1.31.0",
     "@notionhq/client": "^5.9.0",
     "firebase-admin": "^13.6.0",

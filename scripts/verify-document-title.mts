@@ -12,17 +12,17 @@ assert.equal(formatTabTitle("Minha Nota Importante"), "Synapsys Note | Minha Not
 
 assert.equal(
   formatTabTitle("Minha Nota Importante de Trabalho"),
-  "Synapsys Note | Minha Nota Importante..."
+  "Synapsys Note | Minha Nota Importante de Trabalho"
 );
 
 assert.equal(
   formatTabTitle("SPTC - Perito Criminal de São Paulo"),
-  "Synapsys Note | SPTC - Perito..."
+  "Synapsys Note | SPTC - Perito Criminal de..."
 );
 
 assert.equal(
-  formatTabTitle("  Uma   duas  três   quatro  cinco "),
-  "Synapsys Note | Uma duas três..."
+  formatTabTitle("  Uma   duas  três   quatro  cinco seis "),
+  "Synapsys Note | Uma duas três quatro cinco..."
 );
 
 console.log("all document-title tests passed");

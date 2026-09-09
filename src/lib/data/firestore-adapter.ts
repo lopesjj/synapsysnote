@@ -54,7 +54,7 @@ import type {
   Unsubscribe,
 } from "./adapter";
 
-const SERVER_OWNED = ["extractedOCRText", "transcriptText", "embedding", "embeddingUpdatedAt"];
+const SERVER_OWNED = ["transcriptText", "embedding", "embeddingUpdatedAt"];
 
 const BATCH_LIMIT = 400;
 
@@ -667,7 +667,6 @@ export class FirestoreAdapter implements DataAdapter {
     if (!pageSnap.exists()) return;
     const pageData = pageSnap.data();
 
-    // Se o pai estiver na lixeira ou não existir, desvincula da hierarquia e promove à raiz
     let needDetachFromParent = false;
     if (pageData.parentPageId) {
       const parentSnap = await getDoc(this.docRef("pages", pageData.parentPageId));
@@ -1111,7 +1110,7 @@ export class FirestoreAdapter implements DataAdapter {
           name: file.name,
           mimeType: file.type,
           sizeBytes: file.size,
-          pending: isImage || file.type === "application/pdf",
+          pending: false,
         },
       },
     ];

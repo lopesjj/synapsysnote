@@ -106,7 +106,6 @@ function applyMultiAlign(
 
 console.log("Starting table multi-selection verification tests...");
 
-// Setup initial 4x4 grid
 const initialGrid: TableGrid = [
   [
     [{ text: "RAID 0" }],
@@ -134,7 +133,6 @@ const initialGrid: TableGrid = [
   ],
 ];
 
-// 1. Test Toggle Bold on multiple cells
 const selectedCoords = [
   { row: 1, col: 1 },
   { row: 1, col: 2 },
@@ -146,17 +144,14 @@ let grid = toggleMultiAnnotation(initialGrid, selectedCoords, "bold");
 for (const { row, col } of selectedCoords) {
   assert.equal(grid[row][col][0].annotations?.bold, true, `Cell (${row}, ${col}) should be bold`);
 }
-// Unselected cell must not be modified
 assert.equal(grid[0][0][0].annotations?.bold, undefined, "Cell (0, 0) should remain unchanged");
 
-// Toggle again should remove bold from all
 grid = toggleMultiAnnotation(grid, selectedCoords, "bold");
 for (const { row, col } of selectedCoords) {
   assert.equal(grid[row][col][0].annotations?.bold, undefined, `Cell (${row}, ${col}) bold should be removed`);
 }
 console.log("  ✓ Toggle annotation (bold) passed");
 
-// 2. Test Apply Text Color
 grid = applyMultiColor(initialGrid, selectedCoords, "#EF4444");
 for (const { row, col } of selectedCoords) {
   assert.equal(grid[row][col][0].annotations?.color, "#EF4444", `Cell (${row}, ${col}) should have red color`);
@@ -167,14 +162,12 @@ for (const { row, col } of selectedCoords) {
 }
 console.log("  ✓ Multi-cell text color passed");
 
-// 3. Test Apply Highlight
 grid = applyMultiHighlight(initialGrid, selectedCoords, "#FEF08A");
 for (const { row, col } of selectedCoords) {
   assert.equal(grid[row][col][0].annotations?.highlight, "#FEF08A", `Cell (${row}, ${col}) should have yellow highlight`);
 }
 console.log("  ✓ Multi-cell highlight passed");
 
-// 4. Test Multi-cell Alignment
 const initialAlignments: (CellAlignment | null)[][] = Array.from({ length: 4 }, () =>
   Array.from({ length: 4 }, () => ({ horizontal: "left" as const, vertical: "top" as const }))
 );
@@ -186,7 +179,6 @@ for (const { row, col } of selectedCoords) {
 assert.equal(updatedAlignments[0][0]?.horizontal, "left", "Cell (0,0) alignment should remain left");
 console.log("  ✓ Multi-cell alignment passed");
 
-// 5. Test Clear Multi Cells
 const clearedGrid = clearMultiCells(initialGrid, selectedCoords);
 for (const { row, col } of selectedCoords) {
   assert.deepEqual(clearedGrid[row][col], [], `Cell (${row}, ${col}) should be empty`);

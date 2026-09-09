@@ -257,7 +257,7 @@ export function BlockEditor({
                   ...node.attrs,
                   url: permanentUrl,
                   storagePath: storagePath ?? null,
-                  pending: isImage || prepared.type === "application/pdf",
+                  pending: false,
                   tempId: null,
                 });
                 found = true;
@@ -361,7 +361,6 @@ export function BlockEditor({
             `@${label}`,
           ];
         },
-        // eslint-disable-next-line react-hooks/refs
         suggestion: createMentionSuggestion(() => candidatesRef.current),
       }),
     ],
@@ -541,7 +540,6 @@ function applyRemoteMediaEnrichment(
       pending: Boolean(node.attrs.pending),
       transcript: (node.attrs.transcript as string) ?? undefined,
       transcriptSummary: (node.attrs.transcriptSummary as string) ?? undefined,
-      ocrText: (node.attrs.ocrText as string) ?? undefined,
     };
     if (!isRicherMedia(match, local)) return;
     tr.setNodeMarkup(pos, undefined, {
@@ -549,7 +547,6 @@ function applyRemoteMediaEnrichment(
       pending: match.pending ?? false,
       transcript: match.transcript ?? node.attrs.transcript,
       transcriptSummary: match.transcriptSummary ?? node.attrs.transcriptSummary,
-      ocrText: match.ocrText ?? node.attrs.ocrText,
     });
     changed = true;
   });

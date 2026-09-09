@@ -444,21 +444,14 @@ export function PageView({ pageId }: { pageId: string }) {
         </div>
 
         
-        {page.extractedOCRText || page.transcriptText ? (
+        {page.transcriptText ? (
           <div className="mt-8 space-y-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
-              Texto indexado dos anexos
+              Transcrição indexada das notas de voz
             </p>
-            {page.extractedOCRText ? (
-              <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-muted">
-                {page.extractedOCRText}
-              </p>
-            ) : null}
-            {page.transcriptText ? (
-              <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-muted">
-                {page.transcriptText}
-              </p>
-            ) : null}
+            <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-muted">
+              {page.transcriptText}
+            </p>
           </div>
         ) : null}
 

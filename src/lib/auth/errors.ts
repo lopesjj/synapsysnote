@@ -1,7 +1,6 @@
 
 export type AuthErrorReason =
   | "oauth-unregistered"
-  /** The e-mail exists but was registered with a different provider. */
   | "wrong-provider"
   | "invalid-credentials"
   | "current-password"

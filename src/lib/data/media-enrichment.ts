@@ -54,7 +54,6 @@ export function pendingAudioPaths(blocks: AppBlock[]): string[] {
 export function isRicherMedia(remote: BlockMedia, local: BlockMedia): boolean {
   if (remote.transcript && remote.transcript !== local.transcript) return true;
   if (remote.transcriptSummary && remote.transcriptSummary !== local.transcriptSummary) return true;
-  if (remote.ocrText && remote.ocrText !== local.ocrText) return true;
   if (remote.pending === false && local.pending === true) return true;
   return false;
 }
@@ -64,7 +63,6 @@ export function stampMedia(local: BlockMedia, remote: BlockMedia): BlockMedia {
     ...local,
     transcript: remote.transcript || local.transcript,
     transcriptSummary: remote.transcriptSummary || local.transcriptSummary,
-    ocrText: remote.ocrText || local.ocrText,
     pending: remote.pending === false ? false : local.pending,
   };
 }

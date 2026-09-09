@@ -89,7 +89,6 @@ export const startNotionImport = onCall(
       options: {
         downloadMedia: options?.downloadMedia ?? true,
         preserveHierarchy: options?.preserveHierarchy ?? true,
-        runOcr: options?.runOcr ?? true,
         createBacklinks: options?.createBacklinks ?? true,
       },
       requestedBy: request.auth.uid,
@@ -392,7 +391,6 @@ async function importPage(args: ImportArgs): Promise<string> {
       path,
       blocks: omitUndefined(blocks),
       plainText: blocksToPlainText(blocks),
-      extractedOCRText: existing.empty ? "" : (existing.docs[0].get("extractedOCRText") ?? ""),
       transcriptText: existing.empty ? "" : (existing.docs[0].get("transcriptText") ?? ""),
       tags: ["notion"],
       outgoingLinks: [],

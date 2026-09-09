@@ -27,7 +27,7 @@ async function embed(text: string): Promise<number[]> {
 }
 
 function documentText(data: FirebaseFirestore.DocumentData): string {
-  return [data.title, data.plainText, data.extractedOCRText, data.transcriptText]
+  return [data.title, data.plainText, data.transcriptText]
     .filter(Boolean)
     .join("\n")
     .slice(0, 8_000);

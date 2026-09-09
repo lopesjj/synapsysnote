@@ -91,9 +91,7 @@ export function useUserPreferencesSync(): void {
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => {
         lastWritten.current = serialized;
-        void saveUserPreferences(user.uid, preferences).catch(() => {
-          // Offline or rules rejection: local persistence already kept the value.
-        });
+        void saveUserPreferences(user.uid, preferences).catch(() => {});
       }, PREFERENCE_WRITE_DELAY);
     };
 

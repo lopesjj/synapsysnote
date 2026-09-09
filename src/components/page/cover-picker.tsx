@@ -117,7 +117,6 @@ export function CoverPicker({
             {preset ? (
               <div className={cn("h-full w-full", preset.className)} style={preset.style} />
             ) : (
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={coverUrl} alt="" className="h-full w-full object-cover" />
             )}
           </div>

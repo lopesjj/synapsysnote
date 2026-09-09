@@ -26,18 +26,12 @@ export const ORDER_STEP = 100;
 
 export type DropPlan =
   | { kind: "reorder-notebooks"; notebookIds: string[] }
-  /** Notebook moved under another caderno (or back to the root). */
   | {
       kind: "move-notebook";
       notebookId: string;
       parentId: string | null;
       notebookIds: string[];
     }
-  /**
-   * Page moved to a new parent and/or notebook. `pageIds` is the resulting
-   * sibling order at the destination, so the move and the placement are one
-   * atomic intent rather than two.
-   */
   | {
       kind: "move-page";
       pageId: string;
@@ -45,7 +39,6 @@ export type DropPlan =
       parentPageId: string | null;
       pageIds: string[];
     }
-  /** New sibling order within an unchanged parent. */
   | { kind: "reorder-pages"; pageIds: string[] };
 
 export interface SidebarSnapshot {

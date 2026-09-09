@@ -51,7 +51,6 @@ const pages: Page[] = [
   mockPage("p_del", "Página Excluída", "Texto antigo", { deletedAt: 5000 }),
 ];
 
-// 1. Busca por termo que só existe no nome do caderno
 {
   const hits = searchWorkspace("Finanças", pages, notebooks);
   assert.equal(hits.length, 1);
@@ -60,7 +59,6 @@ const pages: Page[] = [
   console.log("✓ Teste 1 passou: Encontra cadernos por nome");
 }
 
-// 2. Busca por termo que só existe no título da página
 {
   const hits = searchWorkspace("Investimentos", pages, notebooks);
   assert.equal(hits.length, 1);
@@ -69,7 +67,6 @@ const pages: Page[] = [
   console.log("✓ Teste 2 passou: Encontra páginas por título");
 }
 
-// 3. Busca por termo no conteúdo (plainText) da página
 {
   const hits = searchWorkspace("imobiliários", pages, notebooks);
   assert.equal(hits.length, 1);
@@ -78,21 +75,18 @@ const pages: Page[] = [
   console.log("✓ Teste 3 passou: Encontra páginas pelo conteúdo textual");
 }
 
-// 4. Busca por termo comum a ambos (caderno e página)
 {
   const hits = searchWorkspace("código", pages, notebooks);
   assert.ok(hits.some((h) => h.kind === "notebook" && h.id === "nb_proj"));
   console.log("✓ Teste 4 passou: Busca integrada de cadernos e páginas");
 }
 
-// 5. Ignora páginas excluídas
 {
   const hits = searchWorkspace("Excluída", pages, notebooks);
   assert.equal(hits.length, 0);
   console.log("✓ Teste 5 passou: Ignora páginas excluídas");
 }
 
-// 6. Query vazia
 {
   const hits = searchWorkspace("", pages, notebooks);
   assert.equal(hits.length, 0);

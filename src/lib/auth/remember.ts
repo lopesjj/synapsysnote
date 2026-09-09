@@ -18,17 +18,13 @@ export function markRemembered(remember: boolean) {
   try {
     if (remember) window.localStorage.setItem(KEY, String(Date.now() + REMEMBER_MS));
     else window.localStorage.removeItem(KEY);
-  } catch {
-    // Private browsing: session persistence still covers this visit.
-  }
+  } catch {}
 }
 
 export function clearRemembered() {
   try {
     window.localStorage.removeItem(KEY);
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 export function isRememberActive(): boolean {

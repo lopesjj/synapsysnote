@@ -18,10 +18,7 @@ export async function GET() {
         const decoded = await adminAuth().verifySessionCookie(cookie, true);
         const token = await adminAuth().createCustomToken(decoded.uid);
         return Response.json({ token });
-      } catch {
-        // Try the next cookie; the final response below remains deliberately
-        // indistinguishable from a missing session.
-      }
+      } catch {}
     }
 
     throw new ApiError(401, "Sessão inválida ou expirada");

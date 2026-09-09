@@ -355,7 +355,6 @@ async function importPage(args: ImportArgs): Promise<string> {
       path,
       blocks: omitUndefined(blocks),
       plainText: blocksToPlainText(blocks),
-      extractedOCRText: existing.empty ? "" : (existing.docs[0].get("extractedOCRText") ?? ""),
       transcriptText: existing.empty ? "" : (existing.docs[0].get("transcriptText") ?? ""),
       tags: ["notion"],
       outgoingLinks: [],
@@ -602,7 +601,6 @@ export async function enqueueNotionImport(input: CreateImportInput): Promise<str
     options: {
       downloadMedia: input.options?.downloadMedia ?? true,
       preserveHierarchy: input.options?.preserveHierarchy ?? true,
-      runOcr: input.options?.runOcr ?? true,
       createBacklinks: input.options?.createBacklinks ?? true,
     },
     requestedBy: input.uid,

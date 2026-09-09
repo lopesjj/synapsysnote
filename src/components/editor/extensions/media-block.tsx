@@ -127,7 +127,6 @@ function ResizableImage({
   const lastTapRef = useRef<number>(0);
 
   const handleTouchStart = (e: React.TouchEvent<HTMLImageElement>) => {
-    // Desfoca o editor imediatamente para fechar ou evitar que o teclado mobile suba
     if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
@@ -149,10 +148,8 @@ function ResizableImage({
     const distX = Math.abs(touch.clientX - start.x);
     const distY = Math.abs(touch.clientY - start.y);
 
-    // Se o movimento do dedo foi pequeno (toque/tap estático)
     if (distX < 15 && distY < 15) {
       if (now - lastTapRef.current < 350) {
-        // Duplo toque detectado!
         e.preventDefault();
         e.stopPropagation();
         if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
@@ -167,7 +164,6 @@ function ResizableImage({
   };
 
   const handlePointerDownImage = (e: React.PointerEvent<HTMLImageElement>) => {
-    // Evita que o ProseMirror foque o editor e abra o teclado virtual
     e.stopPropagation();
     if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
@@ -460,7 +456,6 @@ function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) 
     mimeType,
     sizeBytes,
     durationSeconds,
-    ocrText,
     transcript,
     transcriptSummary,
     pending,
@@ -473,7 +468,7 @@ function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) 
   const params = useParams<{ pageId?: string }>();
   const pageId = params.pageId;
 
-  const extracted = (ocrText as string) || (transcript as string) || "";
+  const extracted = (transcript as string) || "";
   const pdf = isPdf(mimeType, name);
   const visualOnly = mediaType === "image" || pdf;
   const canTranscribe =
@@ -588,7 +583,7 @@ function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) 
                 className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-muted transition hover:text-ink"
               >
                 <ScanText className="size-3" />
-                {mediaType === "audio" ? "transcrição" : "texto OCR"}
+                transcrição
               </button>
             ) : canTranscribe ? (
               <button
@@ -652,7 +647,6 @@ export const MediaBlock = Node.create({
       mimeType: { default: "" },
       sizeBytes: { default: null },
       durationSeconds: { default: null },
-      ocrText: { default: null },
       transcript: { default: null },
       transcriptSummary: { default: null },
       pending: { default: false },

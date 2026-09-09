@@ -65,7 +65,6 @@ function CoverStrip({
     return <div className={cn(className, preset.className)} style={preset.style} />;
   }
   return (
-    // eslint-disable-next-line @next/next/no-img-element
     <img src={coverUrl} alt="" className={cn("object-cover", className)} />
   );
 }
@@ -369,7 +368,6 @@ function NoteCard({ page, notebook }: { page: Page; notebook?: Notebook }) {
           ) : null}
           <span className="shrink-0 text-[11px] text-faint">{formatRelative(page.updatedAt)}</span>
           {page.notionPageId || page.importSource ? <Badge tone="accent">Notion</Badge> : null}
-          {page.extractedOCRText ? <Badge>OCR</Badge> : null}
         </div>
       </div>
     </Link>

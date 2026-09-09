@@ -418,7 +418,6 @@ const PROVIDER_LABELS: Record<string, string> = {
 function Avatar({ name, url }: { name: string; url?: string | null }) {
   if (url) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={url}
         alt=""

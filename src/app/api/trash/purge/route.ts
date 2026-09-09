@@ -86,8 +86,6 @@ async function deletePageStorageAndDoc(
       ),
     ]);
   }
-
-  // Deletar versões e o documento em batches de até 400 operações
   const refsToDelete: FirebaseFirestore.DocumentReference[] = [
     ...versionsSnap.docs.map((v) => v.ref),
     pageDoc.ref,
@@ -124,7 +122,6 @@ export async function POST(request: Request) {
 
     if (emptyAll) {
       const trashedPages = await pagesCol.where("deletedAt", "!=", null).get();
-      // Processar em concorrência controlada (chunks de 5 páginas)
       const pageDocs = trashedPages.docs;
       for (let i = 0; i < pageDocs.length; i += 5) {
         const chunk = pageDocs.slice(i, i + 5);

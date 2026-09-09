@@ -92,9 +92,7 @@ function heuristicLanguage(code: string): string | null {
     try {
       JSON.parse(head);
       return "json";
-    } catch {
-      /* not json */
-    }
+    } catch {}
   }
   if (/^\s*(query|mutation|subscription|type|interface)\s+\w+/m.test(head) && /\{/.test(head)) {
     return "graphql";

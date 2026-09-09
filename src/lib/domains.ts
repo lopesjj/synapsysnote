@@ -18,9 +18,7 @@ export function cookieParentDomain(): string | undefined {
     if (appHost === loginHost) return undefined;
     if (appHost.endsWith(`.${loginHost}`)) return `.${loginHost}`;
     if (loginHost.endsWith(`.${appHost}`)) return `.${appHost}`;
-  } catch {
-    // Ignore malformed env values.
-  }
+  } catch {}
   return undefined;
 }
 

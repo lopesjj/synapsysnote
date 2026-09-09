@@ -17,7 +17,6 @@ export interface ServiceAccountCredentials {
 }
 
 export function resolveServiceAccountCredentials(): ServiceAccountCredentials | null {
-  // 1. JSON direto ou Base64 em FIREBASE_SERVICE_ACCOUNT_JSON
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
   if (raw) {
     if (raw.startsWith("{")) {
@@ -32,10 +31,7 @@ export function resolveServiceAccountCredentials(): ServiceAccountCredentials | 
       if (decoded.trim().startsWith("{")) {
         return JSON.parse(decoded) as ServiceAccountCredentials;
       }
-    } catch {
-      // não é base64
-    }
-    // Caso seja caminho de arquivo informado na variável
+    } catch {}
     try {
       const resolved = isAbsolute(raw) ? raw : resolve(process.cwd(), raw);
       if (existsSync(resolved)) {
@@ -44,7 +40,6 @@ export function resolveServiceAccountCredentials(): ServiceAccountCredentials | 
     } catch {}
   }
 
-  // 2. Caminho de arquivo em GOOGLE_APPLICATION_CREDENTIALS
   const credsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
   if (credsPath) {
     try {
@@ -57,7 +52,6 @@ export function resolveServiceAccountCredentials(): ServiceAccountCredentials | 
     }
   }
 
-  // 3. Fallback no localhost: arquivo de chave adminsdk no diretório raiz do projeto
   try {
     const localKey = resolve(process.cwd(), "synapsysnote-firebase-adminsdk-fbsvc-dee68a0f58.json");
     if (existsSync(localKey)) {
@@ -120,9 +114,7 @@ export function adminDb(): Firestore {
   const db = getFirestore(getAdminApp());
   try {
     db.settings({ ignoreUndefinedProperties: true });
-  } catch {
-    // settings() can only run once per app instance
-  }
+  } catch {}
   adminFirestore = db;
   return db;
 }

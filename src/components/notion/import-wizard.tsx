@@ -60,7 +60,6 @@ export function ImportWizard({
   const [options, setOptions] = useState({
     downloadMedia: true,
     preserveHierarchy: true,
-    runOcr: true,
     createBacklinks: true,
   });
   const [connecting, setConnecting] = useState(false);
@@ -500,7 +499,6 @@ function PreviewStep({
   options: {
     downloadMedia: boolean;
     preserveHierarchy: boolean;
-    runOcr: boolean;
     createBacklinks: boolean;
   };
   onChangeOptions: (next: typeof options) => void;

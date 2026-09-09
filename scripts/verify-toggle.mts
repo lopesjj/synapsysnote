@@ -70,8 +70,6 @@ assert.equal(docOpen.content?.[0]?.attrs?.open, true);
 const backOpen = docToBlocks(docOpen);
 assert.equal(backOpen[0]?.props?.open, true);
 
-// Testes de deleção/retorno de linha via Backspace no toggleBlock
-// Cenário 1: Toggle com primeira linha vazia e conteúdo seguinte (idêntico ao caso da imagem do usuário)
 const toggleWithEmptyFirstLine: AppBlock = {
   id: "toggle_3",
   type: "toggle",
@@ -87,12 +85,10 @@ const toggleWithEmpty = docEmptyFirst.content?.[0];
 assert.ok(toggleWithEmpty);
 assert.equal(toggleWithEmpty.content?.length, 2);
 
-// Simula a remoção da linha vazia ao teclar Backspace
 const updatedChildren = toggleWithEmpty.content?.slice(1);
 assert.equal(updatedChildren?.length, 1);
 assert.equal(updatedChildren?.[0]?.content?.[0]?.text, "Servem basicamente...");
 
-// Cenário 2: Linha com texto que deve se juntar ao summary
 const currentSummary = "PRONOMES";
 const childText = " INTERROGATIVOS";
 const mergedSummary = currentSummary + childText;

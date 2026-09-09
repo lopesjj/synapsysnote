@@ -15,7 +15,6 @@ export function SynapsysMark({
   size?: number;
 }) {
   return (
-    // eslint-disable-next-line @next/next/no-img-element
     <img
       src="/brand/synapsys-mark.png"
       alt=""
@@ -30,7 +29,6 @@ export function SynapsysMark({
 
 function Wordmark({ width, className }: { width: number; className?: string }) {
   return (
-    // eslint-disable-next-line @next/next/no-img-element
     <img
       src="/brand/synapsys-wordmark.png"
       alt="Synapsys Note"

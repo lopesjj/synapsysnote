@@ -37,7 +37,6 @@ export async function POST(request: Request) {
       options: {
         downloadMedia: body.options?.downloadMedia ?? true,
         preserveHierarchy: body.options?.preserveHierarchy ?? true,
-        runOcr: body.options?.runOcr ?? true,
         createBacklinks: body.options?.createBacklinks ?? true,
       },
       items: body.items ?? [],

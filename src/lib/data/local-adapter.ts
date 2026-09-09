@@ -116,9 +116,7 @@ export class LocalAdapter implements DataAdapter {
               integration: parsed.integration ?? null,
             });
           }
-        } catch {
-          // fall through to a fresh seed
-        }
+        } catch {}
       }
     }
     const seed = buildSeed();
@@ -129,9 +127,7 @@ export class LocalAdapter implements DataAdapter {
     if (typeof window === "undefined") return;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
-    } catch {
-      // Quota exceeded — the in-memory state stays authoritative for the session.
-    }
+    } catch {}
   }
 
   private emit() {
@@ -153,9 +149,7 @@ export class LocalAdapter implements DataAdapter {
     this.emit();
   }
 
-  async ensureWorkspace() {
-    /* Demo workspace is seeded in the constructor. */
-  }
+  async ensureWorkspace() {}
 
 
   subscribeNotebooks(cb: (notebooks: Notebook[]) => void) {

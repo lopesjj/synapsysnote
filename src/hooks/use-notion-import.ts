@@ -131,12 +131,11 @@ export function useNotionImport() {
       targetNotebookId: string | null;
       downloadMedia: boolean;
       preserveHierarchy: boolean;
-      runOcr: boolean;
       createBacklinks: boolean;
     }) => {
       if (activeImportJob) {
         throw new Error(
-          "Já existe uma importação em andamento. Aguarde a conclusão ou cancele-a antes de iniciar outra."
+          "Já existe uma importação em andamento. Aguarde a conclusão ou a cancele antes de iniciar outra."
         );
       }
       setSubmitting(true);
@@ -148,7 +147,6 @@ export function useNotionImport() {
           options: {
             downloadMedia: options.downloadMedia,
             preserveHierarchy: options.preserveHierarchy,
-            runOcr: options.runOcr,
             createBacklinks: options.createBacklinks,
           },
           items: ordered.map((node) => ({
