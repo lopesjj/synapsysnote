@@ -45,15 +45,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const editorFontSize = useUiStore((state) => state.editorFontSize);
   const editorWidth = useUiStore((state) => state.editorWidth);
   const notesDensity = useUiStore((state) => state.notesDensity);
+  const uiZoom = useUiStore((state) => state.uiZoom);
+  const autoCollapseSidebar = useUiStore((state) => state.autoCollapseSidebar);
 
   const pathname = usePathname();
   const isDocView = pathname?.startsWith("/home/p/") || pathname?.startsWith("/home/n/");
 
   useEffect(() => {
-    if (pathname?.startsWith("/home/p/")) {
+    if (pathname?.startsWith("/home/p/") && autoCollapseSidebar) {
       useUiStore.getState().closeMenu();
     }
-  }, [pathname]);
+  }, [pathname, autoCollapseSidebar]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--ui-font-scale", String(uiZoom));
+  }, [uiZoom]);
 
   useEffect(() => {
     if (preferencesOpen || importOpen || paletteOpen) {
@@ -199,7 +205,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {mode === "local" && !chromeHidden ? <DemoBanner /> : null}
 
-        <div className="min-h-0 flex-1 overflow-y-auto pb-16 md:pb-0">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto pb-20 md:pb-0">{children}</div>
 
         {zenMode ? (
           <Tooltip
@@ -334,7 +340,11 @@ function BottomNav() {
       )}
       aria-label={label}
     >
-      <span className={cn("flex size-6 items-center justify-center rounded-lg transition-colors", active && "bg-[var(--accent-soft)]")}
+      <span
+        className={cn(
+          "flex size-6 items-center justify-center rounded-lg transition-colors",
+          active && "bg-[var(--accent-soft)]"
+        )}
       >
         {icon}
       </span>
@@ -344,7 +354,7 @@ function BottomNav() {
 
   return (
     <nav
-      className="bottom-nav-safe fixed inset-x-0 bottom-0 z-50 flex border-t border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur-xl md:hidden"
+      className="fixed inset-x-0 bottom-0 z-50 flex border-t border-[var(--border)] bg-[var(--surface)]/95 py-3.5 pb-[calc(0.875rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl md:hidden"
       aria-label="Navegação principal"
     >
       <NavItem

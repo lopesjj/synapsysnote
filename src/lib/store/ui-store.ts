@@ -28,6 +28,7 @@ interface UiState extends UiPreferences {
 
   toggleSidebar: () => void;
   setSidebarCollapsed: (value: boolean) => void;
+  collapseSidebar: () => void;
   closeMenu: () => void;
   openMenu: () => void;
   setSidebarWidth: (value: number) => void;
@@ -45,6 +46,8 @@ interface UiState extends UiPreferences {
   setEditorFontSize: (value: number) => void;
   setEditorWidth: (value: EditorWidth) => void;
   setShowSaveIndicator: (value: boolean) => void;
+  setUiZoom: (value: number) => void;
+  setAutoCollapseSidebar: (value: boolean) => void;
   hydratePreferences: (value: Partial<UiPreferences>) => void;
 }
 
@@ -52,6 +55,10 @@ export const SIDEBAR_MIN_WIDTH = 232;
 export const SIDEBAR_MAX_WIDTH = 420;
 export const EDITOR_FONT_SIZE_MIN = 14;
 export const EDITOR_FONT_SIZE_MAX = 22;
+export const UI_ZOOM_MIN = 0.9;
+export const UI_ZOOM_MAX = 1.1;
+export const UI_ZOOM_MOBILE_MAX = 1.05;
+export const UI_ZOOM_STEPS = [0.9, 0.95, 1.0, 1.05, 1.1] as const;
 
 const DEFAULT_PREFERENCES: UiPreferences = {
   sidebarCollapsed: false,
@@ -64,6 +71,8 @@ const DEFAULT_PREFERENCES: UiPreferences = {
   editorFontSize: 16,
   editorWidth: "normal",
   showSaveIndicator: true,
+  uiZoom: 1.0,
+  autoCollapseSidebar: true,
 };
 
 const PREFERENCE_KEYS = Object.keys(DEFAULT_PREFERENCES) as (keyof UiPreferences)[];
@@ -95,7 +104,14 @@ export const useUiStore = create<UiState>()(
 
       toggleSidebar: () => set({ sidebarCollapsed: !get().sidebarCollapsed }),
       setSidebarCollapsed: (value) => set({ sidebarCollapsed: value }),
-      closeMenu: () => set({ mobileSidebarOpen: false, sidebarCollapsed: true }),
+      collapseSidebar: () => set({ sidebarCollapsed: true, mobileSidebarOpen: false }),
+      closeMenu: () => {
+        const next: Partial<UiState> = { mobileSidebarOpen: false };
+        if (get().autoCollapseSidebar) {
+          next.sidebarCollapsed = true;
+        }
+        set(next);
+      },
       openMenu: () => set({ sidebarCollapsed: false }),
       setSidebarWidth: (value) =>
         set({ sidebarWidth: Math.round(clamp(value, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)) }),
@@ -115,11 +131,15 @@ export const useUiStore = create<UiState>()(
         set({ editorFontSize: Math.round(clamp(value, EDITOR_FONT_SIZE_MIN, EDITOR_FONT_SIZE_MAX)) }),
       setEditorWidth: (value) => set({ editorWidth: value }),
       setShowSaveIndicator: (value) => set({ showSaveIndicator: value }),
+      setUiZoom: (value) =>
+        set({ uiZoom: Math.round(clamp(value, UI_ZOOM_MIN, UI_ZOOM_MAX) * 100) / 100 }),
+      setAutoCollapseSidebar: (value) => set({ autoCollapseSidebar: value }),
       hydratePreferences: (value) => {
         const next = pickPreferences(value);
         const isNotePage =
           typeof window !== "undefined" && window.location.pathname.startsWith("/home/p/");
-        if (isNotePage) {
+        const shouldAutoCollapse = next.autoCollapseSidebar ?? get().autoCollapseSidebar ?? true;
+        if (isNotePage && shouldAutoCollapse) {
           next.sidebarCollapsed = true;
         }
         next.sidebarWidth = SIDEBAR_MIN_WIDTH;
@@ -128,15 +148,18 @@ export const useUiStore = create<UiState>()(
     }),
     {
       name: "synapsys.ui.v1",
-      version: 6,
+      version: 7,
       migrate: (persisted) => {
         const state = (persisted ?? {}) as Partial<UiPreferences>;
         const isNotePage =
           typeof window !== "undefined" && window.location.pathname.startsWith("/home/p/");
+        const shouldAutoCollapse = state.autoCollapseSidebar ?? true;
         return {
           ...state,
-          sidebarCollapsed: isNotePage ? true : (state.sidebarCollapsed ?? false),
+          sidebarCollapsed: (isNotePage && shouldAutoCollapse) ? true : (state.sidebarCollapsed ?? false),
           sidebarWidth: SIDEBAR_MIN_WIDTH,
+          uiZoom: state.uiZoom ?? 1.0,
+          autoCollapseSidebar: shouldAutoCollapse,
         };
       },
       storage: createJSONStorage(() => localStorage),
@@ -152,7 +175,7 @@ export function useRehydrateUiStore(): void {
       const store = useUiStore.getState();
       const isNotePage =
         typeof window !== "undefined" && window.location.pathname.startsWith("/home/p/");
-      if (isNotePage) {
+      if (isNotePage && store.autoCollapseSidebar) {
         store.setSidebarCollapsed(true);
       }
       store.setSidebarWidth(SIDEBAR_MIN_WIDTH);

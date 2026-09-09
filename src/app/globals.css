@@ -109,6 +109,7 @@
 
   html {
     color-scheme: light;
+    font-size: calc(16px * var(--ui-font-scale, 1));
   }
 
   html.dark {
@@ -186,6 +187,29 @@
     content: none;
   }
 }
+
+[class~="text-[9px]"]    { font-size: 0.5625rem; }
+[class~="text-[10px]"]   { font-size: 0.625rem; }
+[class~="text-[10.5px]"] { font-size: 0.65625rem; }
+[class~="text-[11px]"]   { font-size: 0.6875rem; }
+[class~="text-[11.5px]"] { font-size: 0.71875rem; }
+[class~="text-[12px]"]   { font-size: 0.75rem; }
+[class~="text-[12.5px]"] { font-size: 0.78125rem; }
+[class~="text-[13px]"]   { font-size: 0.8125rem; }
+[class~="text-[13.5px]"] { font-size: 0.84375rem; }
+[class~="text-[14px]"]   { font-size: 0.875rem; }
+[class~="text-[15px]"]   { font-size: 0.9375rem; }
+[class~="text-[16px]"]   { font-size: 1rem; }
+[class~="text-[19px]"]   { font-size: 1.1875rem; }
+[class~="text-[22px]"]   { font-size: 1.375rem; }
+[class~="text-[26px]"]   { font-size: 1.625rem; }
+[class~="text-[28px]"]   { font-size: 1.75rem; }
+[class~="text-[30px]"]   { font-size: 1.875rem; }
+[class~="text-[34px]"]   { font-size: 2.125rem; }
+[class~="text-[40px]"]   { font-size: 2.5rem; }
+[class~="text-[42px]"]   { font-size: 2.625rem; }
+[class~="text-[52px]"]   { font-size: 3.25rem; }
+[class~="text-[54px]"]   { font-size: 3.375rem; }
 
 .reading-surface {
   font-family: var(--font-editor, var(--font-sans));

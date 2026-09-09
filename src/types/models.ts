@@ -123,6 +123,8 @@ export interface UserPreferences {
   editorFontSize?: number;
   editorWidth?: EditorWidthPreference;
   showSaveIndicator?: boolean;
+  uiZoom?: number;
+  autoCollapseSidebar?: boolean;
 }
 
 export interface UserProfile {

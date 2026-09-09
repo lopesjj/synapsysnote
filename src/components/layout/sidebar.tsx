@@ -193,7 +193,7 @@ export function SidebarRail() {
           </Button>
         </Tooltip>
       </div>
-      <div className="mt-auto flex w-full justify-center border-t border-[var(--border)] py-3 pb-safe">
+      <div className="mt-auto flex w-full justify-center border-t border-[var(--border)] pt-3 pb-[calc(1.125rem+env(safe-area-inset-bottom,0px))]">
         <UserMenu collapsed />
       </div>
     </aside>
@@ -619,7 +619,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         <Tooltip label="Recolher barra lateral" shortcut={isMac() ? "⌘B" : "Ctrl B"} side="right">
           <button
             type="button"
-            onClick={closeMenuBar}
+            onClick={() => useUiStore.getState().collapseSidebar()}
             aria-label="Recolher barra lateral"
             className={cn("relative flex w-full select-none items-center pl-1 pr-0.5", CHROME_HIT_CLASS)}
           >
@@ -794,7 +794,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         </DragOverlay>
       </DndContext>
 
-      <div className="border-t border-[var(--border)] px-2.5 py-3 pb-safe">
+      <div className="border-t border-[var(--border)] px-2.5 pt-3 pb-[calc(1.125rem+env(safe-area-inset-bottom,0px))]">
         <UserMenu />
       </div>
     </aside>

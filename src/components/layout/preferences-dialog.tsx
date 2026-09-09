@@ -21,6 +21,8 @@ import { useUserProfile } from "@/hooks/use-user-profile";
 import {
   EDITOR_FONT_SIZE_MAX,
   EDITOR_FONT_SIZE_MIN,
+  UI_ZOOM_STEPS,
+  UI_ZOOM_MOBILE_MAX,
   useUiStore,
   type EditorWidth,
   type NotesDensity,
@@ -142,6 +144,16 @@ function AppearanceSection() {
   const notesDensity = useUiStore((state) => state.notesDensity);
   const showSaveIndicator = useUiStore((state) => state.showSaveIndicator);
   const zenMode = useUiStore((state) => state.zenMode);
+  const uiZoom = useUiStore((state) => state.uiZoom);
+  const autoCollapseSidebar = useUiStore((state) => state.autoCollapseSidebar);
+
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const zoomOptions = UI_ZOOM_STEPS
+    .filter((step) => !isMobile || step <= UI_ZOOM_MOBILE_MAX)
+    .map((step) => ({
+      value: String(step),
+      label: `${Math.round(step * 100)}%`,
+    }));
 
   return (
     <>
@@ -216,6 +228,28 @@ function AppearanceSection() {
           checked={showSaveIndicator}
           onCheckedChange={(checked) => useUiStore.getState().setShowSaveIndicator(checked)}
           aria-label="Indicador de salvamento"
+        />
+      </Row>
+      <Separator />
+      <Row
+        label="Escala da interface"
+        hint="Aumenta ou diminui o tamanho de toda a interface. No mobile, o máximo é 105%."
+      >
+        <SegmentedControl<string>
+          value={String(uiZoom)}
+          onChange={(value) => useUiStore.getState().setUiZoom(Number(value))}
+          options={zoomOptions}
+        />
+      </Row>
+      <Separator />
+      <Row
+        label="Fechar sidebar ao abrir nota"
+        hint="Recolhe a barra lateral automaticamente ao navegar para uma nota."
+      >
+        <Switch
+          checked={autoCollapseSidebar}
+          onCheckedChange={(checked) => useUiStore.getState().setAutoCollapseSidebar(checked)}
+          aria-label="Fechar sidebar ao abrir nota"
         />
       </Row>
     </>
