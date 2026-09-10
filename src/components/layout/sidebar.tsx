@@ -613,7 +613,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
       style={{ width }}
     >
       <div
-        className="relative flex items-center px-4 pt-8 pb-6"
+        className="relative flex items-center pr-3 pt-8 pb-6"
         style={{ paddingTop: "calc(2rem + env(safe-area-inset-top, 0px))" }}
       >
         <Tooltip label="Recolher barra lateral" shortcut={isMac() ? "⌘B" : "Ctrl B"} side="right">
@@ -621,10 +621,12 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
             type="button"
             onClick={() => useUiStore.getState().collapseSidebar()}
             aria-label="Recolher barra lateral"
-            className={cn("relative flex w-full select-none items-center pl-1 pr-0.5", CHROME_HIT_CLASS)}
+            className={cn("relative flex w-full select-none items-center", CHROME_HIT_CLASS)}
           >
-            <SynapsysMark size={SIDEBAR_MARK_SIZE} />
-            <span className="pointer-events-none absolute inset-y-0 left-14 right-7 flex select-none items-center justify-center">
+            <span className="flex w-14 shrink-0 items-center justify-center">
+              <SynapsysMark size={SIDEBAR_MARK_SIZE} />
+            </span>
+            <span className="pointer-events-none absolute inset-y-0 left-14 right-8 flex select-none items-center justify-center">
               <SynapsysLettering />
             </span>
             <PanelLeftClose className="ml-auto size-4 shrink-0 text-ink" strokeWidth={1.75} />

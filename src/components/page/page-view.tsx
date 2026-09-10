@@ -10,6 +10,7 @@ import {
   Clock,
   Copy,
   CloudOff,
+  FileDown,
   History,
   ImageOff,
   Loader2,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { AppBlock, Page, PageVersion } from "@/types/models";
+import { exportNoteToPdf } from "@/lib/export/export-note-pdf";
 import { useWorkspace } from "@/lib/data/provider";
 import { useDebounceAutoSave } from "@/hooks/use-debounce-auto-save";
 import { useUiStore } from "@/lib/store/ui-store";
@@ -58,6 +60,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const [audioOpen, setAudioOpen] = useState(false);
   const [versions, setVersions] = useState<PageVersion[]>([]);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const editorInsertFilesRef = useRef<((files: File[]) => Promise<void>) | null>(null);
   const scannedPendingAudio = useRef<string | null>(null);
@@ -143,6 +146,30 @@ export function PageView({ pageId }: { pageId: string }) {
     outgoingLinks: string[];
   }) => {
     schedule({ blocks, outgoingLinks });
+  };
+
+  const handleExportPdf = async () => {
+    if (!page || exportingPdf) return;
+    setExportingPdf(true);
+    const toastId = toast.loading("Preparando exportação para PDF...");
+
+    try {
+      await exportNoteToPdf(page, {
+        notebookName: notebook?.name,
+        onProgress: (status) => {
+          toast.loading(status, { id: toastId });
+        },
+      });
+
+      toast.dismiss(toastId);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível exportar a nota para PDF.",
+        { id: toastId }
+      );
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   const attachEditorFiles = async (files: File[]) => {
@@ -277,6 +304,12 @@ export function PageView({ pageId }: { pageId: string }) {
               }}
             >
               <Copy /> Duplicar nota
+            </MenuItem>
+            <MenuItem
+              disabled={exportingPdf}
+              onSelect={() => void handleExportPdf()}
+            >
+              <FileDown /> Exportar para PDF
             </MenuItem>
             <MenuSeparator />
             <MenuItem
