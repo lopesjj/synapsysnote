@@ -16,13 +16,13 @@ assert.equal(
 );
 
 assert.equal(
-  formatTabTitle("SPTC - Perito Criminal de São Paulo"),
-  "Synapsys Note | SPTC - Perito Criminal de..."
+  formatTabTitle("SPTC - Perito Criminal de São Paulo e Região"),
+  "Synapsys Note | SPTC - Perito Criminal de São Paulo..."
 );
 
 assert.equal(
-  formatTabTitle("  Uma   duas  três   quatro  cinco seis "),
-  "Synapsys Note | Uma duas três quatro cinco..."
+  formatTabTitle("  Uma   duas  três   quatro  cinco seis sete oito "),
+  "Synapsys Note | Uma duas três quatro cinco seis sete..."
 );
 
 console.log("all document-title tests passed");

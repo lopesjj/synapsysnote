@@ -13,34 +13,49 @@ import { cn, formatRelative, truncate } from "@/lib/utils";
 import { WorkspaceIcon, isIconUrl } from "@/lib/icons/workspace-icon";
 import { coverPresetById } from "@/lib/covers/presets";
 import { notebookSubtreeIds } from "@/lib/data/notebook-tree";
-import { NOTEBOOK_COPY } from "@/lib/data/notebook-copy";
 import { useUiStore } from "@/lib/store/ui-store";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
 import type { Notebook, Page } from "@/types/models";
 
-function greetingForHour(hour: number) {
-  if (hour < 5) return "Boa madrugada";
-  if (hour < 12) return "Bom dia";
-  if (hour < 18) return "Boa tarde";
-  return "Boa noite";
+const LOCALE_MAP: Record<string, string> = {
+  pt: "pt-BR",
+  en: "en-US",
+  es: "es-ES",
+  fr: "fr-FR",
+  it: "it-IT",
+  de: "de-DE",
+  ru: "ru-RU",
+  ja: "ja-JP",
+  zh: "zh-CN",
+};
+
+function greetingForHour(hour: number, t: (key: TranslationKey) => string) {
+  if (hour < 5) return t("greeting_early_morning");
+  if (hour < 12) return t("greeting_morning");
+  if (hour < 18) return t("greeting_afternoon");
+  return t("greeting_evening");
 }
 
 function titleWord(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function formatHomeDate(date: Date) {
-  const weekday = date.toLocaleDateString("pt-BR", { weekday: "long" });
-  const day = date.toLocaleDateString("pt-BR", { day: "numeric" });
-  const month = date.toLocaleDateString("pt-BR", { month: "long" });
-  return `${titleWord(weekday)}, ${day} de ${titleWord(month)}`;
+function formatHomeDate(date: Date, lang: string) {
+  const locale = LOCALE_MAP[lang] || "pt-BR";
+  const formatted = date.toLocaleDateString(locale, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+  return titleWord(formatted);
 }
 
-function noteCountLabel(count: number) {
-  return count === 1 ? "1 nota" : `${count} notas`;
+function noteCountLabel(count: number, t: (key: TranslationKey) => string) {
+  return count === 1 ? `1 ${t("note_singular")}` : `${count} ${t("notes_plural")}`;
 }
 
-function pageCountLabel(count: number) {
-  return count === 1 ? "1 página" : `${count} páginas`;
+function pageCountLabel(count: number, t: (key: TranslationKey) => string) {
+  return count === 1 ? `1 ${t("page_singular")}` : `${count} ${t("pages_plural")}`;
 }
 
 function CoverStrip({
@@ -72,6 +87,7 @@ function CoverStrip({
 export default function WorkspaceHome() {
   const router = useRouter();
   const { user } = useAuth();
+  const { t, language } = useTranslation();
   const {
     livePages,
     databases,
@@ -97,19 +113,19 @@ export default function WorkspaceHome() {
     [livePages]
   );
 
-  const firstName = user?.displayName?.split(" ")[0] ?? "você";
+  const firstName = user?.displayName?.split(" ")[0] ?? "";
   const hour = new Date().getHours();
-  const greeting = greetingForHour(hour);
-  const today = formatHomeDate(new Date());
+  const greeting = greetingForHour(hour, t);
+  const today = formatHomeDate(new Date(), language);
 
   const createNote = async () => {
-    const page = await adapter.createPage({ title: "Sem título" });
+    const page = await adapter.createPage({ title: t("untitled") });
     useUiStore.getState().closeMenu();
     router.push(`/home/p/${page.id}`);
   };
 
   const createRootPage = async () => {
-    const notebook = await adapter.createNotebook({ name: NOTEBOOK_COPY.newRootName });
+    const notebook = await adapter.createNotebook({ name: t("new_page") });
     router.push(`/home/n/${notebook.id}`);
   };
 
@@ -141,31 +157,31 @@ export default function WorkspaceHome() {
           <div className="min-w-0">
             <p className="text-[12px] text-muted">{today}</p>
             <h1 className="mt-1 text-[30px] font-semibold tracking-[-0.03em] text-ink sm:text-[34px]">
-              {greeting}, {firstName}
+              {firstName ? `${greeting}, ${firstName}` : greeting}
             </h1>
             <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-muted">
-              <span>{noteCountLabel(livePages.length)}</span>
+              <span>{noteCountLabel(livePages.length, t)}</span>
               <span className="text-faint">·</span>
-              <span>{pageCountLabel(rootNotebooks.length)}</span>
+              <span>{pageCountLabel(rootNotebooks.length, t)}</span>
               {importedCount ? (
                 <>
                   <span className="text-faint">·</span>
-                  <span>{importedCount} do Notion</span>
+                  <span>{importedCount} {t("from_notion")}</span>
                 </>
               ) : null}
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <Button variant="secondary" size="sm" className="sm:w-auto" onClick={() => void openPlanning()}>
-              Planejamento
+              {t("planning")}
             </Button>
             <Button variant="secondary" size="sm" className="sm:w-auto" onClick={() => void createRootPage()}>
               <FolderPlus />
-              Nova página
+              {t("new_page")}
             </Button>
             <Button variant="primary" size="sm" className="sm:w-auto" onClick={() => void createNote()}>
               <FilePlus />
-              Nova nota
+              {t("new_note")}
             </Button>
           </div>
         </div>
@@ -175,8 +191,8 @@ export default function WorkspaceHome() {
         <section className="mt-9">
           <div className="mb-3 flex items-end justify-between gap-3">
             <div>
-              <h2 className="text-[15px] font-semibold tracking-[-0.015em] text-ink">Páginas</h2>
-              <p className="mt-0.5 text-[12px] text-muted">Seus espaços de trabalho</p>
+              <h2 className="text-[15px] font-semibold tracking-[-0.015em] text-ink">{t("pages")}</h2>
+              <p className="mt-0.5 text-[12px] text-muted">{t("your_workspaces")}</p>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -218,9 +234,9 @@ export default function WorkspaceHome() {
           <div className="mb-3 flex items-end justify-between gap-3">
             <div>
               <h2 className="text-[15px] font-semibold tracking-[-0.015em] text-ink">
-                Continue de onde parou
+                {t("continue_where_left")}
               </h2>
-              <p className="mt-0.5 text-[12px] text-muted">Notas editadas recentemente</p>
+              <p className="mt-0.5 text-[12px] text-muted">{t("recently_edited_notes")}</p>
             </div>
             {recent.length ? (
               <Link
@@ -228,7 +244,7 @@ export default function WorkspaceHome() {
                 prefetch={true}
                 className="inline-flex items-center gap-0.5 text-[12px] font-medium text-[var(--accent)] hover:underline"
               >
-                Ver todas
+                {t("view_all")}
                 <ArrowUpRight className="size-3.5" />
               </Link>
             ) : null}
@@ -247,12 +263,12 @@ export default function WorkspaceHome() {
             </div>
           ) : (
             <EmptyState
-              title="Seu workspace está vazio"
-              description="Crie a primeira nota ou uma página para organizar o que vem do Notion."
+              title={t("workspace_empty")}
+              description={t("workspace_empty_desc")}
               action={
                 <Button variant="primary" onClick={() => void createNote()}>
                   <FilePlus />
-                  Criar nota
+                  {t("create_note")}
                 </Button>
               }
             />
@@ -261,7 +277,7 @@ export default function WorkspaceHome() {
 
         {favorites.length ? (
           <aside className="border-t border-[var(--border)] pt-6 lg:border-t-0 lg:pt-0">
-            <h2 className="mb-2 text-[13px] font-semibold text-ink">Favoritos</h2>
+            <h2 className="mb-2 text-[13px] font-semibold text-ink">{t("favorites")}</h2>
             <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]">
               {favorites.map((page) => (
                 <Link
@@ -273,7 +289,7 @@ export default function WorkspaceHome() {
                 >
                   <WorkspaceIcon icon={page.icon} fallback="📄" size={16} />
                   <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">
-                    {page.title || "Sem título"}
+                    {page.title || t("untitled")}
                   </span>
                   <Star className="size-3 shrink-0 fill-[var(--warning)] text-[var(--warning)]" />
                 </Link>
@@ -296,6 +312,7 @@ function PageCard({
   livePages: Page[];
 }) {
   const router = useRouter();
+  const { t } = useTranslation();
   const uploaded = isIconUrl(notebook.emoji ?? "");
   const subtree = notebookSubtreeIds(notebooks, notebook.id);
   const count = livePages.filter(
@@ -327,7 +344,7 @@ function PageCard({
         <p className="mt-2.5 truncate text-[14px] font-semibold tracking-[-0.015em] text-ink">
           {notebook.name}
         </p>
-        <p className="mt-0.5 text-[12px] text-muted">{noteCountLabel(count)}</p>
+        <p className="mt-0.5 text-[12px] text-muted">{noteCountLabel(count, t)}</p>
       </div>
     </Link>
   );
@@ -335,6 +352,7 @@ function PageCard({
 
 function NoteCard({ page, notebook }: { page: Page; notebook?: Notebook }) {
   const router = useRouter();
+  const { t, language } = useTranslation();
   return (
     <Link
       href={`/home/p/${page.id}`}
@@ -350,14 +368,14 @@ function NoteCard({ page, notebook }: { page: Page; notebook?: Notebook }) {
         <div className="flex items-start gap-2">
           <WorkspaceIcon icon={page.icon} fallback="📄" size={16} />
           <p className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">
-            {page.title || "Sem título"}
+            {page.title || t("untitled")}
           </p>
           {page.favorite ? (
             <Star className="mt-0.5 size-3 shrink-0 fill-[var(--warning)] text-[var(--warning)]" />
           ) : null}
         </div>
         <p className="mt-1.5 line-clamp-2 text-[12px] leading-relaxed text-muted">
-          {truncate(page.plainText.replace(/\n/g, " "), 120) || "Nota vazia"}
+          {truncate(page.plainText.replace(/\n/g, " "), 120) || t("empty_note")}
         </p>
         <div className="mt-auto flex items-center gap-1.5 pt-2.5">
           {notebook ? (
@@ -366,7 +384,7 @@ function NoteCard({ page, notebook }: { page: Page; notebook?: Notebook }) {
               <span className="text-[11px] text-faint">·</span>
             </>
           ) : null}
-          <span className="shrink-0 text-[11px] text-faint">{formatRelative(page.updatedAt)}</span>
+          <span className="shrink-0 text-[11px] text-faint">{formatRelative(page.updatedAt, language)}</span>
           {page.notionPageId || page.importSource ? <Badge tone="accent">Notion</Badge> : null}
         </div>
       </div>

@@ -8,6 +8,7 @@ import type {
   NotesDensityPreference,
   NotesLayoutPreference,
   NotesSortPreference,
+  SupportedLanguage,
   UserPreferences,
 } from "@/types/models";
 
@@ -48,6 +49,7 @@ interface UiState extends UiPreferences {
   setShowSaveIndicator: (value: boolean) => void;
   setUiZoom: (value: number) => void;
   setAutoCollapseSidebar: (value: boolean) => void;
+  setLanguage: (value: SupportedLanguage) => void;
   hydratePreferences: (value: Partial<UiPreferences>) => void;
 }
 
@@ -61,6 +63,7 @@ export const UI_ZOOM_MOBILE_MAX = 1.05;
 export const UI_ZOOM_STEPS = [0.9, 0.95, 1.0, 1.05, 1.1] as const;
 
 const DEFAULT_PREFERENCES: UiPreferences = {
+  language: "pt",
   sidebarCollapsed: false,
   sidebarWidth: SIDEBAR_MIN_WIDTH,
   notesLayout: "split",
@@ -134,6 +137,7 @@ export const useUiStore = create<UiState>()(
       setUiZoom: (value) =>
         set({ uiZoom: Math.round(clamp(value, UI_ZOOM_MIN, UI_ZOOM_MAX) * 100) / 100 }),
       setAutoCollapseSidebar: (value) => set({ autoCollapseSidebar: value }),
+      setLanguage: (value) => set({ language: value }),
       hydratePreferences: (value) => {
         const next = pickPreferences(value);
         const isNotePage =

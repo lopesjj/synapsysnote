@@ -110,9 +110,20 @@ export type NotesLayoutPreference = "list" | "cards" | "split";
 export type NotesSortPreference = "updated" | "created" | "title";
 export type NotesDensityPreference = "comfortable" | "compact";
 export type EditorWidthPreference = "narrow" | "normal" | "wide";
+export type SupportedLanguage =
+  | "pt"
+  | "en"
+  | "it"
+  | "fr"
+  | "es"
+  | "ru"
+  | "ja"
+  | "zh"
+  | "de";
 
 export interface UserPreferences {
   theme?: ThemePreference;
+  language?: SupportedLanguage;
   sidebarCollapsed?: boolean;
   sidebarWidth?: number;
   notesLayout?: NotesLayoutPreference;

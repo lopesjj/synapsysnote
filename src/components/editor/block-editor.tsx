@@ -40,6 +40,7 @@ import { ImageLightbox } from "./image-lightbox";
 import { blocksToDoc, collectMentionIds, docToBlocks } from "./serializer";
 import { indexMedia, isRicherMedia, mediaIdentity } from "@/lib/data/media-enrichment";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n/translations";
 
 export interface BlockEditorProps {
   page: Page;
@@ -559,15 +560,16 @@ function applyRemoteMediaEnrichment(
 }
 
 function EditorStatusBar({ editor }: { editor: Editor }) {
+  const { t } = useTranslation();
   useEditorTick(editor);
   const words = editor.storage.characterCount?.words() ?? 0;
   const characters = editor.storage.characterCount?.characters() ?? 0;
   return (
     <div className="mt-2 flex items-center justify-between border-t border-[var(--border)] pt-2 text-[11px] text-faint">
       <span>
-        {words} {words === 1 ? "palavra" : "palavras"} · {characters} caracteres
+        {words} {words === 1 ? t("editor_word_singular") : t("editor_word_plural")} · {characters} {t("editor_characters")}
       </span>
-      <span className="hidden sm:inline"># título · / blocos · @ menção · Ctrl F localizar</span>
+      <span className="hidden sm:inline">{t("editor_shortcuts_hint")}</span>
     </div>
   );
 }

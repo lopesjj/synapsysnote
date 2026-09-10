@@ -11,7 +11,6 @@ import {
   CheckSquare,
   Code,
   Code2,
-  Heading3,
   Highlighter,
   IndentDecrease,
   IndentIncrease,
@@ -30,16 +29,10 @@ import {
 import { cn } from "@/lib/utils";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
 import { Input } from "@/components/ui/primitives";
+import { useTranslation } from "@/lib/i18n/translations";
 import { HIGHLIGHT_COLORS, TEXT_COLORS } from "./editor-colors";
 import { currentTextAlign, type TextAlignValue } from "./extensions/text-align";
 import { dispatchTableMultiAction } from "./extensions/table-block";
-
-const ALIGN_TOOLS: { value: TextAlignValue; label: string; icon: typeof AlignLeft }[] = [
-  { value: "left", label: "Alinhar à esquerda", icon: AlignLeft },
-  { value: "center", label: "Centralizar", icon: AlignCenter },
-  { value: "right", label: "Alinhar à direita", icon: AlignRight },
-  { value: "justify", label: "Justificar", icon: AlignJustify },
-];
 
 export function useEditorTick(editor: Editor | null) {
   const [, setTick] = useState(0);
@@ -110,30 +103,38 @@ export function EditorToolbar({
   editor: Editor;
   onRequestUpload: () => void;
 }) {
+  const { t } = useTranslation();
   useEditorTick(editor);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkValue, setLinkValue] = useState("");
 
+  const alignTools: { value: TextAlignValue; label: string; icon: typeof AlignLeft }[] = [
+    { value: "left", label: t("align_left"), icon: AlignLeft },
+    { value: "center", label: t("align_center"), icon: AlignCenter },
+    { value: "right", label: t("align_right"), icon: AlignRight },
+    { value: "justify", label: t("align_justify"), icon: AlignJustify },
+  ];
+
   const align = currentTextAlign(editor);
   const headingLabel = editor.isActive("heading", { level: 1 })
-    ? "Título 1"
+    ? t("heading_1")
     : editor.isActive("heading", { level: 2 })
-      ? "Título 2"
+      ? t("heading_2")
       : editor.isActive("heading", { level: 3 })
-        ? "Título 3"
-        : "Texto";
+        ? t("heading_3")
+        : t("text_paragraph");
 
   return (
     <>
       <ToolButton
-        label="Desfazer"
+        label={t("undo")}
         disabled={!editor.can().undo()}
         onClick={() => editor.chain().focus().undo().run()}
       >
         <Undo2 className="size-3.5" />
       </ToolButton>
       <ToolButton
-        label="Refazer"
+        label={t("redo")}
         disabled={!editor.can().redo()}
         onClick={() => editor.chain().focus().redo().run()}
       >
@@ -154,15 +155,17 @@ export function EditorToolbar({
           </button>
         </MenuTrigger>
         <MenuContent align="start">
-          <MenuItem onSelect={() => editor.chain().focus().setParagraph().run()}>Texto</MenuItem>
+          <MenuItem onSelect={() => editor.chain().focus().setParagraph().run()}>
+            {t("text_paragraph")}
+          </MenuItem>
           <MenuItem onSelect={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
-            Título 1
+            {t("heading_1")}
           </MenuItem>
           <MenuItem onSelect={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
-            Título 2
+            {t("heading_2")}
           </MenuItem>
           <MenuItem onSelect={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
-            Título 3
+            {t("heading_3")}
           </MenuItem>
         </MenuContent>
       </Menu>
@@ -170,7 +173,7 @@ export function EditorToolbar({
       <span className="mx-0.5 h-4 w-px bg-[var(--border)]" />
 
       <ToolButton
-        label="Negrito"
+        label={t("bold")}
         active={editor.isActive("bold")}
         onClick={() => {
           if (dispatchTableMultiAction({ type: "annotation", key: "bold" })) return;
@@ -180,7 +183,7 @@ export function EditorToolbar({
         <Bold className="size-3.5" />
       </ToolButton>
       <ToolButton
-        label="Itálico"
+        label={t("italic")}
         active={editor.isActive("italic")}
         onClick={() => {
           if (dispatchTableMultiAction({ type: "annotation", key: "italic" })) return;
@@ -190,7 +193,7 @@ export function EditorToolbar({
         <Italic className="size-3.5" />
       </ToolButton>
       <ToolButton
-        label="Sublinhado"
+        label={t("underline")}
         active={editor.isActive("underline")}
         onClick={() => {
           if (dispatchTableMultiAction({ type: "annotation", key: "underline" })) return;
@@ -200,7 +203,7 @@ export function EditorToolbar({
         <UnderlineIcon className="size-3.5" />
       </ToolButton>
       <ToolButton
-        label="Tachado"
+        label={t("strikethrough")}
         active={editor.isActive("strike")}
         onClick={() => {
           if (dispatchTableMultiAction({ type: "annotation", key: "strikethrough" })) return;
@@ -210,7 +213,7 @@ export function EditorToolbar({
         <Strikethrough className="size-3.5" />
       </ToolButton>
       <ToolButton
-        label="Código"
+        label={t("code_inline")}
         active={editor.isActive("code")}
         onClick={() => editor.chain().focus().toggleCode().run()}
       >
@@ -221,7 +224,7 @@ export function EditorToolbar({
         <MenuTrigger asChild>
           <button
             type="button"
-            title="Cor do texto"
+            title={t("text_color")}
             onMouseDown={(event) => event.preventDefault()}
             className="rounded-[var(--radius-xs)] p-1.5 text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
           >
@@ -230,7 +233,7 @@ export function EditorToolbar({
         </MenuTrigger>
         <MenuContent align="start" className="min-w-0 p-1.5" onCloseAutoFocus={(event) => event.preventDefault()}>
           <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-faint">
-            Cor do texto
+            {t("text_color")}
           </p>
           <div className="grid grid-cols-6 gap-1">
             {TEXT_COLORS.map((color) => (
@@ -257,7 +260,7 @@ export function EditorToolbar({
         <MenuTrigger asChild>
           <button
             type="button"
-            title="Destacar"
+            title={t("highlight")}
             onMouseDown={(event) => event.preventDefault()}
             className={cn(
               "rounded-[var(--radius-xs)] p-1.5 text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink",
@@ -269,7 +272,7 @@ export function EditorToolbar({
         </MenuTrigger>
         <MenuContent align="start" className="min-w-0 p-1.5" onCloseAutoFocus={(event) => event.preventDefault()}>
           <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-faint">
-            Destaque
+            {t("highlight")}
           </p>
           <div className="grid grid-cols-6 gap-1">
             {HIGHLIGHT_COLORS.map((color) => (
@@ -317,7 +320,7 @@ export function EditorToolbar({
         </form>
       ) : (
         <ToolButton
-          label="Link"
+          label={t("link")}
           active={editor.isActive("link")}
           onClick={() => {
             setLinkValue(editor.getAttributes("link").href ?? "");
@@ -331,35 +334,35 @@ export function EditorToolbar({
       <span className="mx-0.5 h-4 w-px bg-[var(--border)]" />
 
       <ToolButton
-        label="Lista"
+        label={t("bullet_list")}
         active={editor.isActive("bulletList")}
         onClick={() => editor.chain().focus().toggleBulletList().run()}
       >
         <List className="size-3.5" />
       </ToolButton>
       <ToolButton
-        label="Lista numerada"
+        label={t("numbered_list")}
         active={editor.isActive("orderedList")}
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
       >
         <ListOrdered className="size-3.5" />
       </ToolButton>
       <ToolButton
-        label="Tarefas"
+        label={t("task_list")}
         active={editor.isActive("taskList")}
         onClick={() => editor.chain().focus().toggleTaskList().run()}
       >
         <CheckSquare className="size-3.5" />
       </ToolButton>
       <ToolButton
-        label="Citação"
+        label={t("quote")}
         active={editor.isActive("blockquote")}
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
       >
         <Quote className="size-3.5" />
       </ToolButton>
       <ToolButton
-        label="Diminuir recuo (⇧Tab)"
+        label={`${t("outdent")} (⇧Tab)`}
         disabled={
           editor.isActive("table") ||
           editor.isActive("codeBlock")
@@ -369,7 +372,7 @@ export function EditorToolbar({
         <IndentDecrease className="size-3.5" />
       </ToolButton>
       <ToolButton
-        label="Aumentar recuo (Tab)"
+        label={`${t("indent")} (Tab)`}
         disabled={
           editor.isActive("table") ||
           editor.isActive("codeBlock")
@@ -379,7 +382,7 @@ export function EditorToolbar({
         <IndentIncrease className="size-3.5" />
       </ToolButton>
       <ToolButton
-        label="Recuo da primeira linha"
+        label={t("first_line_indent")}
         active={
           editor.isActive("paragraph") &&
           !editor.isActive("bulletList") &&
@@ -402,7 +405,7 @@ export function EditorToolbar({
 
       <span className="mx-0.5 h-4 w-px bg-[var(--border)]" />
 
-      {ALIGN_TOOLS.map((item) => (
+      {alignTools.map((item) => (
         <ToolButton
           key={item.value}
           label={item.label}
@@ -419,7 +422,7 @@ export function EditorToolbar({
       ))}
 
       <ToolButton
-        label="Bloco de código"
+        label={t("code_block")}
         active={editor.isActive("codeBlock")}
         onClick={() => editor.chain().focus().toggleCodeBlock().run()}
       >
@@ -428,7 +431,7 @@ export function EditorToolbar({
 
       <span className="mx-0.5 h-4 w-px bg-[var(--border)]" />
 
-      <ToolButton label="Anexar" onClick={onRequestUpload}>
+      <ToolButton label={t("attach")} onClick={onRequestUpload}>
         <Paperclip className="size-3.5" />
       </ToolButton>
     </>

@@ -3,8 +3,6 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import {
   ArrowDownWideNarrow,
   ArrowUpWideNarrow,
@@ -25,27 +23,15 @@ import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from "@/component
 import { BlockEditor } from "@/components/editor/block-editor";
 import { getMentionCandidates } from "@/components/editor/extensions/mention-suggestion";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
-import { cn, compareNatural } from "@/lib/utils";
+import { cn, compareNatural, formatRelative } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n/translations";
 import type { Page } from "@/types/models";
-
 
 export interface NotesScope {
   notebookId?: string | null;
   tag?: string;
   favoritesOnly?: boolean;
 }
-
-const SORT_LABELS: Record<NotesSortKey, string> = {
-  updated: "Modificação",
-  created: "Criação",
-  title: "Título",
-};
-
-const LAYOUT_OPTIONS: { value: NotesLayout; label: string; icon: React.ReactNode }[] = [
-  { value: "list", label: "Lista compacta", icon: <List className="size-3.5" /> },
-  { value: "cards", label: "Cartões", icon: <LayoutGrid className="size-3.5" /> },
-  { value: "split", label: "Painel duplo", icon: <Columns2 className="size-3.5" /> },
-];
 
 export function NotesExplorer({
   title,
@@ -57,6 +43,7 @@ export function NotesExplorer({
   scope?: NotesScope;
 }) {
   const router = useRouter();
+  const { t, language } = useTranslation();
   const { livePages, notebooks, adapter } = useWorkspace();
 
   const layout = useUiStore((state) => state.notesLayout);
@@ -70,6 +57,18 @@ export function NotesExplorer({
     scope.notebookId ?? null
   );
   const [pickedId, setPickedId] = useState<string | null>(null);
+
+  const sortLabels: Record<NotesSortKey, string> = {
+    updated: t("sort_updated"),
+    created: t("sort_created"),
+    title: t("sort_title"),
+  };
+
+  const layoutOptions: { value: NotesLayout; label: string; icon: React.ReactNode }[] = [
+    { value: "list", label: t("layout_list"), icon: <List className="size-3.5" /> },
+    { value: "cards", label: t("layout_cards"), icon: <LayoutGrid className="size-3.5" /> },
+    { value: "split", label: t("layout_split"), icon: <Columns2 className="size-3.5" /> },
+  ];
 
   const pages = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -114,7 +113,7 @@ export function NotesExplorer({
     const page = await adapter.createPage({
       notebookId: notebookFilter ?? null,
       tags: scope.tag ? [scope.tag] : [],
-      title: "Sem título",
+      title: t("untitled"),
     });
     useUiStore.getState().closeMenu();
     router.push(`/home/p/${page.id}`);
@@ -128,13 +127,13 @@ export function NotesExplorer({
             <h1 className="text-[19px] font-semibold tracking-[-0.02em] text-ink">{title}</h1>
             <p className="mt-0.5 text-[12.5px] text-muted">
               {description ??
-                `${pages.length} ${pages.length === 1 ? "nota" : "notas"}${
-                  activeNotebook ? ` em ${activeNotebook.name}` : ""
+                `${pages.length} ${pages.length === 1 ? t("note_singular") : t("notes_plural")}${
+                  activeNotebook ? ` ${t("in_word")} ${activeNotebook.name}` : ""
                 }`}
             </p>
           </div>
           <Button variant="primary" onClick={() => void createNote()}>
-            <Plus /> Nova nota
+            <Plus /> {t("new_note")}
           </Button>
         </div>
 
@@ -144,27 +143,27 @@ export function NotesExplorer({
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filtrar por título, conteúdo ou tag…"
+              placeholder={t("filter_placeholder")}
               className="pl-8"
             />
             {query ? (
               <button
                 onClick={() => setQuery("")}
                 className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-faint transition hover:text-ink"
-                aria-label="Limpar filtro"
+                aria-label={t("clear_filter")}
               >
                 <X className="size-3.5" />
               </button>
             ) : null}
           </div>
 
-          <Tooltip label={favoritesOnly ? "Mostrar todas" : "Só favoritas"}>
+          <Tooltip label={favoritesOnly ? t("show_all") : t("only_favorites")}>
             <Button
               variant={favoritesOnly ? "primary" : "secondary"}
               size="icon"
               onClick={() => setFavoritesOnly((previous) => !previous)}
               aria-pressed={favoritesOnly}
-              aria-label="Filtrar favoritas"
+              aria-label={t("filter_favorites")}
             >
               <Star />
             </Button>
@@ -175,13 +174,13 @@ export function NotesExplorer({
               <Button variant="secondary">
                 <NotebookIcon />
                 <span className="max-w-[140px] truncate">
-                  {activeNotebook?.name ?? "Todas as páginas"}
+                  {activeNotebook?.name ?? t("all_pages")}
                 </span>
               </Button>
             </MenuTrigger>
             <MenuContent align="start" className="max-h-72 overflow-y-auto">
-              <MenuLabel>Página</MenuLabel>
-              <MenuItem onSelect={() => setNotebookFilter(null)}>Todas as páginas</MenuItem>
+              <MenuLabel>{t("pages")}</MenuLabel>
+              <MenuItem onSelect={() => setNotebookFilter(null)}>{t("all_pages")}</MenuItem>
               {notebooks.map((notebook) => (
                 <MenuItem key={notebook.id} onSelect={() => setNotebookFilter(notebook.id)}>
                   <WorkspaceIcon icon={notebook.emoji} fallback="📓" size={14} /> {notebook.name}
@@ -192,31 +191,31 @@ export function NotesExplorer({
 
           <Menu>
             <MenuTrigger asChild>
-              <Button variant="secondary">{SORT_LABELS[sort]}</Button>
+              <Button variant="secondary">{sortLabels[sort]}</Button>
             </MenuTrigger>
             <MenuContent align="start">
-              <MenuLabel>Ordenar por</MenuLabel>
-              {(Object.keys(SORT_LABELS) as NotesSortKey[]).map((key) => (
+              <MenuLabel>{t("sort_by")}</MenuLabel>
+              {(Object.keys(sortLabels) as NotesSortKey[]).map((key) => (
                 <MenuItem key={key} onSelect={() => useUiStore.getState().setNotesSort(key)}>
-                  {SORT_LABELS[key]}
+                  {sortLabels[key]}
                 </MenuItem>
               ))}
             </MenuContent>
           </Menu>
 
-          <Tooltip label={direction === "desc" ? "Decrescente" : "Crescente"}>
+          <Tooltip label={direction === "desc" ? t("descending") : t("ascending")}>
             <Button
               variant="secondary"
               size="icon"
               onClick={() => useUiStore.getState().toggleNotesSortDirection()}
-              aria-label="Inverter ordenação"
+              aria-label={t("invert_sort")}
             >
               {direction === "desc" ? <ArrowDownWideNarrow /> : <ArrowUpWideNarrow />}
             </Button>
           </Tooltip>
 
           <div className="flex rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-0.5">
-            {LAYOUT_OPTIONS.map((option) => (
+            {layoutOptions.map((option) => (
               <Tooltip key={option.value} label={option.label}>
                 <button
                   onClick={() => useUiStore.getState().setNotesLayout(option.value)}
@@ -240,15 +239,15 @@ export function NotesExplorer({
       {!pages.length ? (
         <div className="px-5 py-10 sm:px-8">
           <EmptyState
-            title={query ? "Nada encontrado" : "Nenhuma nota por aqui"}
+            title={query ? t("nothing_found") : t("no_notes_here")}
             description={
               query
-                ? `Nenhuma nota corresponde a “${query}”.`
-                : "Crie a primeira nota deste recorte para começar."
+                ? `${t("no_notes_match")} “${query}”.`
+                : t("create_first_note_prompt")
             }
             action={
               <Button variant="secondary" onClick={() => void createNote()}>
-                <Plus /> Nova nota
+                <Plus /> {t("new_note")}
               </Button>
             }
           />
@@ -289,7 +288,7 @@ export function NotesExplorer({
                     <span className="mr-3 inline-flex align-middle">
                       <WorkspaceIcon icon={selected.icon} fallback="📄" size={28} />
                     </span>
-                    {selected.title || "Sem título"}
+                    {selected.title || t("untitled")}
                   </h2>
                   <Button variant="secondary" asChild>
                     <Link
@@ -298,7 +297,7 @@ export function NotesExplorer({
                       onMouseEnter={() => router.prefetch(`/home/p/${selected.id}`)}
                       onClick={() => useUiStore.getState().closeMenu()}
                     >
-                      Abrir
+                      {t("open")}
                     </Link>
                   </Button>
                 </div>
@@ -339,7 +338,7 @@ export function NotesExplorer({
                 <div className="flex items-start gap-2">
                   <WorkspaceIcon icon={page.icon} fallback="📄" size={16} />
                   <p className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">
-                    {page.title || "Sem título"}
+                    {page.title || t("untitled")}
                   </p>
                   {page.favorite ? (
                     <Star className="size-3.5 shrink-0 fill-[var(--warning)] text-[var(--warning)]" />
@@ -347,7 +346,7 @@ export function NotesExplorer({
                 </div>
                 {density === "comfortable" ? (
                   <p className="line-clamp-4 text-[12px] leading-relaxed text-muted">
-                    {excerpt(page, 220) || "Nota vazia"}
+                    {excerpt(page, 220) || t("empty_note")}
                   </p>
                 ) : null}
                 <NoteMeta page={page} className="mt-auto pt-1" />
@@ -373,7 +372,7 @@ export function NotesExplorer({
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   <span className="truncate text-[13.5px] font-medium text-ink">
-                    {page.title || "Sem título"}
+                    {page.title || t("untitled")}
                   </span>
                   {page.favorite ? (
                     <Star className="size-3 shrink-0 fill-[var(--warning)] text-[var(--warning)]" />
@@ -381,12 +380,12 @@ export function NotesExplorer({
                 </span>
                 {density === "comfortable" ? (
                   <span className="mt-0.5 block truncate text-[12px] text-muted">
-                    {excerpt(page, 160) || "Nota vazia"}
+                    {excerpt(page, 160) || t("empty_note")}
                   </span>
                 ) : null}
               </span>
               <span className="hidden shrink-0 text-[11.5px] text-faint sm:block">
-                {relative(page.updatedAt)}
+                {formatRelative(page.updatedAt, language)}
               </span>
             </Link>
           ))}
@@ -397,12 +396,13 @@ export function NotesExplorer({
 }
 
 function NoteRowContent({ page, density }: { page: Page; density: "comfortable" | "compact" }) {
+  const { t, language } = useTranslation();
   return (
     <>
       <div className="flex items-center gap-2">
         <WorkspaceIcon icon={page.icon} fallback="📄" size={14} />
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
-          {page.title || "Sem título"}
+          {page.title || t("untitled")}
         </span>
         {page.favorite ? (
           <Star className="size-3 shrink-0 fill-[var(--warning)] text-[var(--warning)]" />
@@ -410,15 +410,16 @@ function NoteRowContent({ page, density }: { page: Page; density: "comfortable" 
       </div>
       {density === "comfortable" ? (
         <p className="mt-1 line-clamp-2 text-[11.5px] leading-relaxed text-muted">
-          {excerpt(page, 140) || "Nota vazia"}
+          {excerpt(page, 140) || t("empty_note")}
         </p>
       ) : null}
-      <p className="mt-1 text-[10.5px] text-faint">{relative(page.updatedAt)}</p>
+      <p className="mt-1 text-[10.5px] text-faint">{formatRelative(page.updatedAt, language)}</p>
     </>
   );
 }
 
 function NoteMeta({ page, className }: { page: Page; className?: string }) {
+  const { t, language } = useTranslation();
   const { notebooks } = useWorkspace();
   const notebook = notebooks.find((candidate) => candidate.id === page.notebookId);
 
@@ -431,7 +432,7 @@ function NoteMeta({ page, className }: { page: Page; className?: string }) {
           </span>
         </span>
       ) : null}
-      <span>Atualizada {relative(page.updatedAt)}</span>
+      <span>{t("updated")} {formatRelative(page.updatedAt, language)}</span>
       {page.tags.slice(0, 3).map((tag) => (
         <span
           key={tag}
@@ -453,13 +454,4 @@ function excerpt(page: Page, length: number): string {
   const text = page.plainText.replace(/\s+/g, " ").trim();
   const withoutTitle = text.startsWith(page.title) ? text.slice(page.title.length).trim() : text;
   return withoutTitle.slice(0, length);
-}
-
-function relative(timestamp: number): string {
-  if (!timestamp) return "agora";
-  try {
-    return formatDistanceToNow(timestamp, { addSuffix: true, locale: ptBR });
-  } catch {
-    return "agora";
-  }
 }

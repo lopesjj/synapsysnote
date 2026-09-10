@@ -49,19 +49,11 @@ import { useUiStore } from "@/lib/store/ui-store";
 import { SIDEBAR_MARK_SIZE, SynapsysLettering, SynapsysMark } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Kbd, Tooltip } from "@/components/ui/primitives";
+import { useTranslation } from "@/lib/i18n/translations";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { UserMenu } from "./user-menu";
 import type { Notebook } from "@/types/models";
-import { childrenOf, parentIdOf } from "@/lib/data/notebook-tree";
-import {
-  NOTEBOOK_COPY,
-  duplicateNotebookLabel,
-  collapseNotebookLabel,
-  deleteNotebookConfirm,
-  deleteNotebookLabel,
-  isNestedNotebook,
-  openNotebookLabel,
-} from "@/lib/data/notebook-copy";
+import { childrenOf, isNestedNotebook, parentIdOf } from "@/lib/data/notebook-tree";
 import {
   ORDER_STEP,
   decodeId,
@@ -116,9 +108,10 @@ export function SidebarRail() {
   const router = useRouter();
   const pathname = usePathname();
   const { adapter } = useWorkspace();
+  const { t } = useTranslation();
 
   const createPage = async () => {
-    const page = await adapter.createPage({ notebookId: null, title: "Sem título" });
+    const page = await adapter.createPage({ notebookId: null, title: t("untitled") });
     useUiStore.getState().closeMenu();
     router.push(`/home/p/${page.id}`);
   };
@@ -129,65 +122,65 @@ export function SidebarRail() {
         className="flex shrink-0 items-center justify-center pt-8 pb-6"
         style={{ paddingTop: "calc(2rem + env(safe-area-inset-top, 0px))" }}
       >
-        <Tooltip label="Expandir barra lateral" shortcut={isMac() ? "⌘B" : "Ctrl B"} side="right">
+        <Tooltip label={t("expand_sidebar")} shortcut={isMac() ? "⌘B" : "Ctrl B"} side="right">
           <button
             type="button"
             onClick={() => useUiStore.getState().toggleSidebar()}
             className={cn("flex select-none items-center justify-center", CHROME_HIT_CLASS)}
-            aria-label="Expandir barra lateral"
+            aria-label={t("expand_sidebar")}
           >
             <SynapsysMark size={SIDEBAR_MARK_SIZE} />
           </button>
         </Tooltip>
       </div>
       <div className="flex flex-col items-center gap-2">
-        <Tooltip label="Buscar" shortcut={isMac() ? "⌘K" : "Ctrl K"} side="right">
+        <Tooltip label={t("search")} shortcut={isMac() ? "⌘K" : "Ctrl K"} side="right">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => useUiStore.getState().setPaletteOpen(true)}
-            aria-label="Buscar"
+            aria-label={t("search")}
           >
             <Search />
           </Button>
         </Tooltip>
-        <Tooltip label="Início" side="right">
+        <Tooltip label={t("home")} side="right">
           <Button
             variant="ghost"
             size="icon"
             asChild
             className={cn(pathname === "/home" && "bg-[var(--surface-active)] text-ink")}
           >
-            <Link href="/home" aria-label="Início">
+            <Link href="/home" aria-label={t("home")}>
               <Home />
             </Link>
           </Button>
         </Tooltip>
-        <Tooltip label="Nova nota" shortcut={isMac() ? "⌘N" : "Ctrl N"} side="right">
-          <Button variant="ghost" size="icon" onClick={() => void createPage()} aria-label="Nova nota">
+        <Tooltip label={t("new_note")} shortcut={isMac() ? "⌘N" : "Ctrl N"} side="right">
+          <Button variant="ghost" size="icon" onClick={() => void createPage()} aria-label={t("new_note")}>
             <Plus />
           </Button>
         </Tooltip>
-        <Tooltip label="Todas as notas" side="right">
+        <Tooltip label={t("all_notes")} side="right">
           <Button
             variant="ghost"
             size="icon"
             asChild
             className={cn(pathname === "/home/notes" && "bg-[var(--surface-active)] text-ink")}
           >
-            <Link href="/home/notes" aria-label="Todas as notas">
+            <Link href="/home/notes" aria-label={t("all_notes")}>
               <FileStack />
             </Link>
           </Button>
         </Tooltip>
-        <Tooltip label="Lixeira" side="right">
+        <Tooltip label={t("trash")} side="right">
           <Button
             variant="ghost"
             size="icon"
             asChild
             className={cn(pathname === "/home/trash" && "bg-[var(--surface-active)] text-ink")}
           >
-            <Link href="/home/trash" aria-label="Lixeira">
+            <Link href="/home/trash" aria-label={t("trash")}>
               <Trash2 />
             </Link>
           </Button>
@@ -221,6 +214,7 @@ function setSessionState<T>(key: string, value: T) {
 }
 
 export function Sidebar({ collapsed, width }: { collapsed: boolean; width: number }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const { notebooks, livePages, databases, tags, trashedPages, treeFor, adapter, rootNotebooks } =
@@ -286,7 +280,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   }, [databases, notebooks, treeFor]);
 
   const createPage = async (notebookId: string | null) => {
-    const page = await adapter.createPage({ notebookId, title: "Sem título" });
+    const page = await adapter.createPage({ notebookId, title: t("untitled") });
     if (notebookId) setOpenNotebooks((prev) => ({ ...prev, [notebookId]: true }));
     useUiStore.getState().closeMenu();
     router.push(`/home/p/${page.id}`);
@@ -294,12 +288,12 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
 
   const createNotebook = async (parentId: string | null = null) => {
     const notebook = await adapter.createNotebook({
-      name: parentId ? NOTEBOOK_COPY.newChildName : NOTEBOOK_COPY.newRootName,
+      name: parentId ? t("new_notebook") : t("new_page"),
       parentId,
     });
     if (parentId) setOpenNotebooks((prev) => ({ ...prev, [parentId]: true }));
     setOpenNotebooks((prev) => ({ ...prev, [notebook.id]: true }));
-    toast.success(parentId ? NOTEBOOK_COPY.createdChild : NOTEBOOK_COPY.createdRoot);
+    toast.success(parentId ? t("notebook_created") : t("page_created"));
     router.push(`/home/n/${notebook.id}`);
   };
 
@@ -395,7 +389,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         await adapter.applyNotebookOrders(
           plan.notebookIds.map((id, index) => ({ id, order: index * ORDER_STEP }))
         );
-        toast.success("Ordem dos cadernos atualizada");
+        toast.success(t("notebook_order_updated"));
         return;
       }
 
@@ -407,7 +401,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         if (plan.parentId) {
           setOpenNotebooks((prev) => ({ ...prev, [plan.parentId!]: true }));
         }
-        toast.success(plan.parentId ? "Caderno inserido dentro do caderno" : "Caderno movido");
+        toast.success(plan.parentId ? t("notebook_moved_inside") : t("notebook_moved"));
         return;
       }
 
@@ -422,11 +416,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         if (plan.parentPageId) {
           setExpanded((prev) => ({ ...prev, [plan.parentPageId!]: true }));
         }
-        toast.success(
-          plan.parentPageId
-            ? "Nota inserida como subpágina"
-            : "Nota movida para o caderno"
-        );
+        toast.success(t("note_moved_to_notebook"));
       }
 
       await adapter.applyPageOrders(
@@ -434,7 +424,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
       );
 
       if (plan.kind === "reorder-pages") {
-        toast.success("Ordem das notas atualizada");
+        toast.success(t("notes_order_updated"));
       }
     } catch {
       toast.error("Não foi possível reordenar. Tente novamente.");
@@ -478,18 +468,19 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                 const copy = await adapter.duplicateNotebook(notebook.id);
                 setOpenNotebooks((prev) => ({ ...prev, [copy.id]: true }));
                 toast.success(
-                  isNestedNotebook(notebook) ? NOTEBOOK_COPY.duplicatedChild : NOTEBOOK_COPY.duplicatedRoot
+                  isNestedNotebook(notebook) ? t("notebook_duplicated") : t("page_duplicated")
                 );
                 router.push(`/home/n/${copy.id}`);
               } catch {
-                toast.error("Não foi possível duplicar.");
+                toast.error(t("could_not_duplicate"));
               }
             }}
             onRename={(name) => adapter.updateNotebook(notebook.id, { name })}
             onDelete={async () => {
-              if (!window.confirm(deleteNotebookConfirm(notebook))) return;
+              const name = notebook.name?.trim() || (isNestedNotebook(notebook) ? t("notebook_count_singular") : t("new_page"));
+              if (!window.confirm(t("delete_notebook_confirm", { name }))) return;
               await adapter.deleteNotebook(notebook.id);
-              toast.success(isNestedNotebook(notebook) ? NOTEBOOK_COPY.removedChild : NOTEBOOK_COPY.removedRoot);
+              toast.success(isNestedNotebook(notebook) ? t("notebook_deleted") : t("page_deleted"));
               if (active) {
                 const parent = parentIdOf(notebook);
                 router.push(parent ? `/home/n/${parent}` : "/home");
@@ -524,7 +515,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                   ))}
                   {empty ? (
                     <p className="px-6 py-1 text-[11.5px] text-faint">
-                      Vazio - arraste notas para cá
+                      {t("empty_drag_notes")}
                     </p>
                   ) : null}
                 </SortableContext>
@@ -552,7 +543,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               const child = await adapter.createPage({
                 parentPageId: node.page.id,
                 notebookId: node.page.notebookId,
-                title: "Sem título",
+                title: t("untitled"),
               });
               setExpanded((prev) => ({ ...prev, [node.page.id]: true }));
               useUiStore.getState().closeMenu();
@@ -564,17 +555,17 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
             onDuplicate={async () => {
               try {
                 const copy = await adapter.duplicatePage(node.page.id);
-                toast.success("Nota duplicada");
+                toast.success(t("note_duplicated"));
                 useUiStore.getState().closeMenu();
                 router.push(`/home/p/${copy.id}`);
               } catch {
-                toast.error("Não foi possível duplicar a nota.");
+                toast.error(t("could_not_duplicate"));
               }
             }}
             onTrash={async () => {
               await adapter.trashPage(node.page.id);
-              toast.success("Movida para a lixeira", {
-                action: { label: "Desfazer", onClick: () => adapter.restorePage(node.page.id) },
+              toast.success(t("moved_to_trash"), {
+                action: { label: t("undo_action"), onClick: () => adapter.restorePage(node.page.id) },
               });
               if (active) router.push("/home");
             }}
@@ -616,11 +607,11 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         className="relative flex items-center pr-3 pt-8 pb-6"
         style={{ paddingTop: "calc(2rem + env(safe-area-inset-top, 0px))" }}
       >
-        <Tooltip label="Recolher barra lateral" shortcut={isMac() ? "⌘B" : "Ctrl B"} side="right">
+        <Tooltip label={t("collapse_sidebar")} shortcut={isMac() ? "⌘B" : "Ctrl B"} side="right">
           <button
             type="button"
             onClick={() => useUiStore.getState().collapseSidebar()}
-            aria-label="Recolher barra lateral"
+            aria-label={t("collapse_sidebar")}
             className={cn("relative flex w-full select-none items-center", CHROME_HIT_CLASS)}
           >
             <span className="flex w-14 shrink-0 items-center justify-center">
@@ -640,22 +631,22 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
         >
           <Search className="size-3.5" />
-          Buscar
+          {t("search")}
           <Kbd className="ml-auto">{isMac() ? "⌘K" : "Ctrl K"}</Kbd>
         </button>
         <NavLink href="/home" active={pathname === "/home"} icon={<Home className="size-3.5" />}>
-          Início
+          {t("home")}
         </NavLink>
         <NavLink
           href="/home/notes"
           active={pathname === "/home/notes"}
           icon={<FileStack className="size-3.5" />}
         >
-          Todas as notas
+          {t("all_notes")}
           <span className="ml-auto text-[10.5px] text-faint">{livePages.length}</span>
         </NavLink>
         <NavLink href="/home/trash" active={pathname === "/home/trash"} icon={<Trash2 className="size-3.5" />}>
-          Lixeira
+          {t("trash")}
           {trashedPages.length ? (
             <span className="ml-auto text-[10.5px] text-faint">{trashedPages.length}</span>
           ) : null}
@@ -668,7 +659,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
         >
           <Import className="size-3.5" />
-          Importar do Notion
+          {t("import_notion")}
         </button>
       </div>
 
@@ -687,13 +678,13 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         <div className="mt-3 flex-1 space-y-4 overflow-y-auto px-2 pb-4">
           {favorites.length ? (
             <Section
-              title="Favoritos"
+              title={t("favorites")}
               action={
-                <Tooltip label="Ver todos os favoritos">
+                <Tooltip label={t("view_all_favorites")}>
                   <Link
                     href="/home/notes?favorites=1"
                     className="rounded p-0.5 text-faint transition hover:text-ink"
-                    aria-label="Ver todos os favoritos"
+                    aria-label={t("view_all_favorites")}
                   >
                     <FileStack className="size-3.5" />
                   </Link>
@@ -710,20 +701,20 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                   className="flex items-center gap-2 rounded-[var(--radius-xs)] px-2 py-1 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
                 >
                   <SidebarItemIcon icon={page.icon} fallback="⭐" />
-                  <span className="truncate">{page.title || "Sem título"}</span>
+                  <span className="truncate">{page.title || t("untitled")}</span>
                 </Link>
               ))}
             </Section>
           ) : null}
 
           <Section
-            title={NOTEBOOK_COPY.sectionRoots}
+            title={t("pages")}
             action={
-              <Tooltip label={NOTEBOOK_COPY.newRootName} shortcut={isMac() ? "⌘⇧N" : "Ctrl ⇧ N"}>
+              <Tooltip label={t("new_page")} shortcut={isMac() ? "⌘⇧N" : "Ctrl ⇧ N"}>
                 <button
                   onClick={() => void createNotebook(null)}
                   className="rounded p-0.5 text-faint transition hover:text-ink"
-                  aria-label={NOTEBOOK_COPY.newRootName}
+                  aria-label={t("new_page")}
                 >
                   <FolderPlus className="size-3.5" />
                 </button>
@@ -734,7 +725,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           </Section>
 
           {orphanPages.length ? (
-            <Section title={NOTEBOOK_COPY.unfiled}>
+            <Section title={t("unfiled")}>
               <SortableContext
                 items={sortableIds(orphanPages)}
                 strategy={verticalListSortingStrategy}
@@ -745,7 +736,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           ) : null}
 
           {tags.length ? (
-            <Section title="Tags">
+            <Section title={t("tags")}>
               <div className="flex flex-wrap gap-1 px-1.5 pt-1">
                 {tags.slice(0, 14).map((tag) => (
                   <Link
@@ -773,22 +764,22 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                 size={16}
               />
               <span className="max-w-[130px] truncate text-[13px] font-semibold text-ink">
-                {draggedLabel || "Sem título"}
+                {draggedLabel || t("untitled")}
               </span>
               {sidebarDropIntent?.mode === "inside" && (dragging.kind === "notebook" || sidebarDropIntent?.targetKind === "notebook") ? (
                 <span className="ml-auto flex items-center gap-1 rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold text-white shadow-sm animate-in fade-in zoom-in-95 duration-100">
                   <FolderPlus className="size-3" />
                   {dragging.kind === "notebook"
-                    ? "Inserir dentro"
-                    : "Mover para o caderno"}
+                    ? t("move_inside")
+                    : t("move_to_notebook")}
                 </span>
               ) : sidebarDropIntent?.mode === "before" ? (
                 <span className="ml-auto rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[10px] font-bold shadow-sm animate-in fade-in duration-100">
-                  ↕ Acima
+                  <span>↕</span> {t("dnd_reorder_above")}
                 </span>
               ) : sidebarDropIntent?.mode === "after" ? (
                 <span className="ml-auto rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[10px] font-bold shadow-sm animate-in fade-in duration-100">
-                  ↕ Abaixo
+                  <span>↕</span> {t("dnd_reorder_below")}
                 </span>
               ) : null}
             </div>
@@ -863,6 +854,7 @@ function NotebookRow({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const { t } = useTranslation();
   const {
     attributes,
     listeners,
@@ -938,7 +930,7 @@ function NotebookRow({
               type="button"
               onClick={onToggle}
               className="flex size-4 shrink-0 items-center justify-center rounded text-faint transition hover:text-ink"
-              aria-label={collapseNotebookLabel(open, notebook)}
+              aria-label={open ? t("collapse") : t("expand")}
             >
               <ChevronRight
                 className={cn("size-3 transition-transform", open && "rotate-90")}
@@ -966,11 +958,11 @@ function NotebookRow({
         <span className="shrink-0 text-[10.5px] tabular-nums text-faint">{count}</span>
         <div className="grid grid-cols-[0fr] transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:grid-cols-[1fr]">
           <div className="flex min-w-0 items-center overflow-hidden">
-        <Tooltip label="Nova nota">
+        <Tooltip label={t("new_note")}>
           <button
             onClick={onCreatePage}
             className="rounded p-0.5 text-faint hover:text-ink"
-            aria-label="Nova nota"
+            aria-label={t("new_note")}
           >
             <Plus className="size-3.5" />
           </button>
@@ -986,24 +978,24 @@ function NotebookRow({
           </MenuTrigger>
           <MenuContent align="start">
             <MenuItem onSelect={() => router.push(`/home/n/${notebook.id}`)}>
-              <FolderPlus /> {openNotebookLabel(notebook)}
+              <FolderPlus /> {isNestedNotebook(notebook) ? t("open_notebook") : t("open_page")}
             </MenuItem>
             <MenuItem onSelect={() => router.push(`/home/notes?notebook=${notebook.id}`)}>
-              <FileStack /> Ver todas as notas
+              <FileStack /> {t("all_notes")}
             </MenuItem>
-            <MenuItem onSelect={() => setRenaming(true)}>Renomear</MenuItem>
+            <MenuItem onSelect={() => setRenaming(true)}>{t("rename")}</MenuItem>
             <MenuItem onSelect={onCreateSubnotebook}>
-              <FolderPlus /> {NOTEBOOK_COPY.newChildAction}
+              <FolderPlus /> {t("new_notebook")}
             </MenuItem>
             <MenuItem onSelect={onCreatePage}>
-              <Plus /> Nova nota
+              <Plus /> {t("new_note")}
             </MenuItem>
             <MenuItem onSelect={() => void onDuplicate()}>
-              <Copy /> {duplicateNotebookLabel(notebook)}
+              <Copy /> {isNestedNotebook(notebook) ? t("duplicate_notebook") : t("duplicate_page")}
             </MenuItem>
             <MenuSeparator />
             <MenuItem destructive onSelect={() => void onDelete()}>
-              <Trash2 /> {deleteNotebookLabel(notebook)}
+              <Trash2 /> {isNestedNotebook(notebook) ? t("delete_notebook") : t("delete_page")}
             </MenuItem>
           </MenuContent>
         </Menu>
@@ -1012,7 +1004,7 @@ function NotebookRow({
               {...attributes}
               {...listeners}
               className={GRIP_CLASS}
-              aria-label={`Reordenar ${notebook.name}`}
+              aria-label={`${t("reorder")}: ${notebook.name}`}
             >
               <GripVertical className="size-3.5" />
             </button>
@@ -1058,6 +1050,7 @@ function SortablePageRow({
   onTrash: () => Promise<void>;
 }) {
   const router = useRouter();
+  const { t } = useTranslation();
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useSortable({
     id: encodeId("page", node.page.id),
   });
@@ -1125,7 +1118,7 @@ function SortablePageRow({
         )}
       >
         <SidebarItemIcon icon={node.page.icon} fallback="📄" />
-        <span className="truncate">{node.page.title || "Sem título"}</span>
+        <span className="truncate">{node.page.title || t("untitled")}</span>
       </Link>
       <div className="grid grid-cols-[0fr] transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:grid-cols-[1fr]">
         <div className="flex min-w-0 items-center overflow-hidden">
@@ -1141,17 +1134,17 @@ function SortablePageRow({
             </MenuTrigger>
             <MenuContent align="start">
               <MenuItem onSelect={() => void onCreateChild()}>
-                <Plus /> Nova subpágina
+                <Plus /> {t("new_subpage")}
               </MenuItem>
               <MenuItem onSelect={onToggleFavorite}>
-                <Star /> {node.page.favorite ? "Remover dos favoritos" : "Favoritar"}
+                <Star /> {node.page.favorite ? t("unfavorite") : t("favorite")}
               </MenuItem>
               <MenuItem onSelect={() => void onDuplicate()}>
-                <Copy /> Duplicar nota
+                <Copy /> {t("duplicate_note")}
               </MenuItem>
               <MenuSeparator />
               <MenuItem destructive onSelect={() => void onTrash()}>
-                <Trash2 /> Mover para lixeira
+                <Trash2 /> {t("delete_page")}
               </MenuItem>
             </MenuContent>
           </Menu>

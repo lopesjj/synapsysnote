@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Badge, Checkbox, Progress, Skeleton, Switch } from "@/components/ui/primitives";
 import { cn, formatBytes } from "@/lib/utils";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
+import { useTranslation } from "@/lib/i18n/translations";
 
 type Step = "connect" | "select" | "preview" | "progress";
 
@@ -32,6 +33,7 @@ export function ImportWizard({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const {
     integration,
@@ -77,10 +79,10 @@ export function ImportWizard({
         window.location.href = result.redirectUrl;
         return;
       }
-      toast.success(`Conectado a ${result.connected.workspaceName}`);
+      toast.success(t("connected_to", { name: result.connected.workspaceName }));
       setStepOverride("select");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao conectar ao Notion");
+      toast.error(error instanceof Error ? error.message : t("connection_failed"));
     } finally {
       setConnecting(false);
     }
@@ -103,7 +105,7 @@ export function ImportWizard({
       open={open}
       onOpenChange={(next) => {
         if (!next && job && !finished) {
-          toast.info("A importação continua em segundo plano.");
+          toast.info(t("wizard_continue_background"));
         }
         if (!next && finished) setStepOverride(null);
         onOpenChange(next);
@@ -111,11 +113,11 @@ export function ImportWizard({
       className="max-w-3xl"
     >
       <DialogHeader
-        title="Importar do Notion"
+        title={t("import_from_notion_title")}
         description={
           integration?.connected
-            ? `Conectado à conta Notion “${integration.workspaceName}”. Selecione o que deseja importar.`
-            : "Entre com a sua conta do Notion para listar as suas notas, páginas e bases."
+            ? t("wizard_connected_desc", { name: integration.workspaceName })
+            : t("wizard_unconnected_desc")
         }
       />
 
@@ -172,19 +174,19 @@ export function ImportWizard({
           {step === "select" ? (
             <>
               <StepDot active /> <StepDot /> <StepDot />
-              <span className="ml-1">Passo 1 de 3 · Seleção</span>
+              <span className="ml-1">{t("wizard_step1")}</span>
             </>
           ) : null}
           {step === "preview" ? (
             <>
               <StepDot done /> <StepDot active /> <StepDot />
-              <span className="ml-1">Passo 2 de 3 · Revisão</span>
+              <span className="ml-1">{t("wizard_step2")}</span>
             </>
           ) : null}
           {step === "progress" ? (
             <>
               <StepDot done /> <StepDot done /> <StepDot active />
-              <span className="ml-1">Passo 3 de 3 · Importação</span>
+              <span className="ml-1">{t("wizard_step3")}</span>
             </>
           ) : null}
         </div>
@@ -193,14 +195,14 @@ export function ImportWizard({
           {step === "select" ? (
             <>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>
-                Cancelar
+                {t("wizard_cancel")}
               </Button>
               <Button
                 variant="primary"
                 disabled={!selected.size}
                 onClick={() => setStepOverride("preview")}
               >
-                Revisar {selected.size ? `(${selected.size})` : ""}
+                {t("wizard_review", { count: selected.size ? `(${selected.size})` : "" })}
                 <ArrowRight />
               </Button>
             </>
@@ -209,11 +211,14 @@ export function ImportWizard({
           {step === "preview" ? (
             <>
               <Button variant="ghost" onClick={() => setStepOverride("select")}>
-                <ArrowLeft /> Voltar
+                <ArrowLeft /> {t("wizard_back")}
               </Button>
               <Button variant="primary" disabled={submitting} onClick={handleStart}>
                 {submitting ? <Loader2 className="animate-spin" /> : null}
-                Importar {summary.total} {summary.total === 1 ? "item" : "itens"}
+                {t("wizard_import_action", {
+                  count: summary.total,
+                  unit: summary.total === 1 ? t("wizard_unit_item") : t("wizard_unit_items"),
+                })}
               </Button>
             </>
           ) : null}
@@ -228,7 +233,7 @@ export function ImportWizard({
                     setStepOverride("select");
                   }}
                 >
-                  Nova importação
+                  {t("wizard_new_import")}
                 </Button>
                 <Button
                   variant="primary"
@@ -240,16 +245,16 @@ export function ImportWizard({
                     if (imported?.appId) router.push(`/home/p/${imported.appId}`);
                   }}
                 >
-                  <Check /> Concluir
+                  <Check /> {t("wizard_finish")}
                 </Button>
               </>
             ) : (
               <>
                 <Button variant="ghost" onClick={() => onOpenChange(false)}>
-                  Continuar em segundo plano
+                  {t("wizard_continue_background")}
                 </Button>
                 <Button variant="danger" onClick={() => void cancel()}>
-                  <X /> Cancelar importação
+                  <X /> {t("wizard_cancel_import")}
                 </Button>
               </>
             )
@@ -271,23 +276,22 @@ function StepDot({ active, done }: { active?: boolean; done?: boolean }) {
   );
 }
 
-
 function ConnectStep({ connecting, onConnect }: { connecting: boolean; onConnect: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center justify-center gap-5 px-8 py-14 text-center">
       <div className="space-y-1.5">
-        <h3 className="text-[15px] font-semibold text-ink">Conectar a sua conta do Notion</h3>
+        <h3 className="text-[15px] font-semibold text-ink">{t("wizard_connect_heading")}</h3>
         <p className="mx-auto max-w-md text-[12.5px] leading-relaxed text-muted">
-          O Notion pede o login na página deles. Cada usuário do Synapsys importa as
-          próprias notas - o token fica criptografado só neste workspace.
+          {t("wizard_connect_desc")}
         </p>
       </div>
       <Button variant="primary" size="lg" disabled={connecting} onClick={onConnect}>
         {connecting ? <Loader2 className="animate-spin" /> : null}
-        Entrar com minha conta Notion
+        {t("wizard_login_btn")}
       </Button>
       <p className="text-[11px] text-faint">
-        Na tela do Notion, escolha o seu espaço e as páginas que quer importar.
+        {t("wizard_login_hint")}
       </p>
     </div>
   );
@@ -315,6 +319,7 @@ function SelectStep({
   toggleAll: (checked: boolean) => void;
   existingNotionIds?: Set<string>;
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const total = useMemo(() => {
@@ -367,7 +372,7 @@ function SelectStep({
         <AlertTriangle className="size-6 text-[var(--warning)]" />
         <p className="text-[13px] text-ink">{error}</p>
         <Button variant="secondary" onClick={onRetry}>
-          <RefreshCw /> Tentar novamente
+          <RefreshCw /> {t("wizard_try_again")}
         </Button>
       </div>
     );
@@ -391,7 +396,7 @@ function SelectStep({
                 "flex size-4 items-center justify-center rounded text-faint transition hover:text-ink",
                 !hasChildren && "invisible"
               )}
-              aria-label={open ? "Recolher" : "Expandir"}
+              aria-label={open ? t("collapse_sidebar") : t("expand_sidebar")}
             >
               <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
             </button>
@@ -414,18 +419,24 @@ function SelectStep({
 
             {existingNotionIds?.has(node.id) ? (
               <Badge tone="neutral" className="text-[10.5px] opacity-75">
-                Já no Synapsys
+                {t("wizard_already_in_synapsys")}
               </Badge>
             ) : null}
 
             {node.type === "database" ? (
               hasChildren ? (
-                <Badge tone="accent">{node.children!.length} notas</Badge>
+                <Badge tone="accent">
+                  {node.children!.length} {node.children!.length === 1 ? t("note_singular") : t("notes_plural")}
+                </Badge>
               ) : (
-                <Badge tone="accent">{node.childCount ?? 0} registros</Badge>
+                <Badge tone="accent">
+                  {node.childCount ?? 0} {t("wizard_summary_records").toLowerCase()}
+                </Badge>
               )
             ) : hasChildren ? (
-              <span className="text-[11px] text-faint">{node.children!.length} itens</span>
+              <span className="text-[11px] text-faint">
+                {node.children!.length} {node.children!.length === 1 ? t("wizard_unit_item") : t("wizard_unit_items")}
+              </span>
             ) : null}
           </div>
 
@@ -454,8 +465,8 @@ function SelectStep({
             checked={selectedCount === total && total > 0}
             onCheckedChange={(value) => toggleAll(value === true)}
           />
-          Importar todo o workspace
-          <span className="text-faint">({total} itens)</span>
+          {t("wizard_import_all")}
+          <span className="text-faint">({total} {total === 1 ? t("wizard_unit_item") : t("wizard_unit_items")})</span>
         </label>
         <div className="flex items-center gap-3 text-[11.5px]">
           <div className="flex items-center gap-1.5 text-muted">
@@ -464,7 +475,7 @@ function SelectStep({
               onClick={expandAll}
               className="transition hover:text-ink hover:underline"
             >
-              Expandir tudo
+              {t("wizard_expand_all")}
             </button>
             <span className="text-faint">·</span>
             <button
@@ -472,10 +483,10 @@ function SelectStep({
               onClick={collapseAll}
               className="transition hover:text-ink hover:underline"
             >
-              Recolher tudo
+              {t("wizard_collapse_all")}
             </button>
           </div>
-          <span className="font-medium text-ink">{selectedCount} selecionados</span>
+          <span className="font-medium text-ink">{t("wizard_selected_count", { count: selectedCount })}</span>
         </div>
       </div>
       <div className="max-h-[min(55vh,480px)] min-h-[180px] overflow-y-auto px-2 py-2">{renderNodes(tree)}</div>
@@ -503,47 +514,46 @@ function PreviewStep({
   };
   onChangeOptions: (next: typeof options) => void;
 }) {
+  const { t } = useTranslation();
+
   const toggles = [
     {
       key: "downloadMedia" as const,
-      title: "Rehospedar arquivos no Cloud Storage",
-      description:
-        "As URLs da API do Notion expiram em 1 hora. Cada imagem, vídeo, PDF e áudio é baixado por streaming e re-enviado para o Storage, e o bloco passa a apontar para o link permanente.",
+      title: t("wizard_media_title"),
+      description: t("wizard_media_desc"),
     },
     {
       key: "preserveHierarchy" as const,
-      title: "Preservar hierarquia",
-      description:
-        "Pastas, cadernos e bases com notas viram cadernos automaticamente; notas e aulas entram organizadas dentro dos seus cadernos correspondentes.",
+      title: t("wizard_hierarchy_title"),
+      description: t("wizard_hierarchy_desc"),
     },
     {
       key: "createBacklinks" as const,
-      title: "Reconstruir links internos",
-      description: "Links entre páginas do Notion viram menções com backlinks bidirecionais.",
+      title: t("wizard_backlinks_title"),
+      description: t("wizard_backlinks_desc"),
     },
   ];
 
   return (
     <div className="space-y-5 px-5 py-5">
       <div className="grid grid-cols-3 gap-3">
-        <SummaryCard label="Páginas" value={summary.pages} />
-        <SummaryCard label="Bases" value={summary.databases} />
-        <SummaryCard label="Registros" value={summary.rows} />
+        <SummaryCard label={t("wizard_summary_pages")} value={summary.pages} />
+        <SummaryCard label={t("wizard_summary_databases")} value={summary.databases} />
+        <SummaryCard label={t("wizard_summary_records")} value={summary.rows} />
       </div>
 
       {"existingCount" in summary && (summary as { existingCount: number }).existingCount > 0 ? (
         <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-2)] p-2.5 text-[12px] text-muted">
-          💡 <strong className="text-ink">{(summary as { existingCount: number }).existingCount}</strong> dos itens selecionados já existem no Synapsys Note e serão sincronizados e atualizados sem criar duplicatas.
+          💡 <strong className="text-ink">{(summary as { existingCount: number }).existingCount}</strong> {t("wizard_existing_notice")}
         </div>
       ) : null}
 
       <div className="space-y-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
-          Destino das notas soltas
+          {t("wizard_unfiled_target")}
         </p>
         <p className="text-[11.5px] leading-relaxed text-muted">
-          Pastas, páginas agregadoras e bases com notas viram cadernos automaticamente. Escolha abaixo
-          apenas onde organizar notas avulsas que não possuam caderno pai.
+          {t("wizard_unfiled_target_desc")}
         </p>
         <div className="flex flex-wrap gap-2">
           {notebooks.map((notebook) => (
@@ -572,13 +582,13 @@ function PreviewStep({
                 : "border-[var(--border)] text-muted hover:text-ink"
             )}
           >
-            Sem página
+            {t("wizard_no_parent_page")}
           </button>
         </div>
       </div>
 
       <div className="space-y-2.5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">Conversão</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">{t("wizard_conversion")}</p>
         {toggles.map((item) => (
           <label
             key={item.key}
@@ -609,7 +619,6 @@ function SummaryCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-
 function ProgressStep({
   job,
   progress,
@@ -619,6 +628,8 @@ function ProgressStep({
   progress: number;
   onOpenPage: (appId: string) => void;
 }) {
+  const { t } = useTranslation();
+
   const statusTone: Record<string, "accent" | "success" | "danger" | "warning" | "neutral"> = {
     pending: "neutral",
     discovering: "accent",
@@ -630,12 +641,12 @@ function ProgressStep({
   };
 
   const statusLabel: Record<string, string> = {
-    pending: "Na fila",
-    discovering: "Lendo estrutura",
-    running: "Importando",
-    completed: "Concluída",
-    completed_with_errors: "Concluída com avisos",
-    failed: "Falhou",
+    pending: t("wizard_status_queued"),
+    discovering: t("wizard_status_discovering"),
+    running: t("wizard_status_importing"),
+    completed: t("status_completed"),
+    completed_with_errors: t("status_completed_with_errors"),
+    failed: t("status_failed"),
     canceled: "Cancelada",
   };
 
@@ -663,14 +674,14 @@ function ProgressStep({
 
         <div className="grid grid-cols-3 gap-3 pt-1">
           <Metric
-            label="Páginas"
+            label={t("wizard_summary_pages")}
             value={`${job.processedPages}/${Math.max(job.totalPages, job.processedPages)}`}
           />
           <Metric
-            label="Arquivos"
+            label={t("files_unit")}
             value={`${job.processedFiles}/${Math.max(job.totalFiles, job.processedFiles)}`}
           />
-          <Metric label="Transferido" value={formatBytes(job.totalBytes)} />
+          <Metric label={t("wizard_metric_transferred")} value={formatBytes(job.totalBytes)} />
         </div>
       </div>
 
@@ -693,7 +704,7 @@ function ProgressStep({
             </span>
             <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{item.title}</span>
             {item.fileCount ? (
-              <span className="shrink-0 text-[11px] text-faint">{item.fileCount} arquivos</span>
+              <span className="shrink-0 text-[11px] text-faint">{item.fileCount} {t("files_unit")}</span>
             ) : null}
             {item.status === "done" && item.appId && item.type === "page" ? (
               <button
@@ -701,7 +712,7 @@ function ProgressStep({
                 onClick={() => onOpenPage(item.appId!)}
                 className="shrink-0 text-[11.5px] text-[var(--accent)] hover:underline"
               >
-                abrir
+                {t("wizard_open_imported")}
               </button>
             ) : null}
           </div>
@@ -711,7 +722,7 @@ function ProgressStep({
       {job.errors.length ? (
         <div className="space-y-1.5 rounded-[var(--radius-md)] border border-[color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[color-mix(in_oklab,var(--danger)_8%,transparent)] p-3">
           <p className="text-[12px] font-medium text-[var(--danger)]">
-            {job.errors.length} item(ns) com problema
+            {t("wizard_issues_count", { count: job.errors.length })}
           </p>
           {job.errors.slice(0, 4).map((error) => (
             <p key={`${error.itemId}-${error.at}`} className="text-[11.5px] text-muted">

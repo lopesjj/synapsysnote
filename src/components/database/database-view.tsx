@@ -22,8 +22,10 @@ import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { Button } from "@/components/ui/button";
 import { EmptyState, Tabs, TabsList, TabsTrigger } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n/translations";
 
 export function DatabaseView({ database }: { database: AppDatabase }) {
+  const { t } = useTranslation();
   const { adapter } = useWorkspace();
   const [view, setView] = useState<"table" | "kanban">(database.views[0]?.type === "kanban" ? "kanban" : "table");
 
@@ -35,7 +37,7 @@ export function DatabaseView({ database }: { database: AppDatabase }) {
 
   const addRow = (presetValues: Record<string, unknown> = {}) =>
     adapter.upsertRow(database.id, {
-      values: { [titleProperty.id]: "Novo registro", ...presetValues } as DatabaseRow["values"],
+      values: { [titleProperty.id]: t("db_new_row"), ...presetValues } as DatabaseRow["values"],
       order: database.rows.length,
     });
 
@@ -49,8 +51,8 @@ export function DatabaseView({ database }: { database: AppDatabase }) {
               {database.name}
             </h1>
             <p className="text-[11.5px] text-muted">
-              {database.rows.length} registros · {database.properties.length} propriedades
-              {database.notionDatabaseId ? " · importada do Notion" : ""}
+              {t("db_records_properties", { records: database.rows.length, properties: database.properties.length })}
+              {database.notionDatabaseId ? ` · ${t("db_imported_from_notion")}` : ""}
             </p>
           </div>
         </div>
@@ -58,12 +60,12 @@ export function DatabaseView({ database }: { database: AppDatabase }) {
         <div className="ml-auto flex items-center gap-2">
           <Tabs value={view} onValueChange={(value) => setView(value as "table" | "kanban")}>
             <TabsList>
-              <TabsTrigger value="table">Tabela</TabsTrigger>
-              <TabsTrigger value="kanban">Kanban</TabsTrigger>
+              <TabsTrigger value="table">{t("db_tab_table")}</TabsTrigger>
+              <TabsTrigger value="kanban">{t("db_tab_kanban")}</TabsTrigger>
             </TabsList>
           </Tabs>
           <Button variant="primary" size="sm" onClick={() => addRow()}>
-            Novo
+            {t("db_new_button")}
           </Button>
         </div>
       </div>
@@ -71,11 +73,11 @@ export function DatabaseView({ database }: { database: AppDatabase }) {
       <div className="min-h-0 flex-1 overflow-auto px-5 py-5 md:px-8">
         {!database.rows.length ? (
           <EmptyState
-            title="Nenhum registro ainda"
-            description="Crie o primeiro item ou importe uma base de dados do Notion - propriedades, seleções e datas são convertidas automaticamente."
+            title={t("db_empty_title")}
+            description={t("db_empty_desc")}
             action={
               <Button variant="secondary" onClick={() => addRow()}>
-                Criar registro
+                {t("db_create_record")}
               </Button>
             }
           />
@@ -85,8 +87,8 @@ export function DatabaseView({ database }: { database: AppDatabase }) {
           <KanbanView database={database} groupProperty={groupProperty} titleProperty={titleProperty} onAddRow={addRow} />
         ) : (
           <EmptyState
-            title="Sem propriedade de agrupamento"
-            description="Adicione uma propriedade do tipo seleção para usar a visualização Kanban."
+            title={t("db_no_group_prop_title")}
+            description={t("db_no_group_prop_desc")}
           />
         )}
       </div>
@@ -104,6 +106,7 @@ function TableView({
   titleProperty: PropertyDef;
   onAddRow: () => void;
 }) {
+  const { t } = useTranslation();
   const { adapter } = useWorkspace();
   const properties = useMemo(
     () => [...database.properties].filter((p) => !p.hidden).sort((a, b) => a.order - b.order),
@@ -161,7 +164,7 @@ function TableView({
                 onClick={onAddRow}
                 className="flex w-full items-center gap-2 px-3 py-2 text-[12.5px] text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink"
               >
-                <Plus className="size-3.5" /> Novo registro
+                <Plus className="size-3.5" /> {t("db_new_row")}
               </button>
             </td>
           </tr>

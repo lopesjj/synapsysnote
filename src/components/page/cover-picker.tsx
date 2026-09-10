@@ -5,6 +5,7 @@ import { ImageOff, ImagePlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { COVER_PRESETS, coverPresetById } from "@/lib/covers/presets";
 import { Menu, MenuContent, MenuTrigger } from "@/components/ui/menu";
+import { useTranslation } from "@/lib/i18n/translations";
 import { cn } from "@/lib/utils";
 
 export function CoverPicker({
@@ -16,6 +17,7 @@ export function CoverPicker({
   onChange: (coverUrl: string | null) => void;
   onUploadImage?: (file: File) => Promise<string>;
 }) {
+  const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const preset = coverPresetById(coverUrl);
@@ -42,11 +44,11 @@ export function CoverPicker({
       <div className="grid max-h-64 grid-cols-4 gap-1 overflow-y-auto pr-0.5">
         <button
           type="button"
-          title="Sem capa"
+          title={t("no_cover")}
           onClick={() => onChange(null)}
           className="flex h-11 items-center justify-center rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--surface-2)] text-[10px] text-faint"
         >
-          Nenhuma
+          {t("no_cover")}
         </button>
         {COVER_PRESETS.map((item) => (
           <button
@@ -72,7 +74,7 @@ export function CoverPicker({
           className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-dashed border-[var(--border-strong)] px-2 py-1.5 text-[11.5px] text-muted transition hover:border-[var(--accent)] hover:text-ink disabled:opacity-60"
         >
           {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImagePlus className="size-3.5" />}
-          {uploading ? "Enviando…" : "Enviar imagem"}
+          {uploading ? t("uploading") : t("upload_image")}
         </button>
       ) : null}
     </div>
@@ -103,7 +105,7 @@ export function CoverPicker({
                 type="button"
                 className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1 text-[12px] text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink"
               >
-                <ImagePlus className="size-3.5" /> Adicionar capa
+                <ImagePlus className="size-3.5" /> {t("add_cover")}
               </button>
             </MenuTrigger>
             <MenuContent align="end" className="min-w-0 p-0">
@@ -127,7 +129,7 @@ export function CoverPicker({
                   type="button"
                   className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/55 px-2.5 py-1 text-[11.5px] font-medium text-white shadow-sm backdrop-blur-md transition hover:bg-black/75 active:scale-95"
                 >
-                  <ImagePlus className="size-3" /> Trocar capa
+                  <ImagePlus className="size-3" /> {t("change_cover")}
                 </button>
               </MenuTrigger>
               <MenuContent align="end" className="min-w-0 p-0">
@@ -139,7 +141,7 @@ export function CoverPicker({
               onClick={() => onChange(null)}
               className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/55 px-2.5 py-1 text-[11.5px] font-medium text-white shadow-sm backdrop-blur-md transition hover:bg-black/75 active:scale-95"
             >
-              <ImageOff className="size-3" /> Remover capa
+              <ImageOff className="size-3" /> {t("remove_cover")}
             </button>
           </div>
         </div>

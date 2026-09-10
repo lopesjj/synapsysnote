@@ -28,21 +28,13 @@ import { toast } from "sonner";
 import { useUiStore } from "@/lib/store/ui-store";
 import { useWorkspace } from "@/lib/data/provider";
 import { childrenOf, isNotebookDescendant, notebookSubtreeIds, parentIdOf } from "@/lib/data/notebook-tree";
-import {
-  NOTEBOOK_COPY,
-  childNotebookCountLabel,
-  deleteNotebookConfirm,
-  deleteNotebookLabel,
-  duplicateNotebookLabel,
-  emptyNotebookTitle,
-  iconNotebookLabel,
-  notebookNamePlaceholder,
-} from "@/lib/data/notebook-copy";
+
 import { Button } from "@/components/ui/button";
 import { EmptyState, Tooltip } from "@/components/ui/primitives";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { WorkspaceCrumbs } from "./workspace-crumbs";
 import { cn, compareNatural, formatRelative } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n/translations";
 import type { Notebook, Page } from "@/types/models";
 import { NOTEBOOK_ICONS } from "@/lib/icons/catalog";
 import {
@@ -84,6 +76,7 @@ function moveItem<T>(items: T[], from: number, to: number): T[] {
 
 export function NotebookView({ notebookId }: { notebookId: string }) {
   const router = useRouter();
+  const { t, language } = useTranslation();
   const { adapter, notebooks, livePages, databases, treeFor, ready } = useWorkspace();
   const notebook = notebooks.find((candidate) => candidate.id === notebookId);
 
@@ -257,9 +250,9 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
       if (!note || !target) return;
       try {
         await adapter.movePage(note.id, { notebookId: target.id, parentPageId: null });
-        toast.success(`Nota “${note.title || "Sem título"}” movida para o caderno “${target.name}”`);
+        toast.success(t("note_moved_to_notebook"));
       } catch {
-        toast.error("Não foi possível mover a nota para o caderno.");
+        toast.error(t("cannot_move_note"));
       }
       return;
     }
@@ -281,9 +274,9 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
         await adapter.applyPageOrders(
           reordered.map((p, index) => ({ id: p.id, order: index * 100 }))
         );
-        toast.success("Ordem das notas atualizada");
+        toast.success(t("notes_order_updated"));
       } catch {
-        toast.error("Não foi possível reordenar as notas.");
+        toast.error(t("notes_order_failed"));
       }
       return;
     }
@@ -295,14 +288,14 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
 
       if (targetState.mode === "inside") {
         if (isNotebookDescendant(notebooks, target.id, dragged.id)) {
-          toast.error("Não é possível mover um caderno para dentro de seus subcadernos.");
+          toast.error(t("cannot_move_into_sub"));
           return;
         }
         try {
           await adapter.moveNotebook(dragged.id, { parentId: target.id });
-          toast.success(`Caderno “${dragged.name}” inserido dentro de “${target.name}”`);
+          toast.success(t("notebook_moved_inside"));
         } catch {
-          toast.error("Não foi possível mover o caderno.");
+          toast.error(t("cannot_move_notebook"));
         }
         return;
       }
@@ -323,9 +316,9 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
         await adapter.applyNotebookOrders(
           reordered.map((n, index) => ({ id: n.id, order: index * 100 }))
         );
-        toast.success("Ordem dos cadernos atualizada");
+        toast.success(t("notebook_order_updated"));
       } catch {
-        toast.error("Não foi possível reordenar os cadernos.");
+        toast.error(t("notebook_order_failed"));
       }
       return;
     }
@@ -343,10 +336,10 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
   if (!notebook) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-        <p className="text-sm font-medium text-ink">{NOTEBOOK_COPY.missing}</p>
-        <p className="max-w-xs text-[12.5px] text-muted">{NOTEBOOK_COPY.missingHint}</p>
+        <p className="text-sm font-medium text-ink">{t("page_not_found")}</p>
+        <p className="max-w-xs text-[12.5px] text-muted">{t("page_not_found_hint")}</p>
         <Button variant="secondary" onClick={() => router.push("/home")}>
-          Voltar ao início
+          {t("back_to_home")}
         </Button>
       </div>
     );
@@ -354,15 +347,15 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
 
   const createSubnotebook = async () => {
     const created = await adapter.createNotebook({
-      name: NOTEBOOK_COPY.newChildName,
+      name: t("new_notebook"),
       parentId: notebookId,
     });
-    toast.success(NOTEBOOK_COPY.createdChild);
+    toast.success(t("notebook_created"));
     router.push(`/home/n/${created.id}`);
   };
 
   const createNote = async () => {
-    const page = await adapter.createPage({ notebookId, title: "Sem título" });
+    const page = await adapter.createPage({ notebookId, title: t("untitled") });
     useUiStore.getState().closeMenu();
     router.push(`/home/p/${page.id}`);
   };
@@ -392,25 +385,25 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
 
         <Menu>
           <MenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="Mais ações">
+            <Button variant="ghost" size="icon-sm" aria-label={t("more_actions")}>
               <MoreHorizontal />
             </Button>
           </MenuTrigger>
           <MenuContent align="end">
             <MenuItem onSelect={() => void createSubnotebook()}>
-              <FolderPlus /> {NOTEBOOK_COPY.newChildAction}
+              <FolderPlus /> {t("new_notebook")}
             </MenuItem>
             <MenuItem onSelect={() => void createNote()}>
-              <FilePlus /> Nova nota
+              <FilePlus /> {t("new_note")}
             </MenuItem>
             {hasCover ? (
               <MenuItem
                 onSelect={async () => {
                   await adapter.updateNotebook(notebookId, { coverUrl: null });
-                  toast.success("Capa removida");
+                  toast.success(t("remove_cover"));
                 }}
               >
-                <ImageOff /> Remover capa
+                <ImageOff /> {t("remove_cover")}
               </MenuItem>
             ) : null}
             <MenuItem
@@ -418,28 +411,29 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                 try {
                   const copy = await adapter.duplicateNotebook(notebookId);
                   toast.success(
-                    parentIdOf(notebook) ? NOTEBOOK_COPY.duplicatedChild : NOTEBOOK_COPY.duplicatedRoot
+                    parentIdOf(notebook) ? t("notebook_duplicated") : t("page_duplicated")
                   );
                   router.push(`/home/n/${copy.id}`);
                 } catch {
-                  toast.error("Não foi possível duplicar.");
+                  toast.error(t("could_not_duplicate"));
                 }
               }}
             >
-              <Copy /> {duplicateNotebookLabel(notebook)}
+              <Copy /> {parentIdOf(notebook) ? t("duplicate_notebook") : t("duplicate_page")}
             </MenuItem>
             <MenuSeparator />
             <MenuItem
               destructive
               onSelect={async () => {
-                if (!window.confirm(deleteNotebookConfirm(notebook))) return;
+                const name = notebook.name?.trim() || (parentIdOf(notebook) ? t("notebook_count_singular") : t("new_page"));
+                if (!window.confirm(t("delete_notebook_confirm", { name }))) return;
                 const parent = parentIdOf(notebook);
                 await adapter.deleteNotebook(notebookId);
-                toast.success(parent ? NOTEBOOK_COPY.removedChild : NOTEBOOK_COPY.removedRoot);
+                toast.success(parent ? t("notebook_deleted") : t("page_deleted"));
                 router.push(parent ? `/home/n/${parent}` : "/home");
               }}
             >
-              <Trash2 /> {deleteNotebookLabel(notebook)}
+              <Trash2 /> {parentIdOf(notebook) ? t("delete_notebook") : t("delete_page")}
             </MenuItem>
           </MenuContent>
         </Menu>
@@ -483,7 +477,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                   isIconUrl(notebook.emoji ?? "") ? "rounded-[22px] sm:rounded-[28px]" : "rounded-[10px]",
                   !hasCover && "hover:bg-[var(--surface-hover)]"
                 )}
-                aria-label={iconNotebookLabel(notebook)}
+                aria-label={t("change_icon")}
               >
                 <WorkspaceIcon
                   icon={notebook.emoji}
@@ -506,7 +500,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
               value={title}
               rows={1}
               cols={1}
-              placeholder={notebookNamePlaceholder(notebook)}
+              placeholder={parentIdOf(notebook) ? t("notebook_name_placeholder") : t("page_name_placeholder")}
               ref={(el) => {
                 if (!el) return;
                 el.style.height = "auto";
@@ -525,23 +519,23 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
         <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-faint sm:mt-2 sm:justify-start sm:gap-2 sm:text-[11px]">
           <div className="flex items-center gap-2">
             <span>
-              {childNotebooks.length} {childNotebookCountLabel(childNotebooks.length)}
+              {childNotebooks.length} {childNotebooks.length === 1 ? t("notebook_count_singular") : t("notebook_count_plural")}
             </span>
             <span>·</span>
             <span>
-              {notes.length} {notes.length === 1 ? "nota" : "notas"}
+              {notes.length} {notes.length === 1 ? t("note_singular") : t("notes_plural")}
             </span>
           </div>
-          <span className="sm:ml-auto">Atualizado {formatRelative(notebook.updatedAt)}</span>
+          <span className="sm:ml-auto">{t("updated_time", { time: formatRelative(notebook.updatedAt, language) })}</span>
         </div>
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => void createSubnotebook()}>
-              <FolderPlus /> {NOTEBOOK_COPY.newChildAction}
+              <FolderPlus /> {t("new_notebook")}
             </Button>
             <Button variant="secondary" onClick={() => void createNote()}>
-              <FilePlus /> Nova nota
+              <FilePlus /> {t("new_note")}
             </Button>
           </div>
 
@@ -552,7 +546,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Pesquisar neste caderno..."
+                placeholder={t("search_in_notebook")}
                 className="h-8 w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] pl-8 pr-7 text-[12.5px] text-ink placeholder:text-faint transition focus:border-[var(--accent)] focus:bg-[var(--surface)] focus:outline-none"
               />
               {searchQuery ? (
@@ -560,7 +554,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                   type="button"
                   onClick={() => setSearchQuery("")}
                   className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-faint hover:text-ink"
-                  aria-label="Limpar pesquisa"
+                  aria-label={t("clear_search")}
                 >
                   <X className="size-3" />
                 </button>
@@ -572,15 +566,15 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
         {empty ? (
           <div className="mt-8">
             <EmptyState
-              title={emptyNotebookTitle(notebook)}
-              description={NOTEBOOK_COPY.emptyDescription}
+              title={parentIdOf(notebook) ? t("this_notebook_is_empty") : t("this_page_is_empty")}
+              description={t("empty_notebook_desc")}
               action={
                 <div className="flex flex-wrap justify-center gap-2">
                   <Button variant="secondary" onClick={() => void createSubnotebook()}>
-                    <FolderPlus /> {NOTEBOOK_COPY.newChildAction}
+                    <FolderPlus /> {t("new_notebook")}
                   </Button>
                   <Button variant="primary" onClick={() => void createNote()}>
-                    <FilePlus /> Nova nota
+                    <FilePlus /> {t("new_note")}
                   </Button>
                 </div>
               }
@@ -589,7 +583,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
         ) : searchQuery && !filteredChildNotebooks.length && !filteredNotes.length ? (
           <div className="mt-8 rounded-[var(--radius-lg)] border border-dashed border-[var(--border)] p-8 text-center">
             <p className="text-[13px] text-muted">
-              Nenhuma nota ou subcaderno encontrado para “{searchQuery}” neste caderno.
+              {t("no_items_match_in_notebook")}
             </p>
             <Button
               variant="ghost"
@@ -597,7 +591,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
               className="mt-3 text-xs"
               onClick={() => setSearchQuery("")}
             >
-              Limpar pesquisa
+              {t("clear_search")}
             </Button>
           </div>
         ) : (
@@ -614,15 +608,15 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                 <section>
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
-                      {NOTEBOOK_COPY.childrenHeading}
+                      {t("notebooks")}
                     </h2>
                     {!searchQuery ? (
                       <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
                         <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-0.5 font-medium text-muted shadow-2xs">
-                          <span>↕</span> Bordas: <strong>Reordenar</strong>
+                          <span>↕</span> {t("dnd_borders_reorder")}
                         </span>
                         <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-2.5 py-0.5 font-semibold text-[var(--accent)] shadow-2xs">
-                          <FolderPlus className="size-3.5" /> Centro: <strong>Mover para dentro</strong>
+                          <FolderPlus className="size-3.5" /> {t("dnd_center_move")}
                         </span>
                       </div>
                     ) : null}
@@ -650,13 +644,13 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                 <section>
                   <div className="mb-2 flex items-center justify-between">
                     <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
-                      Notas
+                      {t("notes_plural")}
                     </h2>
                     {!searchQuery && (notes.length > 1 || childNotebooks.length > 0) ? (
                       <span className="text-[10.5px] text-faint">
                         {childNotebooks.length > 0
-                          ? "Arraste para reordenar ou solte em um caderno acima para mover"
-                          : "Arraste para reordenar notas"}
+                          ? t("dnd_drag_reorder_or_move")
+                          : t("dnd_drag_reorder")}
                       </span>
                     ) : null}
                   </div>
@@ -684,7 +678,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                             <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">
                               {database.name}
                             </span>
-                            <span className="text-[11px] text-faint">Base</span>
+                            <span className="text-[11px] text-faint">{t("database_badge")}</span>
                           </Link>
                         ))}
                     </div>
@@ -699,16 +693,16 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                   <GripVertical className="size-4 text-[var(--accent)]" />
                   <WorkspaceIcon icon={activeNote.icon} fallback="📄" variant="list" />
                   <span className="truncate text-[13.5px] font-semibold text-ink">
-                    {activeNote.title || "Sem título"}
+                    {activeNote.title || t("untitled")}
                   </span>
                   {dropTarget?.kind === "notebook" ? (
                     <span className="ml-auto flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3 py-1 text-[11.5px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
                       <FolderPlus className="size-3.5" />
-                      Mover para o caderno
+                      {t("move_inside")}
                     </span>
                   ) : (
                     <span className="ml-auto text-[11px] font-medium text-faint">
-                      {childNotebooks.length > 0 ? "Solte em um caderno ou reordene" : "Reordenar"}
+                      {childNotebooks.length > 0 ? t("dnd_drag_reorder_or_move") : t("reorder")}
                     </span>
                   )}
                 </div>
@@ -724,19 +718,19 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                   {dropTarget?.mode === "inside" ? (
                     <span className="ml-auto flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3 py-1 text-[11.5px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
                       <FolderPlus className="size-3.5" />
-                      Soltar para inserir DENTRO
+                      {t("dnd_drop_to_insert")}
                     </span>
                   ) : dropTarget?.mode === "before" ? (
                     <span className="ml-auto flex items-center gap-1 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-3 py-1 text-[11px] font-bold shadow-md animate-in fade-in duration-100">
-                      <span>↕</span> Reordenar acima
+                      <span>↕</span> {t("dnd_reorder_above")}
                     </span>
                   ) : dropTarget?.mode === "after" ? (
                     <span className="ml-auto flex items-center gap-1 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-3 py-1 text-[11px] font-bold shadow-md animate-in fade-in duration-100">
-                      <span>↕</span> Reordenar abaixo
+                      <span>↕</span> {t("dnd_reorder_below")}
                     </span>
                   ) : (
                     <span className="ml-auto text-[11px] font-medium text-faint">
-                      Arraste para uma posição
+                      {t("dnd_drag_to_position")}
                     </span>
                   )}
                 </div>
@@ -761,6 +755,7 @@ function NotebookRow({
   isNoteDragging?: boolean;
 }) {
   const router = useRouter();
+  const { t, language } = useTranslation();
   const { adapter, livePages, notebooks } = useWorkspace();
   const {
     attributes,
@@ -781,19 +776,20 @@ function NotebookRow({
     event.stopPropagation();
     try {
       const copy = await adapter.duplicateNotebook(notebook.id);
-      toast.success(NOTEBOOK_COPY.duplicatedChild);
+      toast.success(t("notebook_duplicated"));
       router.push(`/home/n/${copy.id}`);
     } catch {
-      toast.error("Não foi possível duplicar.");
+      toast.error(t("could_not_duplicate"));
     }
   };
 
   const remove = async (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!window.confirm(deleteNotebookConfirm(notebook))) return;
+    const name = notebook.name?.trim() || t("notebook_count_singular");
+    if (!window.confirm(t("delete_notebook_confirm", { name }))) return;
     await adapter.deleteNotebook(notebook.id);
-    toast.success(NOTEBOOK_COPY.removedChild);
+    toast.success(t("notebook_deleted"));
   };
 
   return (
@@ -810,7 +806,7 @@ function NotebookRow({
         <div className="pointer-events-none absolute inset-x-0 -top-1.5 z-30 flex items-center">
           <div className="h-1 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_10px_var(--accent)]" />
           <span className="absolute left-6 -top-3.5 flex items-center gap-1.5 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-3 py-0.5 text-[11px] font-bold shadow-md animate-in fade-in duration-100">
-            <span>↕</span> Reordenar ACIMA de “{notebook.name}”
+            <span>↕</span> {t("dnd_reorder_above")} “{notebook.name}”
           </span>
         </div>
       )}
@@ -819,7 +815,7 @@ function NotebookRow({
         <div className="pointer-events-none absolute inset-x-0 -bottom-1.5 z-30 flex items-center">
           <div className="h-1 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_10px_var(--accent)]" />
           <span className="absolute left-6 -bottom-3.5 flex items-center gap-1.5 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-3 py-0.5 text-[11px] font-bold shadow-md animate-in fade-in duration-100">
-            <span>↕</span> Reordenar ABAIXO de “{notebook.name}”
+            <span>↕</span> {t("dnd_reorder_below")} “{notebook.name}”
           </span>
         </div>
       )}
@@ -828,7 +824,7 @@ function NotebookRow({
         <div className="pointer-events-none absolute inset-y-1.5 right-3 z-30 flex items-center">
           <span className="flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3.5 py-1.5 text-[12px] font-bold text-white shadow-xl ring-2 ring-white/30 animate-in fade-in zoom-in-95 duration-100">
             <FolderPlus className="size-4" />
-            <span>Mover nota para cá</span>
+            <span>{t("dnd_move_note_here")}</span>
           </span>
         </div>
       )}
@@ -837,7 +833,7 @@ function NotebookRow({
         <div className="pointer-events-none absolute inset-y-1.5 right-3 z-30 flex items-center">
           <span className="flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3.5 py-1.5 text-[12px] font-bold text-white shadow-xl ring-2 ring-white/30 animate-in fade-in zoom-in-95 duration-100">
             <FolderPlus className="size-4" />
-            <span>Soltar para inserir DENTRO</span>
+            <span>{t("dnd_drop_to_insert")}</span>
           </span>
         </div>
       )}
@@ -847,7 +843,7 @@ function NotebookRow({
         ref={setActivatorNodeRef}
         {...attributes}
         {...listeners}
-        aria-label={`Arrastar para reordenar ou mover ${notebook.name}`}
+        aria-label={`${t("dnd_drag_reorder_or_move")}: ${notebook.name}`}
         className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-faint opacity-40 transition hover:bg-[var(--surface-hover)] hover:text-ink hover:opacity-100 active:cursor-grabbing group-hover:opacity-80"
         onClick={(e) => e.stopPropagation()}
       >
@@ -864,30 +860,30 @@ function NotebookRow({
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13.5px] font-medium text-ink">{notebook.name}</span>
           <span className="mt-0.5 block text-[11.5px] text-muted">
-            {nested ? `${nested} ${childNotebookCountLabel(nested)} · ` : null}
-            {noteCount} {noteCount === 1 ? "nota" : "notas"}
+            {nested ? `${nested} ${nested === 1 ? t("notebook_count_singular") : t("notebook_count_plural")} · ` : null}
+            {noteCount} {noteCount === 1 ? t("note_singular") : t("notes_plural")}
           </span>
         </span>
         <span className="hidden shrink-0 text-[11.5px] text-faint sm:block">
-          {formatRelative(notebook.updatedAt)}
+          {formatRelative(notebook.updatedAt, language)}
         </span>
       </Link>
-      <Tooltip label={duplicateNotebookLabel(notebook)}>
+      <Tooltip label={t("duplicate_notebook")}>
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={duplicateNotebookLabel(notebook)}
+          aria-label={t("duplicate_notebook")}
           className="shrink-0 text-faint opacity-70 hover:text-ink group-hover:opacity-100"
           onClick={(event) => void duplicate(event)}
         >
           <Copy />
         </Button>
       </Tooltip>
-      <Tooltip label={deleteNotebookLabel(notebook)}>
+      <Tooltip label={t("delete_notebook")}>
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={deleteNotebookLabel(notebook)}
+          aria-label={t("delete_notebook")}
           className="shrink-0 text-faint opacity-70 hover:text-[var(--danger)] group-hover:opacity-100"
           onClick={(event) => void remove(event)}
         >
@@ -908,6 +904,7 @@ function NoteRow({
   dropMode?: DropMode;
 }) {
   const router = useRouter();
+  const { t, language } = useTranslation();
   const { adapter } = useWorkspace();
   const {
     attributes,
@@ -922,20 +919,20 @@ function NoteRow({
     event.stopPropagation();
     try {
       const copy = await adapter.duplicatePage(page.id);
-      toast.success("Nota duplicada");
+      toast.success(t("note_duplicated"));
       useUiStore.getState().closeMenu();
       router.push(`/home/p/${copy.id}`);
     } catch {
-      toast.error("Não foi possível duplicar a nota.");
+      toast.error(t("could_not_duplicate"));
     }
   };
 
   const remove = async (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!window.confirm(`Mover "${page.title || "Sem título"}" para a lixeira?`)) return;
+    if (!window.confirm(`${t("delete_page")} “${page.title || t("untitled")}”?`)) return;
     await adapter.trashPage(page.id);
-    toast.success("Movida para a lixeira");
+    toast.success(t("moved_to_trash"));
   };
 
   return (
@@ -974,7 +971,7 @@ function NoteRow({
         ref={setActivatorNodeRef}
         {...attributes}
         {...listeners}
-        aria-label={`Arrastar para reordenar ${page.title || "Sem título"}`}
+        aria-label={`${t("dnd_drag_reorder")}: ${page.title || t("untitled")}`}
         className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-faint opacity-40 transition hover:bg-[var(--surface-hover)] hover:text-ink hover:opacity-100 active:cursor-grabbing group-hover:opacity-80"
         onClick={(e) => e.stopPropagation()}
       >
@@ -990,28 +987,28 @@ function NoteRow({
       >
         <WorkspaceIcon icon={page.icon} fallback="📄" variant="list" />
         <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">
-          {page.title || "Sem título"}
+          {page.title || t("untitled")}
         </span>
         <span className="hidden shrink-0 text-[11.5px] text-faint sm:block">
-          {formatRelative(page.updatedAt)}
+          {formatRelative(page.updatedAt, language)}
         </span>
       </Link>
-      <Tooltip label="Duplicar nota">
+      <Tooltip label={t("duplicate_note")}>
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="Duplicar nota"
+          aria-label={t("duplicate_note")}
           className="shrink-0 text-faint opacity-70 hover:text-ink group-hover:opacity-100"
           onClick={(event) => void duplicate(event)}
         >
           <Copy />
         </Button>
       </Tooltip>
-      <Tooltip label="Mover para a lixeira">
+      <Tooltip label={t("delete_page")}>
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="Mover para a lixeira"
+          aria-label={t("delete_page")}
           className="shrink-0 text-faint opacity-70 hover:text-[var(--danger)] group-hover:opacity-100"
           onClick={(event) => void remove(event)}
         >

@@ -36,6 +36,7 @@ import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/compo
 import { WorkspaceCrumbs } from "./workspace-crumbs";
 import { cn, formatRelative } from "@/lib/utils";
 import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
+import { useTranslation } from "@/lib/i18n/translations";
 
 import { PAGE_ICONS } from "@/lib/icons/catalog";
 import {
@@ -50,6 +51,7 @@ import { pendingAudioPaths } from "@/lib/data/media-enrichment";
 
 export function PageView({ pageId }: { pageId: string }) {
   const router = useRouter();
+  const { t, language } = useTranslation();
   const { adapter, pages, livePages, notebooks, pageById, ready } = useWorkspace();
   const page = pageById(pageId);
 
@@ -61,14 +63,17 @@ export function PageView({ pageId }: { pageId: string }) {
   const [versions, setVersions] = useState<PageVersion[]>([]);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [editorKey, setEditorKey] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const editorInsertFilesRef = useRef<((files: File[]) => Promise<void>) | null>(null);
   const scannedPendingAudio = useRef<string | null>(null);
+  const latestPageRef = useRef<Page | null>(null);
+  const hasEditedRef = useRef(false);
 
   const zenMode = useUiStore((state) => state.zenMode);
   const showSaveIndicator = useUiStore((state) => state.showSaveIndicator);
 
-  const { schedule, status, lastSavedAt } = useDebounceAutoSave<Partial<Page>>({
+  const { schedule, flush, status, lastSavedAt } = useDebounceAutoSave<Partial<Page>>({
     resetKey: pageId,
     delay: 900,
     maxWait: 6000,
@@ -81,6 +86,14 @@ export function PageView({ pageId }: { pageId: string }) {
         { id: "page-save-error" }
       ),
   });
+
+  useEffect(() => {
+    if (page) {
+      latestPageRef.current = page;
+    }
+  }, [page]);
+
+
 
   useEffect(() => {
     if (!page) return;
@@ -125,12 +138,12 @@ export function PageView({ pageId }: { pageId: string }) {
   if (!page) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-        <p className="text-sm font-medium text-ink">Esta página não existe mais</p>
+        <p className="text-sm font-medium text-ink">{t("page_not_found")}</p>
         <p className="max-w-xs text-[12.5px] text-muted">
-          Ela pode ter sido excluída ou movida para a lixeira.
+          {t("page_not_found_hint")}
         </p>
         <Button variant="secondary" onClick={() => router.push("/home")}>
-          Voltar ao início
+          {t("back_to_home")}
         </Button>
       </div>
     );
@@ -145,6 +158,14 @@ export function PageView({ pageId }: { pageId: string }) {
     blocks: AppBlock[];
     outgoingLinks: string[];
   }) => {
+    hasEditedRef.current = true;
+    if (latestPageRef.current) {
+      latestPageRef.current = {
+        ...latestPageRef.current,
+        blocks,
+        outgoingLinks,
+      };
+    }
     schedule({ blocks, outgoingLinks });
   };
 
@@ -234,13 +255,13 @@ export function PageView({ pageId }: { pageId: string }) {
           />
         ) : null}
 
-        <Tooltip label={page.favorite ? "Remover dos favoritos" : "Favoritar"}>
+        <Tooltip label={page.favorite ? t("unfavorite") : t("favorite")}>
           <Button
             variant="ghost"
             size="icon-sm"
             className={hasCover ? "text-white hover:bg-white/15 hover:text-white" : undefined}
             onClick={() => adapter.updatePage(pageId, { favorite: !page.favorite })}
-            aria-label="Favoritar"
+            aria-label={t("favorite")}
           >
             <Star className={cn(page.favorite && "fill-[var(--warning)] text-[var(--warning)]")} />
           </Button>
@@ -252,17 +273,17 @@ export function PageView({ pageId }: { pageId: string }) {
               variant="ghost"
               size="icon-sm"
               className={hasCover ? "text-white hover:bg-white/15 hover:text-white" : undefined}
-              aria-label="Mais ações"
+              aria-label={t("more_actions")}
             >
               <MoreHorizontal />
             </Button>
           </MenuTrigger>
           <MenuContent align="end">
             <MenuItem onSelect={() => fileInput.current?.click()}>
-              <Paperclip /> Anexar arquivo
+              <Paperclip /> {t("attach_file")}
             </MenuItem>
             <MenuItem onSelect={() => setAudioOpen(true)}>
-              <AudioLines /> Gravar nota de voz
+              <AudioLines /> {t("record_audio")}
             </MenuItem>
             {hasCover ? (
               <MenuItem
@@ -271,7 +292,7 @@ export function PageView({ pageId }: { pageId: string }) {
                   toast.success("Capa removida");
                 }}
               >
-                <ImageOff /> Remover capa
+                <ImageOff /> {t("remove_cover")}
               </MenuItem>
             ) : null}
             <MenuSeparator />
@@ -281,7 +302,7 @@ export function PageView({ pageId }: { pageId: string }) {
                 toast.success("Versão salva no histórico");
               }}
             >
-              <Clock /> Salvar versão
+              <Clock /> {t("save_version")}
             </MenuItem>
             <MenuItem
               onSelect={async () => {
@@ -289,38 +310,38 @@ export function PageView({ pageId }: { pageId: string }) {
                 setVersionsOpen(true);
               }}
             >
-              <History /> Histórico de versões
+              <History /> {t("history_versions")}
             </MenuItem>
             <MenuItem
               onSelect={async () => {
                 try {
                   const copy = await adapter.duplicatePage(pageId);
-                  toast.success("Nota duplicada");
+                  toast.success(t("note_duplicated"));
                   useUiStore.getState().closeMenu();
                   router.push(`/home/p/${copy.id}`);
                 } catch {
-                  toast.error("Não foi possível duplicar a nota.");
+                  toast.error(t("could_not_duplicate"));
                 }
               }}
             >
-              <Copy /> Duplicar nota
+              <Copy /> {t("duplicate_note")}
             </MenuItem>
             <MenuItem
               disabled={exportingPdf}
               onSelect={() => void handleExportPdf()}
             >
-              <FileDown /> Exportar para PDF
+              <FileDown /> {t("export_pdf")}
             </MenuItem>
             <MenuSeparator />
             <MenuItem
               destructive
               onSelect={async () => {
                 await adapter.trashPage(pageId);
-                toast.success("Página movida para a lixeira");
+                toast.success(t("moved_to_trash"));
                 router.push("/home");
               }}
             >
-              <Trash2 /> Mover para lixeira
+              <Trash2 /> {t("delete_page")}
             </MenuItem>
           </MenuContent>
         </Menu>
@@ -389,15 +410,20 @@ export function PageView({ pageId }: { pageId: string }) {
               value={title}
               rows={1}
               cols={1}
-              placeholder="Sem título"
+              placeholder={t("untitled")}
               ref={(el) => {
                 if (!el) return;
                 el.style.height = "auto";
                 el.style.height = `${el.scrollHeight}px`;
               }}
               onChange={(event) => {
-                setTitleDraft({ id: pageId, value: event.target.value });
-                schedule({ title: event.target.value });
+                hasEditedRef.current = true;
+                const val = event.target.value;
+                setTitleDraft({ id: pageId, value: val });
+                if (latestPageRef.current) {
+                  latestPageRef.current = { ...latestPageRef.current, title: val };
+                }
+                schedule({ title: val });
               }}
               style={{ fontFamily: "var(--font-editor, var(--font-sans))" }}
               className="w-full min-w-0 resize-none overflow-hidden border-none bg-transparent py-0 text-[26px] font-bold leading-[1.2] tracking-[-0.025em] text-ink outline-none placeholder:text-faint [scrollbar-width:none] [-ms-overflow-style:none] sm:text-[34px] sm:font-semibold sm:leading-[1.15] [&::-webkit-scrollbar]:hidden"
@@ -428,7 +454,7 @@ export function PageView({ pageId }: { pageId: string }) {
             <Input
               autoFocus
               value={tagDraft}
-              placeholder="nome da tag"
+              placeholder={t("tag_name_placeholder")}
               onChange={(event) => setTagDraft(event.target.value)}
               onBlur={addTag}
               onKeyDown={(event) => {
@@ -442,22 +468,23 @@ export function PageView({ pageId }: { pageId: string }) {
               onClick={() => setShowTagInput(true)}
               className="rounded-full border border-dashed border-[var(--border)] px-2 py-0.5 text-[11px] text-faint transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
             >
-              + tag
+              {t("add_tag")}
             </button>
           )}
           {page.notionPageId ? (
-            <Badge tone="accent">importada do Notion</Badge>
+            <Badge tone="accent">{t("imported_from_notion")}</Badge>
           ) : page.importSource === "notion-zip" ? (
-            <Badge tone="accent">importada de um .zip do Notion</Badge>
+            <Badge tone="accent">{t("imported_from_notion_zip")}</Badge>
           ) : null}
           <span className="ml-auto text-[11px] text-faint">
-            Atualizada {formatRelative(page.updatedAt)}
+            {t("updated")} {formatRelative(page.updatedAt, language)}
           </span>
         </div>
 
         
         <div className="mt-4 sm:mt-6 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-1 py-2 sm:px-4 sm:py-3 dark:border-transparent dark:bg-transparent dark:px-0 dark:py-0 md:px-5">
           <BlockEditor
+            key={`${page.id}-${editorKey}`}
             page={page}
             mentionCandidates={mentionCandidates}
             onChange={handleEditorChange}
@@ -480,7 +507,7 @@ export function PageView({ pageId }: { pageId: string }) {
         {page.transcriptText ? (
           <div className="mt-8 space-y-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
-              Transcrição indexada das notas de voz
+              {t("voice_notes_transcript_title")}
             </p>
             <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-muted">
               {page.transcriptText}
@@ -488,10 +515,9 @@ export function PageView({ pageId }: { pageId: string }) {
           </div>
         ) : null}
 
-        
         <div className="mt-8 border-t border-[var(--border)] pt-5">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
-            Backlinks ({backlinks.length})
+            {t("backlinks_title", { count: backlinks.length })}
           </p>
           {backlinks.length ? (
             <div className="flex flex-wrap gap-2">
@@ -509,14 +535,12 @@ export function PageView({ pageId }: { pageId: string }) {
             </div>
           ) : (
             <p className="text-[12px] text-faint">
-              Nenhuma página menciona esta ainda. Use <span className="font-mono">@</span> em outra
-              página para criar um link bidirecional.
+              {t("backlinks_empty")}
             </p>
           )}
         </div>
       </div>
 
-      
       {versionsOpen ? (
         <motion.div
           initial={{ x: 320, opacity: 0 }}
@@ -525,13 +549,13 @@ export function PageView({ pageId }: { pageId: string }) {
           className="fixed inset-y-0 right-0 z-50 w-full border-l border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-float)] sm:w-[320px]"
         >
           <div className="flex items-center justify-between">
-            <p className="text-[13px] font-semibold text-ink">Histórico de versões</p>
+            <p className="text-[13px] font-semibold text-ink">{t("history_versions")}</p>
             <Button variant="ghost" size="icon-sm" onClick={() => setVersionsOpen(false)}>
               <X />
             </Button>
           </div>
           <p className="mt-1 text-[11.5px] text-muted">
-            Snapshots ficam disponíveis por 30 dias, como a lixeira.
+            {t("versions_retention_hint")}
           </p>
           <div className="mt-4 space-y-1.5">
             {versions.length ? (
@@ -541,18 +565,18 @@ export function PageView({ pageId }: { pageId: string }) {
                   className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] px-2.5 py-2"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] text-ink">{version.title}</p>
+                    <p className="truncate text-[12px] text-ink">{version.title || t("untitled")}</p>
                     <p className="text-[11px] text-faint">
-                      {formatRelative(version.createdAt)} · {version.label ?? "automática"}
+                      {formatRelative(version.createdAt, language)} · {version.label ?? t("version_automatic")}
                     </p>
                   </div>
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="Restaurar"
+                    aria-label={t("undo")}
                     onClick={async () => {
                       await adapter.restoreVersion(pageId, version.id);
-                      toast.success("Versão restaurada");
+                      toast.success(t("undo_action"));
                       setVersionsOpen(false);
                     }}
                   >
@@ -562,7 +586,7 @@ export function PageView({ pageId }: { pageId: string }) {
               ))
             ) : (
               <p className="text-[12px] text-faint">
-                Ainda não há versões salvas para esta página.
+                {t("versions_empty")}
               </p>
             )}
           </div>
@@ -605,14 +629,15 @@ function SaveIndicator({
   lastSavedAt: number | null;
   inverted?: boolean;
 }) {
+  const { t, language } = useTranslation();
   const map: Record<string, { icon: React.ReactNode; label: string; className?: string }> = {
-    idle: { icon: <Check className="size-3" />, label: `Salvo ${formatRelative(lastSavedAt)}` },
-    dirty: { icon: <Loader2 className="size-3 animate-spin" />, label: "Alterações pendentes" },
-    saving: { icon: <Loader2 className="size-3 animate-spin" />, label: "Salvando…" },
-    saved: { icon: <Check className="size-3" />, label: "Salvo" },
+    idle: { icon: <Check className="size-3" />, label: `${t("saved")} ${formatRelative(lastSavedAt, language)}` },
+    dirty: { icon: <Loader2 className="size-3 animate-spin" />, label: t("pending_changes") },
+    saving: { icon: <Loader2 className="size-3 animate-spin" />, label: t("saving") },
+    saved: { icon: <Check className="size-3" />, label: t("saved") },
     error: {
       icon: <CloudOff className="size-3" />,
-      label: "Offline - será sincronizado",
+      label: t("offline_sync"),
       className: "text-[var(--warning)]",
     },
   };

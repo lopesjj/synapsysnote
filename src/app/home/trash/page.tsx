@@ -9,8 +9,10 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/primitives";
 import { formatRelative } from "@/lib/utils";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
+import { useTranslation } from "@/lib/i18n/translations";
 
 export default function TrashPage() {
+  const { t, language } = useTranslation();
   const { trashedPages, trashedDatabases = [], adapter } = useWorkspace();
   const [emptying, setEmptying] = useState(false);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
@@ -18,14 +20,16 @@ export default function TrashPage() {
   const totalTrashedCount = trashedPages.length + trashedDatabases.length;
 
   const expiresOn = (deletedAt: number | null) =>
-    new Date((deletedAt ?? 0) + TRASH_RETENTION_DAYS * 86_400_000).toLocaleDateString("pt-BR");
+    new Date((deletedAt ?? 0) + TRASH_RETENTION_DAYS * 86_400_000).toLocaleDateString(
+      language === "pt" ? "pt-BR" : language
+    );
 
   const emptyTrash = async () => {
     if (!totalTrashedCount) return;
-    const label = totalTrashedCount === 1 ? "1 item" : `${totalTrashedCount} itens`;
+    const label = `${totalTrashedCount} ${totalTrashedCount === 1 ? t("wizard_unit_item") : t("wizard_unit_items")}`;
     if (
       !window.confirm(
-        `Excluir definitivamente ${label} da lixeira? Esta ação não pode ser desfeita.`
+        t("trash_confirm", { label })
       )
     ) {
       return;
@@ -33,10 +37,10 @@ export default function TrashPage() {
     setEmptying(true);
     try {
       await adapter.emptyTrash();
-      toast.success("Lixeira esvaziada definitivamente");
+      toast.success(t("trash_emptied_success"));
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Não foi possível esvaziar a lixeira. Tente novamente."
+        error instanceof Error ? error.message : t("trash_empty_failed")
       );
     } finally {
       setEmptying(false);
@@ -52,11 +56,15 @@ export default function TrashPage() {
               <Trash2 className="size-5" />
             </span>
             <div>
-              <h1 className="text-[22px] font-semibold tracking-[-0.025em] text-ink">Lixeira</h1>
+              <h1 className="text-[22px] font-semibold tracking-[-0.025em] text-ink">{t("trash")}</h1>
               <p className="mt-0.5 text-[12px] text-faint">
                 {totalTrashedCount
-                  ? `${totalTrashedCount} ${totalTrashedCount === 1 ? "item" : "itens"} · recuperáveis por ${TRASH_RETENTION_DAYS} dias`
-                  : `Itens excluídos ficam aqui por ${TRASH_RETENTION_DAYS} dias`}
+                  ? t("trash_items_retention", {
+                      count: totalTrashedCount,
+                      unit: totalTrashedCount === 1 ? t("wizard_unit_item") : t("wizard_unit_items"),
+                      days: TRASH_RETENTION_DAYS,
+                    })
+                  : t("trash_default_hint", { days: TRASH_RETENTION_DAYS })}
               </p>
             </div>
           </div>
@@ -70,7 +78,7 @@ export default function TrashPage() {
             onClick={() => void emptyTrash()}
           >
             <Trash2 />
-            {emptying ? "Esvaziando…" : "Esvaziar lixeira"}
+            {emptying ? t("emptying_trash") : t("empty_trash_button")}
           </Button>
         ) : null}
       </div>
@@ -79,7 +87,7 @@ export default function TrashPage() {
         {trashedPages.length > 0 && (
           <div className="overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-panel)]">
             <div className="border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-faint">
-              Páginas ({trashedPages.length})
+              {t("pages_plural")} ({trashedPages.length})
             </div>
             {trashedPages.map((page, index) => {
               const isItemBusy = emptying || activeActionId === page.id;
@@ -98,10 +106,10 @@ export default function TrashPage() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[14px] font-medium tracking-[-0.01em] text-ink">
-                      {page.title || "Sem título"}
+                      {page.title || t("untitled")}
                     </p>
                     <p className="mt-0.5 text-[11.5px] text-faint">
-                      Excluída {formatRelative(page.deletedAt)} · até {expiresOn(page.deletedAt)}
+                      {t("deleted_time", { time: formatRelative(page.deletedAt, language) })} · {t("expires_until", { date: expiresOn(page.deletedAt) })}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
@@ -114,30 +122,30 @@ export default function TrashPage() {
                         setActiveActionId(page.id);
                         try {
                           await adapter.restorePage(page.id);
-                          toast.success("Página restaurada");
+                          toast.success(t("page_restored"));
                         } catch (error) {
                           toast.error(
                             error instanceof Error
                               ? error.message
-                              : "Não foi possível restaurar. Tente novamente."
+                              : t("restore_failed")
                           );
                         } finally {
                           setActiveActionId(null);
                         }
                       }}
                     >
-                      <RotateCcw /> Restaurar
+                      <RotateCcw /> {t("undo_action")}
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon-sm"
                       className="rounded-full hover:bg-red-50 hover:text-[var(--danger)] dark:hover:bg-red-950/40"
-                      aria-label="Excluir definitivamente"
+                      aria-label={t("delete_page")}
                       disabled={isItemBusy}
                       onClick={async () => {
                         if (
                           !window.confirm(
-                            `Excluir "${page.title || "Sem título"}" definitivamente? Esta ação não pode ser desfeita.`
+                            `Excluir "${page.title || t("untitled")}" definitivamente? Esta ação não pode ser desfeita.`
                           )
                         ) {
                           return;
@@ -145,12 +153,12 @@ export default function TrashPage() {
                         setActiveActionId(page.id);
                         try {
                           await adapter.purgePage(page.id);
-                          toast.success("Página excluída definitivamente");
+                          toast.success(t("trash_emptied_success"));
                         } catch (error) {
                           toast.error(
                             error instanceof Error
                               ? error.message
-                              : "Não foi possível excluir. Tente novamente."
+                              : t("trash_empty_failed")
                           );
                         } finally {
                           setActiveActionId(null);
@@ -169,7 +177,7 @@ export default function TrashPage() {
         {trashedDatabases.length > 0 && (
           <div className="overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-panel)]">
             <div className="border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-faint">
-              Bases de dados ({trashedDatabases.length})
+              {t("wizard_summary_databases")} ({trashedDatabases.length})
             </div>
             {trashedDatabases.map((db, index) => {
               const isItemBusy = emptying || activeActionId === db.id;
@@ -188,10 +196,10 @@ export default function TrashPage() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[14px] font-medium tracking-[-0.01em] text-ink">
-                      {db.name || "Sem nome"}
+                      {db.name || t("untitled")}
                     </p>
                     <p className="mt-0.5 text-[11.5px] text-faint">
-                      Excluída {formatRelative(db.deletedAt)} · até {expiresOn(db.deletedAt)}
+                      {t("deleted_time", { time: formatRelative(db.deletedAt, language) })} · {t("expires_until", { date: expiresOn(db.deletedAt) })}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
@@ -204,19 +212,19 @@ export default function TrashPage() {
                         setActiveActionId(db.id);
                         try {
                           await adapter.updateDatabase(db.id, { deletedAt: null });
-                          toast.success("Base de dados restaurada");
+                          toast.success(t("database_restored"));
                         } catch (error) {
                           toast.error(
                             error instanceof Error
                               ? error.message
-                              : "Não foi possível restaurar. Tente novamente."
+                              : t("restore_failed")
                           );
                         } finally {
                           setActiveActionId(null);
                         }
                       }}
                     >
-                      <RotateCcw /> Restaurar
+                      <RotateCcw /> {t("undo_action")}
                     </Button>
                   </div>
                 </div>
@@ -227,11 +235,11 @@ export default function TrashPage() {
 
         {totalTrashedCount === 0 && (
           <EmptyState
-            title="A lixeira está vazia"
-            description="Nada foi excluído nos últimos 30 dias."
+            title={t("trash_empty_title")}
+            description={t("trash_empty_desc")}
             action={
               <Link href="/home" className="text-[12.5px] text-[var(--accent)] hover:underline">
-                Voltar ao início
+                {t("back_to_home")}
               </Link>
             }
           />

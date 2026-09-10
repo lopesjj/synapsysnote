@@ -12,7 +12,7 @@ import { searchWorkspace } from "@/lib/search";
 import { Kbd } from "@/components/ui/primitives";
 import { cn, isMac } from "@/lib/utils";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
-import { isNestedNotebook } from "@/lib/data/notebook-copy";
+import { useTranslation } from "@/lib/i18n/translations";
 
 export function CommandPalette({
   open,
@@ -23,6 +23,7 @@ export function CommandPalette({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { t } = useTranslation();
   const { livePages, databases, notebooks, adapter } = useWorkspace();
   const currentPageId = pathname.startsWith("/home/p/") ? pathname.slice("/home/p/".length) : null;
   const currentNotebookId = pathname.startsWith("/home/n/") ? pathname.slice("/home/n/".length) : null;
@@ -99,7 +100,7 @@ export function CommandPalette({
                   autoFocus
                   value={query}
                   onValueChange={setQuery}
-                  placeholder="Buscar em cadernos e páginas…"
+                  placeholder={t("search_placeholder")}
                   className="h-12 w-full bg-transparent text-[13.5px] text-ink outline-none placeholder:text-faint"
                 />
                 <Kbd>esc</Kbd>
@@ -107,11 +108,11 @@ export function CommandPalette({
 
               <Command.List className="max-h-[52vh] overflow-y-auto p-1.5">
                 <Command.Empty className="px-3 py-8 text-center text-[12.5px] text-muted">
-                  Nada encontrado em cadernos ou páginas para “{query}”.
+                  {t("nothing_found")} “{query}”.
                 </Command.Empty>
 
                 {query && notebookHits.length ? (
-                  <Command.Group heading={<GroupLabel>Cadernos</GroupLabel>}>
+                  <Command.Group heading={<GroupLabel>{t("notebooks")}</GroupLabel>}>
                     {notebookHits.map((hit) => (
                       <Command.Item
                         key={`hit-notebook-${hit.id}`}
@@ -132,7 +133,7 @@ export function CommandPalette({
                 ) : null}
 
                 {query && pageHits.length ? (
-                  <Command.Group heading={<GroupLabel>Páginas</GroupLabel>}>
+                  <Command.Group heading={<GroupLabel>{t("pages")}</GroupLabel>}>
                     {pageHits.map((hit) => {
                       const parentNotebook = hit.notebookId ? notebookMap.get(hit.notebookId) : null;
                       return (
@@ -165,7 +166,7 @@ export function CommandPalette({
                 {!query ? (
                   <>
                     {notebooks.length ? (
-                      <Command.Group heading={<GroupLabel>Cadernos</GroupLabel>}>
+                      <Command.Group heading={<GroupLabel>{t("notebooks")}</GroupLabel>}>
                         {notebooks.slice(0, 6).map((notebook) => (
                           <Command.Item
                             key={notebook.id}
@@ -182,7 +183,7 @@ export function CommandPalette({
                       </Command.Group>
                     ) : null}
 
-                    <Command.Group heading={<GroupLabel>Recentes</GroupLabel>}>
+                    <Command.Group heading={<GroupLabel>{t("recently_edited_notes")}</GroupLabel>}>
                       {recents.map((page) => (
                         <Command.Item
                           key={page.id}
@@ -191,12 +192,12 @@ export function CommandPalette({
                           className={itemClass}
                         >
                           <WorkspaceIcon icon={page.icon} fallback="📄" size={14} />
-                          <span className="flex-1 truncate text-[13px] text-ink">{page.title}</span>
+                          <span className="flex-1 truncate text-[13px] text-ink">{page.title || t("untitled")}</span>
                         </Command.Item>
                       ))}
                     </Command.Group>
 
-                    <Command.Group heading={<GroupLabel>Ações</GroupLabel>}>
+                    <Command.Group heading={<GroupLabel>{t("more_actions")}</GroupLabel>}>
                       {currentPageId ? (
                         <Command.Item
                           value="duplicate-note"
@@ -204,14 +205,14 @@ export function CommandPalette({
                           onSelect={async () => {
                             try {
                               const copy = await adapter.duplicatePage(currentPageId);
-                              toast.success("Nota duplicada");
+                              toast.success(t("note_duplicated"));
                               go(`/home/p/${copy.id}`);
                             } catch {
-                              toast.error("Não foi possível duplicar a nota.");
+                              toast.error(t("could_not_duplicate"));
                             }
                           }}
                         >
-                          <span className="flex-1 text-[13px] text-ink">Duplicar esta nota</span>
+                          <span className="flex-1 text-[13px] text-ink">{t("duplicate_note")}</span>
                         </Command.Item>
                       ) : null}
                       {currentNotebookId ? (
@@ -221,17 +222,15 @@ export function CommandPalette({
                           onSelect={async () => {
                             try {
                               const copy = await adapter.duplicateNotebook(currentNotebookId);
-                              toast.success("Duplicado");
+                              toast.success(t("notebook_duplicated"));
                               go(`/home/n/${copy.id}`);
                             } catch {
-                              toast.error("Não foi possível duplicar.");
+                              toast.error(t("could_not_duplicate"));
                             }
                           }}
                         >
                           <span className="flex-1 text-[13px] text-ink">
-                            {currentNotebook && isNestedNotebook(currentNotebook)
-                              ? "Duplicar este caderno"
-                              : "Duplicar esta página"}
+                            {t("duplicate_notebook")}
                           </span>
                         </Command.Item>
                       ) : null}
@@ -239,47 +238,47 @@ export function CommandPalette({
                         value="new-page"
                         className={itemClass}
                         onSelect={async () => {
-                          const page = await adapter.createPage({ title: "Sem título" });
+                          const page = await adapter.createPage({ title: t("untitled") });
                           go(`/home/p/${page.id}`);
                         }}
                       >
-                        <span className="flex-1 text-[13px] text-ink">Nova nota</span>
+                        <span className="flex-1 text-[13px] text-ink">{t("new_note")}</span>
                         <Kbd>{isMac() ? "⌘N" : "Ctrl N"}</Kbd>
                       </Command.Item>
                       <Command.Item
                         value="new-notebook"
                         className={itemClass}
                         onSelect={async () => {
-                          const notebook = await adapter.createNotebook({ name: "Nova página" });
+                          const notebook = await adapter.createNotebook({ name: t("new_page") });
                           go(`/home/n/${notebook.id}`);
                         }}
                       >
-                        <span className="flex-1 text-[13px] text-ink">Nova página</span>
+                        <span className="flex-1 text-[13px] text-ink">{t("new_page")}</span>
                         <Kbd>{isMac() ? "⌘⇧N" : "Ctrl ⇧ N"}</Kbd>
                       </Command.Item>
                       <Command.Item
                         value="new-database"
                         className={itemClass}
                         onSelect={async () => {
-                          const database = await adapter.createDatabase({ name: "Nova base" });
+                          const database = await adapter.createDatabase({ name: t("planning") });
                           go(`/home/db/${database.id}`);
                         }}
                       >
-                        <span className="flex-1 text-[13px] text-ink">Nova base de dados</span>
+                        <span className="flex-1 text-[13px] text-ink">{t("planning")}</span>
                       </Command.Item>
                       <Command.Item
                         value="all-notes"
                         className={itemClass}
                         onSelect={() => go("/home/notes")}
                       >
-                        <span className="flex-1 text-[13px] text-ink">Todas as notas</span>
+                        <span className="flex-1 text-[13px] text-ink">{t("all_notes")}</span>
                       </Command.Item>
                       <Command.Item
                         value="zen-mode"
                         className={itemClass}
                         onSelect={() => run(() => useUiStore.getState().toggleZenMode())}
                       >
-                        <span className="flex-1 text-[13px] text-ink">Modo foco</span>
+                        <span className="flex-1 text-[13px] text-ink">{t("focus_mode")}</span>
                         <Kbd>{isMac() ? "⌘⇧F" : "Ctrl ⇧ F"}</Kbd>
                       </Command.Item>
                       <Command.Item
@@ -288,7 +287,7 @@ export function CommandPalette({
                         onSelect={() => run(() => useUiStore.getState().setImportOpen(true))}
                       >
                         <span className="flex-1 text-[13px] text-ink">
-                          Importar do Notion (conta conectada)
+                          {t("import_notion")}
                         </span>
                       </Command.Item>
                       <Command.Item
@@ -296,7 +295,7 @@ export function CommandPalette({
                         className={itemClass}
                         onSelect={() => run(() => useUiStore.getState().setPreferencesOpen(true))}
                       >
-                        <span className="flex-1 text-[13px] text-ink">Preferências</span>
+                        <span className="flex-1 text-[13px] text-ink">{t("preferences")}</span>
                         <Kbd>{isMac() ? "⌘," : "Ctrl ,"}</Kbd>
                       </Command.Item>
                       <Command.Item
@@ -305,11 +304,11 @@ export function CommandPalette({
                         onSelect={() => run(toggle)}
                       >
                         <span className="flex-1 text-[13px] text-ink">
-                          Alternar para tema {theme === "dark" ? "claro" : "escuro"}
+                          {t("theme")}: {theme === "dark" ? t("light") : t("dark")}
                         </span>
                       </Command.Item>
                       <Command.Item value="trash" className={itemClass} onSelect={() => go("/home/trash")}>
-                        <span className="flex-1 text-[13px] text-ink">Abrir lixeira</span>
+                        <span className="flex-1 text-[13px] text-ink">{t("trash")}</span>
                       </Command.Item>
                     </Command.Group>
                   </>
@@ -318,14 +317,12 @@ export function CommandPalette({
 
               <div className="flex items-center justify-between border-t border-[var(--border)] bg-[var(--surface-2)]/50 px-3 py-2 text-[11px] text-faint">
                 <span className="flex items-center gap-1.5">
-                  Pesquisar em cadernos e páginas
+                  {t("search_placeholder")}
                 </span>
                 <span className="flex items-center gap-2">
                   <Kbd>↑</Kbd>
                   <Kbd>↓</Kbd>
-                  navegar
                   <Kbd>↵</Kbd>
-                  abrir
                 </span>
               </div>
             </Command>

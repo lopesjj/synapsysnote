@@ -8,6 +8,7 @@ import { ImportWizard } from "@/components/notion/import-wizard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/primitives";
 import { formatRelative } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n/translations";
 
 export default function IntegrationsPage() {
   return (
@@ -18,6 +19,7 @@ export default function IntegrationsPage() {
 }
 
 function IntegrationsBody() {
+  const { t, language } = useTranslation();
   const params = useSearchParams();
   const { integration, importJobs, adapter } = useWorkspace();
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -34,33 +36,45 @@ function IntegrationsBody() {
         window.location.href = result.redirectUrl;
         return;
       }
-      toast.success(`Conectado a ${result.connected.workspaceName}`);
+      toast.success(t("connected_to", { name: result.connected.workspaceName }));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao conectar");
+      toast.error(error instanceof Error ? error.message : t("connection_failed"));
     } finally {
       setBusy(false);
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "completed":
+        return t("status_completed");
+      case "failed":
+        return t("status_failed");
+      case "completed_with_errors":
+        return t("status_completed_with_errors");
+      default:
+        return status;
+    }
+  };
+
   return (
     <div className="mx-auto max-w-3xl px-5 py-10 md:px-8">
-      <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-ink">Integrações</h1>
+      <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-ink">{t("integrations_title")}</h1>
       <p className="mt-1 text-[12.5px] text-muted">
-        Conecte serviços externos. Tokens são criptografados com AES-256-GCM e ficam apenas no
-        servidor.
+        {t("integrations_desc")}
       </p>
 
       {oauthError ? (
         <div className="mt-5 rounded-[var(--radius-md)] border border-[color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[color-mix(in_oklab,var(--danger)_8%,transparent)] p-3">
           <p className="text-[12.5px] text-ink">
-            A autorização do Notion falhou: {oauthErrorLabel(oauthError)}
+            {t("notion_auth_failed")}: {oauthErrorLabel(oauthError)}
           </p>
         </div>
       ) : null}
 
       {justConnected ? (
         <div className="mt-5 rounded-[var(--radius-md)] border border-[color-mix(in_oklab,var(--success)_35%,transparent)] bg-[color-mix(in_oklab,var(--success)_8%,transparent)] p-3">
-          <p className="text-[12.5px] text-ink">Notion conectado. Você já pode importar páginas.</p>
+          <p className="text-[12.5px] text-ink">{t("notion_connected_ready")}</p>
         </div>
       ) : null}
 
@@ -68,39 +82,39 @@ function IntegrationsBody() {
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-[14px] font-semibold text-ink">Notion</h2>
           {integration?.connected ? (
-            <Badge tone="success">conectado</Badge>
+            <Badge tone="success">{t("notion_connected")}</Badge>
           ) : (
-            <Badge>desconectado</Badge>
+            <Badge>{t("notion_disconnected")}</Badge>
           )}
         </div>
         <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
           {integration?.connected
-            ? `Conta Notion: ${integration.workspaceName} · token ${integration.tokenPreview ?? "•••"} · última sincronização ${formatRelative(integration.lastSyncAt ?? null)}`
-            : "Cada pessoa conecta a própria conta do Notion. O login e a senha ficam no site deles; aqui só entra o token dessa conta, neste workspace."}
+            ? `${t("notion_account")}: ${integration.workspaceName} · token ${integration.tokenPreview ?? "•••"} · ${t("last_sync")} ${formatRelative(integration.lastSyncAt ?? null, language)}`
+            : t("notion_connect_prompt")}
         </p>
 
         <div className="mt-4 flex flex-wrap gap-2">
           {integration?.connected ? (
             <>
               <Button variant="primary" onClick={() => setWizardOpen(true)}>
-                Importar páginas
+                {t("import_pages")}
               </Button>
               <Button variant="secondary" onClick={connect} disabled={busy}>
-                Reconectar
+                {t("reconnect")}
               </Button>
               <Button
                 variant="ghost"
                 onClick={async () => {
                   await adapter.disconnectNotion();
-                  toast.success("Integração revogada");
+                  toast.success(t("access_revoked"));
                 }}
               >
-                Revogar acesso
+                {t("revoke_access")}
               </Button>
             </>
           ) : (
             <Button variant="primary" onClick={connect} disabled={busy}>
-              Conectar minha conta Notion
+              {t("connect_notion_account")}
             </Button>
           )}
         </div>
@@ -108,7 +122,7 @@ function IntegrationsBody() {
         {importJobs.length ? (
           <div className="mt-5 border-t border-[var(--border)] pt-4">
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
-              Histórico de importações
+              {t("import_history")}
             </p>
             <div className="space-y-1.5">
               {importJobs.slice(0, 6).map((job) => (
@@ -123,7 +137,7 @@ function IntegrationsBody() {
                     {importJobTitle(job)}
                   </span>
                   <span className="text-[12px] text-ink">
-                    {job.processedPages}/{Math.max(job.totalPages, job.processedPages)} páginas · {job.processedFiles}/{Math.max(job.totalFiles, job.processedFiles)} arquivos
+                    {job.processedPages}/{Math.max(job.totalPages, job.processedPages)} {t("pages_unit")} · {job.processedFiles}/{Math.max(job.totalFiles, job.processedFiles)} {t("files_unit")}
                   </span>
                   <span className="ml-auto">
                     <Badge
@@ -137,10 +151,10 @@ function IntegrationsBody() {
                               : "accent"
                       }
                     >
-                      {job.status}
+                      {getStatusLabel(job.status)}
                     </Badge>
                   </span>
-                  <span className="text-[11px] text-faint">{formatRelative(job.createdAt)}</span>
+                  <span className="text-[11px] text-faint">{formatRelative(job.createdAt, language)}</span>
                 </div>
               ))}
             </div>

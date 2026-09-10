@@ -8,6 +8,10 @@ export function parentIdOf(notebook: Pick<Notebook, "parentId">): string | null 
   return parentId;
 }
 
+export function isNestedNotebook(notebook: Pick<Notebook, "parentId">): boolean {
+  return Boolean(parentIdOf(notebook));
+}
+
 export function childrenOf(notebooks: Notebook[], parentId: string | null): Notebook[] {
   return notebooks
     .filter((notebook) => parentIdOf(notebook) === parentId)

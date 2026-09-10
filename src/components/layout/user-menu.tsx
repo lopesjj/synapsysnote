@@ -21,6 +21,7 @@ import { useTheme } from "@/components/theme-provider";
 import { ChangePasswordDialog } from "@/components/auth/change-password-dialog";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuShortcut, MenuTrigger } from "@/components/ui/menu";
 import { cn, isMac } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n/translations";
 
 const AVATAR_CLASS =
   "flex size-9 shrink-0 items-center justify-center rounded-full bg-[#ea580c] text-[14px] font-semibold text-white";
@@ -34,16 +35,17 @@ const TRIGGER_CLASS = cn(
 
 export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   const router = useRouter();
+  const { t } = useTranslation();
   const { theme, toggle } = useTheme();
   const { user, signOut, mode } = useAuth();
   const { profile } = useUserProfile();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
-  const displayName = profile?.displayName || user?.displayName || "Conta";
+  const displayName = profile?.displayName || user?.displayName || t("account");
   const email = user?.email ?? "";
   const photoURL = profile?.photoURL ?? user?.photoURL;
   const initial = displayName.trim().charAt(0).toUpperCase() || "?";
-  const planLabel = mode === "demo" || user?.uid === "demo-user" ? "Convidado" : "Pro";
+  const planLabel = mode === "demo" || user?.uid === "demo-user" ? t("guest") : "Pro";
 
   const avatar = photoURL ? (
     <img
@@ -64,7 +66,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
         {collapsed ? (
           <button
             type="button"
-            aria-label="Abrir menu da conta"
+            aria-label={t("open_account_menu")}
             className={cn("flex size-9 items-center justify-center", TRIGGER_CLASS)}
           >
             {avatar}
@@ -72,7 +74,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
         ) : (
           <button
             type="button"
-            aria-label="Abrir menu da conta"
+            aria-label={t("open_account_menu")}
             className={cn("flex h-9 w-full items-center gap-2.5 text-left", TRIGGER_CLASS)}
           >
             {avatar}
@@ -134,7 +136,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
               useUiStore.getState().setPreferencesOpen(true);
             }}
           >
-            <Settings2 /> Preferências
+            <Settings2 /> {t("preferences")}
           </MenuItem>
           <MenuItem
             onSelect={() => {
@@ -142,17 +144,17 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
               setChangePasswordOpen(true);
             }}
           >
-            <KeyRound /> Alterar senha
+            <KeyRound /> {t("change_password")}
           </MenuItem>
           <MenuItem onSelect={() => router.push("/home/integrations")}>
-            <Plug /> Integrações
+            <Plug /> {t("integrations")}
           </MenuItem>
           <MenuItem onSelect={toggle}>
             {theme === "dark" ? <Sun /> : <Moon />}
-            Tema {theme === "dark" ? "claro" : "escuro"}
+            {t("theme")}: {theme === "dark" ? t("light") : t("dark")}
           </MenuItem>
           <MenuItem onSelect={() => useUiStore.getState().toggleZenMode()}>
-            <Minimize2 /> Modo foco
+            <Minimize2 /> {t("focus_mode")}
             <MenuShortcut>{isMac() ? "⌘⇧F" : "Ctrl ⇧ F"}</MenuShortcut>
           </MenuItem>
         </div>
@@ -165,11 +167,11 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
                 await signOut();
                 navigateTo(loginHref("/?logout=1"), router, "replace");
               } catch (error) {
-                toast.error(error instanceof Error ? error.message : "Não foi possível sair da conta");
+                toast.error(error instanceof Error ? error.message : t("logout"));
               }
             }}
           >
-            <LogOut /> Sair da conta
+            <LogOut /> {t("logout")}
           </MenuItem>
         </div>
       </MenuContent>
