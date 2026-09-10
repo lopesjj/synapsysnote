@@ -85,4 +85,5 @@ export interface DataAdapter {
   uploadAttachment(pageId: string, file: File): Promise<{ url: string; storagePath?: string }>;
 
   uploadWorkspaceIcon(file: File): Promise<string>;
+  deleteMedia(storagePaths: string[], pageId?: string): Promise<void>;
 }

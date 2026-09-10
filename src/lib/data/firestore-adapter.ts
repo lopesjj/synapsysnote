@@ -111,6 +111,45 @@ function mapPage(snap: QueryDocumentSnapshot<DocumentData>): Page {
   };
 }
 
+function isStorageFile(input: unknown, workspaceId: string): boolean {
+  if (typeof input !== "string" || !input.trim()) return false;
+  const val = input.trim();
+  if (val.startsWith(`workspaces/${workspaceId}/`)) return true;
+  if (val.includes("firebasestorage.googleapis.com") || val.includes("firebasestorage.app")) {
+    const match = val.match(/\/o\/([^?]+)/);
+    if (match && match[1]) {
+      try {
+        const decoded = decodeURIComponent(match[1]);
+        return decoded.startsWith(`workspaces/${workspaceId}/`);
+      } catch {
+        return match[1].startsWith(`workspaces/${workspaceId}/`);
+      }
+    }
+  }
+  return false;
+}
+
+function extractMediaPathsFromBlocks(blocks: unknown[]): string[] {
+  const paths: string[] = [];
+  const walk = (list: unknown[]) => {
+    if (!Array.isArray(list)) return;
+    for (const item of list) {
+      if (!item || typeof item !== "object") continue;
+      const b = item as { media?: { storagePath?: string; url?: string }; children?: unknown[] };
+      if (b.media?.storagePath) {
+        paths.push(b.media.storagePath);
+      } else if (b.media?.url) {
+        paths.push(b.media.url);
+      }
+      if (Array.isArray(b.children) && b.children.length) {
+        walk(b.children);
+      }
+    }
+  };
+  walk(blocks);
+  return paths;
+}
+
 export class FirestoreAdapter implements DataAdapter {
   readonly mode = "firestore" as const;
 
@@ -372,6 +411,19 @@ export class FirestoreAdapter implements DataAdapter {
   }
 
   async updateNotebook(id: string, patch: Partial<Notebook>) {
+    if (patch.coverUrl !== undefined) {
+      const current = await getDoc(this.docRef("notebooks", id));
+      if (current.exists()) {
+        const data = current.data();
+        if (
+          data.coverUrl &&
+          data.coverUrl !== patch.coverUrl &&
+          isStorageFile(data.coverUrl, this.workspaceId)
+        ) {
+          void this.deleteMedia([data.coverUrl]);
+        }
+      }
+    }
     await updateDoc(this.docRef("notebooks", id), { ...patch, updatedAt: serverTimestamp() });
   }
 
@@ -521,11 +573,45 @@ export class FirestoreAdapter implements DataAdapter {
   async updatePage(id: string, patch: Partial<Page>) {
     let blocks = patch.blocks;
     let currentData: DocumentData | undefined;
-    if (blocks && hasMergeableMedia(blocks)) {
+    const shouldInspectMedia =
+      blocks !== undefined || patch.coverUrl !== undefined || patch.icon !== undefined;
+
+    if (shouldInspectMedia) {
       const current = await getDoc(this.docRef("pages", id));
       if (current.exists()) {
         currentData = current.data();
-        blocks = mergeMediaEnrichment(blocks, (currentData?.blocks ?? []) as Page["blocks"]);
+        if (blocks && hasMergeableMedia(blocks)) {
+          blocks = mergeMediaEnrichment(blocks, (currentData.blocks ?? []) as Page["blocks"]);
+        }
+        const removed: string[] = [];
+        if (blocks && currentData.blocks) {
+          const oldPaths = extractMediaPathsFromBlocks(currentData.blocks);
+          const newPaths = new Set(extractMediaPathsFromBlocks(blocks));
+          for (const p of oldPaths) {
+            if (!newPaths.has(p) && isStorageFile(p, this.workspaceId)) {
+              removed.push(p);
+            }
+          }
+        }
+        if (
+          patch.coverUrl !== undefined &&
+          currentData.coverUrl &&
+          currentData.coverUrl !== patch.coverUrl &&
+          isStorageFile(currentData.coverUrl, this.workspaceId)
+        ) {
+          removed.push(currentData.coverUrl);
+        }
+        if (
+          patch.icon !== undefined &&
+          currentData.icon &&
+          currentData.icon !== patch.icon &&
+          isStorageFile(currentData.icon, this.workspaceId)
+        ) {
+          removed.push(currentData.icon);
+        }
+        if (removed.length > 0) {
+          void this.deleteMedia(removed, id);
+        }
       }
     }
     const payload: Record<string, unknown> = stripUndefined({
@@ -1123,5 +1209,21 @@ export class FirestoreAdapter implements DataAdapter {
     const storageRef = ref(getFirebaseStorage(), path);
     await uploadBytes(storageRef, file, { contentType: file.type || "image/png" });
     return getDownloadURL(storageRef);
+  }
+
+  async deleteMedia(storagePaths: string[], pageId?: string): Promise<void> {
+    if (!storagePaths || storagePaths.length === 0) return;
+    void pageId;
+    try {
+      await firebaseJson("/api/media/delete", {
+        method: "POST",
+        body: JSON.stringify({
+          workspaceId: this.workspaceId,
+          storagePaths,
+        }),
+      });
+    } catch (err) {
+      console.error("Falha ao excluir mídia do storage:", err);
+    }
   }
 }

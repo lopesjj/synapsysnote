@@ -271,6 +271,8 @@ export function BlockEditor({
               const blocks = docToBlocks(instance.getJSON());
               emittedBlockCount.current = blocks.length;
               onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
+            } else if (storagePath) {
+              void adapter.deleteMedia([storagePath], page.id);
             }
 
             toast.success(

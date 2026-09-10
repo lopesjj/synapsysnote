@@ -920,6 +920,10 @@ export class LocalAdapter implements DataAdapter {
   async uploadWorkspaceIcon(file: File) {
     return toPersistableUrl(file);
   }
+
+  async deleteMedia(storagePaths: string[], _pageId?: string): Promise<void> {
+    void storagePaths;
+  }
 }
 
 let singleton: LocalAdapter | null = null;
