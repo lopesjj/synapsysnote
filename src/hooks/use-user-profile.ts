@@ -65,6 +65,7 @@ export function useUserPreferencesSync(): void {
   const { user } = useAuth();
   const { profile } = useUserProfile();
   const { theme, setTheme } = useTheme();
+  const queryClient = useQueryClient();
   const hydratePreferences = useUiStore((state) => state.hydratePreferences);
 
   const hydratedFor = useRef<string | null>(null);
@@ -72,35 +73,97 @@ export function useUserPreferencesSync(): void {
   const lastWritten = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!user || !profile || hydratedFor.current === user.uid) return;
+    if (!user) {
+      hydratedFor.current = null;
+      lastWritten.current = null;
+      return;
+    }
+    if (!profile || hydratedFor.current === user.uid) return;
     hydratedFor.current = user.uid;
 
     const { theme: storedTheme, ...layout } = profile.preferences ?? {};
-    hydratePreferences(layout);
-    if (storedTheme && storedTheme !== theme) setTheme(storedTheme);
+    if (Object.keys(layout).length > 0) {
+      hydratePreferences(layout);
+    }
+    if (storedTheme && storedTheme !== theme) {
+      setTheme(storedTheme);
+    }
+
+    const currentActive: UserPreferences = {
+      ...currentPreferences(),
+      ...layout,
+      ...(storedTheme ? { theme: storedTheme } : { theme }),
+    };
+    lastWritten.current = JSON.stringify(currentActive);
   }, [hydratePreferences, profile, setTheme, theme, user]);
 
   useEffect(() => {
     if (!user || hydratedFor.current !== user.uid) return;
 
-    const schedule = () => {
+    const schedule = (immediate = false) => {
       const preferences: UserPreferences = { ...currentPreferences(), theme };
       const serialized = JSON.stringify(preferences);
       if (serialized === lastWritten.current) return;
 
       if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => {
+
+      const commit = () => {
         lastWritten.current = serialized;
-        void saveUserPreferences(user.uid, preferences).catch(() => {});
-      }, PREFERENCE_WRITE_DELAY);
+        void saveUserPreferences(user.uid, preferences)
+          .then(() => {
+            queryClient.setQueryData<UserProfile | null>(
+              queryKeys.userProfile(user.uid),
+              (previous) =>
+                previous
+                  ? { ...previous, preferences: { ...previous.preferences, ...preferences } }
+                  : previous
+            );
+          })
+          .catch(() => {});
+      };
+
+      if (immediate) {
+        commit();
+      } else {
+        timer.current = setTimeout(commit, PREFERENCE_WRITE_DELAY);
+      }
     };
 
-    const unsubscribe = useUiStore.subscribe(schedule);
-    schedule();
+    let prevLanguage = useUiStore.getState().language;
+    let prevSidebar = useUiStore.getState().sidebarCollapsed;
+
+    const unsubscribe = useUiStore.subscribe((state) => {
+      const langChanged = state.language !== prevLanguage;
+      const sidebarChanged = state.sidebarCollapsed !== prevSidebar;
+      prevLanguage = state.language;
+      prevSidebar = state.sidebarCollapsed;
+
+      if (langChanged || sidebarChanged) {
+        schedule(true);
+      } else {
+        schedule(false);
+      }
+    });
+
+    schedule(false);
 
     return () => {
       unsubscribe();
-      if (timer.current) clearTimeout(timer.current);
+      if (timer.current) {
+        clearTimeout(timer.current);
+        const preferences: UserPreferences = { ...currentPreferences(), theme };
+        void saveUserPreferences(user.uid, preferences)
+          .then(() => {
+            queryClient.setQueryData<UserProfile | null>(
+              queryKeys.userProfile(user.uid),
+              (previous) =>
+                previous
+                  ? { ...previous, preferences: { ...previous.preferences, ...preferences } }
+                  : previous
+            );
+          })
+          .catch(() => {});
+      }
     };
-  }, [profile, theme, user]);
+  }, [profile, queryClient, theme, user]);
 }

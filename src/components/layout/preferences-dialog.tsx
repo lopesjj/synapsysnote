@@ -93,13 +93,13 @@ export function PreferencesDialog({
       open={open}
       onOpenChange={onOpenChange}
       showClose={false}
-      className="max-w-3xl md:h-[620px] md:max-h-[88vh] p-0 gap-0 overflow-hidden bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-float)] rounded-[var(--radius-xl)]"
+      className="h-[88dvh] max-h-[88dvh] sm:h-[85dvh] md:h-[620px] md:max-h-[88vh] w-[calc(100vw-1.5rem)] sm:w-[calc(100vw-2rem)] max-w-3xl p-0 gap-0 overflow-hidden bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-float)] rounded-[var(--radius-xl)]"
     >
       <div className="flex flex-col md:flex-row h-full">
-        <div className="w-full md:w-[210px] shrink-0 border-b md:border-b-0 md:border-r border-[var(--border)] bg-[var(--surface-2)]/35 flex flex-col justify-between p-3 md:p-3.5">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between px-2 py-1">
-              <div className="flex items-center gap-2.5">
+        <div className="w-full md:w-[210px] shrink-0 border-b md:border-b-0 md:border-r border-[var(--border)] bg-[var(--surface-2)]/35 flex flex-col justify-between p-2.5 sm:p-3 md:p-3.5">
+          <div className="space-y-2 md:space-y-3">
+            <div className="flex items-center justify-between px-1.5 py-0.5 md:px-2 md:py-1">
+              <div className="flex items-center gap-2 md:gap-2.5">
                 <div className="flex size-7 items-center justify-center rounded-lg bg-[var(--surface)] border border-[var(--border)] shadow-xs text-ink">
                   <Settings className="size-3.5" />
                 </div>
@@ -116,7 +116,7 @@ export function PreferencesDialog({
               </button>
             </div>
 
-            <nav className="flex md:flex-col gap-1 overflow-x-auto no-scrollbar md:overflow-visible pb-1 md:pb-0">
+            <nav className="flex md:flex-col gap-1 overflow-x-auto no-scrollbar md:overflow-visible pb-0.5 md:pb-0 px-0.5">
               {navItems.map((item) => {
                 const active = activeTab === item.id;
                 return (
@@ -125,7 +125,7 @@ export function PreferencesDialog({
                     type="button"
                     onClick={() => setActiveTab(item.id)}
                     className={cn(
-                      "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all text-left shrink-0 md:shrink select-none",
+                      "flex items-center gap-2 rounded-lg px-2.5 py-1.5 md:px-3 md:py-2 text-[12.5px] md:text-[13px] font-medium transition-all text-left shrink-0 md:shrink select-none",
                       active
                         ? "bg-[var(--surface)] text-ink font-semibold shadow-xs border border-[var(--border)]"
                         : "text-muted hover:text-ink hover:bg-[var(--surface-hover)] border border-transparent"
@@ -152,28 +152,28 @@ export function PreferencesDialog({
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col min-w-0 bg-[var(--surface)]">
-          <div className="hidden md:flex items-center justify-between px-8 py-4 border-b border-[var(--border)] shrink-0">
-            <div>
-              <h3 className="text-[16px] font-semibold text-ink tracking-tight">
+        <div className="flex-1 flex flex-col min-w-0 bg-[var(--surface)] overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 md:px-8 md:py-4 border-b border-[var(--border)] shrink-0">
+            <div className="min-w-0 flex-1">
+              <h3 className="text-[14px] md:text-[16px] font-semibold text-ink tracking-tight truncate">
                 {getSectionTitle()}
               </h3>
               {getSectionDescription() ? (
-                <p className="mt-0.5 text-[11.5px] text-muted">
+                <p className="mt-0.5 text-[11px] md:text-[11.5px] text-muted truncate">
                   {getSectionDescription()}
                 </p>
               ) : null}
             </div>
             <button
               onClick={() => onOpenChange(false)}
-              className="rounded-lg p-1.5 text-faint hover:bg-[var(--surface-hover)] hover:text-ink transition"
+              className="hidden md:flex rounded-lg p-1.5 text-faint hover:bg-[var(--surface-hover)] hover:text-ink transition"
               aria-label="Fechar"
             >
               <X className="size-4" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-5 py-4 md:px-8 md:py-6 space-y-6">
+          <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-6 sm:py-4 md:px-8 md:py-6 space-y-5 sm:space-y-6 pb-8 md:pb-6 overscroll-contain">
             {activeTab === "appearance" && <AppearanceSection />}
             {activeTab === "language" && <LanguageSection />}
             {activeTab === "typography" && <TypographySection />}
@@ -204,19 +204,33 @@ function PreferenceRow({
   hint,
   children,
   className,
+  layout = "auto",
 }: {
   label: string;
   hint?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  layout?: "auto" | "horizontal" | "stacked";
 }) {
   return (
-    <div className={cn("flex items-center justify-between gap-4 px-3.5 py-3", className)}>
+    <div
+      className={cn(
+        "px-3.5 py-3",
+        layout === "horizontal"
+          ? "flex items-center justify-between gap-3"
+          : layout === "stacked"
+          ? "flex flex-col gap-2.5"
+          : "flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4",
+        className
+      )}
+    >
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-medium text-ink leading-tight">{label}</p>
         {hint ? <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted">{hint}</p> : null}
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className={cn("shrink-0", layout === "auto" && "w-full sm:w-auto flex sm:justify-end")}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -225,13 +239,20 @@ function SegmentedControl<T extends string>({
   value,
   options,
   onChange,
+  className,
 }: {
   value: T;
   options: { value: T; label: string; icon?: React.ReactNode }[];
   onChange: (value: T) => void;
+  className?: string;
 }) {
   return (
-    <div className="inline-flex rounded-lg bg-[var(--surface-2)] border border-[var(--border)]/60 p-0.5">
+    <div
+      className={cn(
+        "flex w-full sm:w-auto items-center rounded-lg bg-[var(--surface-2)] border border-[var(--border)]/60 p-0.5 overflow-x-auto no-scrollbar",
+        className
+      )}
+    >
       {options.map((option) => {
         const active = value === option.value;
         return (
@@ -240,9 +261,9 @@ function SegmentedControl<T extends string>({
             type="button"
             onClick={() => onChange(option.value)}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-medium transition-all select-none",
+              "flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 sm:py-1 text-[11.5px] sm:text-[12px] font-medium transition-all select-none whitespace-nowrap",
               active
-                ? "bg-[var(--surface)] text-ink shadow-xs border border-[var(--border)]/80"
+                ? "bg-[var(--surface)] text-ink shadow-xs border border-[var(--border)]/80 font-semibold"
                 : "text-muted hover:text-ink"
             )}
           >
@@ -358,6 +379,7 @@ function AppearanceSection() {
           <PreferenceRow
             label={t("focus_mode")}
             hint={`${t("focus_mode_hint")} (${isMac() ? "⌘⇧F" : "Ctrl ⇧ F"})`}
+            layout="horizontal"
           >
             <Switch
               checked={zenMode}
@@ -369,6 +391,7 @@ function AppearanceSection() {
           <PreferenceRow
             label={t("auto_collapse_sidebar")}
             hint={t("auto_collapse_sidebar_hint")}
+            layout="horizontal"
           >
             <Switch
               checked={autoCollapseSidebar}
@@ -380,6 +403,7 @@ function AppearanceSection() {
           <PreferenceRow
             label={t("saving_indicator")}
             hint={t("saving_indicator_hint")}
+            layout="horizontal"
           >
             <Switch
               checked={showSaveIndicator}
@@ -593,8 +617,8 @@ function TypographySection() {
 
       <PreferenceCard>
         <PreferenceRow label={t("font_body_size")} hint={`${editorFontSize}px`}>
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] text-faint font-mono">{EDITOR_FONT_SIZE_MIN}px</span>
+          <div className="flex w-full sm:w-auto items-center gap-2.5 sm:gap-3">
+            <span className="text-[11px] text-faint font-mono shrink-0">{EDITOR_FONT_SIZE_MIN}px</span>
             <input
               type="range"
               min={EDITOR_FONT_SIZE_MIN}
@@ -603,11 +627,11 @@ function TypographySection() {
               onChange={(event) =>
                 useUiStore.getState().setEditorFontSize(Number(event.target.value))
               }
-              className="w-32 sm:w-44 accent-[var(--accent)] cursor-pointer"
+              className="flex-1 sm:w-44 accent-[var(--accent)] cursor-pointer"
               aria-label={t("font_body_size")}
             />
-            <span className="text-[11px] text-faint font-mono">{EDITOR_FONT_SIZE_MAX}px</span>
-            <span className="text-[12px] font-semibold text-ink px-2 py-0.5 rounded-md bg-[var(--surface-2)] border border-[var(--border)]">
+            <span className="text-[11px] text-faint font-mono shrink-0">{EDITOR_FONT_SIZE_MAX}px</span>
+            <span className="text-[12px] font-semibold text-ink px-2 py-0.5 rounded-md bg-[var(--surface-2)] border border-[var(--border)] shrink-0">
               {editorFontSize}px
             </span>
           </div>
@@ -677,13 +701,13 @@ function ProfileSection() {
         <label className="block text-[12.5px] font-medium text-ink" htmlFor="display-name">
           {t("display_name")}
         </label>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <Input
             id="display-name"
             value={name}
             onChange={(event) => setDraft(event.target.value)}
             placeholder={t("display_name_placeholder")}
-            className="rounded-lg"
+            className="rounded-lg flex-1"
           />
           <Button
             variant="primary"
@@ -697,7 +721,7 @@ function ProfileSection() {
                 onError: () => toast.error(t("name_save_failed")),
               });
             }}
-            className="shrink-0 rounded-lg"
+            className="shrink-0 rounded-lg w-full sm:w-auto justify-center"
           >
             {rename.isPending ? <Loader2 className="animate-spin" /> : null}
             {t("save")}
@@ -706,8 +730,8 @@ function ProfileSection() {
       </div>
 
       <PreferenceCard>
-        <PreferenceRow label={t("access_methods")} hint={t("access_methods_hint")}>
-          <div className="flex flex-wrap justify-end gap-1.5">
+        <PreferenceRow label={t("access_methods")} hint={t("access_methods_hint")} layout="auto">
+          <div className="flex flex-wrap sm:justify-end gap-1.5">
             {(profile?.providers?.length ? profile.providers : ["-"]).map((provider) => (
               <span
                 key={provider}

@@ -23,10 +23,12 @@ import { ImportWizard } from "@/components/notion/import-wizard";
 import { SynapsysWordmark } from "@/components/brand/logo";
 import { useDocumentTitle } from "./document-title";
 import { useWorkspaceNavHistory } from "@/hooks/use-workspace-nav-history";
+import { useTranslation } from "@/lib/i18n/translations";
 import { Tooltip } from "@/components/ui/primitives";
 import { cn, isMac } from "@/lib/utils";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user, loading, loggingOut } = useAuth();
   const { mode, activeImportJob, adapter } = useWorkspace();
@@ -191,7 +193,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => useUiStore.getState().setMobileSidebarOpen(true)}
-              aria-label="Abrir menu"
+              aria-label={t("open_menu")}
               className="group flex size-9 items-center justify-center rounded-xl border border-[var(--border)]/80 bg-[var(--surface-2)]/80 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-md transition-all hover:border-[var(--accent)]/40 hover:bg-[var(--surface-3)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/25"
             >
               <span className="flex flex-col items-start justify-center gap-[3.5px]">
@@ -209,7 +211,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {zenMode ? (
           <Tooltip
-            label="Sair do modo foco"
+            label={t("exit_focus_mode")}
             shortcut={isMac() ? "⌘⇧F · Esc" : "Ctrl ⇧ F · Esc"}
             side="left"
           >
@@ -222,7 +224,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
             >
               <Minimize2 className="size-3.5" />
-              Modo foco
+              {t("focus_mode")}
             </button>
           </Tooltip>
         ) : activeImportJob ? (
@@ -235,7 +237,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <Loader2 className="size-3.5 animate-spin text-[var(--accent)]" />
             <span className="text-ink">
-              Importando {activeImportJob.processedPages}/{activeImportJob.totalPages}
+              {t("importing_progress", {
+                current: activeImportJob.processedPages,
+                total: activeImportJob.totalPages,
+              })}
             </span>
           </button>
         ) : null}
@@ -310,12 +315,13 @@ function isEditingText(target: EventTarget | null): boolean {
 }
 
 function BottomNav() {
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const { adapter } = useWorkspace();
 
   const createNote = async () => {
-    const page = await adapter.createPage({ title: "Sem título" });
+    const page = await adapter.createPage({ title: t("untitled") });
     useUiStore.getState().closeMenu();
     router.push(`/home/p/${page.id}`);
   };
@@ -355,23 +361,23 @@ function BottomNav() {
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-50 flex border-t border-[var(--border)] bg-[var(--surface)]/95 py-3.5 pb-[calc(0.875rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl md:hidden"
-      aria-label="Navegação principal"
+      aria-label={t("main_navigation")}
     >
       <NavItem
         icon={<Home className="size-[18px]" />}
-        label="Início"
+        label={t("home")}
         active={pathname === "/home"}
         onClick={() => router.push("/home")}
       />
       <NavItem
         icon={<Search className="size-[18px]" />}
-        label="Buscar"
+        label={t("search")}
         active={false}
         onClick={() => useUiStore.getState().setPaletteOpen(true)}
       />
       <NavItem
         icon={<FilePlus className="size-[18px]" />}
-        label="Nova nota"
+        label={t("new_note")}
         active={false}
         onClick={() => void createNote()}
       />
@@ -380,6 +386,7 @@ function BottomNav() {
 }
 
 function SidebarResizer() {
+  const { t } = useTranslation();
   const setSidebarWidth = useUiStore((state) => state.setSidebarWidth);
   const [dragging, setDragging] = useState(false);
   const frame = useRef<number | null>(null);
@@ -415,7 +422,7 @@ function SidebarResizer() {
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="Redimensionar barra lateral"
+      aria-label={t("resize_sidebar")}
       aria-valuemin={SIDEBAR_MIN_WIDTH}
       aria-valuemax={SIDEBAR_MAX_WIDTH}
       onPointerDown={(event) => {

@@ -145,7 +145,7 @@ export default function WorkspaceHome() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-5 py-8 md:px-8 md:py-10">
+    <div className="mx-auto w-full max-w-6xl xl:max-w-7xl 2xl:max-w-[94rem] px-5 py-8 md:px-8 md:py-10 transition-all">
       <motion.section
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -198,7 +198,7 @@ export default function WorkspaceHome() {
               <p className="mt-0.5 text-[12px] text-muted">{t("your_workspaces")}</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5">
             {rootNotebooks.map((notebook, index) => (
               <motion.div
                 key={notebook.id}
@@ -219,7 +219,7 @@ export default function WorkspaceHome() {
               <div className="h-3 w-36 animate-pulse rounded bg-[var(--surface-2)]" />
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5">
             <div className="h-28 animate-pulse rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]" />
             <div className="h-28 animate-pulse rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]" />
             <div className="h-28 animate-pulse rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]" />
@@ -230,7 +230,7 @@ export default function WorkspaceHome() {
       <div
         className={cn(
           "mt-10 grid grid-cols-1 gap-8",
-          favorites.length && "lg:grid-cols-[minmax(0,1fr)_17.5rem]"
+          favorites.length && "lg:grid-cols-[minmax(0,1fr)_17.5rem] 2xl:grid-cols-[minmax(0,1fr)_20rem]"
         )}
       >
         <section>
@@ -254,13 +254,13 @@ export default function WorkspaceHome() {
           </div>
 
           {recent.length ? (
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 2xl:grid-cols-3">
               {recent.map((page) => (
                 <NoteCard key={page.id} page={page} notebook={notebookById(page.notebookId ?? "")} />
               ))}
             </div>
           ) : !ready ? (
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 2xl:grid-cols-3">
               <div className="h-24 animate-pulse rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]" />
               <div className="h-24 animate-pulse rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]" />
             </div>

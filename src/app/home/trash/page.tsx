@@ -18,11 +18,32 @@ export default function TrashPage() {
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
   const totalTrashedCount = trashedPages.length + trashedDatabases.length;
+  const dayUnit = TRASH_RETENTION_DAYS === 1 ? t("unit_day_singular") : t("unit_day_plural");
 
   const expiresOn = (deletedAt: number | null) =>
     new Date((deletedAt ?? 0) + TRASH_RETENTION_DAYS * 86_400_000).toLocaleDateString(
       language === "pt" ? "pt-BR" : language
     );
+
+  const getRemainingDays = (deletedAt: number | null) => {
+    if (!deletedAt) return TRASH_RETENTION_DAYS;
+    const expiresAt = deletedAt + TRASH_RETENTION_DAYS * 86_400_000;
+    const diff = expiresAt - Date.now();
+    return Math.max(0, Math.ceil(diff / 86_400_000));
+  };
+
+  const getExpiresText = (deletedAt: number | null) => {
+    const days = getRemainingDays(deletedAt);
+    const date = expiresOn(deletedAt);
+    const itemDayUnit = days === 1 ? t("unit_day_singular") : t("unit_day_plural");
+    if (days <= 0) {
+      return `${t("trash_days_left_zero")} · ${t("expires_until", { date })}`;
+    }
+    if (days === 1) {
+      return `${t("trash_days_left_single", { days, dayUnit: itemDayUnit })} · ${t("expires_until", { date })}`;
+    }
+    return `${t("trash_days_left_plural", { days, dayUnit: itemDayUnit })} · ${t("expires_until", { date })}`;
+  };
 
   const emptyTrash = async () => {
     if (!totalTrashedCount) return;
@@ -52,7 +73,7 @@ export default function TrashPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-10 md:px-8">
+    <div className="mx-auto w-full max-w-3xl xl:max-w-4xl 2xl:max-w-5xl px-5 py-10 md:px-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
@@ -63,12 +84,23 @@ export default function TrashPage() {
               <h1 className="text-[22px] font-semibold tracking-[-0.025em] text-ink">{t("trash")}</h1>
               <p className="mt-0.5 text-[12px] text-faint">
                 {totalTrashedCount
-                  ? t("trash_items_retention", {
-                      count: totalTrashedCount,
-                      unit: totalTrashedCount === 1 ? t("wizard_unit_item") : t("wizard_unit_items"),
+                  ? totalTrashedCount === 1
+                    ? t("trash_items_retention_single", {
+                        count: totalTrashedCount,
+                        unit: t("wizard_unit_item"),
+                        days: TRASH_RETENTION_DAYS,
+                        dayUnit,
+                      })
+                    : t("trash_items_retention_plural", {
+                        count: totalTrashedCount,
+                        unit: t("wizard_unit_items"),
+                        days: TRASH_RETENTION_DAYS,
+                        dayUnit,
+                      })
+                  : t(TRASH_RETENTION_DAYS === 1 ? "trash_default_hint_single" : "trash_default_hint", {
                       days: TRASH_RETENTION_DAYS,
-                    })
-                  : t("trash_default_hint", { days: TRASH_RETENTION_DAYS })}
+                      dayUnit,
+                    })}
               </p>
             </div>
           </div>
@@ -113,7 +145,7 @@ export default function TrashPage() {
                       {page.title || t("untitled")}
                     </p>
                     <p className="mt-0.5 text-[11.5px] text-faint">
-                      {t("deleted_time", { time: formatRelative(page.deletedAt, language) })} · {t("expires_until", { date: expiresOn(page.deletedAt) })}
+                      {t("deleted_time", { time: formatRelative(page.deletedAt, language) })} · {getExpiresText(page.deletedAt)}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
@@ -203,7 +235,7 @@ export default function TrashPage() {
                       {db.name || t("untitled")}
                     </p>
                     <p className="mt-0.5 text-[11.5px] text-faint">
-                      {t("deleted_time", { time: formatRelative(db.deletedAt, language) })} · {t("expires_until", { date: expiresOn(db.deletedAt) })}
+                      {t("deleted_time", { time: formatRelative(db.deletedAt, language) })} · {getExpiresText(db.deletedAt)}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
@@ -240,7 +272,10 @@ export default function TrashPage() {
         {totalTrashedCount === 0 && (
           <EmptyState
             title={t("trash_empty_title")}
-            description={t("trash_empty_desc")}
+            description={t(TRASH_RETENTION_DAYS === 1 ? "trash_empty_desc_single" : "trash_empty_desc", {
+              days: TRASH_RETENTION_DAYS,
+              dayUnit,
+            })}
             action={
               <Link href="/home" className="text-[12.5px] text-[var(--accent)] hover:underline">
                 {t("back_to_home")}

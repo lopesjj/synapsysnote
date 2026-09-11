@@ -98,7 +98,7 @@ export function CoverPicker({
       ) : null}
 
       {!coverUrl ? (
-        <div className="mx-auto flex w-full max-w-[var(--reading-width,46rem)] justify-end px-2 pt-1 sm:px-6 sm:pt-4 md:px-8">
+        <div className="mx-auto flex w-full max-w-[var(--reading-width,64rem)] justify-end px-2 pt-1 sm:px-6 sm:pt-4 md:px-8">
           <Menu>
             <MenuTrigger asChild>
               <button

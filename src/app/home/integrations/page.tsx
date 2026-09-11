@@ -58,7 +58,7 @@ function IntegrationsBody() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-10 md:px-8">
+    <div className="mx-auto w-full max-w-3xl xl:max-w-4xl 2xl:max-w-5xl px-5 py-10 md:px-8">
       <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-ink">{t("integrations_title")}</h1>
       <p className="mt-1 text-[12.5px] text-muted">
         {t("integrations_desc")}

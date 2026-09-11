@@ -140,13 +140,6 @@ export const useUiStore = create<UiState>()(
       setLanguage: (value) => set({ language: value }),
       hydratePreferences: (value) => {
         const next = pickPreferences(value);
-        const isNotePage =
-          typeof window !== "undefined" && window.location.pathname.startsWith("/home/p/");
-        const shouldAutoCollapse = next.autoCollapseSidebar ?? get().autoCollapseSidebar ?? true;
-        if (isNotePage && shouldAutoCollapse) {
-          next.sidebarCollapsed = true;
-        }
-        next.sidebarWidth = SIDEBAR_MIN_WIDTH;
         set(next);
       },
     }),
@@ -155,15 +148,12 @@ export const useUiStore = create<UiState>()(
       version: 7,
       migrate: (persisted) => {
         const state = (persisted ?? {}) as Partial<UiPreferences>;
-        const isNotePage =
-          typeof window !== "undefined" && window.location.pathname.startsWith("/home/p/");
-        const shouldAutoCollapse = state.autoCollapseSidebar ?? true;
         return {
           ...state,
-          sidebarCollapsed: (isNotePage && shouldAutoCollapse) ? true : (state.sidebarCollapsed ?? false),
-          sidebarWidth: SIDEBAR_MIN_WIDTH,
+          sidebarCollapsed: state.sidebarCollapsed ?? false,
+          sidebarWidth: state.sidebarWidth ?? SIDEBAR_MIN_WIDTH,
           uiZoom: state.uiZoom ?? 1.0,
-          autoCollapseSidebar: shouldAutoCollapse,
+          autoCollapseSidebar: state.autoCollapseSidebar ?? false,
         };
       },
       storage: createJSONStorage(() => localStorage),
@@ -177,12 +167,9 @@ export function useRehydrateUiStore(): void {
   useEffect(() => {
     void Promise.resolve(useUiStore.persist.rehydrate()).then(() => {
       const store = useUiStore.getState();
-      const isNotePage =
-        typeof window !== "undefined" && window.location.pathname.startsWith("/home/p/");
-      if (isNotePage && store.autoCollapseSidebar) {
-        store.setSidebarCollapsed(true);
+      if (store.sidebarWidth) {
+        store.setSidebarWidth(store.sidebarWidth);
       }
-      store.setSidebarWidth(SIDEBAR_MIN_WIDTH);
     });
   }, []);
 }

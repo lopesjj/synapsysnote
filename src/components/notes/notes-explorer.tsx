@@ -253,7 +253,7 @@ export function NotesExplorer({
           />
         </div>
       ) : layout === "split" ? (
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(260px,340px)_1fr]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(260px,340px)_1fr] 2xl:grid-cols-[minmax(280px,380px)_1fr]">
           <div className="min-h-0 overflow-y-auto border-b border-[var(--border)] lg:border-b-0 lg:border-r">
             {pages.map((page) => (
               <button
@@ -279,7 +279,7 @@ export function NotesExplorer({
 
           <div className="min-h-0 overflow-y-auto">
             {selected ? (
-              <article className="mx-auto w-full max-w-full sm:max-w-[var(--reading-width,46rem)] px-1.5 sm:px-5 md:px-8 py-4 sm:py-6">
+              <article className="mx-auto w-full max-w-full sm:max-w-[var(--reading-width,64rem)] px-1.5 sm:px-5 md:px-8 py-4 sm:py-6">
                 <div className="flex items-start justify-between gap-4">
                   <h2
                     className="min-w-0 text-[28px] font-semibold leading-[1.15] tracking-[-0.025em] text-ink"
@@ -319,7 +319,7 @@ export function NotesExplorer({
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8">
           <div
             className={cn(
-              "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3",
+              "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5",
               density === "compact" ? "gap-2" : "gap-3"
             )}
           >

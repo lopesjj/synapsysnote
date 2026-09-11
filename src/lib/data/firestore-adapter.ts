@@ -54,7 +54,7 @@ import type {
   Unsubscribe,
 } from "./adapter";
 
-const SERVER_OWNED = ["transcriptText", "embedding", "embeddingUpdatedAt"];
+const SERVER_OWNED = ["extractedOCRText", "transcriptText", "embedding", "embeddingUpdatedAt"];
 
 const BATCH_LIMIT = 400;
 

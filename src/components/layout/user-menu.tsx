@@ -15,7 +15,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { loginHref, navigateTo } from "@/lib/domains";
 import { useUserProfile } from "@/hooks/use-user-profile";
-import { useUiStore } from "@/lib/store/ui-store";
+import { currentPreferences, useUiStore } from "@/lib/store/ui-store";
+import { saveUserPreferences } from "@/lib/data/user-profile";
 import { useTheme } from "@/components/theme-provider";
 import { ChangePasswordDialog } from "@/components/auth/change-password-dialog";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuShortcut, MenuTrigger } from "@/components/ui/menu";
@@ -163,6 +164,10 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
             destructive
             onSelect={async () => {
               try {
+                if (user?.uid) {
+                  const prefs = { ...currentPreferences(), theme };
+                  await saveUserPreferences(user.uid, prefs).catch(() => {});
+                }
                 await signOut();
                 navigateTo(loginHref("/?logout=1"), router, "replace");
               } catch (error) {

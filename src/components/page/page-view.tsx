@@ -117,7 +117,7 @@ export function PageView({ pageId }: { pageId: string }) {
 
   if (!ready && !page) {
     return (
-      <div className="mx-auto max-w-[var(--reading-width,46rem)] px-6 py-14">
+      <div className="mx-auto max-w-[var(--reading-width,64rem)] px-6 py-14">
         <div className="h-9 w-2/3 animate-pulse rounded bg-[var(--surface-2)]" />
         <div className="mt-6 space-y-3">
           <div className="h-4 w-full animate-pulse rounded bg-[var(--surface-2)]" />
@@ -353,7 +353,7 @@ export function PageView({ pageId }: { pageId: string }) {
       ) : null}
 
       
-      <div className="relative z-10 mx-auto w-full max-w-full sm:max-w-[var(--reading-width,46rem)] px-4 pb-6 sm:pb-8 pb-safe sm:px-5 md:px-8">
+      <div className="relative z-10 mx-auto w-full max-w-full sm:max-w-[var(--reading-width,64rem)] px-4 pb-28 sm:pb-36 pb-safe sm:px-5 md:px-8">
         
         <div
           className={cn(
@@ -505,7 +505,7 @@ export function PageView({ pageId }: { pageId: string }) {
 
 
 
-        <div className="mt-8 border-t border-[var(--border)] pt-5">
+        <div className="mt-10 border-t border-[var(--border)] pt-6 pb-12 sm:pb-16">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
             {t("backlinks_title", { count: backlinks.length })}
           </p>

@@ -447,7 +447,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
         />
       ) : null}
 
-      <div className="relative z-10 mx-auto w-full max-w-[46rem] px-4 pb-24 pb-safe sm:px-5 md:px-8">
+      <div className="relative z-10 mx-auto w-full max-w-full sm:max-w-[var(--reading-width,64rem)] px-4 pb-24 pb-safe sm:px-5 md:px-8">
         <div
           className={cn(
             "flex flex-col items-start sm:flex-row sm:items-center",

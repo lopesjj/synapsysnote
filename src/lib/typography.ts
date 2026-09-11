@@ -124,7 +124,7 @@ export function fontsByCategory(): { category: FontCategory; label: string; font
 }
 
 export const EDITOR_WIDTHS: Record<"narrow" | "normal" | "wide", string> = {
-  narrow: "48rem",
-  normal: "64rem",
-  wide: "84rem",
+  narrow: "clamp(44rem, 50vw, 50rem)",
+  normal: "clamp(58rem, 68vw, 76rem)",
+  wide: "clamp(78rem, 90vw, 108rem)",
 };
