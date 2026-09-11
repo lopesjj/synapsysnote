@@ -5,6 +5,8 @@ import { Calendar, Check, Link as LinkIcon } from "lucide-react";
 import type { PropertyDef, PropertyValue } from "@/types/models";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
 import { cn, hashHue } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n/translations";
+import { translateDatabaseText } from "./database-i18n";
 
 export function SelectChip({ value, color }: { value: string; color?: string }) {
   const hue = hashHue(value);
@@ -80,6 +82,7 @@ function DateCell({
   onChange: (next: PropertyValue) => void;
   base: string;
 }) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(() => formatIsoToDisplay(value));
   const inputRef = useRef<HTMLInputElement>(null);
@@ -147,7 +150,7 @@ function DateCell({
             }
           }}
           className="shrink-0 p-1 text-faint hover:text-ink transition rounded"
-          title="Abrir calendário"
+          title={t("open_calendar")}
         >
           <Calendar className="size-3.5" />
         </button>
@@ -201,7 +204,7 @@ function DateCell({
           }
         }}
         className="p-1 text-faint hover:text-ink opacity-40 group-hover/date:opacity-100 transition-opacity rounded"
-        title="Abrir calendário"
+        title={t("open_calendar")}
       >
         <Calendar className="size-3.5" />
       </button>
@@ -234,6 +237,7 @@ export function PropertyCell({
   onChange: (next: PropertyValue) => void;
   compact?: boolean;
 }) {
+  const { t, language } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -288,7 +292,7 @@ export function PropertyCell({
             <button type="button" className={cn(base, "text-left")}>
               {value ? (
                 <SelectChip
-                  value={String(value)}
+                  value={translateDatabaseText(String(value), language)}
                   color={property.options?.find((o) => o.name === value)?.color}
                 />
               ) : (
@@ -299,11 +303,11 @@ export function PropertyCell({
           <MenuContent align="start">
             {property.options?.map((option) => (
               <MenuItem key={option.id} onSelect={() => onChange(option.name)}>
-                <SelectChip value={option.name} color={option.color} />
+                <SelectChip value={translateDatabaseText(option.name, language)} color={option.color} />
               </MenuItem>
             ))}
             <MenuItem onSelect={() => onChange(null)}>
-              <span className="text-faint">Limpar</span>
+              <span className="text-faint">{t("clear")}</span>
             </MenuItem>
           </MenuContent>
         </Menu>
@@ -319,7 +323,7 @@ export function PropertyCell({
                 values.map((item) => (
                   <SelectChip
                     key={item}
-                    value={item}
+                    value={translateDatabaseText(item, language)}
                     color={property.options?.find((o) => o.name === item)?.color}
                   />
                 ))
@@ -342,7 +346,7 @@ export function PropertyCell({
                   }}
                 >
                   <span className={cn("flex-1", !active && "opacity-60")}>
-                    <SelectChip value={option.name} color={option.color} />
+                    <SelectChip value={translateDatabaseText(option.name, language)} color={option.color} />
                   </span>
                   {active ? <Check className="size-3" /> : null}
                 </MenuItem>

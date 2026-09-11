@@ -165,4 +165,36 @@ assert.deepEqual(removed2, [
   `workspaces/${wsId}/uploads/p1/doc.pdf`,
 ]);
 
+const iconStorageUrl = `https://firebasestorage.googleapis.com/v0/b/bucket/o/workspaces%2F${wsId}%2Fuploads%2Ficons%2F123-icon.webp?alt=media`;
+const newIconStorageUrl = `https://firebasestorage.googleapis.com/v0/b/bucket/o/workspaces%2F${wsId}%2Fuploads%2Ficons%2F456-icon.webp?alt=media`;
+
+assert.equal(isStorageFile(iconStorageUrl, wsId), true);
+assert.equal(isStorageFile(`workspaces/${wsId}/uploads/icons/123-icon.webp`, wsId), true);
+
+function computePageIconRemoval(currentIcon: string | undefined, patchIcon: string | undefined, workspaceId: string): string[] {
+  const removed: string[] = [];
+  if (patchIcon !== undefined && currentIcon && currentIcon !== patchIcon && isStorageFile(currentIcon, workspaceId)) {
+    removed.push(currentIcon);
+  }
+  return removed;
+}
+
+assert.deepEqual(computePageIconRemoval(iconStorageUrl, newIconStorageUrl, wsId), [iconStorageUrl]);
+assert.deepEqual(computePageIconRemoval(iconStorageUrl, "📄", wsId), [iconStorageUrl]);
+assert.deepEqual(computePageIconRemoval(iconStorageUrl, iconStorageUrl, wsId), []);
+assert.deepEqual(computePageIconRemoval("📄", newIconStorageUrl, wsId), []);
+
+function computeNotebookIconRemoval(currentEmoji: string | undefined, patchEmoji: string | undefined, workspaceId: string): string[] {
+  const removed: string[] = [];
+  if (patchEmoji !== undefined && currentEmoji && currentEmoji !== patchEmoji && isStorageFile(currentEmoji, workspaceId)) {
+    removed.push(currentEmoji);
+  }
+  return removed;
+}
+
+assert.deepEqual(computeNotebookIconRemoval(iconStorageUrl, newIconStorageUrl, wsId), [iconStorageUrl]);
+assert.deepEqual(computeNotebookIconRemoval(iconStorageUrl, "📓", wsId), [iconStorageUrl]);
+assert.deepEqual(computeNotebookIconRemoval(iconStorageUrl, iconStorageUrl, wsId), []);
+assert.deepEqual(computeNotebookIconRemoval("📓", newIconStorageUrl, wsId), []);
+
 console.log("Todos os testes de exclusão de mídias passaram com sucesso!");

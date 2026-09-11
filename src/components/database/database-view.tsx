@@ -23,9 +23,16 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, Tabs, TabsList, TabsTrigger } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/translations";
+import {
+  isPlanningName,
+  translateDatabaseText,
+  formatRecordsProperties,
+} from "./database-i18n";
+
+export { isPlanningName, translateDatabaseText, formatRecordsProperties };
 
 export function DatabaseView({ database }: { database: AppDatabase }) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { adapter } = useWorkspace();
   const [view, setView] = useState<"table" | "kanban">(database.views[0]?.type === "kanban" ? "kanban" : "table");
 
@@ -48,10 +55,10 @@ export function DatabaseView({ database }: { database: AppDatabase }) {
           <WorkspaceIcon icon={database.icon} fallback="🗂️" size={20} />
           <div className="min-w-0">
             <h1 className="truncate text-[16px] font-semibold tracking-[-0.015em] text-ink">
-              {database.name}
+              {isPlanningName(database.name) ? t("planning") : database.name}
             </h1>
             <p className="text-[11.5px] text-muted">
-              {t("db_records_properties", { records: database.rows.length, properties: database.properties.length })}
+              {formatRecordsProperties(database.rows.length, database.properties.length, language)}
               {database.notionDatabaseId ? ` · ${t("db_imported_from_notion")}` : ""}
             </p>
           </div>
@@ -106,7 +113,7 @@ function TableView({
   titleProperty: PropertyDef;
   onAddRow: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { adapter } = useWorkspace();
   const properties = useMemo(
     () => [...database.properties].filter((p) => !p.hidden).sort((a, b) => a.order - b.order),
@@ -124,7 +131,7 @@ function TableView({
                 style={{ width: property.width }}
                 className="whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-faint"
               >
-                {property.name}
+                {translateDatabaseText(property.name, language)}
               </th>
             ))}
             <th className="w-10" />
@@ -151,7 +158,7 @@ function TableView({
                 <button
                   onClick={() => adapter.deleteRow(database.id, row.id)}
                   className="rounded p-1 text-faint opacity-0 transition group-hover:opacity-100 hover:text-[var(--danger)]"
-                  aria-label={`Excluir ${row.values[titleProperty.id] ?? "registro"}`}
+                  aria-label={`${t("db_delete_row")}: ${row.values[titleProperty.id] ?? t("db_record_fallback")}`}
                 >
                   <Trash2 className="size-3.5" />
                 </button>
@@ -186,6 +193,7 @@ function KanbanView({
   titleProperty: PropertyDef;
   onAddRow: (preset: Record<string, unknown>) => void;
 }) {
+  const { t, language } = useTranslation();
   const { adapter } = useWorkspace();
   const [dragging, setDragging] = useState<DatabaseRow | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -195,6 +203,7 @@ function KanbanView({
     const buckets = options.map((option) => ({
       id: option.name,
       name: option.name,
+      label: translateDatabaseText(option.name, language),
       color: option.color,
       rows: database.rows.filter((row) => row.values[groupProperty.id] === option.name),
     }));
@@ -202,10 +211,16 @@ function KanbanView({
       (row) => !options.some((option) => option.name === row.values[groupProperty.id])
     );
     if (ungrouped.length) {
-      buckets.push({ id: "__none__", name: "Sem status", color: undefined, rows: ungrouped });
+      buckets.push({
+        id: "__none__",
+        name: "__none__",
+        label: translateDatabaseText("sem status", language),
+        color: undefined,
+        rows: ungrouped,
+      });
     }
     return buckets;
-  }, [database.rows, groupProperty]);
+  }, [database.rows, groupProperty, language]);
 
   const onDragEnd = (event: DragEndEvent) => {
     setDragging(null);
@@ -237,11 +252,11 @@ function KanbanView({
           <KanbanColumn
             key={column.id}
             id={column.id}
-            name={column.name}
+            name={column.label}
             color={column.color}
             count={column.rows.length}
             onAdd={() =>
-              onAddRow({ [groupProperty.id]: column.id === "__none__" ? null : column.name })
+              onAddRow({ [groupProperty.id]: column.id === "__none__" ? null : column.id })
             }
           >
             {column.rows.map((row) => (
@@ -261,7 +276,7 @@ function KanbanView({
         {dragging ? (
           <div className="w-[260px] rotate-2 rounded-[var(--radius-md)] border border-[var(--accent)] bg-[var(--surface)] p-3 shadow-[var(--shadow-float)]">
             <p className="text-[12.5px] font-medium text-ink">
-              {String(dragging.values[titleProperty.id] ?? "Registro")}
+              {String(dragging.values[titleProperty.id] ?? t("db_record_fallback"))}
             </p>
           </div>
         ) : null}
@@ -285,6 +300,7 @@ function KanbanColumn({
   onAdd: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
     <div
@@ -300,7 +316,7 @@ function KanbanColumn({
         <button
           onClick={onAdd}
           className="ml-auto rounded p-1 text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink"
-          aria-label={`Adicionar em ${name}`}
+          aria-label={t("db_add_in_column", { name })}
         >
           <Plus className="size-3.5" />
         </button>
@@ -321,6 +337,7 @@ function KanbanCard({
   titleProperty: PropertyDef;
   groupPropertyId: string;
 }) {
+  const { t, language } = useTranslation();
   const { adapter } = useWorkspace();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: row.id });
 
@@ -343,7 +360,7 @@ function KanbanCard({
           {...attributes}
           {...listeners}
           className="mt-0.5 cursor-grab rounded p-0.5 text-faint opacity-0 transition group-hover:opacity-100 active:cursor-grabbing"
-          aria-label="Arrastar cartão"
+          aria-label={t("db_drag_card")}
         >
           <GripVertical className="size-3.5" />
         </button>
@@ -367,7 +384,7 @@ function KanbanCard({
                 return value.map((item) => (
                   <SelectChip
                     key={`${property.id}-${item}`}
-                    value={String(item)}
+                    value={translateDatabaseText(String(item), language)}
                     color={property.options?.find((o) => o.name === item)?.color}
                   />
                 ));
@@ -376,14 +393,14 @@ function KanbanCard({
                 return (
                   <SelectChip
                     key={property.id}
-                    value={String(value)}
+                    value={translateDatabaseText(String(value), language)}
                     color={property.options?.find((o) => o.name === value)?.color}
                   />
                 );
               }
               return (
                 <span key={property.id} className="text-[11px] text-muted">
-                  {property.name}: <span className="text-ink">{String(value)}</span>
+                  {translateDatabaseText(property.name, language)}: <span className="text-ink">{String(value)}</span>
                 </span>
               );
             })}

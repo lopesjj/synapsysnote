@@ -1,30 +1,5 @@
 rules_version = '2';
 
-// =============================================================================
-// Synapsys Note — Firestore  (projeto: synapsysnote)
-//
-// COPIE ESTE ARQUIVO INTEIRO em:
-//   Firebase Console → Firestore Database → Regras → Publicar
-//
-// Ou publique pelo CLI (na raiz do repo):
-//   firebase deploy --only firestore:rules
-//
-// Modelo:
-//
-//   /users/{userId}
-//   /workspaces/{workspaceId}
-//     /members/{uid}
-//     /notebooks/{id}
-//     /pages/{id}/versions/{id}
-//     /databases/{id}/rows/{id}
-//     /attachments/{id}
-//     /import_jobs/{id}/logs/{id}          ← create só Admin SDK
-//     /integrations/{id}/secure/{id}       ← token Notion, só Admin SDK
-//
-// O Admin SDK (bootstrap, OAuth Notion, worker de importação, OCR) ignora
-// estas regras. O cliente só lê o que for membro e só escreve conteúdo.
-// =============================================================================
-
 service cloud.firestore {
   match /databases/{database}/documents {
 

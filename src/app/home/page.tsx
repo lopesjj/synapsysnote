@@ -15,6 +15,7 @@ import { coverPresetById } from "@/lib/covers/presets";
 import { notebookSubtreeIds } from "@/lib/data/notebook-tree";
 import { useUiStore } from "@/lib/store/ui-store";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
+import { isPlanningName } from "@/components/database/database-view";
 import type { Notebook, Page } from "@/types/models";
 
 const LOCALE_MAP: Record<string, string> = {
@@ -131,13 +132,15 @@ export default function WorkspaceHome() {
 
   const openPlanning = async () => {
     const existing = databases.find(
-      (database) => !database.deletedAt && database.name === "Planejamento"
+      (database) =>
+        !database.deletedAt &&
+        (isPlanningName(database.name) || database.name === t("planning"))
     );
     if (existing) {
       router.push(`/home/db/${existing.id}`);
       return;
     }
-    const database = await adapter.createDatabase({ name: "Planejamento" });
+    const database = await adapter.createDatabase({ name: t("planning") });
     router.push(`/home/db/${database.id}`);
   };
 

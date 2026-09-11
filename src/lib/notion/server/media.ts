@@ -120,3 +120,23 @@ export async function rehostNotionFile(input: {
     };
   }
 }
+
+export async function rehostNotionIcon(url: string, fallback: string = "📄"): Promise<string> {
+  if (!url || !/^https?:\/\//i.test(url)) return url || fallback;
+  try {
+    const res = await fetch(url, { redirect: "follow" });
+    if (!res.ok) return fallback;
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const sharpModule = await import("sharp");
+    const sharp = sharpModule.default || sharpModule;
+    const optimized = await sharp(buffer)
+      .resize(128, 128, { fit: "inside", withoutEnlargement: false })
+      .webp({ quality: 85, alphaQuality: 85 })
+      .toBuffer();
+    return `data:image/webp;base64,${optimized.toString("base64")}`;
+  } catch {
+    return fallback;
+  }
+}
+

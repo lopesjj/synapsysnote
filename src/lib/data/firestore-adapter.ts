@@ -19,7 +19,7 @@ import {
   type QueryDocumentSnapshot,
   type Timestamp,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";
 import { nanoid } from "nanoid";
 import type {
@@ -111,22 +111,27 @@ function mapPage(snap: QueryDocumentSnapshot<DocumentData>): Page {
   };
 }
 
-function isStorageFile(input: unknown, workspaceId: string): boolean {
-  if (typeof input !== "string" || !input.trim()) return false;
+function extractStoragePathFromValue(input: unknown): string | null {
+  if (typeof input !== "string" || !input.trim()) return null;
   const val = input.trim();
-  if (val.startsWith(`workspaces/${workspaceId}/`)) return true;
+  if (val.startsWith("workspaces/") || val.startsWith("users/")) return val;
   if (val.includes("firebasestorage.googleapis.com") || val.includes("firebasestorage.app")) {
     const match = val.match(/\/o\/([^?]+)/);
     if (match && match[1]) {
       try {
-        const decoded = decodeURIComponent(match[1]);
-        return decoded.startsWith(`workspaces/${workspaceId}/`);
+        return decodeURIComponent(match[1]);
       } catch {
-        return match[1].startsWith(`workspaces/${workspaceId}/`);
+        return match[1];
       }
     }
   }
-  return false;
+  return null;
+}
+
+function isStorageFile(input: unknown, workspaceId: string): boolean {
+  const path = extractStoragePathFromValue(input);
+  if (!path) return false;
+  return path.startsWith(`workspaces/${workspaceId}/`);
 }
 
 function extractMediaPathsFromBlocks(blocks: unknown[]): string[] {
@@ -411,16 +416,30 @@ export class FirestoreAdapter implements DataAdapter {
   }
 
   async updateNotebook(id: string, patch: Partial<Notebook>) {
-    if (patch.coverUrl !== undefined) {
+    const shouldInspectMedia = patch.coverUrl !== undefined || patch.emoji !== undefined;
+    if (shouldInspectMedia) {
       const current = await getDoc(this.docRef("notebooks", id));
       if (current.exists()) {
         const data = current.data();
+        const removed: string[] = [];
         if (
+          patch.coverUrl !== undefined &&
           data.coverUrl &&
           data.coverUrl !== patch.coverUrl &&
           isStorageFile(data.coverUrl, this.workspaceId)
         ) {
-          void this.deleteMedia([data.coverUrl]);
+          removed.push(data.coverUrl);
+        }
+        if (
+          patch.emoji !== undefined &&
+          data.emoji &&
+          data.emoji !== patch.emoji &&
+          isStorageFile(data.emoji, this.workspaceId)
+        ) {
+          removed.push(data.emoji);
+        }
+        if (removed.length > 0) {
+          void this.deleteMedia(removed);
         }
       }
     }
@@ -484,6 +503,21 @@ export class FirestoreAdapter implements DataAdapter {
           updatedAt: serverTimestamp(),
         })
       );
+    }
+    const mediaToDelete: string[] = [];
+    for (const snap of notebooksSnap.docs) {
+      if (ids.has(snap.id)) {
+        const data = snap.data();
+        if (data.coverUrl && isStorageFile(data.coverUrl, this.workspaceId)) {
+          mediaToDelete.push(data.coverUrl);
+        }
+        if (data.emoji && isStorageFile(data.emoji, this.workspaceId)) {
+          mediaToDelete.push(data.emoji);
+        }
+      }
+    }
+    if (mediaToDelete.length > 0) {
+      void this.deleteMedia(mediaToDelete);
     }
     for (const notebookId of ids) {
       ops.push((batch) => batch.delete(this.docRef("notebooks", notebookId)));
@@ -1204,10 +1238,59 @@ export class FirestoreAdapter implements DataAdapter {
   }
 
   async uploadWorkspaceIcon(file: File) {
-    const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(-80);
+    let uploadData: Blob | File = file;
+    let contentType = file.type || "image/png";
+    let ext = file.name.split(".").pop() || "png";
+
+    if (typeof window !== "undefined" && typeof FileReader !== "undefined") {
+      try {
+        const blob = await new Promise<Blob | null>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement("canvas");
+              const max = 512;
+              let w = img.width;
+              let h = img.height;
+              if (w > max || h > max) {
+                if (w > h) {
+                  h = Math.round((h * max) / w);
+                  w = max;
+                } else {
+                  w = Math.round((w * max) / h);
+                  h = max;
+                }
+              }
+              canvas.width = Math.max(1, w);
+              canvas.height = Math.max(1, h);
+              const ctx = canvas.getContext("2d");
+              if (ctx) {
+                ctx.drawImage(img, 0, 0, w, h);
+                canvas.toBlob((b) => resolve(b), "image/webp", 0.9);
+                return;
+              }
+              resolve(null);
+            };
+            img.onerror = () => resolve(null);
+            img.src = String(reader.result);
+          };
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(file);
+        });
+        if (blob) {
+          uploadData = blob;
+          contentType = "image/webp";
+          ext = "webp";
+        }
+      } catch {}
+    }
+
+    const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[^\w.\-]+/g, "_").slice(-60) || "icon";
+    const safeName = `${baseName}.${ext}`;
     const path = `workspaces/${this.workspaceId}/uploads/icons/${Date.now()}-${nanoid(6)}-${safeName}`;
     const storageRef = ref(getFirebaseStorage(), path);
-    await uploadBytes(storageRef, file, { contentType: file.type || "image/png" });
+    await uploadBytes(storageRef, uploadData, { contentType });
     return getDownloadURL(storageRef);
   }
 
@@ -1225,5 +1308,14 @@ export class FirestoreAdapter implements DataAdapter {
     } catch (err) {
       console.error("Falha ao excluir mídia do storage:", err);
     }
+    try {
+      const storage = getFirebaseStorage();
+      await Promise.allSettled(
+        storagePaths.map((p) => {
+          const path = extractStoragePathFromValue(p) ?? p;
+          return deleteObject(ref(storage, path)).catch(() => {});
+        })
+      );
+    } catch {}
   }
 }

@@ -1,19 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Globe, Loader2, Monitor, Moon, Settings2, Sun, Type } from "lucide-react";
+import {
+  Check,
+  Globe,
+  Keyboard,
+  Loader2,
+  Monitor,
+  Moon,
+  Palette,
+  Settings,
+  Sun,
+  Type,
+  User,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
-import { DialogHeader, DialogShell } from "@/components/ui/dialog";
+import { DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
   Input,
   Kbd,
-  Separator,
   Switch,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
 } from "@/components/ui/primitives";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/hooks/use-auth";
@@ -31,8 +39,10 @@ import {
 } from "@/lib/store/ui-store";
 import { fontById, fontsByCategory } from "@/lib/typography";
 import { cn, isMac } from "@/lib/utils";
-import { useTranslation } from "@/lib/i18n/translations";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
 import { SUPPORTED_LANGUAGES } from "@/lib/i18n/languages";
+
+type PreferenceTab = "appearance" | "language" | "typography" | "profile" | "shortcuts";
 
 export function PreferencesDialog({
   open,
@@ -42,60 +52,168 @@ export function PreferencesDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { t } = useTranslation();
+  const [activeTab, setActiveTab] = useState<PreferenceTab>("appearance");
+
+  const navItems: { id: PreferenceTab; label: string; icon: React.ReactNode }[] = [
+    { id: "appearance", label: t("appearance"), icon: <Palette className="size-4" /> },
+    { id: "language", label: t("language"), icon: <Globe className="size-4" /> },
+    { id: "typography", label: t("typography"), icon: <Type className="size-4" /> },
+    { id: "profile", label: t("profile"), icon: <User className="size-4" /> },
+    { id: "shortcuts", label: t("shortcuts"), icon: <Keyboard className="size-4" /> },
+  ];
+
+  const getSectionTitle = () => {
+    switch (activeTab) {
+      case "appearance":
+        return t("appearance");
+      case "language":
+        return t("language_title");
+      case "typography":
+        return t("typography");
+      case "profile":
+        return t("profile");
+      case "shortcuts":
+        return t("shortcuts");
+    }
+  };
+
+  const getSectionDescription = () => {
+    switch (activeTab) {
+      case "appearance":
+        return t("theme_hint");
+      case "language":
+        return t("language_description");
+      default:
+        return "";
+    }
+  };
 
   return (
-    <DialogShell open={open} onOpenChange={onOpenChange} className="max-w-2xl">
-      <DialogHeader
-        icon={<Settings2 className="size-4" />}
-        title={t("preferences")}
-        description={t("preferences_description")}
-      />
-      <Tabs defaultValue="appearance">
-        <div className="border-b border-[var(--border)] px-5 pt-3">
-          <TabsList>
-            <TabsTrigger value="appearance">{t("appearance")}</TabsTrigger>
-            <TabsTrigger value="language">{t("language")}</TabsTrigger>
-            <TabsTrigger value="typography">{t("typography")}</TabsTrigger>
-            <TabsTrigger value="profile">{t("profile")}</TabsTrigger>
-            <TabsTrigger value="shortcuts">{t("shortcuts")}</TabsTrigger>
-          </TabsList>
+    <DialogShell
+      open={open}
+      onOpenChange={onOpenChange}
+      showClose={false}
+      className="max-w-3xl md:h-[620px] md:max-h-[88vh] p-0 gap-0 overflow-hidden bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-float)] rounded-[var(--radius-xl)]"
+    >
+      <div className="flex flex-col md:flex-row h-full">
+        <div className="w-full md:w-[210px] shrink-0 border-b md:border-b-0 md:border-r border-[var(--border)] bg-[var(--surface-2)]/35 flex flex-col justify-between p-3 md:p-3.5">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-2 py-1">
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-7 items-center justify-center rounded-lg bg-[var(--surface)] border border-[var(--border)] shadow-xs text-ink">
+                  <Settings className="size-3.5" />
+                </div>
+                <h2 className="text-[13.5px] font-semibold text-ink tracking-tight">
+                  {t("preferences")}
+                </h2>
+              </div>
+              <button
+                onClick={() => onOpenChange(false)}
+                className="md:hidden rounded-lg p-1.5 text-faint hover:bg-[var(--surface-hover)] hover:text-ink transition"
+                aria-label="Fechar"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <nav className="flex md:flex-col gap-1 overflow-x-auto no-scrollbar md:overflow-visible pb-1 md:pb-0">
+              {navItems.map((item) => {
+                const active = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveTab(item.id)}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all text-left shrink-0 md:shrink select-none",
+                      active
+                        ? "bg-[var(--surface)] text-ink font-semibold shadow-xs border border-[var(--border)]"
+                        : "text-muted hover:text-ink hover:bg-[var(--surface-hover)] border border-transparent"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "transition-colors",
+                        active ? "text-[var(--accent)]" : "text-faint"
+                      )}
+                    >
+                      {item.icon}
+                    </span>
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          <div className="hidden md:flex items-center justify-between px-2 pt-2 border-t border-[var(--border)]/60 text-[11px] text-faint">
+            <span>Synapsys Note</span>
+            <Kbd>Esc</Kbd>
+          </div>
         </div>
 
-        <div className="max-h-[62vh] overflow-y-auto px-5 py-4">
-          <TabsContent value="appearance" className="space-y-5 outline-none">
-            <AppearanceSection />
-          </TabsContent>
-          <TabsContent value="language" className="space-y-5 outline-none">
-            <LanguageSection />
-          </TabsContent>
-          <TabsContent value="typography" className="space-y-5 outline-none">
-            <TypographySection />
-          </TabsContent>
-          <TabsContent value="profile" className="space-y-5 outline-none">
-            <ProfileSection />
-          </TabsContent>
-          <TabsContent value="shortcuts" className="outline-none">
-            <ShortcutsSection />
-          </TabsContent>
+        <div className="flex-1 flex flex-col min-w-0 bg-[var(--surface)]">
+          <div className="hidden md:flex items-center justify-between px-8 py-4 border-b border-[var(--border)] shrink-0">
+            <div>
+              <h3 className="text-[16px] font-semibold text-ink tracking-tight">
+                {getSectionTitle()}
+              </h3>
+              {getSectionDescription() ? (
+                <p className="mt-0.5 text-[11.5px] text-muted">
+                  {getSectionDescription()}
+                </p>
+              ) : null}
+            </div>
+            <button
+              onClick={() => onOpenChange(false)}
+              className="rounded-lg p-1.5 text-faint hover:bg-[var(--surface-hover)] hover:text-ink transition"
+              aria-label="Fechar"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-5 py-4 md:px-8 md:py-6 space-y-6">
+            {activeTab === "appearance" && <AppearanceSection />}
+            {activeTab === "language" && <LanguageSection />}
+            {activeTab === "typography" && <TypographySection />}
+            {activeTab === "profile" && <ProfileSection />}
+            {activeTab === "shortcuts" && <ShortcutsSection />}
+          </div>
         </div>
-      </Tabs>
+      </div>
     </DialogShell>
   );
 }
 
-function Row({
+function PreferenceCard({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/25 divide-y divide-[var(--border)]/60 p-1",
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function PreferenceRow({
   label,
   hint,
   children,
+  className,
 }: {
   label: string;
-  hint?: string;
+  hint?: React.ReactNode;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-6">
-      <div className="min-w-0">
-        <p className="text-[13px] font-medium text-ink">{label}</p>
+    <div className={cn("flex items-center justify-between gap-4 px-3.5 py-3", className)}>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-medium text-ink leading-tight">{label}</p>
         {hint ? <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted">{hint}</p> : null}
       </div>
       <div className="shrink-0">{children}</div>
@@ -113,23 +231,26 @@ function SegmentedControl<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="inline-flex rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-0.5">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onChange(option.value)}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-[6px] px-2.5 py-1 text-[12px] font-medium transition",
-            value === option.value
-              ? "bg-[var(--surface)] text-ink shadow-sm"
-              : "text-muted hover:text-ink"
-          )}
-        >
-          {option.icon}
-          {option.label}
-        </button>
-      ))}
+    <div className="inline-flex rounded-lg bg-[var(--surface-2)] border border-[var(--border)]/60 p-0.5">
+      {options.map((option) => {
+        const active = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-medium transition-all select-none",
+              active
+                ? "bg-[var(--surface)] text-ink shadow-xs border border-[var(--border)]/80"
+                : "text-muted hover:text-ink"
+            )}
+          >
+            {option.icon}
+            {option.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -137,10 +258,10 @@ function SegmentedControl<T extends string>({
 function DensityPreview({ density }: { density: NotesDensity }) {
   const compact = density === "compact";
   return (
-    <div className={cn("flex w-36 flex-col", compact ? "gap-0.5" : "gap-1.5")} aria-hidden>
-      <span className={cn("w-full rounded-full bg-[var(--text)]/25", compact ? "h-1" : "h-1.5")} />
-      <span className={cn("w-5/6 rounded-full bg-[var(--text)]/18", compact ? "h-1" : "h-1.5")} />
-      <span className={cn("w-2/3 rounded-full bg-[var(--text)]/12", compact ? "h-1" : "h-1.5")} />
+    <div className={cn("flex w-32 flex-col", compact ? "gap-0.5" : "gap-1.5")} aria-hidden>
+      <span className={cn("w-full rounded-full bg-[var(--text)]/20", compact ? "h-1" : "h-1.5")} />
+      <span className={cn("w-4/5 rounded-full bg-[var(--text)]/15", compact ? "h-1" : "h-1.5")} />
+      <span className={cn("w-3/5 rounded-full bg-[var(--text)]/10", compact ? "h-1" : "h-1.5")} />
     </div>
   );
 }
@@ -165,103 +286,221 @@ function AppearanceSection() {
     }));
 
   return (
-    <>
-      <Row label={t("theme")} hint={t("theme_hint")}>
-        <SegmentedControl
-          value={theme}
-          onChange={setTheme}
-          options={[
-            { value: "light", label: t("light"), icon: <Sun className="size-3.5" /> },
-            { value: "dark", label: t("dark"), icon: <Moon className="size-3.5" /> },
-          ]}
-        />
-      </Row>
-      <Separator />
-      <Row
-        label={t("focus_mode")}
-        hint={`${t("focus_mode_hint")} ${t("focus_mode_shortcut_hint", {
-          shortcut: isMac() ? "⌘⇧F" : "Ctrl ⇧ F",
-        })}`}
-      >
-        <Switch
-          checked={zenMode}
-          onCheckedChange={(checked) => useUiStore.getState().setZenMode(checked)}
-          aria-label={t("focus_mode")}
-        />
-      </Row>
-      <Separator />
-      <Row label={t("notes_layout")} hint={t("notes_layout_hint")}>
-        <SegmentedControl<NotesLayout>
-          value={notesLayout}
-          onChange={(value) => useUiStore.getState().setNotesLayout(value)}
-          options={[
-            { value: "list", label: t("layout_list") },
-            { value: "cards", label: t("layout_cards") },
-            { value: "split", label: t("layout_split") },
-          ]}
-        />
-      </Row>
-      <Row
-        label={t("density")}
-        hint={t("density_hint")}
-      >
-        <div className="flex flex-col items-end gap-2">
-          <SegmentedControl<NotesDensity>
-            value={notesDensity}
-            onChange={(value) => useUiStore.getState().setNotesDensity(value)}
-            options={[
-              { value: "comfortable", label: t("comfortable") },
-              { value: "compact", label: t("compact") },
-            ]}
-          />
-          <DensityPreview density={notesDensity} />
+    <div className="space-y-5">
+      <div>
+        <label className="block text-[12px] font-semibold uppercase tracking-wider text-faint mb-2.5">
+          {t("theme")}
+        </label>
+        <div className="grid grid-cols-2 gap-3 max-w-sm">
+          <button
+            type="button"
+            onClick={() => setTheme("light")}
+            className={cn(
+              "group relative flex flex-col items-center gap-2 rounded-xl border p-3 text-left transition-all",
+              theme === "light"
+                ? "border-[var(--accent)] bg-[var(--accent-soft)]/20 ring-1 ring-[var(--accent)]/30 shadow-xs"
+                : "border-[var(--border)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+            )}
+          >
+            <div className="w-full h-16 rounded-lg bg-slate-100 border border-slate-200 p-2 flex flex-col justify-between overflow-hidden shadow-xs">
+              <div className="flex items-center gap-1">
+                <div className="size-1.5 rounded-full bg-slate-300" />
+                <div className="size-1.5 rounded-full bg-slate-300" />
+                <div className="size-1.5 rounded-full bg-slate-300" />
+              </div>
+              <div className="space-y-1">
+                <div className="w-3/4 h-1.5 rounded-full bg-slate-300" />
+                <div className="w-1/2 h-1.5 rounded-full bg-slate-200" />
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink">
+              <Sun className="size-3.5 text-amber-500" />
+              <span>{t("light")}</span>
+              {theme === "light" && <Check className="size-3.5 text-[var(--accent)] ml-auto" />}
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTheme("dark")}
+            className={cn(
+              "group relative flex flex-col items-center gap-2 rounded-xl border p-3 text-left transition-all",
+              theme === "dark"
+                ? "border-[var(--accent)] bg-[var(--accent-soft)]/20 ring-1 ring-[var(--accent)]/30 shadow-xs"
+                : "border-[var(--border)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+            )}
+          >
+            <div className="w-full h-16 rounded-lg bg-slate-900 border border-slate-800 p-2 flex flex-col justify-between overflow-hidden shadow-xs">
+              <div className="flex items-center gap-1">
+                <div className="size-1.5 rounded-full bg-slate-700" />
+                <div className="size-1.5 rounded-full bg-slate-700" />
+                <div className="size-1.5 rounded-full bg-slate-700" />
+              </div>
+              <div className="space-y-1">
+                <div className="w-3/4 h-1.5 rounded-full bg-slate-700" />
+                <div className="w-1/2 h-1.5 rounded-full bg-slate-800" />
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink">
+              <Moon className="size-3.5 text-indigo-400" />
+              <span>{t("dark")}</span>
+              {theme === "dark" && <Check className="size-3.5 text-[var(--accent)] ml-auto" />}
+            </div>
+          </button>
         </div>
-      </Row>
-      <Row label={t("default_sorting")}>
-        <SegmentedControl<NotesSortKey>
-          value={notesSort}
-          onChange={(value) => useUiStore.getState().setNotesSort(value)}
-          options={[
-            { value: "updated", label: t("sort_updated") },
-            { value: "created", label: t("sort_created") },
-            { value: "title", label: t("sort_title") },
-          ]}
-        />
-      </Row>
-      <Separator />
-      <Row
-        label={t("saving_indicator")}
-        hint={t("saving_indicator_hint")}
-      >
-        <Switch
-          checked={showSaveIndicator}
-          onCheckedChange={(checked) => useUiStore.getState().setShowSaveIndicator(checked)}
-          aria-label={t("saving_indicator")}
-        />
-      </Row>
-      <Separator />
-      <Row
-        label={t("ui_scale")}
-        hint={t("ui_scale_hint")}
-      >
-        <SegmentedControl<string>
-          value={String(uiZoom)}
-          onChange={(value) => useUiStore.getState().setUiZoom(Number(value))}
-          options={zoomOptions}
-        />
-      </Row>
-      <Separator />
-      <Row
-        label={t("auto_collapse_sidebar")}
-        hint={t("auto_collapse_sidebar_hint")}
-      >
-        <Switch
-          checked={autoCollapseSidebar}
-          onCheckedChange={(checked) => useUiStore.getState().setAutoCollapseSidebar(checked)}
-          aria-label={t("auto_collapse_sidebar")}
-        />
-      </Row>
-    </>
+      </div>
+
+      <div>
+        <label className="block text-[12px] font-semibold uppercase tracking-wider text-faint mb-2.5">
+          {t("appearance")}
+        </label>
+        <PreferenceCard>
+          <PreferenceRow
+            label={t("focus_mode")}
+            hint={`${t("focus_mode_hint")} (${isMac() ? "⌘⇧F" : "Ctrl ⇧ F"})`}
+          >
+            <Switch
+              checked={zenMode}
+              onCheckedChange={(checked) => useUiStore.getState().setZenMode(checked)}
+              aria-label={t("focus_mode")}
+            />
+          </PreferenceRow>
+
+          <PreferenceRow
+            label={t("auto_collapse_sidebar")}
+            hint={t("auto_collapse_sidebar_hint")}
+          >
+            <Switch
+              checked={autoCollapseSidebar}
+              onCheckedChange={(checked) => useUiStore.getState().setAutoCollapseSidebar(checked)}
+              aria-label={t("auto_collapse_sidebar")}
+            />
+          </PreferenceRow>
+
+          <PreferenceRow
+            label={t("saving_indicator")}
+            hint={t("saving_indicator_hint")}
+          >
+            <Switch
+              checked={showSaveIndicator}
+              onCheckedChange={(checked) => useUiStore.getState().setShowSaveIndicator(checked)}
+              aria-label={t("saving_indicator")}
+            />
+          </PreferenceRow>
+        </PreferenceCard>
+      </div>
+
+      <div>
+        <label className="block text-[12px] font-semibold uppercase tracking-wider text-faint mb-2.5">
+          {t("notes_layout")}
+        </label>
+        <PreferenceCard>
+          <PreferenceRow label={t("notes_layout")} hint={t("notes_layout_hint")}>
+            <SegmentedControl<NotesLayout>
+              value={notesLayout}
+              onChange={(value) => useUiStore.getState().setNotesLayout(value)}
+              options={[
+                { value: "list", label: t("layout_list") },
+                { value: "cards", label: t("layout_cards") },
+                { value: "split", label: t("layout_split") },
+              ]}
+            />
+          </PreferenceRow>
+
+          <PreferenceRow label={t("density")} hint={t("density_hint")}>
+            <div className="flex flex-col items-end gap-2">
+              <SegmentedControl<NotesDensity>
+                value={notesDensity}
+                onChange={(value) => useUiStore.getState().setNotesDensity(value)}
+                options={[
+                  { value: "comfortable", label: t("comfortable") },
+                  { value: "compact", label: t("compact") },
+                ]}
+              />
+              <DensityPreview density={notesDensity} />
+            </div>
+          </PreferenceRow>
+
+          <PreferenceRow label={t("default_sorting")}>
+            <SegmentedControl<NotesSortKey>
+              value={notesSort}
+              onChange={(value) => useUiStore.getState().setNotesSort(value)}
+              options={[
+                { value: "updated", label: t("sort_updated") },
+                { value: "created", label: t("sort_created") },
+                { value: "title", label: t("sort_title") },
+              ]}
+            />
+          </PreferenceRow>
+
+          <PreferenceRow label={t("ui_scale")} hint={t("ui_scale_hint")}>
+            <SegmentedControl<string>
+              value={String(uiZoom)}
+              onChange={(value) => useUiStore.getState().setUiZoom(Number(value))}
+              options={zoomOptions}
+            />
+          </PreferenceRow>
+        </PreferenceCard>
+      </div>
+    </div>
+  );
+}
+
+function LanguageSection() {
+  const { t, language, setLanguage } = useTranslation();
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {SUPPORTED_LANGUAGES.map((lang) => {
+          const active = lang.code === language;
+          return (
+            <button
+              key={lang.code}
+              type="button"
+              onClick={() => setLanguage(lang.code)}
+              className={cn(
+                "group relative flex items-center justify-between rounded-xl border p-3.5 text-left transition-all duration-150 select-none",
+                active
+                  ? "border-[var(--accent)] bg-[var(--accent-soft)]/20 shadow-xs ring-1 ring-[var(--accent)]/30"
+                  : "border-[var(--border)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]/70 bg-[var(--surface)]"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={cn(
+                    "size-8 rounded-lg flex items-center justify-center font-mono text-[11px] font-bold tracking-wider shrink-0 transition-colors",
+                    active
+                      ? "bg-[var(--accent)] text-white shadow-xs"
+                      : "bg-[var(--surface-2)] text-muted group-hover:text-ink border border-[var(--border)]"
+                  )}
+                >
+                  {lang.code.toUpperCase()}
+                </div>
+                <div>
+                  <span className="block text-[13.5px] font-medium text-ink leading-tight">
+                    {lang.nativeName}
+                  </span>
+                  <span className="block text-[11.5px] text-muted leading-tight mt-0.5">
+                    {t(`lang_${lang.code}` as TranslationKey)}
+                  </span>
+                </div>
+              </div>
+              <div
+                className={cn(
+                  "size-5 rounded-full flex items-center justify-center transition-colors shrink-0",
+                  active
+                    ? "bg-[var(--accent)] text-white"
+                    : "border border-[var(--border)] group-hover:border-[var(--border-strong)]"
+                )}
+              >
+                {active ? <Check className="size-3" strokeWidth={3} /> : null}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -286,26 +525,24 @@ function TypographySection() {
   };
 
   const getFontNote = (fontId: string, defaultNote: string) => {
-    const key = `font_note_${fontId.replace(/-/g, "_")}` as any;
+    const key = `font_note_${fontId.replace(/-/g, "_")}` as TranslationKey;
     const translated = t(key);
     return translated === key ? defaultNote : translated;
   };
 
   return (
-    <>
+    <div className="space-y-5">
       <div>
-        <p className="text-[13px] font-medium text-ink">{t("editor_font")}</p>
-        <p className="mt-0.5 text-[11.5px] text-muted">
-          {t("editor_font_hint")}
-        </p>
-
-        <div className="mt-3 space-y-4">
+        <label className="block text-[12px] font-semibold uppercase tracking-wider text-faint mb-2.5">
+          {t("editor_font")}
+        </label>
+        <div className="space-y-4">
           {fontsByCategory().map((group) => (
             <div key={group.category}>
-              <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-faint">
+              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-faint">
                 {getFontCategoryLabel(group.category)}
               </p>
-              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {group.fonts.map((font) => {
                   const active = font.id === editorFontId;
                   return (
@@ -314,25 +551,36 @@ function TypographySection() {
                       type="button"
                       onClick={() => useUiStore.getState().setEditorFontId(font.id)}
                       className={cn(
-                        "flex items-start gap-2 rounded-[var(--radius-sm)] border px-2.5 py-2 text-left transition",
+                        "group flex items-center gap-3 rounded-xl border p-3 text-left transition-all",
                         active
-                          ? "border-[var(--accent)] bg-[var(--accent-soft)]"
-                          : "border-[var(--border)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+                          ? "border-[var(--accent)] bg-[var(--accent-soft)]/20 shadow-xs ring-1 ring-[var(--accent)]/30"
+                          : "border-[var(--border)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] bg-[var(--surface)]"
                       )}
                     >
-                      <span className="min-w-0 flex-1">
+                      <div
+                        className={cn(
+                          "size-8 rounded-lg flex items-center justify-center text-[13px] font-bold shrink-0 transition-colors",
+                          active
+                            ? "bg-[var(--accent)] text-white shadow-xs"
+                            : "bg-[var(--surface-2)] text-muted group-hover:text-ink border border-[var(--border)]"
+                        )}
+                        style={{ fontFamily: font.stack }}
+                      >
+                        Aa
+                      </div>
+                      <div className="min-w-0 flex-1">
                         <span
-                          className="block truncate text-[13.5px] text-ink"
+                          className="block truncate text-[13.5px] font-medium text-ink leading-tight"
                           style={{ fontFamily: font.stack }}
                         >
                           {font.name}
                         </span>
-                        <span className="mt-0.5 block text-[11px] leading-snug text-muted">
+                        <span className="mt-0.5 block text-[11px] text-muted leading-tight truncate">
                           {getFontNote(font.id, font.note)}
                         </span>
-                      </span>
+                      </div>
                       {active ? (
-                        <Check className="mt-0.5 size-3.5 shrink-0 text-[var(--accent)]" />
+                        <Check className="size-4 shrink-0 text-[var(--accent)]" strokeWidth={2.5} />
                       ) : null}
                     </button>
                   );
@@ -343,46 +591,53 @@ function TypographySection() {
         </div>
       </div>
 
-      <Separator />
+      <PreferenceCard>
+        <PreferenceRow label={t("font_body_size")} hint={`${editorFontSize}px`}>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-faint font-mono">{EDITOR_FONT_SIZE_MIN}px</span>
+            <input
+              type="range"
+              min={EDITOR_FONT_SIZE_MIN}
+              max={EDITOR_FONT_SIZE_MAX}
+              value={editorFontSize}
+              onChange={(event) =>
+                useUiStore.getState().setEditorFontSize(Number(event.target.value))
+              }
+              className="w-32 sm:w-44 accent-[var(--accent)] cursor-pointer"
+              aria-label={t("font_body_size")}
+            />
+            <span className="text-[11px] text-faint font-mono">{EDITOR_FONT_SIZE_MAX}px</span>
+            <span className="text-[12px] font-semibold text-ink px-2 py-0.5 rounded-md bg-[var(--surface-2)] border border-[var(--border)]">
+              {editorFontSize}px
+            </span>
+          </div>
+        </PreferenceRow>
 
-      <Row label={t("font_body_size")} hint={`${editorFontSize}px`}>
-        <input
-          type="range"
-          min={EDITOR_FONT_SIZE_MIN}
-          max={EDITOR_FONT_SIZE_MAX}
-          value={editorFontSize}
-          onChange={(event) =>
-            useUiStore.getState().setEditorFontSize(Number(event.target.value))
-          }
-          className="w-40 accent-[var(--accent)]"
-          aria-label={t("font_body_size")}
-        />
-      </Row>
-
-      <Row label={t("reading_width")} hint={t("reading_width_hint")}>
-        <SegmentedControl<EditorWidth>
-          value={editorWidth}
-          onChange={(value) => useUiStore.getState().setEditorWidth(value)}
-          options={[
-            { value: "narrow", label: t("width_narrow") },
-            { value: "normal", label: t("width_normal") },
-            { value: "wide", label: t("width_wide") },
-          ]}
-        />
-      </Row>
+        <PreferenceRow label={t("reading_width")} hint={t("reading_width_hint")}>
+          <SegmentedControl<EditorWidth>
+            value={editorWidth}
+            onChange={(value) => useUiStore.getState().setEditorWidth(value)}
+            options={[
+              { value: "narrow", label: t("width_narrow") },
+              { value: "normal", label: t("width_normal") },
+              { value: "wide", label: t("width_wide") },
+            ]}
+          />
+        </PreferenceRow>
+      </PreferenceCard>
 
       <div
-        className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3"
+        className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/30 p-4 transition-all"
         style={{ fontFamily: selected.stack, fontSize: `${editorFontSize}px` }}
       >
-        <p className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-faint">
-          <Type className="size-3" /> {t("preview")} · {selected.name}
-        </p>
-        <p className="mt-1.5 leading-relaxed text-ink">
-          {t("preview_quote")}
+        <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-faint mb-2">
+          <Type className="size-3 text-[var(--accent)]" /> {t("preview")} · {selected.name}
+        </div>
+        <p className="leading-relaxed text-ink font-normal">
+          &ldquo;{t("preview_quote")}&rdquo;
         </p>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -404,24 +659,22 @@ function ProfileSection() {
   };
 
   return (
-    <>
-      <div className="flex items-center gap-3">
+    <div className="space-y-5">
+      <div className="flex items-center gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/30 p-4">
         <Avatar name={profile?.displayName ?? user?.displayName ?? ""} url={user?.photoURL} />
-        <div className="min-w-0">
-          <p className="truncate text-[14px] font-medium text-ink">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-semibold text-ink">
             {profile?.displayName ?? user?.displayName}
           </p>
-          <p className="truncate text-[12px] text-muted">{user?.email}</p>
+          <p className="truncate text-[12.5px] text-muted">{user?.email}</p>
           {profile?.phone ? (
-            <p className="truncate text-[12px] text-muted">{profile.phone}</p>
+            <p className="truncate text-[12px] text-muted mt-0.5">{profile.phone}</p>
           ) : null}
         </div>
       </div>
 
-      <Separator />
-
-      <div className="space-y-1.5">
-        <label className="text-[11.5px] font-medium text-muted" htmlFor="display-name">
+      <div className="space-y-2">
+        <label className="block text-[12.5px] font-medium text-ink" htmlFor="display-name">
           {t("display_name")}
         </label>
         <div className="flex gap-2">
@@ -430,6 +683,7 @@ function ProfileSection() {
             value={name}
             onChange={(event) => setDraft(event.target.value)}
             placeholder={t("display_name_placeholder")}
+            className="rounded-lg"
           />
           <Button
             variant="primary"
@@ -443,38 +697,36 @@ function ProfileSection() {
                 onError: () => toast.error(t("name_save_failed")),
               });
             }}
+            className="shrink-0 rounded-lg"
           >
             {rename.isPending ? <Loader2 className="animate-spin" /> : null}
             {t("save")}
           </Button>
         </div>
-        <p className="text-[11px] text-faint">
-          {t("display_name_hint")}
-        </p>
       </div>
 
-      <Separator />
-
-      <Row label={t("access_methods")} hint={t("access_methods_hint")}>
-        <div className="flex flex-wrap justify-end gap-1.5">
-          {(profile?.providers?.length ? profile.providers : ["-"]).map((provider) => (
-            <span
-              key={provider}
-              className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-muted"
-            >
-              {providerLabels[provider] ?? provider}
-            </span>
-          ))}
-        </div>
-      </Row>
+      <PreferenceCard>
+        <PreferenceRow label={t("access_methods")} hint={t("access_methods_hint")}>
+          <div className="flex flex-wrap justify-end gap-1.5">
+            {(profile?.providers?.length ? profile.providers : ["-"]).map((provider) => (
+              <span
+                key={provider}
+                className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-0.5 text-[11px] font-medium text-muted"
+              >
+                {providerLabels[provider] ?? provider}
+              </span>
+            ))}
+          </div>
+        </PreferenceRow>
+      </PreferenceCard>
 
       {mode === "demo" ? (
-        <p className="flex items-start gap-2 rounded-[var(--radius-sm)] bg-[var(--accent-soft)] px-3 py-2 text-[11.5px] text-[var(--accent)]">
-          <Monitor className="mt-0.5 size-3.5 shrink-0" />
-          {t("demo_session_notice")}
-        </p>
+        <div className="flex items-start gap-2.5 rounded-xl border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-3.5 py-3 text-[12px] text-[var(--accent)]">
+          <Monitor className="mt-0.5 size-4 shrink-0" />
+          <span className="leading-relaxed">{t("demo_session_notice")}</span>
+        </div>
       ) : null}
-    </>
+    </div>
   );
 }
 
@@ -484,14 +736,14 @@ function Avatar({ name, url }: { name: string; url?: string | null }) {
       <img
         src={url}
         alt=""
-        width={44}
-        height={44}
-        className="size-11 shrink-0 rounded-full object-cover"
+        width={48}
+        height={48}
+        className="size-12 shrink-0 rounded-full object-cover border border-[var(--border)] shadow-xs"
       />
     );
   }
   return (
-    <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[15px] font-semibold text-[var(--accent)]">
+    <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[16px] font-bold text-[var(--accent)] border border-[var(--accent)]/20 shadow-xs">
       {name.trim().charAt(0).toUpperCase() || "?"}
     </div>
   );
@@ -533,16 +785,16 @@ function ShortcutsSection() {
     <div className="space-y-5">
       {shortcuts.map((section) => (
         <div key={section.group}>
-          <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-faint">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.09em] text-faint">
             {section.group}
           </p>
-          <div className="space-y-1">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/25 divide-y divide-[var(--border)]/50 overflow-hidden">
             {section.items.map((item) => (
               <div
                 key={item.label}
-                className="flex items-center justify-between gap-4 rounded-[var(--radius-xs)] px-1 py-1"
+                className="flex items-center justify-between gap-4 px-3.5 py-2.5 text-left hover:bg-[var(--surface-hover)]/50 transition-colors"
               >
-                <span className="text-[12.5px] text-muted">{item.label}</span>
+                <span className="text-[12.5px] font-medium text-ink">{item.label}</span>
                 <span className="flex shrink-0 items-center gap-1">
                   {item.keys.map((key, index) => (
                     <Kbd key={`${item.label}-${index}`}>{key === "mod" ? mod : key}</Kbd>
@@ -556,53 +808,3 @@ function ShortcutsSection() {
     </div>
   );
 }
-
-function LanguageSection() {
-  const { t, language, setLanguage } = useTranslation();
-
-  return (
-    <div>
-      <p className="text-[13px] font-medium text-ink">{t("language_title")}</p>
-      <p className="mt-0.5 text-[11.5px] text-muted">
-        {t("language_description")}
-      </p>
-
-      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {SUPPORTED_LANGUAGES.map((lang) => {
-          const active = lang.code === language;
-          return (
-            <button
-              key={lang.code}
-              type="button"
-              onClick={() => setLanguage(lang.code)}
-              className={cn(
-                "flex items-center justify-between rounded-[var(--radius-sm)] border px-3 py-2.5 text-left transition",
-                active
-                  ? "border-[var(--accent)] bg-[var(--accent-soft)]"
-                  : "border-[var(--border)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
-              )}
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="text-[18px] leading-none" role="img" aria-label={lang.name}>
-                  {lang.flag}
-                </span>
-                <div>
-                  <span className="block text-[13px] font-medium text-ink">
-                    {lang.nativeName}
-                  </span>
-                  <span className="block text-[11px] text-muted">
-                    {t(`lang_${lang.code}` as any)}
-                  </span>
-                </div>
-              </div>
-              {active ? (
-                <Check className="size-4 shrink-0 text-[var(--accent)]" />
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-

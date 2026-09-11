@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { FLAG_CODE_SET, flagEmojiFromCode } from "./flag-codes";
 
@@ -78,8 +78,25 @@ function WorkspaceImageIcon({
   px: number;
   className?: string;
 }) {
-  const [hasError, setHasError] = useState(() => isExpiredNotionUrl(src));
+  const [currentSrc, setCurrentSrc] = useState(src);
+  const [hasError, setHasError] = useState(false);
+  const [attemptedProxy, setAttemptedProxy] = useState(false);
   const safeFallback = isIconUrl(fallback) ? "📄" : fallback;
+
+  useEffect(() => {
+    setCurrentSrc(src);
+    setHasError(false);
+    setAttemptedProxy(false);
+  }, [src]);
+
+  const handleError = () => {
+    if (!attemptedProxy && currentSrc.startsWith("http") && !currentSrc.startsWith("/api/media/proxy")) {
+      setAttemptedProxy(true);
+      setCurrentSrc(`/api/media/proxy?url=${encodeURIComponent(currentSrc)}`);
+    } else {
+      setHasError(true);
+    }
+  };
 
   if (hasError) {
     const flag = flagCountryCode(safeFallback);
@@ -128,9 +145,9 @@ function WorkspaceImageIcon({
       style={hero ? undefined : { width: px, height: px }}
     >
       <img
-        src={src}
+        src={currentSrc}
         alt=""
-        onError={() => setHasError(true)}
+        onError={handleError}
         className={
           hero
             ? "max-h-full max-w-full object-contain object-center"

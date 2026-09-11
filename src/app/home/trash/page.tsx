@@ -29,7 +29,11 @@ export default function TrashPage() {
     const label = `${totalTrashedCount} ${totalTrashedCount === 1 ? t("wizard_unit_item") : t("wizard_unit_items")}`;
     if (
       !window.confirm(
-        t("trash_confirm", { label })
+        t("trash_confirm", {
+          count: totalTrashedCount,
+          unit: totalTrashedCount === 1 ? t("wizard_unit_item") : t("wizard_unit_items"),
+          label,
+        })
       )
     ) {
       return;

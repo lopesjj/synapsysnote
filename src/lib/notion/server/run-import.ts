@@ -35,7 +35,7 @@ import {
   type ImportRole,
 } from "@/lib/notion/classify-import";
 import { defaultViews, mapDatabaseSchema, mapPropertyValues } from "./property-mapper";
-import { rehostNotionFile } from "./media";
+import { rehostNotionFile, rehostNotionIcon } from "./media";
 
 type JobOptions = ImportJob["options"];
 
@@ -214,16 +214,9 @@ async function importNotebook(args: ImportArgs): Promise<string> {
   });
 
   let icon = node.icon ?? "📓";
-  if (node.icon && /^https?:\/\//i.test(node.icon) && progress.options.downloadMedia) {
+  if (node.icon && /^https?:\/\//i.test(node.icon)) {
     try {
-      const rehosted = await rehostNotionFile({
-        workspaceId,
-        jobId,
-        url: node.icon,
-        suggestedName: `${node.title || "caderno"}-icon.png`,
-      });
-      await progress.fileDone(rehosted.bytes);
-      icon = rehosted.url;
+      icon = await rehostNotionIcon(node.icon, "📓");
     } catch {
       icon = "📓";
     }
@@ -317,16 +310,9 @@ async function importPage(args: ImportArgs): Promise<string> {
   }
 
   let icon = node.icon ?? "📄";
-  if (node.icon && /^https?:\/\//i.test(node.icon) && progress.options.downloadMedia) {
+  if (node.icon && /^https?:\/\//i.test(node.icon)) {
     try {
-      const rehosted = await rehostNotionFile({
-        workspaceId,
-        jobId,
-        url: node.icon,
-        suggestedName: `${node.title || "pagina"}-icon.png`,
-      });
-      await progress.fileDone(rehosted.bytes);
-      icon = rehosted.url;
+      icon = await rehostNotionIcon(node.icon, "📄");
     } catch {
       icon = "📄";
     }
@@ -411,16 +397,9 @@ async function importDatabase(args: ImportArgs): Promise<string> {
   });
 
   let icon = node.icon ?? "🗂️";
-  if (node.icon && /^https?:\/\//i.test(node.icon) && progress.options.downloadMedia) {
+  if (node.icon && /^https?:\/\//i.test(node.icon)) {
     try {
-      const rehosted = await rehostNotionFile({
-        workspaceId,
-        jobId,
-        url: node.icon,
-        suggestedName: `${node.title || "base"}-icon.png`,
-      });
-      await progress.fileDone(rehosted.bytes);
-      icon = rehosted.url;
+      icon = await rehostNotionIcon(node.icon, "🗂️");
     } catch {
       icon = "🗂️";
     }

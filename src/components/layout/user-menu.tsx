@@ -9,7 +9,6 @@ import {
   Moon,
   Plug,
   Settings,
-  Settings2,
   Sun,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -136,7 +135,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
               useUiStore.getState().setPreferencesOpen(true);
             }}
           >
-            <Settings2 /> {t("preferences")}
+            <Settings className="size-4" /> {t("preferences")}
           </MenuItem>
           <MenuItem
             onSelect={() => {
