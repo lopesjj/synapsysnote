@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Badge, Checkbox, Progress, Skeleton, Switch } from "@/components/ui/primitives";
 import { cn, formatBytes } from "@/lib/utils";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
-import { useTranslation } from "@/lib/i18n/translations";
+import { useTranslation, localizeErrorMessage } from "@/lib/i18n/translations";
 
 type Step = "connect" | "select" | "preview" | "progress";
 
@@ -370,7 +370,7 @@ function SelectStep({
     return (
       <div className="flex flex-col items-center gap-3 px-8 py-16 text-center">
         <AlertTriangle className="size-6 text-[var(--warning)]" />
-        <p className="text-[13px] text-ink">{error}</p>
+        <p className="text-[13px] text-ink">{localizeErrorMessage(error, t)}</p>
         <Button variant="secondary" onClick={onRetry}>
           <RefreshCw /> {t("wizard_try_again")}
         </Button>
@@ -727,7 +727,7 @@ function ProgressStep({
           {job.errors.slice(0, 4).map((error) => (
             <p key={`${error.itemId}-${error.at}`} className="text-[11.5px] text-muted">
               <span className="font-mono">{error.stage}</span> · {error.itemTitle ?? error.itemId}:{" "}
-              {error.message}
+              {localizeErrorMessage(error.message, t)}
             </p>
           ))}
         </div>

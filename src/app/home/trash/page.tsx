@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { RotateCcw, Trash2 } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace, TRASH_RETENTION_DAYS } from "@/lib/data/provider";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/primitives";
 import { formatRelative } from "@/lib/utils";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
+import { TrashCanIcon } from "@/lib/icons/trash-icon";
 import { useTranslation } from "@/lib/i18n/translations";
 
 export default function TrashPage() {
@@ -77,8 +78,8 @@ export default function TrashPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
-            <span className="inline-flex size-10 items-center justify-center rounded-[14px] bg-[var(--accent-soft)] text-[var(--accent)]">
-              <Trash2 className="size-5" />
+            <span className="inline-flex size-9.5 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-2)] text-muted shadow-sm transition-colors">
+              <TrashCanIcon className="size-5 text-muted" />
             </span>
             <div>
               <h1 className="text-[22px] font-semibold tracking-[-0.025em] text-ink">{t("trash")}</h1>
@@ -113,7 +114,7 @@ export default function TrashPage() {
             disabled={emptying || activeActionId !== null}
             onClick={() => void emptyTrash()}
           >
-            <Trash2 />
+            <TrashCanIcon className="size-3.5" />
             {emptying ? t("emptying_trash") : t("empty_trash_button")}
           </Button>
         ) : null}
@@ -201,7 +202,7 @@ export default function TrashPage() {
                         }
                       }}
                     >
-                      <Trash2 className="text-[var(--danger)]" />
+                      <TrashCanIcon className="size-3.5 text-[var(--danger)]" />
                     </Button>
                   </div>
                 </div>

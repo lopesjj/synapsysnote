@@ -77,7 +77,7 @@ function writeLocalStore(key: string, value: unknown) {
   } catch {}
 }
 
-export const TRASH_RETENTION_DAYS = 30;
+export const TRASH_RETENTION_DAYS: number = 30;
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();

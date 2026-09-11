@@ -453,6 +453,82 @@
   padding: 0.85rem 1rem;
 }
 
+.synapsys-editor .ProseMirror .synapsys-toggle {
+  position: relative;
+  padding-left: 1.5rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.synapsys-editor .ProseMirror .synapsys-toggle__trigger {
+  position: absolute;
+  left: 0;
+  top: 0.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 4px;
+  color: var(--muted);
+  user-select: none;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.synapsys-editor .ProseMirror .synapsys-toggle__trigger:hover {
+  background-color: var(--surface-hover);
+  color: var(--ink);
+}
+
+.synapsys-editor .ProseMirror .synapsys-toggle:has(h1:first-child) .synapsys-toggle__trigger {
+  top: 0.45rem;
+}
+
+.synapsys-editor .ProseMirror .synapsys-toggle:has(h2:first-child) .synapsys-toggle__trigger {
+  top: 0.35rem;
+}
+
+.synapsys-editor .ProseMirror .synapsys-toggle:has(h3:first-child) .synapsys-toggle__trigger {
+  top: 0.25rem;
+}
+
+.synapsys-editor .ProseMirror .synapsys-toggle [data-node-view-content-react] > *:first-child,
+.synapsys-editor .ProseMirror .synapsys-toggle .synapsys-toggle-content > *:first-child {
+  margin-top: 0;
+}
+
+.synapsys-editor .ProseMirror .synapsys-toggle p:first-child.is-empty::before {
+  color: var(--muted);
+  content: "Toggle...";
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.synapsys-toggle--closed [data-node-view-content-react] > *:not(:first-child),
+.synapsys-toggle--closed [data-node-view-content] > *:not(:first-child),
+.synapsys-toggle--closed .synapsys-toggle-content > *:not(:first-child),
+[data-toggle-open="false"] [data-node-view-content-react] > *:not(:first-child),
+[data-toggle-open="false"] [data-node-view-content] > *:not(:first-child),
+[data-toggle-open="false"] .synapsys-toggle-content > *:not(:first-child) {
+  display: none !important;
+}
+
+.synapsys-toggle--open [data-node-view-content-react] > *:not(:first-child),
+.synapsys-toggle--open [data-node-view-content] > *:not(:first-child),
+.synapsys-toggle--open .synapsys-toggle-content > *:not(:first-child),
+[data-toggle-open="true"] [data-node-view-content-react] > *:not(:first-child),
+[data-toggle-open="true"] [data-node-view-content] > *:not(:first-child),
+[data-toggle-open="true"] .synapsys-toggle-content > *:not(:first-child) {
+  margin-left: 0.25rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--border);
+}
+
 .synapsys-editor .ProseMirror .ProseMirror-selectednode {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

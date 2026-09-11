@@ -26,6 +26,7 @@ import {
 } from "@dnd-kit/sortable";
 import { AnimatePresence, motion } from "framer-motion";
 import { WorkspaceIcon, isIconUrl } from "@/lib/icons/workspace-icon";
+import { TrashCanIcon } from "@/lib/icons/trash-icon";
 import {
   ChevronRight,
   Copy,
@@ -645,7 +646,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           {t("all_notes")}
           <span className="ml-auto text-[10.5px] text-faint">{livePages.length}</span>
         </NavLink>
-        <NavLink href="/home/trash" active={pathname === "/home/trash"} icon={<Trash2 className="size-3.5" />}>
+        <NavLink href="/home/trash" active={pathname === "/home/trash"} icon={<TrashCanIcon className="size-3.5" />}>
           {t("trash")}
           {trashedPages.length ? (
             <span className="ml-auto text-[10.5px] text-faint">{trashedPages.length}</span>

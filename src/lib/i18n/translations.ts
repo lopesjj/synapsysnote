@@ -20,6 +20,12 @@ export type TranslationKey =
   | "main_navigation"
   | "resize_sidebar"
   | "importing_progress"
+  | "firebase_admin_not_configured_set_env"
+  | "firebase_admin_not_configured_save"
+  | "firebase_admin_not_configured"
+  | "notion_not_connected"
+  | "notion_token_missing"
+  | "notion_tree_read_error"
   | "logout"
   | "settings"
   | "tags"
@@ -569,6 +575,12 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     open_menu: "Abrir menu",
     main_navigation: "Navegação principal",
     resize_sidebar: "Redimensionar barra lateral",
+    firebase_admin_not_configured_set_env: "Firebase Admin não configurado. Defina FIREBASE_SERVICE_ACCOUNT_JSON.",
+    firebase_admin_not_configured_save: "Firebase Admin não configurado: defina FIREBASE_SERVICE_ACCOUNT_JSON para salvar a integração.",
+    firebase_admin_not_configured: "Firebase Admin não configurado.",
+    notion_not_connected: "A integração com o Notion não está conectada.",
+    notion_token_missing: "Token do Notion ausente. Reconecte a integração.",
+    notion_tree_read_error: "Não foi possível ler o workspace do Notion.",
     wizard_metric_transferred: "Transferido",
     wizard_issues_count: "{count} item(ns) com problema",
     wizard_open_imported: "abrir",
@@ -1009,6 +1021,12 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     open_menu: "Open menu",
     main_navigation: "Main navigation",
     resize_sidebar: "Resize sidebar",
+    firebase_admin_not_configured_set_env: "Firebase Admin not configured. Set FIREBASE_SERVICE_ACCOUNT_JSON.",
+    firebase_admin_not_configured_save: "Firebase Admin not configured: set FIREBASE_SERVICE_ACCOUNT_JSON to save the integration.",
+    firebase_admin_not_configured: "Firebase Admin not configured.",
+    notion_not_connected: "The Notion integration is not connected.",
+    notion_token_missing: "Notion token missing. Please reconnect the integration.",
+    notion_tree_read_error: "Could not read the Notion workspace.",
     wizard_metric_transferred: "Transferred",
     wizard_issues_count: "{count} issue(s) encountered",
     wizard_open_imported: "open",
@@ -1449,6 +1467,12 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     open_menu: "Abrir menú",
     main_navigation: "Navegación principal",
     resize_sidebar: "Redimensionar barra lateral",
+    firebase_admin_not_configured_set_env: "Firebase Admin no configurado. Defina FIREBASE_SERVICE_ACCOUNT_JSON.",
+    firebase_admin_not_configured_save: "Firebase Admin no configurado: defina FIREBASE_SERVICE_ACCOUNT_JSON para guardar la integración.",
+    firebase_admin_not_configured: "Firebase Admin no configurado.",
+    notion_not_connected: "La integración con Notion no está conectada.",
+    notion_token_missing: "Falta el token de Notion. Vuelve a conectar la integración.",
+    notion_tree_read_error: "No se pudo leer el espacio de trabajo de Notion.",
     wizard_metric_transferred: "Transferido",
     wizard_issues_count: "{count} problema(s) encontrado(s)",
     wizard_open_imported: "abrir",
@@ -1889,6 +1913,12 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     open_menu: "Ouvrir le menu",
     main_navigation: "Navigation principale",
     resize_sidebar: "Redimensionner la barre latérale",
+    firebase_admin_not_configured_set_env: "Firebase Admin non configuré. Définissez FIREBASE_SERVICE_ACCOUNT_JSON.",
+    firebase_admin_not_configured_save: "Firebase Admin non configuré : définissez FIREBASE_SERVICE_ACCOUNT_JSON pour enregistrer l'intégration.",
+    firebase_admin_not_configured: "Firebase Admin non configuré.",
+    notion_not_connected: "L'intégration avec Notion n'est pas connectée.",
+    notion_token_missing: "Jeton Notion manquant. Veuillez reconnecter l'intégration.",
+    notion_tree_read_error: "Impossible de lire l'espace de travail Notion.",
     wizard_metric_transferred: "Transféré",
     wizard_issues_count: "{count} problème(s) rencontré(s)",
     wizard_open_imported: "ouvrir",
@@ -2329,6 +2359,12 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     open_menu: "Apri menu",
     main_navigation: "Navigazione principale",
     resize_sidebar: "Ridimensiona barra laterale",
+    firebase_admin_not_configured_set_env: "Firebase Admin non configurato. Imposta FIREBASE_SERVICE_ACCOUNT_JSON.",
+    firebase_admin_not_configured_save: "Firebase Admin non configurato: imposta FIREBASE_SERVICE_ACCOUNT_JSON per salvare l'integrazione.",
+    firebase_admin_not_configured: "Firebase Admin non configurato.",
+    notion_not_connected: "L'integrazione con Notion non è collegata.",
+    notion_token_missing: "Token Notion mancante. Ricollega l'integrazione.",
+    notion_tree_read_error: "Impossibile leggere l'area di lavoro di Notion.",
     wizard_metric_transferred: "Trasferito",
     wizard_issues_count: "{count} problema/i riscontrato/i",
     wizard_open_imported: "apri",
@@ -2769,6 +2805,12 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     open_menu: "Menü öffnen",
     main_navigation: "Hauptnavigation",
     resize_sidebar: "Seitenleiste anpassen",
+    firebase_admin_not_configured_set_env: "Firebase Admin nicht konfiguriert. Definieren Sie FIREBASE_SERVICE_ACCOUNT_JSON.",
+    firebase_admin_not_configured_save: "Firebase Admin nicht konfiguriert: definieren Sie FIREBASE_SERVICE_ACCOUNT_JSON, um die Integration zu speichern.",
+    firebase_admin_not_configured: "Firebase Admin nicht konfiguriert.",
+    notion_not_connected: "Die Notion-Integration ist nicht verbunden.",
+    notion_token_missing: "Notion-Token fehlt. Bitte verbinden Sie die Integration erneut.",
+    notion_tree_read_error: "Der Notion-Workspace konnte nicht gelesen werden.",
     wizard_metric_transferred: "Übertragen",
     wizard_issues_count: "{count} Problem(e) aufgetreten",
     wizard_open_imported: "öffnen",
@@ -3209,6 +3251,12 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     open_menu: "Открыть меню",
     main_navigation: "Главная навигация",
     resize_sidebar: "Изменить размер боковой панели",
+    firebase_admin_not_configured_set_env: "Firebase Admin не настроен. Задайте FIREBASE_SERVICE_ACCOUNT_JSON.",
+    firebase_admin_not_configured_save: "Firebase Admin не настроен: задайте FIREBASE_SERVICE_ACCOUNT_JSON для сохранения интеграции.",
+    firebase_admin_not_configured: "Firebase Admin не настроен.",
+    notion_not_connected: "Интеграция с Notion не подключена.",
+    notion_token_missing: "Токен Notion отсутствует. Пожалуйста, переподключите интеграцию.",
+    notion_tree_read_error: "Не удалось прочитать рабочее пространство Notion.",
     wizard_metric_transferred: "Передано",
     wizard_issues_count: "Ошибок: {count}",
     wizard_open_imported: "открыть",
@@ -3649,6 +3697,12 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     open_menu: "メニューを開く",
     main_navigation: "メインナビゲーション",
     resize_sidebar: "サイドバーのサイズを変更",
+    firebase_admin_not_configured_set_env: "Firebase Admin が設定されていません。FIREBASE_SERVICE_ACCOUNT_JSON を設定してください。",
+    firebase_admin_not_configured_save: "Firebase Admin が設定されていません。連携を保存するには FIREBASE_SERVICE_ACCOUNT_JSON を設定してください。",
+    firebase_admin_not_configured: "Firebase Admin が設定されていません。",
+    notion_not_connected: "Notion連携が接続されていません。",
+    notion_token_missing: "Notionトークンがありません。連携を再接続してください。",
+    notion_tree_read_error: "Notionワークスペースを読み込めませんでした。",
     wizard_metric_transferred: "転送済み",
     wizard_issues_count: "{count} 件の問題が発生",
     wizard_open_imported: "開く",
@@ -4089,6 +4143,12 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     open_menu: "打开菜单",
     main_navigation: "主导航",
     resize_sidebar: "调整侧边栏大小",
+    firebase_admin_not_configured_set_env: "Firebase Admin 未配置。请设置 FIREBASE_SERVICE_ACCOUNT_JSON。",
+    firebase_admin_not_configured_save: "Firebase Admin 未配置：请设置 FIREBASE_SERVICE_ACCOUNT_JSON 以保存集成。",
+    firebase_admin_not_configured: "Firebase Admin 未配置。",
+    notion_not_connected: "Notion 集成未连接。",
+    notion_token_missing: "Notion 令牌缺失，请重新连接集成。",
+    notion_tree_read_error: "无法读取 Notion 工作区。",
     wizard_metric_transferred: "已传输",
     wizard_issues_count: "{count} 个项目出现问题",
     wizard_open_imported: "打开",
@@ -4422,4 +4482,30 @@ export function useTranslation() {
   };
 
   return { t, language, setLanguage };
+}
+
+export function localizeErrorMessage(
+  msg: string | null | undefined,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string
+): string {
+  if (!msg) return "";
+  if (msg.includes("FIREBASE_SERVICE_ACCOUNT_JSON")) {
+    if (msg.toLowerCase().includes("salvar") || msg.toLowerCase().includes("save")) {
+      return t("firebase_admin_not_configured_save");
+    }
+    return t("firebase_admin_not_configured_set_env");
+  }
+  if (msg.toLowerCase().includes("firebase admin n") || msg.toLowerCase().includes("firebase admin not configured")) {
+    return t("firebase_admin_not_configured");
+  }
+  if (msg.includes("não está conectada") || msg.includes("not connected")) {
+    return t("notion_not_connected");
+  }
+  if (msg.includes("Token do Notion ausente") || msg.includes("Notion token missing")) {
+    return t("notion_token_missing");
+  }
+  if (msg.includes("Não foi possível ler o workspace") || msg.includes("Could not read Notion workspace")) {
+    return t("notion_tree_read_error");
+  }
+  return msg;
 }

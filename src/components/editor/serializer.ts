@@ -189,17 +189,28 @@ function blockToNode(block: AppBlock): JSONContent | null {
         attrs: { emoji: block.props?.emoji ?? "💡" },
         content: [paragraph(), ...((block.children ?? []).map(blockToNode).filter(Boolean) as JSONContent[])],
       };
-    case "toggle":
+    case "toggle": {
+      const level = (block.props?.level as 1 | 2 | 3 | undefined) ?? undefined;
+      const headerNode: JSONContent = level
+        ? {
+            type: "heading",
+            attrs: headingAttrs(block, level),
+            ...(inline.length ? { content: inline } : {}),
+          }
+        : paragraph(inline, paragraphAttrs(block));
+
+      const childrenNodes = block.children?.length
+        ? blocksToNodes(block.children)
+        : [];
+
       return {
         type: "toggleBlock",
         attrs: {
-          summary: (block.richText ?? []).map((s) => s.text).join(""),
           open: block.props?.open !== undefined ? Boolean(block.props.open) : true,
-          textColor: block.props?.color ?? null,
-          backgroundColor: block.props?.backgroundColor ?? null,
         },
-        content: blocksToNodes(block.children ?? [{ id: nanoid(), type: "paragraph" }]),
+        content: [headerNode, ...childrenNodes],
       };
+    }
     case "image":
     case "video":
     case "audio":
@@ -348,20 +359,23 @@ function nodeToBlocks(node: JSONContent): AppBlock[] {
         },
       ];
     }
-    case "toggleBlock":
+    case "toggleBlock": {
+      const [first, ...rest] = node.content ?? [];
+      const isHeading = first?.type === "heading";
+      const level = isHeading ? (Number(first?.attrs?.level) as 1 | 2 | 3) : undefined;
       return [
         {
           id: id(),
           type: "toggle",
-          richText: [{ text: (node.attrs?.summary as string) ?? "" }],
+          richText: inlineToSpans(first?.content),
           props: {
             open: node.attrs?.open !== undefined ? Boolean(node.attrs.open) : true,
-            color: (node.attrs?.textColor as string) || undefined,
-            backgroundColor: (node.attrs?.backgroundColor as string) || undefined,
+            ...(level ? { level } : {}),
           },
-          children: (node.content ?? []).flatMap(nodeToBlocks),
+          children: rest.flatMap(nodeToBlocks),
         },
       ];
+    }
     case "tableBlock": {
       const rows = (node.attrs?.rows as RichTextSpan[][][] | undefined) ?? [];
       const cellAlignments = (node.attrs?.cellAlignments as any) ?? [];

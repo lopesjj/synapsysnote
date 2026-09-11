@@ -83,6 +83,7 @@ export interface AppBlock {
   props?: {
     checked?: boolean;
     open?: boolean;
+    level?: 1 | 2 | 3;
     language?: string;
     autoDetect?: boolean;
     emoji?: string;

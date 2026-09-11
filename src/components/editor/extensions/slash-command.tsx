@@ -131,7 +131,7 @@ function getCommands(t: (key: TranslationKey) => string): CommandDescriptor[] {
           .deleteRange(range)
           .insertContent({
             type: "toggleBlock",
-            attrs: { summary: "", open: true },
+            attrs: { open: true },
             content: [{ type: "paragraph" }],
           })
           .run(),

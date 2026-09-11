@@ -8,7 +8,7 @@ import { ImportWizard } from "@/components/notion/import-wizard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/primitives";
 import { formatRelative } from "@/lib/utils";
-import { useTranslation } from "@/lib/i18n/translations";
+import { useTranslation, localizeErrorMessage } from "@/lib/i18n/translations";
 
 export default function IntegrationsPage() {
   return (
@@ -38,7 +38,7 @@ function IntegrationsBody() {
       }
       toast.success(t("connected_to", { name: result.connected.workspaceName }));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("connection_failed"));
+      toast.error(error instanceof Error ? localizeErrorMessage(error.message, t) : t("connection_failed"));
     } finally {
       setBusy(false);
     }
