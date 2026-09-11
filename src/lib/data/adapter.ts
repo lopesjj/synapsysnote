@@ -80,6 +80,7 @@ export interface DataAdapter {
   disconnectNotion(): Promise<void>;
 
   saveAudioNote(pageId: string, blob: Blob, durationSeconds: number): Promise<void>;
+  uploadAudioNote(pageId: string, blob: Blob, durationSeconds: number): Promise<{ url: string; storagePath?: string }>;
   retryMediaProcessing(pageId: string, storagePath: string): Promise<void>;
   saveAttachment(pageId: string, file: File): Promise<void>;
   uploadAttachment(pageId: string, file: File): Promise<{ url: string; storagePath?: string }>;

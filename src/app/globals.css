@@ -50,6 +50,18 @@
   --editor-h2-mt: 1.6rem;
   --editor-h3-mt: 1.25rem;
   --nav-row-py: 0.375rem;
+  --code-syntax-plain: #0f2c4c;
+  --code-syntax-comment: #64748b;
+  --code-syntax-keyword: #0284c7;
+  --code-syntax-type: #7c3aed;
+  --code-syntax-string: #047857;
+  --code-syntax-function: #1d4ed8;
+  --code-syntax-tag: #be185d;
+  --code-syntax-property: #c2410c;
+  --code-syntax-number: #b45309;
+  --code-syntax-regexp: #0e7490;
+  --code-syntax-deletion: #b91c1c;
+  --code-syntax-addition: #047857;
 }
 
 .dark {
@@ -71,6 +83,18 @@
   --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 24px 48px -24px rgba(0, 0, 0, 0.8);
   --shadow-float: 0 24px 64px -16px rgba(0, 0, 0, 0.85);
   --selection: rgba(58, 166, 184, 0.22);
+  --code-syntax-plain: #e2e8f4;
+  --code-syntax-comment: #94a3b8;
+  --code-syntax-keyword: #38bdf8;
+  --code-syntax-type: #c084fc;
+  --code-syntax-string: #4ade80;
+  --code-syntax-function: #60a5fa;
+  --code-syntax-tag: #f472b6;
+  --code-syntax-property: #fcd34d;
+  --code-syntax-number: #fb923c;
+  --code-syntax-regexp: #2dd4bf;
+  --code-syntax-deletion: #f87171;
+  --code-syntax-addition: #4ade80;
 }
 
 [data-density="compact"] {
@@ -329,8 +353,8 @@
 .synapsys-editor .ProseMirror pre,
 .synapsys-editor .ProseMirror .synapsys-code-block {
   font-family: var(--font-mono);
-  font-size: 0.82em;
-  line-height: 1.65;
+  font-size: 0.94em;
+  line-height: 1.68;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -343,7 +367,7 @@
 .synapsys-editor .ProseMirror .synapsys-code-block pre,
 .synapsys-editor .ProseMirror .synapsys-code-block__pre {
   margin: 0;
-  padding: 0.75rem 1rem 0.95rem;
+  padding: 0.85rem 1.1rem 1rem;
   background: transparent;
   border: none;
   border-radius: 0;
@@ -352,7 +376,7 @@
 .synapsys-editor .ProseMirror pre code,
 .synapsys-editor .ProseMirror .synapsys-code-block code {
   background: none;
-  color: inherit;
+  color: var(--code-syntax-plain);
   padding: 0;
   font-size: inherit;
   display: block;
@@ -443,59 +467,62 @@
 .hljs-comment,
 .hljs-quote,
 .hljs-doctag {
-  color: var(--text-faint);
+  color: var(--code-syntax-comment);
   font-style: italic;
 }
 .hljs-keyword,
 .hljs-selector-tag,
 .hljs-literal,
-.hljs-meta-keyword,
-.hljs-addition {
-  color: var(--accent);
+.hljs-meta-keyword {
+  color: var(--code-syntax-keyword);
+  font-weight: 550;
 }
 .hljs-type,
 .hljs-class .hljs-title,
 .hljs-title.class_,
 .hljs-built_in {
-  color: #8b5cf6;
+  color: var(--code-syntax-type);
 }
 .hljs-string,
 .hljs-meta-string,
 .hljs-template-tag,
-.hljs-template-variable,
-.hljs-addition {
-  color: #10b981;
+.hljs-template-variable {
+  color: var(--code-syntax-string);
 }
 .hljs-title,
 .hljs-title.function_,
 .hljs-section {
-  color: #38bdf8;
+  color: var(--code-syntax-function);
+  font-weight: 550;
 }
 .hljs-name,
 .hljs-tag,
 .hljs-selector-id,
 .hljs-selector-class {
-  color: #f472b6;
+  color: var(--code-syntax-tag);
 }
 .hljs-attr,
 .hljs-attribute,
 .hljs-property,
 .hljs-variable,
 .hljs-params {
-  color: #fbbf24;
+  color: var(--code-syntax-property);
 }
 .hljs-number,
 .hljs-symbol,
 .hljs-bullet,
 .hljs-link {
-  color: #f59e0b;
+  color: var(--code-syntax-number);
 }
 .hljs-regexp,
 .hljs-meta {
-  color: #22d3ee;
+  color: var(--code-syntax-regexp);
 }
 .hljs-deletion {
-  color: #f87171;
+  color: var(--code-syntax-deletion);
+}
+.hljs-addition {
+  color: var(--code-syntax-addition);
 }
 .hljs-emphasis {
   font-style: italic;

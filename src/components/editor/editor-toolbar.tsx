@@ -9,8 +9,6 @@ import {
   AlignRight,
   Bold,
   CheckSquare,
-  Code,
-  Code2,
   Highlighter,
   IndentDecrease,
   IndentIncrease,
@@ -211,13 +209,6 @@ export function EditorToolbar({
         }}
       >
         <Strikethrough className="size-3.5" />
-      </ToolButton>
-      <ToolButton
-        label={t("code_inline")}
-        active={editor.isActive("code")}
-        onClick={() => editor.chain().focus().toggleCode().run()}
-      >
-        <Code className="size-3.5" />
       </ToolButton>
 
       <Menu>
@@ -422,11 +413,13 @@ export function EditorToolbar({
       ))}
 
       <ToolButton
-        label={t("code_block")}
+        label={t("code_inline")}
         active={editor.isActive("codeBlock")}
         onClick={() => editor.chain().focus().toggleCodeBlock().run()}
       >
-        <Code2 className="size-3.5" />
+        <span className="inline-flex items-center justify-center font-mono text-[14px] font-bold leading-none tracking-tight select-none">
+          {"</>"}
+        </span>
       </ToolButton>
 
       <span className="mx-0.5 h-4 w-px bg-[var(--border)]" />

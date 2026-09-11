@@ -35,6 +35,8 @@ export const SuggestionList = forwardRef<SuggestionListHandle, { items: Suggesti
           return true;
         }
         if (event.key === "Enter" || event.key === "Tab") {
+          event.preventDefault();
+          event.stopPropagation();
           items[selected]?.run();
           return true;
         }

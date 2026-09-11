@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { formatDuration } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n/translations";
+import { prepareAudioAttachment } from "@/lib/media/compress-attachment";
 
 export function AudioRecorder({
   open,
@@ -17,6 +19,7 @@ export function AudioRecorder({
   onOpenChange: (open: boolean) => void;
   onSave: (blob: Blob, durationSeconds: number) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [levels, setLevels] = useState<number[]>(Array.from({ length: 40 }, () => 0.08));
@@ -29,6 +32,7 @@ export function AudioRecorder({
   const audioContext = useRef<AudioContext | null>(null);
   const raf = useRef<number | null>(null);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
+  const openTimestamp = useRef(0);
 
   const cleanup = () => {
     if (raf.current) cancelAnimationFrame(raf.current);
@@ -57,9 +61,21 @@ export function AudioRecorder({
     onOpenChange(next);
   };
 
-  useEffect(() => cleanup, []);
+  useEffect(() => {
+    if (open) {
+      openTimestamp.current = Date.now();
+    }
+    cleanup();
+    resetUi();
+    return () => {
+      cleanup();
+    };
+  }, [open]);
 
   const startRecording = async () => {
+    if (!open) return;
+    if (Date.now() - openTimestamp.current < 450) return;
+    if (recording || recorder.current) return;
     setError(null);
     try {
       const media = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -69,7 +85,7 @@ export function AudioRecorder({
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : "audio/webm";
-      const instance = new MediaRecorder(media, { mimeType });
+      const instance = new MediaRecorder(media, { mimeType, audioBitsPerSecond: 28000 });
       instance.ondataavailable = (event) => {
         if (event.data.size) chunks.current.push(event.data);
       };
@@ -95,9 +111,7 @@ export function AudioRecorder({
       };
       sample();
     } catch {
-      setError(
-        "Não foi possível acessar o microfone. Verifique as permissões do navegador e tente novamente."
-      );
+      setError(t("mic_access_error"));
     }
   };
 
@@ -106,20 +120,30 @@ export function AudioRecorder({
     if (!instance) return;
     const duration = seconds;
 
-    const blob = await new Promise<Blob>((resolve) => {
+    if (tick.current) {
+      clearInterval(tick.current);
+      tick.current = null;
+    }
+    if (raf.current) {
+      cancelAnimationFrame(raf.current);
+      raf.current = null;
+    }
+
+    const rawBlob = await new Promise<Blob>((resolve) => {
       instance.onstop = () => resolve(new Blob(chunks.current, { type: instance.mimeType }));
       instance.stop();
     });
 
-    setRecording(false);
     cleanup();
+    resetUi();
     setSaving(true);
     try {
+      const blob = await prepareAudioAttachment(rawBlob);
       await onSave(blob, duration);
       close(false);
-      toast.success("Nota de voz salva. A transcrição chega em instantes.");
+      toast.success(t("voice_note_saved"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha ao salvar a nota de voz");
+      toast.error(err instanceof Error ? err.message : t("voice_note_save_error"));
     } finally {
       setSaving(false);
     }
@@ -129,11 +153,19 @@ export function AudioRecorder({
     <DialogShell open={open} onOpenChange={close} className="max-w-md">
       <DialogHeader
         icon={<AudioLines className="size-4" />}
-        title="Nota de voz"
-        description="Grave uma ideia rápida. O áudio é transcrito e resumido automaticamente."
+        title={t("voice_note")}
+        description={t("voice_note_desc")}
       />
 
-      <div className="flex flex-col items-center gap-5 px-5 py-8">
+      <div
+        className="flex flex-col items-center gap-5 px-5 py-8"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !recording && Date.now() - openTimestamp.current < 500) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
+      >
         <div className="flex h-16 items-end gap-[3px]">
           {levels.map((level, index) => (
             <motion.span
@@ -153,22 +185,19 @@ export function AudioRecorder({
         {error ? <p className="max-w-xs text-center text-[12px] text-[var(--danger)]">{error}</p> : null}
 
         {!recording ? (
-          <Button variant="primary" size="lg" onClick={startRecording} disabled={saving}>
-            <Mic /> Começar a gravar
+          <Button type="button" variant="primary" size="lg" onClick={startRecording} disabled={saving}>
+            <Mic /> {t("start_recording")}
           </Button>
         ) : (
-          <Button variant="danger" size="lg" onClick={stopAndSave} disabled={saving}>
-            <Square /> Parar e salvar
+          <Button type="button" variant="danger" size="lg" onClick={stopAndSave} disabled={saving}>
+            <Square /> {t("stop_and_save")}
           </Button>
         )}
       </div>
 
-      <DialogFooter>
-        <span className="text-[11px] text-faint">
-          Áudio vai para o Cloud Storage; transcrição e resumo via Gemini.
-        </span>
-        <Button variant="ghost" onClick={() => close(false)}>
-          Fechar
+      <DialogFooter className="justify-end">
+        <Button type="button" variant="ghost" onClick={() => close(false)}>
+          {t("btn_close")}
         </Button>
       </DialogFooter>
     </DialogShell>

@@ -133,7 +133,7 @@ export function buildSeed(): {
       ),
       block("bulleted_list_item", "Next.js App Router + React Server Components para o shell."),
       block("bulleted_list_item", "Firestore com persistência offline como fonte da verdade reativa."),
-      block("bulleted_list_item", "Cloud Functions para Notion, transcrição e embeddings."),
+      block("bulleted_list_item", "Cloud Functions para Notion e busca semântica."),
       block("heading_2", "Orçamento de latência"),
       block(
         "paragraph",
@@ -195,8 +195,7 @@ export function buildSeed(): {
     notebookId: nbResearch.id,
     tags: ["pesquisa", "entrevista"],
     updatedAt: minutes(180),
-    transcriptText:
-      "A gente perde tempo procurando o print de um contrato dentro do Notion. Se a busca lesse o texto das imagens, resolveria metade dos meus problemas.",
+    transcriptText: "",
     blocks: [
       block("heading_2", "Contexto"),
       block(
@@ -211,7 +210,7 @@ export function buildSeed(): {
       block("heading_3", "Trechos marcados"),
       block(
         "paragraph",
-        "A transcrição completa está anexada como nota de voz - o resumo do Gemini destacou três pedidos recorrentes."
+        "A gravação completa da entrevista está anexada como nota de áudio com os principais pontos destacados."
       ),
     ],
   });

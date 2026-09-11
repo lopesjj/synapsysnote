@@ -1,20 +1,51 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { useParams } from "next/navigation";
 import { Node, mergeAttributes } from "@tiptap/core";
+import { NodeSelection } from "@tiptap/pm/state";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
-import { toast } from "sonner";
-import { AudioLines, Download, ExternalLink, FileText, Loader2, ScanText, Sparkles } from "lucide-react";
+import { AudioLines, Download, ExternalLink, FileText, GripVertical, Loader2 } from "lucide-react";
 import { cn, formatBytes, formatDuration } from "@/lib/utils";
 import { Badge } from "@/components/ui/primitives";
-import { useWorkspace } from "@/lib/data/provider";
 import { useImageLightboxStore } from "@/lib/store/image-lightbox-store";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
 
 function isPdf(mimeType: unknown, name: unknown) {
   if (typeof mimeType === "string" && mimeType.includes("pdf")) return true;
   return typeof name === "string" && /\.pdf($|\?)/i.test(name);
+}
+
+function formatMediaDisplayName(
+  rawName: unknown,
+  mediaType: unknown,
+  t: (key: TranslationKey) => string
+): string {
+  if (typeof rawName !== "string" || !rawName.trim()) {
+    return mediaType === "audio" ? `${t("voice_note")}.webm` : t("attachment");
+  }
+
+  const trimmed = rawName.trim();
+  const voiceNoteRegex =
+    /^(?:nota[-_\s]de[-_\s]voz|voice[-_\s]note|note[-_\s]vocale|nota[-_\s]vocale|sprachnotiz|голосовая[-_\s]заметка|音声ノート|语音笔记)([-_\s].*?)?(\.[a-z0-9]+)?$/i;
+
+  const match = trimmed.match(voiceNoteRegex);
+  if (match) {
+    const suffix = match[1] || "";
+    const ext = match[2] || ".webm";
+    return `${t("voice_note")}${suffix}${ext}`;
+  }
+
+  if (mediaType === "audio") {
+    const timestampIdRegex = /^\d{10,14}(?:-[\w-]+)?\.(webm|ogg|mp3|m4a|wav)$/i;
+    const timeMatch = trimmed.match(timestampIdRegex);
+    if (timeMatch) {
+      const ext = timeMatch[1] || "webm";
+      return `${t("voice_note")}.${ext}`;
+    }
+  }
+
+  return trimmed;
 }
 
 const WIDTH_SNAPS = [25, 33, 50, 67, 75, 100];
@@ -447,46 +478,56 @@ function ResizablePdf({
   );
 }
 
-function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) {
+function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeViewProps) {
+  const { t } = useTranslation();
   const {
     mediaType,
     url,
-    storagePath,
     name,
     mimeType,
     sizeBytes,
     durationSeconds,
-    transcript,
-    transcriptSummary,
     pending,
     displayWidth,
     displayHeight,
+    tempId,
   } = node.attrs as Record<string, string | number | boolean | null>;
-  const [showText, setShowText] = useState(false);
-  const [retrying, setRetrying] = useState(false);
-  const { adapter } = useWorkspace();
-  const params = useParams<{ pageId?: string }>();
-  const pageId = params.pageId;
 
-  const extracted = (transcript as string) || "";
-  const pdf = isPdf(mimeType, name);
-  const visualOnly = mediaType === "image" || pdf;
-  const canTranscribe =
-    mediaType === "audio" && Boolean(storagePath) && Boolean(pageId) && !extracted;
-
-  const retryTranscription = async () => {
-    if (!pageId || !storagePath || retrying) return;
-    setRetrying(true);
-    updateAttributes({ pending: true });
-    try {
-      await adapter.retryMediaProcessing(pageId, String(storagePath));
-    } catch (error) {
-      updateAttributes({ pending: false });
-      toast.error(error instanceof Error ? error.message : "Não foi possível transcrever o áudio.");
-    } finally {
-      setRetrying(false);
+  const selectNode = (e: React.MouseEvent) => {
+    if (!editor.isEditable) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("button, a, audio, input, video")) return;
+    if (typeof getPos === "function") {
+      const pos = getPos();
+      if (typeof pos === "number") {
+        editor.commands.setNodeSelection(pos);
+      }
     }
   };
+
+  const handleDragStart = (e: React.DragEvent) => {
+    if (!editor.isEditable) return;
+    if (typeof getPos === "function") {
+      const pos = getPos();
+      if (typeof pos === "number") {
+        const selection = NodeSelection.create(editor.state.doc, pos);
+        editor.view.dispatch(editor.state.tr.setSelection(selection));
+        const slice = editor.state.selection.content();
+        editor.view.dragging = { slice, move: true };
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = "move";
+        }
+      }
+    }
+  };
+
+  const pdf = isPdf(mimeType, name);
+  const displayName = formatMediaDisplayName(name, mediaType, t);
+  const visualOnly = mediaType === "image" || pdf;
+  const isPending = Boolean(
+    pending &&
+      (Boolean(tempId) || (typeof url === "string" && url.startsWith("blob:")) || !url)
+  );
 
   const handleOpenLightbox = () => {
     editor.commands.blur();
@@ -530,7 +571,7 @@ function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) 
       {pdf && url ? (
         <ResizablePdf
           url={url as string}
-          name={(name as string) || "PDF"}
+          name={displayName || "PDF"}
           width={typeof displayWidth === "number" ? displayWidth : null}
           height={typeof displayHeight === "number" ? displayHeight : null}
           editable={editor.isEditable}
@@ -544,14 +585,31 @@ function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) 
       ) : null}
 
       {visualOnly ? null : (
-        <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)]">
-          <div className="flex items-center gap-3 px-3 py-2.5">
+        <div
+          onClick={selectNode}
+          className={cn(
+            "overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] transition-shadow",
+            selected && "ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)]"
+          )}
+        >
+          <div className="flex items-center gap-2 sm:gap-3 px-3 py-2.5">
+            {editor.isEditable ? (
+              <div
+                draggable="true"
+                data-drag-handle
+                onDragStart={handleDragStart}
+                className="cursor-grab active:cursor-grabbing p-0.5 text-faint transition hover:text-ink"
+                title={t("drag_block")}
+              >
+                <GripVertical className="size-3.5" />
+              </div>
+            ) : null}
             <div className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-[var(--accent-soft)] text-[var(--accent)]">
               {mediaType === "audio" ? <AudioLines className="size-4" /> : <FileText className="size-4" />}
             </div>
 
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[12.5px] font-medium text-ink">{(name as string) || "Anexo"}</p>
+              <p className="truncate text-[12.5px] font-medium text-ink">{displayName}</p>
               <p className="text-[11px] text-muted">
                 {[
                   mimeType as string,
@@ -563,45 +621,19 @@ function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) 
               </p>
             </div>
 
-            {pending || retrying ? (
-              <button
-                type="button"
-                onClick={() => void retryTranscription()}
-                disabled={retrying || !canTranscribe}
-                className="rounded-full"
-                title="Tentar transcrever de novo"
-              >
-                <Badge tone="accent">
-                  <Loader2 className="size-3 animate-spin" />
-                  processando
-                </Badge>
-              </button>
-            ) : extracted ? (
-              <button
-                type="button"
-                onClick={() => setShowText((prev) => !prev)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-muted transition hover:text-ink"
-              >
-                <ScanText className="size-3" />
-                transcrição
-              </button>
-            ) : canTranscribe ? (
-              <button
-                type="button"
-                onClick={() => void retryTranscription()}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-muted transition hover:text-ink"
-              >
-                <ScanText className="size-3" />
-                Transcrever
-              </button>
+            {isPending ? (
+              <Badge tone="accent">
+                <Loader2 className="size-3 animate-spin" />
+                {t("loading")}
+              </Badge>
             ) : null}
 
             {url ? (
               <a
                 href={url as string}
-                download={(name as string) ?? true}
+                download={displayName}
                 className="rounded p-1.5 text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink"
-                aria-label="Baixar"
+                aria-label={t("download")}
               >
                 <Download className="size-3.5" />
               </a>
@@ -611,18 +643,6 @@ function MediaView({ node, updateAttributes, editor, selected }: NodeViewProps) 
           {mediaType === "audio" && url ? (
             <div className="px-3 pb-3">
               <audio src={url as string} controls className="w-full" />
-            </div>
-          ) : null}
-
-          {showText && extracted ? (
-            <div className="space-y-2 border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
-              {transcriptSummary ? (
-                <p className="flex items-start gap-2 text-[12px] text-ink">
-                  <Sparkles className="mt-0.5 size-3.5 shrink-0 text-[var(--accent)]" />
-                  <span>{transcriptSummary as string}</span>
-                </p>
-              ) : null}
-              <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-muted">{extracted}</p>
             </div>
           ) : null}
         </div>

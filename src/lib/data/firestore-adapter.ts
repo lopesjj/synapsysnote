@@ -1105,6 +1105,16 @@ export class FirestoreAdapter implements DataAdapter {
   }
 
 
+  async uploadAudioNote(pageId: string, blob: Blob, _durationSeconds: number): Promise<{ url: string; storagePath: string }> {
+    const fileId = `${Date.now()}-${nanoid(6)}.webm`;
+    const path = `workspaces/${this.workspaceId}/audio/${pageId}/${fileId}`;
+    const storageRef = ref(getFirebaseStorage(), path);
+    const mimeType = (blob.type || "audio/webm").split(";")[0] || "audio/webm";
+    await uploadBytes(storageRef, blob, { contentType: mimeType });
+    const url = await getDownloadURL(storageRef);
+    return { url, storagePath: path };
+  }
+
   async saveAudioNote(pageId: string, blob: Blob, durationSeconds: number) {
     const fileId = `${Date.now()}-${nanoid(6)}.webm`;
     const path = `workspaces/${this.workspaceId}/audio/${pageId}/${fileId}`;
@@ -1126,16 +1136,16 @@ export class FirestoreAdapter implements DataAdapter {
           mimeType,
           sizeBytes: blob.size,
           durationSeconds,
-          pending: true,
+          pending: false,
         },
       },
     ];
     await this.updatePage(pageId, { blocks });
-    await this.requestTranscription(pageId, path);
   }
 
   async retryMediaProcessing(pageId: string, storagePath: string) {
-    await this.requestTranscription(pageId, storagePath);
+    void pageId;
+    void storagePath;
   }
 
   private async requestTranscription(pageId: string, storagePath: string) {

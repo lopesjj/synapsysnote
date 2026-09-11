@@ -47,7 +47,6 @@ import {
 } from "@/lib/icons/workspace-icon";
 import { IconPickerMenu } from "@/components/ui/icon-picker";
 import { CoverPicker } from "./cover-picker";
-import { pendingAudioPaths } from "@/lib/data/media-enrichment";
 
 export function PageView({ pageId }: { pageId: string }) {
   const router = useRouter();
@@ -66,7 +65,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const [editorKey, setEditorKey] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const editorInsertFilesRef = useRef<((files: File[]) => Promise<void>) | null>(null);
-  const scannedPendingAudio = useRef<string | null>(null);
+  const editorInsertAudioRef = useRef<((blob: Blob, duration: number) => Promise<void>) | null>(null);
   const latestPageRef = useRef<Page | null>(null);
   const hasEditedRef = useRef(false);
 
@@ -95,14 +94,7 @@ export function PageView({ pageId }: { pageId: string }) {
 
 
 
-  useEffect(() => {
-    if (!page) return;
-    if (scannedPendingAudio.current === page.id) return;
-    scannedPendingAudio.current = page.id;
-    for (const path of pendingAudioPaths(page.blocks)) {
-      void adapter.retryMediaProcessing(page.id, path).catch(() => undefined);
-    }
-  }, [adapter, page]);
+
 
   const mentionCandidates = useMemo(
     () =>
@@ -282,7 +274,12 @@ export function PageView({ pageId }: { pageId: string }) {
             <MenuItem onSelect={() => fileInput.current?.click()}>
               <Paperclip /> {t("attach_file")}
             </MenuItem>
-            <MenuItem onSelect={() => setAudioOpen(true)}>
+            <MenuItem
+              onSelect={(event) => {
+                event.preventDefault();
+                setAudioOpen(true);
+              }}
+            >
               <AudioLines /> {t("record_audio")}
             </MenuItem>
             {hasCover ? (
@@ -500,20 +497,13 @@ export function PageView({ pageId }: { pageId: string }) {
             onRegisterInsertFiles={(fn) => {
               editorInsertFilesRef.current = fn;
             }}
+            onRegisterInsertAudio={(fn) => {
+              editorInsertAudioRef.current = fn;
+            }}
           />
         </div>
 
-        
-        {page.transcriptText ? (
-          <div className="mt-8 space-y-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
-              {t("voice_notes_transcript_title")}
-            </p>
-            <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-muted">
-              {page.transcriptText}
-            </p>
-          </div>
-        ) : null}
+
 
         <div className="mt-8 border-t border-[var(--border)] pt-5">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
@@ -614,7 +604,13 @@ export function PageView({ pageId }: { pageId: string }) {
       <AudioRecorder
         open={audioOpen}
         onOpenChange={setAudioOpen}
-        onSave={(blob, duration) => adapter.saveAudioNote(pageId, blob, duration)}
+        onSave={async (blob, duration) => {
+          if (editorInsertAudioRef.current) {
+            await editorInsertAudioRef.current(blob, duration);
+          } else {
+            await adapter.saveAudioNote(pageId, blob, duration);
+          }
+        }}
       />
     </div>
   );

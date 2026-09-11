@@ -1,5 +1,6 @@
 export const IMAGE_SIZE_LIMIT = 1 * 1024 * 1024;
 export const PDF_SIZE_LIMIT = 3 * 1024 * 1024;
+export const AUDIO_SIZE_LIMIT = 3 * 1024 * 1024;
 export const ATTACHMENT_SIZE_LIMIT = PDF_SIZE_LIMIT;
 const MAX_ROUNDS = 18;
 const MIN_EDGE = 320;
@@ -11,7 +12,14 @@ export function needsCompression(file: File): boolean {
   if (file.type === "application/pdf") {
     return file.size > PDF_SIZE_LIMIT;
   }
+  if (file.type.startsWith("audio/")) {
+    return file.size > AUDIO_SIZE_LIMIT;
+  }
   return false;
+}
+
+export function needsAudioCompression(blob: Blob): boolean {
+  return blob.size > AUDIO_SIZE_LIMIT;
 }
 
 export function replaceExtension(name: string, ext: string): string {
@@ -63,8 +71,21 @@ export async function prepareEditorAttachment(file: File): Promise<File> {
     if (!needsCompression(optimized)) return optimized;
     return compressImageUntilFits(optimized);
   }
+  if (file.type.startsWith("audio/")) {
+    if (!needsCompression(file)) return file;
+    const compressed = await compressAudioUntilFits(file);
+    return new File([compressed], file.name, {
+      type: compressed.type || file.type,
+      lastModified: Date.now(),
+    });
+  }
   if (!needsCompression(file)) return file;
   return compressPdfUntilFits(file);
+}
+
+export async function prepareAudioAttachment(blob: Blob): Promise<Blob> {
+  if (!needsAudioCompression(blob)) return blob;
+  return compressAudioUntilFits(blob);
 }
 
 async function compressImageUntilFits(file: File): Promise<File> {
@@ -204,4 +225,192 @@ async function rasterizePdf(bytes: Uint8Array, scale: number, quality: number): 
   const copy = new Uint8Array(written.byteLength);
   copy.set(written);
   return new Blob([copy], { type: "application/pdf" });
+}
+
+const OGG_CRC_TABLE = new Uint32Array(256);
+for (let i = 0; i < 256; i++) {
+  let r = i << 24;
+  for (let j = 0; j < 8; j++) {
+    r = (r & 0x80000000) ? ((r << 1) ^ 0x04c11db7) : (r << 1);
+  }
+  OGG_CRC_TABLE[i] = r >>> 0;
+}
+
+function oggCrc(buf: Uint8Array): number {
+  let crc = 0;
+  for (let i = 0; i < buf.length; i++) {
+    crc = ((crc << 8) ^ OGG_CRC_TABLE[((crc >>> 24) ^ buf[i]) & 0xff]) >>> 0;
+  }
+  return crc;
+}
+
+function makeOggPage(
+  headerType: number,
+  granulePos: bigint,
+  serial: number,
+  seq: number,
+  packets: Uint8Array[]
+): Uint8Array {
+  const segments: number[] = [];
+  let payloadLength = 0;
+  for (const pkt of packets) {
+    let len = pkt.length;
+    while (len >= 255) {
+      segments.push(255);
+      len -= 255;
+    }
+    segments.push(len);
+    payloadLength += pkt.length;
+  }
+  const page = new Uint8Array(27 + segments.length + payloadLength);
+  const view = new DataView(page.buffer);
+  page.set([0x4f, 0x67, 0x67, 0x53, 0, headerType], 0);
+  view.setBigInt64(6, granulePos, true);
+  view.setUint32(14, serial, true);
+  view.setUint32(18, seq, true);
+  view.setUint32(22, 0, true);
+  page[26] = segments.length;
+  page.set(segments, 27);
+  let offset = 27 + segments.length;
+  for (const pkt of packets) {
+    page.set(pkt, offset);
+    offset += pkt.length;
+  }
+  const crc = oggCrc(page);
+  view.setUint32(22, crc, true);
+  return page;
+}
+
+function makeOpusHead(channels = 1, sampleRate = 48000): Uint8Array {
+  const head = new Uint8Array(19);
+  head.set([0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64, 1, channels]);
+  const view = new DataView(head.buffer);
+  view.setUint16(10, 384, true);
+  view.setUint32(12, sampleRate, true);
+  view.setInt16(16, 0, true);
+  head[18] = 0;
+  return head;
+}
+
+function makeOpusTags(): Uint8Array {
+  const vendor = new TextEncoder().encode("synapsys");
+  const tags = new Uint8Array(8 + 4 + vendor.length + 4);
+  tags.set([0x4f, 0x70, 0x75, 0x73, 0x54, 0x61, 0x67, 0x73]);
+  const view = new DataView(tags.buffer);
+  view.setUint32(8, vendor.length, true);
+  tags.set(vendor, 12);
+  view.setUint32(12 + vendor.length, 0, true);
+  return tags;
+}
+
+async function encodeAudioBufferToOpus(audioBuffer: AudioBuffer, targetBitrate: number): Promise<Blob> {
+  const sampleRate = 48000;
+  const numberOfChannels = 1;
+  const channelData = new Float32Array(Math.round(audioBuffer.duration * sampleRate));
+
+  const origData = audioBuffer.getChannelData(0);
+  const origRate = audioBuffer.sampleRate;
+  const step = origRate / sampleRate;
+  for (let i = 0; i < channelData.length; i++) {
+    const srcIdx = i * step;
+    const i0 = Math.floor(srcIdx);
+    const i1 = Math.min(origData.length - 1, i0 + 1);
+    const frac = srcIdx - i0;
+    channelData[i] = origData[i0] * (1 - frac) + origData[i1] * frac;
+  }
+
+  const serial = (Math.random() * 0x7fffffff) >>> 0;
+  const pages: Uint8Array[] = [];
+  let seq = 0;
+
+  pages.push(makeOggPage(2, BigInt(0), serial, seq++, [makeOpusHead(numberOfChannels, sampleRate)]));
+  pages.push(makeOggPage(0, BigInt(0), serial, seq++, [makeOpusTags()]));
+
+  const packets: Uint8Array[] = [];
+  let totalGranule = BigInt(0);
+
+  const encoder = new AudioEncoder({
+    output: (chunk) => {
+      const buf = new Uint8Array(chunk.byteLength);
+      chunk.copyTo(buf);
+      packets.push(buf);
+    },
+    error: (e) => {
+      throw e;
+    },
+  });
+
+  encoder.configure({
+    codec: "opus",
+    sampleRate,
+    numberOfChannels,
+    bitrate: targetBitrate,
+  });
+
+  const frameSize = 960;
+  for (let offset = 0; offset < channelData.length; offset += frameSize) {
+    const remaining = channelData.length - offset;
+    const currentSize = Math.min(frameSize, remaining);
+    const frame = new Float32Array(currentSize);
+    frame.set(channelData.subarray(offset, offset + currentSize));
+    const audioData = new AudioData({
+      format: "f32-planar",
+      sampleRate,
+      numberOfFrames: currentSize,
+      numberOfChannels,
+      timestamp: Math.round((offset / sampleRate) * 1_000_000),
+      data: frame,
+    });
+    encoder.encode(audioData);
+    audioData.close();
+  }
+
+  await encoder.flush();
+  encoder.close();
+
+  for (let i = 0; i < packets.length; i++) {
+    totalGranule += BigInt(frameSize);
+    const isLast = i === packets.length - 1;
+    pages.push(makeOggPage(isLast ? 4 : 0, totalGranule, serial, seq++, [packets[i]]));
+  }
+
+  return new Blob(pages as BlobPart[], { type: "audio/ogg; codecs=opus" });
+}
+
+export async function compressAudioUntilFits(blob: Blob): Promise<Blob> {
+  if (blob.size <= AUDIO_SIZE_LIMIT) return blob;
+
+  if (typeof window === "undefined") {
+    return blob.slice(0, AUDIO_SIZE_LIMIT, blob.type || "audio/webm");
+  }
+
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) {
+      return blob.slice(0, AUDIO_SIZE_LIMIT, blob.type || "audio/webm");
+    }
+
+    const audioCtx = new AudioCtx();
+    try {
+      const buffer = await audioCtx.decodeAudioData(await blob.arrayBuffer());
+      const duration = Math.max(1, buffer.duration);
+      const targetBitrate = Math.max(
+        12000,
+        Math.min(32000, Math.floor(((AUDIO_SIZE_LIMIT * 0.82) * 8) / duration))
+      );
+
+      if (typeof AudioEncoder !== "undefined") {
+        const encoded = await encodeAudioBufferToOpus(buffer, targetBitrate);
+        if (encoded.size <= AUDIO_SIZE_LIMIT) {
+          return encoded;
+        }
+      }
+    } finally {
+      void audioCtx.close().catch(() => undefined);
+    }
+  } catch {}
+
+  return blob.slice(0, AUDIO_SIZE_LIMIT, blob.type || "audio/webm");
 }

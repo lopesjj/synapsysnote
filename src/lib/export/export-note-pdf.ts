@@ -120,8 +120,6 @@ function renderAudioCard(block: AppBlock): string {
   const duration = media?.durationSeconds ? formatDuration(media.durationSeconds) : null;
   const size = media?.sizeBytes ? formatBytes(media.sizeBytes) : null;
   const mime = media?.mimeType ? escapeHtml(media.mimeType) : "Áudio";
-  const transcript = media?.transcript;
-  const summary = media?.transcriptSummary;
   const url = media?.url;
 
   const metaParts = [duration, size, mime].filter(Boolean);
@@ -146,24 +144,9 @@ function renderAudioCard(block: AppBlock): string {
           </td>
         </tr>
       </table>
-      ${
-        transcript
-          ? `
-        <div style="margin-top:8px;padding:10px 12px;background:#ffffff;border-radius:6px;border:1px solid #e2e8f0;">
-          <div style="font-size:11px;font-weight:600;color:#0284c7;margin-bottom:4px;display:flex;align-items:center;gap:5px;">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex-shrink:0;"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path></svg>
-            <span>Transcrição do Áudio</span>
-          </div>
-          ${summary ? `<div style="font-size:12px;font-weight:500;color:#334155;margin-bottom:4px;">${escapeHtml(summary)}</div>` : ""}
-          <div style="font-size:11.5px;color:#475569;line-height:1.55;white-space:pre-wrap;">${escapeHtml(transcript)}</div>
-        </div>
-      `
-          : `
-        <div style="font-size:11px;color:#64748b;font-style:italic;">
-          Arquivo de áudio gravado anexado à nota
-        </div>
-      `
-      }
+      <div style="font-size:11px;color:#64748b;font-style:italic;">
+        Arquivo de áudio gravado anexado à nota
+      </div>
       ${
         url
           ? `

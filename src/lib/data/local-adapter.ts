@@ -833,6 +833,12 @@ export class LocalAdapter implements DataAdapter {
   }
 
 
+  async uploadAudioNote(_pageId: string, blob: Blob, _durationSeconds: number): Promise<{ url: string; storagePath: string }> {
+    const url = await toPersistableUrl(blob);
+    const storagePath = `local-audio-${Date.now()}-${nanoid(6)}.webm`;
+    return { url, storagePath };
+  }
+
   async saveAudioNote(pageId: string, blob: Blob, durationSeconds: number) {
     const page = this.state.pages.find((p) => p.id === pageId);
     if (!page) return;
@@ -845,46 +851,20 @@ export class LocalAdapter implements DataAdapter {
         type: "audio" as const,
         media: {
           url,
-          name: `nota-de-voz-${new Date().toLocaleTimeString("pt-BR")}.webm`,
+          name: `voice-note-${new Date().toLocaleTimeString()}.webm`,
           mimeType: blob.type || "audio/webm",
           sizeBytes: blob.size,
           durationSeconds,
-          pending: true,
+          pending: false,
         },
       },
     ];
     await this.updatePage(pageId, { blocks });
-
-    setTimeout(() => {
-      void this.finishDemoTranscript(pageId, blockId);
-    }, 2200);
   }
 
   async retryMediaProcessing(pageId: string, storagePath: string) {
-    const page = this.state.pages.find((item) => item.id === pageId);
-    if (!page) return;
-    const match = page.blocks.find(
-      (block) =>
-        block.media?.storagePath === storagePath || (block.type === "audio" && Boolean(block.media?.pending))
-    );
-    if (match) this.finishDemoTranscript(pageId, match.id);
-  }
-
-  private finishDemoTranscript(pageId: string, blockId: string) {
-    const target = this.state.pages.find((page) => page.id === pageId);
-    if (!target) return;
-    const transcript =
-      "Transcrição de demonstração: a nota de voz foi processada localmente. Conecte o Firebase para usar o Gemini e obter a transcrição real com marcações de tempo.";
-    const summary = "Resumo: nota de voz capturada no app; pendente de revisão.";
-    const nextBlocks = target.blocks.map((block) =>
-      block.id === blockId && block.media
-        ? { ...block, media: { ...block.media, pending: false, transcript, transcriptSummary: summary } }
-        : block
-    );
-    void this.updatePage(pageId, {
-      blocks: nextBlocks,
-      transcriptText: `${target.transcriptText}\n${transcript}`.trim(),
-    });
+    void pageId;
+    void storagePath;
   }
 
   async uploadAttachment(pageId: string, file: File): Promise<{ url: string; storagePath?: string }> {

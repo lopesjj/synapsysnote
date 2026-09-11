@@ -52,6 +52,7 @@ export interface BlockEditorProps {
   onRequestAudio?: () => void;
   onInsertFiles?: (files: File[]) => void;
   onRegisterInsertFiles?: (fn: (files: File[]) => Promise<void>) => void;
+  onRegisterInsertAudio?: (fn: (blob: Blob, durationSeconds: number) => Promise<void>) => void;
 }
 
 function mentionHref(
@@ -118,8 +119,10 @@ export function BlockEditor({
   onRequestAudio,
   onInsertFiles,
   onRegisterInsertFiles,
+  onRegisterInsertAudio,
 }: BlockEditorProps) {
   const router = useRouter();
+  const { t, language } = useTranslation();
   const { livePages, notebooks, adapter } = useWorkspace();
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   const storeBlockCount = useRef(page.blocks.length);
@@ -304,6 +307,100 @@ export function BlockEditor({
     onRegisterInsertFiles?.(insertFilesIntoEditor);
   }, [insertFilesIntoEditor, onRegisterInsertFiles]);
 
+  const insertAudioIntoEditor = useCallback(
+    async (blob: Blob, durationSeconds: number) => {
+      const instance = editorRef.current;
+      if (!instance || !editable) return;
+
+      let targetPos: number;
+      if (instance.isFocused) {
+        targetPos = instance.state.selection.from;
+      } else if (lastSelectionRef.current) {
+        targetPos = Math.min(lastSelectionRef.current.from, instance.state.doc.content.size);
+      } else {
+        targetPos = instance.state.doc.content.size;
+      }
+
+      const tempId = `temp_audio_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const previewUrl = URL.createObjectURL(blob);
+
+      instance
+        .chain()
+        .focus()
+        .setTextSelection(targetPos)
+        .insertContent({
+          type: "mediaBlock",
+          attrs: {
+            mediaType: "audio",
+            url: previewUrl,
+            name: `${t("voice_note").toLowerCase().replace(/\s+/g, "-")}-${new Date().toLocaleTimeString(language === "pt" ? "pt-BR" : language)}.webm`,
+            mimeType: blob.type || "audio/webm",
+            sizeBytes: blob.size,
+            durationSeconds,
+            pending: true,
+            tempId,
+          },
+        })
+        .run();
+
+      lastSelectionRef.current = instance.state.selection;
+
+      void (async () => {
+        try {
+          const { url: permanentUrl, storagePath } = await adapter.uploadAudioNote(
+            page.id,
+            blob,
+            durationSeconds
+          );
+
+          const { tr } = instance.state;
+          let found = false;
+
+          instance.state.doc.descendants((node, pos) => {
+            if (found) return false;
+            if (
+              node.type.name === "mediaBlock" &&
+              (node.attrs.tempId === tempId || node.attrs.url === previewUrl)
+            ) {
+              tr.setNodeMarkup(pos, undefined, {
+                ...node.attrs,
+                url: permanentUrl,
+                storagePath: storagePath ?? null,
+                pending: false,
+                tempId: null,
+              });
+              found = true;
+              return false;
+            }
+          });
+
+          if (found) {
+            instance.view.dispatch(tr);
+            const blocks = docToBlocks(instance.getJSON());
+            emittedBlockCount.current = blocks.length;
+            onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
+          }
+        } catch (error) {
+          console.error("Erro ao salvar áudio:", error);
+          toast.error(
+            error instanceof Error ? error.message : "Não foi possível salvar o áudio."
+          );
+        } finally {
+          setTimeout(() => {
+            try {
+              URL.revokeObjectURL(previewUrl);
+            } catch {}
+          }, 10000);
+        }
+      })();
+    },
+    [adapter, editable, onChange, page.id]
+  );
+
+  useEffect(() => {
+    onRegisterInsertAudio?.(insertAudioIntoEditor);
+  }, [insertAudioIntoEditor, onRegisterInsertAudio]);
+
   const extensions = useMemo(
     () => [
       StarterKit.configure({
@@ -328,7 +425,7 @@ export function BlockEditor({
               doc.firstChild.content.size === 0);
 
           return isEmpty
-            ? "Escreva, cole, use # para um título ou / para inserir um bloco"
+            ? t("editor_placeholder")
             : "";
         },
         includeChildren: false,
@@ -367,7 +464,7 @@ export function BlockEditor({
         suggestion: createMentionSuggestion(() => candidatesRef.current),
       }),
     ],
-    [editable, handlers]
+    [editable, handlers, t]
   );
 
   const editor = useEditor(

@@ -6,7 +6,6 @@ import { NodeSelection } from "@tiptap/pm/state";
 import { BubbleMenu } from "@tiptap/react/menus";
 import {
   Bold,
-  Code,
   Highlighter,
   Italic,
   Link as LinkIcon,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/primitives";
+import { useTranslation } from "@/lib/i18n/translations";
 import { HIGHLIGHT_COLORS, TEXT_COLORS, type PaletteColor } from "./editor-colors";
 
 type Panel = "turn" | "color" | "highlight" | "link" | null;
@@ -54,28 +54,34 @@ function SwatchGrid({
 }
 
 export function BubbleToolbar({ editor }: { editor: Editor }) {
+  const { t } = useTranslation();
   const [panel, setPanel] = useState<Panel>(null);
   const [linkValue, setLinkValue] = useState("");
 
   const togglePanel = (next: Panel) => setPanel((current) => (current === next ? null : next));
 
-  const actions = [
-    { id: "bold", icon: Bold, label: "Negrito", run: () => editor.chain().focus().toggleBold().run() },
-    { id: "italic", icon: Italic, label: "Itálico", run: () => editor.chain().focus().toggleItalic().run() },
+  const actions: Array<{
+    id: string;
+    label: string;
+    run: () => void;
+    icon?: React.ComponentType<{ className?: string }>;
+  }> = [
+    { id: "bold", icon: Bold, label: t("bold"), run: () => editor.chain().focus().toggleBold().run() },
+    { id: "italic", icon: Italic, label: t("italic"), run: () => editor.chain().focus().toggleItalic().run() },
     {
       id: "underline",
       icon: UnderlineIcon,
-      label: "Sublinhado",
+      label: t("underline"),
       run: () => editor.chain().focus().toggleUnderline().run(),
     },
     {
       id: "strike",
       icon: Strikethrough,
-      label: "Tachado",
+      label: t("strikethrough"),
       run: () => editor.chain().focus().toggleStrike().run(),
     },
-    { id: "code", icon: Code, label: "Código", run: () => editor.chain().focus().toggleCode().run() },
-  ] as const;
+    { id: "code", label: t("code_inline"), run: () => editor.chain().focus().toggleCode().run() },
+  ];
 
   const currentColor = (editor.getAttributes("textStyle").color as string | undefined) ?? null;
 
@@ -118,7 +124,13 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
               editor.isActive(action.id) && "bg-[var(--accent-soft)] text-[var(--accent)]"
             )}
           >
-            <action.icon className="size-3.5" />
+            {action.id === "code" ? (
+              <span className="inline-flex items-center justify-center font-mono text-[14px] font-bold leading-none tracking-tight select-none">
+                {"</>"}
+              </span>
+            ) : action.icon ? (
+              <action.icon className="size-3.5" />
+            ) : null}
           </button>
         ))}
         <span className="mx-0.5 h-4 w-px bg-[var(--border)]" />

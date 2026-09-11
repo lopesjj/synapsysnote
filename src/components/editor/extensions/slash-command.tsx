@@ -11,7 +11,6 @@ import {
   Heading1,
   Heading2,
   Heading3,
-  Image as ImageIcon,
   Lightbulb,
   List,
   ListOrdered,
@@ -26,7 +25,8 @@ import { SuggestionList, type SuggestionItem, type SuggestionListHandle } from "
 import { ensureSuggestionPopup } from "./suggestion-tippy";
 import { emptyTableGrid } from "./table-block";
 import type { Instance as TippyInstance } from "tippy.js";
-
+import { useUiStore } from "@/lib/store/ui-store";
+import { TRANSLATIONS, type TranslationKey } from "@/lib/i18n/translations";
 
 export interface SlashCommandHandlers {
   onRequestUpload: () => void;
@@ -43,204 +43,211 @@ interface CommandDescriptor {
   action: (args: { editor: Editor; range: Range; handlers: SlashCommandHandlers }) => void;
 }
 
-const COMMANDS: CommandDescriptor[] = [
-  {
-    id: "text",
-    title: "Texto",
-    subtitle: "Parágrafo simples",
-    group: "Básico",
-    icon: <Type />,
-    keywords: ["texto", "paragrafo", "p"],
-    action: ({ editor, range }) => editor.chain().focus().deleteRange(range).setParagraph().run(),
-  },
-  {
-    id: "h1",
-    title: "Título 1",
-    subtitle: "Seção principal",
-    group: "Básico",
-    icon: <Heading1 />,
-    keywords: ["h1", "titulo", "heading"],
-    action: ({ editor, range }) =>
-      editor.chain().focus().deleteRange(range).setNode("heading", { level: 1 }).run(),
-  },
-  {
-    id: "h2",
-    title: "Título 2",
-    subtitle: "Subseção",
-    group: "Básico",
-    icon: <Heading2 />,
-    keywords: ["h2", "subtitulo"],
-    action: ({ editor, range }) =>
-      editor.chain().focus().deleteRange(range).setNode("heading", { level: 2 }).run(),
-  },
-  {
-    id: "h3",
-    title: "Título 3",
-    subtitle: "Agrupamento menor",
-    group: "Básico",
-    icon: <Heading3 />,
-    keywords: ["h3"],
-    action: ({ editor, range }) =>
-      editor.chain().focus().deleteRange(range).setNode("heading", { level: 3 }).run(),
-  },
-  {
-    id: "bullet",
-    title: "Lista com marcadores",
-    subtitle: "Itens sem ordem",
-    group: "Listas",
-    icon: <List />,
-    keywords: ["lista", "bullet", "ul"],
-    action: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleBulletList().run(),
-  },
-  {
-    id: "ordered",
-    title: "Lista numerada",
-    subtitle: "Passo a passo",
-    group: "Listas",
-    icon: <ListOrdered />,
-    keywords: ["numerada", "ol", "ordem"],
-    action: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleOrderedList().run(),
-  },
-  {
-    id: "todo",
-    title: "Lista de tarefas",
-    subtitle: "Checkbox marcável",
-    group: "Listas",
-    icon: <CheckSquare />,
-    keywords: ["todo", "tarefa", "checkbox"],
-    action: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleTaskList().run(),
-  },
-  {
-    id: "toggle",
-    title: "Toggle",
-    subtitle: "Conteúdo recolhível",
-    group: "Listas",
-    icon: <ChevronRight />,
-    keywords: ["toggle", "recolher", "detalhes"],
-    action: ({ editor, range }) =>
-      editor
-        .chain()
-        .focus()
-        .deleteRange(range)
-        .insertContent({
-          type: "toggleBlock",
-          attrs: { summary: "", open: true },
-          content: [{ type: "paragraph" }],
-        })
-        .run(),
-  },
-  {
-    id: "callout",
-    title: "Callout",
-    subtitle: "Destaque com emoji",
-    group: "Blocos",
-    icon: <Lightbulb />,
-    keywords: ["callout", "destaque", "aviso"],
-    action: ({ editor, range }) =>
-      editor
-        .chain()
-        .focus()
-        .deleteRange(range)
-        .insertContent({ type: "callout", attrs: { emoji: "💡" }, content: [{ type: "paragraph" }] })
-        .run(),
-  },
-  {
-    id: "quote",
-    title: "Citação",
-    subtitle: "Trecho destacado",
-    group: "Blocos",
-    icon: <Quote />,
-    keywords: ["citacao", "quote"],
-    action: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleBlockquote().run(),
-  },
-  {
-    id: "code",
-    title: "Bloco de código",
-    subtitle: "Linguagem automática e realce de sintaxe",
-    group: "Blocos",
-    icon: <Code2 />,
-    keywords: ["codigo", "code", "snippet"],
-    action: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
-  },
-  {
-    id: "equation",
-    title: "Equação (LaTeX)",
-    subtitle: "Renderizada com KaTeX",
-    group: "Blocos",
-    icon: <Sigma />,
-    keywords: ["equacao", "latex", "katex", "formula", "matematica"],
-    action: ({ editor, range }) =>
-      editor
-        .chain()
-        .focus()
-        .deleteRange(range)
-        .insertContent({ type: "equationBlock", attrs: { expression: "" } })
-        .run(),
-  },
-  {
-    id: "divider",
-    title: "Divisor",
-    subtitle: "Separa seções",
-    group: "Blocos",
-    icon: <Minus />,
-    keywords: ["divisor", "linha", "hr"],
-    action: ({ editor, range }) => editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
-  },
-  {
-    id: "table",
-    title: "Tabela",
-    subtitle: "Grade editável com cabeçalho",
-    group: "Blocos",
-    icon: <Table2 />,
-    keywords: ["tabela", "table", "grade", "planilha"],
-    action: ({ editor, range }) =>
-      editor
-        .chain()
-        .focus()
-        .deleteRange(range)
-        .insertContent({
-          type: "tableBlock",
-          attrs: { rows: emptyTableGrid(3, 3), hasColumnHeader: true },
-        })
-        .run(),
-  },
-  {
-    id: "image",
-    title: "Imagem ou arquivo",
-    subtitle: "Imagem (até 1 MB) ou PDF (até 3 MB)",
-    group: "Mídia",
-    icon: <ImageIcon />,
-    keywords: ["imagem", "arquivo", "upload", "anexo", "pdf"],
-    action: ({ editor, range, handlers }) => {
-      editor.chain().focus().deleteRange(range).run();
-      handlers.onRequestUpload();
+function getTranslator() {
+  const language = useUiStore.getState().language || "pt";
+  const dict = TRANSLATIONS[language] || TRANSLATIONS.pt;
+  return (key: TranslationKey) => dict[key] || TRANSLATIONS.pt[key] || key;
+}
+
+function getCommands(t: (key: TranslationKey) => string): CommandDescriptor[] {
+  return [
+    {
+      id: "text",
+      title: t("slash_text_title"),
+      subtitle: t("slash_text_desc"),
+      group: t("slash_group_basic"),
+      icon: <Type />,
+      keywords: ["texto", "paragrafo", "p", "text", "paragraph"],
+      action: ({ editor, range }) => editor.chain().focus().deleteRange(range).setParagraph().run(),
     },
-  },
-  {
-    id: "audio",
-    title: "Gravar nota de voz",
-    subtitle: "Transcrição e resumo com Gemini",
-    group: "Mídia",
-    icon: <AudioLines />,
-    keywords: ["audio", "voz", "gravar", "transcricao"],
-    action: ({ editor, range, handlers }) => {
-      editor.chain().focus().deleteRange(range).run();
-      handlers.onRequestAudio();
+    {
+      id: "h1",
+      title: t("slash_h1_title"),
+      subtitle: t("slash_h1_desc"),
+      group: t("slash_group_basic"),
+      icon: <Heading1 />,
+      keywords: ["h1", "titulo", "heading", "title"],
+      action: ({ editor, range }) =>
+        editor.chain().focus().deleteRange(range).setNode("heading", { level: 1 }).run(),
     },
-  },
-  {
-    id: "attachment",
-    title: "Anexar do computador",
-    subtitle: "PDF, planilhas, documentos",
-    group: "Mídia",
-    icon: <Paperclip />,
-    keywords: ["anexo", "pdf", "documento"],
-    action: ({ editor, range, handlers }) => {
-      editor.chain().focus().deleteRange(range).run();
-      handlers.onRequestUpload();
+    {
+      id: "h2",
+      title: t("slash_h2_title"),
+      subtitle: t("slash_h2_desc"),
+      group: t("slash_group_basic"),
+      icon: <Heading2 />,
+      keywords: ["h2", "subtitulo", "subtitle", "heading"],
+      action: ({ editor, range }) =>
+        editor.chain().focus().deleteRange(range).setNode("heading", { level: 2 }).run(),
     },
-  },
-];
+    {
+      id: "h3",
+      title: t("slash_h3_title"),
+      subtitle: t("slash_h3_desc"),
+      group: t("slash_group_basic"),
+      icon: <Heading3 />,
+      keywords: ["h3", "heading"],
+      action: ({ editor, range }) =>
+        editor.chain().focus().deleteRange(range).setNode("heading", { level: 3 }).run(),
+    },
+    {
+      id: "bullet",
+      title: t("slash_bullet_title"),
+      subtitle: t("slash_bullet_desc"),
+      group: t("slash_group_lists"),
+      icon: <List />,
+      keywords: ["lista", "bullet", "ul", "list"],
+      action: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleBulletList().run(),
+    },
+    {
+      id: "ordered",
+      title: t("slash_ordered_title"),
+      subtitle: t("slash_ordered_desc"),
+      group: t("slash_group_lists"),
+      icon: <ListOrdered />,
+      keywords: ["numerada", "ol", "ordem", "ordered", "number"],
+      action: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleOrderedList().run(),
+    },
+    {
+      id: "todo",
+      title: t("slash_todo_title"),
+      subtitle: t("slash_todo_desc"),
+      group: t("slash_group_lists"),
+      icon: <CheckSquare />,
+      keywords: ["todo", "tarefa", "checkbox", "task", "check"],
+      action: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleTaskList().run(),
+    },
+    {
+      id: "toggle",
+      title: t("slash_toggle_title"),
+      subtitle: t("slash_toggle_desc"),
+      group: t("slash_group_lists"),
+      icon: <ChevronRight />,
+      keywords: ["toggle", "recolher", "detalhes", "collapse"],
+      action: ({ editor, range }) =>
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .insertContent({
+            type: "toggleBlock",
+            attrs: { summary: "", open: true },
+            content: [{ type: "paragraph" }],
+          })
+          .run(),
+    },
+    {
+      id: "callout",
+      title: t("slash_callout_title"),
+      subtitle: t("slash_callout_desc"),
+      group: t("slash_group_blocks"),
+      icon: <Lightbulb />,
+      keywords: ["callout", "destaque", "aviso", "box", "alert"],
+      action: ({ editor, range }) =>
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .insertContent({ type: "callout", attrs: { emoji: "💡" }, content: [{ type: "paragraph" }] })
+          .run(),
+    },
+    {
+      id: "quote",
+      title: t("slash_quote_title"),
+      subtitle: t("slash_quote_desc"),
+      group: t("slash_group_blocks"),
+      icon: <Quote />,
+      keywords: ["citacao", "quote", "cit"],
+      action: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleBlockquote().run(),
+    },
+    {
+      id: "code",
+      title: t("slash_code_title"),
+      subtitle: t("slash_code_desc"),
+      group: t("slash_group_blocks"),
+      icon: <Code2 />,
+      keywords: ["codigo", "code", "snippet"],
+      action: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
+    },
+    {
+      id: "equation",
+      title: t("slash_equation_title"),
+      subtitle: t("slash_equation_desc"),
+      group: t("slash_group_blocks"),
+      icon: <Sigma />,
+      keywords: ["equacao", "latex", "katex", "formula", "matematica", "math", "equation"],
+      action: ({ editor, range }) =>
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .insertContent({ type: "equationBlock", attrs: { expression: "" } })
+          .run(),
+    },
+    {
+      id: "divider",
+      title: t("slash_divider_title"),
+      subtitle: t("slash_divider_desc"),
+      group: t("slash_group_blocks"),
+      icon: <Minus />,
+      keywords: ["divisor", "linha", "hr", "divider", "line"],
+      action: ({ editor, range }) => editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
+    },
+    {
+      id: "table",
+      title: t("slash_table_title"),
+      subtitle: t("slash_table_desc"),
+      group: t("slash_group_blocks"),
+      icon: <Table2 />,
+      keywords: ["tabela", "table", "grade", "planilha", "grid"],
+      action: ({ editor, range }) =>
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .insertContent({
+            type: "tableBlock",
+            attrs: { rows: emptyTableGrid(3, 3), hasColumnHeader: true },
+          })
+          .run(),
+    },
+    {
+      id: "audio",
+      title: t("slash_audio_title"),
+      subtitle: t("slash_audio_desc"),
+      group: t("slash_group_media"),
+      icon: <AudioLines />,
+      keywords: ["audio", "voz", "gravar", "voice", "record"],
+      action: ({ editor, range, handlers }) => {
+        editor.chain().focus().deleteRange(range).run();
+        setTimeout(() => handlers.onRequestAudio(), 60);
+      },
+    },
+    {
+      id: "attachment",
+      title: t("slash_attachment_title"),
+      subtitle: t("slash_attachment_desc"),
+      group: t("slash_group_media"),
+      icon: <Paperclip />,
+      keywords: [
+        "anexo",
+        "pdf",
+        "imagem",
+        "imagens",
+        "arquivo",
+        "upload",
+        "computador",
+        "attach",
+        "file",
+        "image",
+      ],
+      action: ({ editor, range, handlers }) => {
+        editor.chain().focus().deleteRange(range).run();
+        handlers.onRequestUpload();
+      },
+    },
+  ];
+}
 
 function buildSuggestion(handlers: SlashCommandHandlers): Omit<SuggestionOptions, "editor"> {
   return {
@@ -249,9 +256,11 @@ function buildSuggestion(handlers: SlashCommandHandlers): Omit<SuggestionOptions
     allowSpaces: false,
 
     items: ({ query }) => {
+      const t = getTranslator();
+      const commands = getCommands(t);
       const q = query.toLowerCase().trim();
-      if (!q) return COMMANDS;
-      return COMMANDS.filter(
+      if (!q) return commands;
+      return commands.filter(
         (command) =>
           command.title.toLowerCase().includes(q) ||
           command.keywords.some((keyword) => keyword.includes(q))
@@ -278,10 +287,11 @@ function buildSuggestion(handlers: SlashCommandHandlers): Omit<SuggestionOptions
 
       return {
         onStart: (props) => {
+          const t = getTranslator();
           component = new ReactRenderer(SuggestionList, {
             props: {
               items: toItems(props.items as CommandDescriptor[], props.editor, props.range),
-              emptyLabel: "Nenhum bloco corresponde",
+              emptyLabel: t("slash_empty"),
             },
             editor: props.editor,
           });

@@ -24,6 +24,12 @@ function CodeBlockView({ node, updateAttributes, editor }: NodeViewProps) {
   useEffect(() => {
     if (!autoDetect) return;
     const text = node.textContent;
+    if (!text.trim()) {
+      if (language !== "plaintext") {
+        updateAttributes({ language: "plaintext" });
+      }
+      return;
+    }
     const timer = window.setTimeout(() => {
       const { language: next, confidence } = detectCodeLanguage(text);
       if (confidence >= 3 && next !== language) {
@@ -46,12 +52,20 @@ function CodeBlockView({ node, updateAttributes, editor }: NodeViewProps) {
 
   const pick = (id: string, detect: boolean) => {
     updateAttributes({
-      language: detect ? detectCodeLanguage(node.textContent).language : normalizeLanguage(id),
+      language: detect
+        ? (node.textContent.trim() ? detectCodeLanguage(node.textContent).language : "plaintext")
+        : normalizeLanguage(id),
       autoDetect: detect,
     });
     setOpen(false);
     setQuery("");
   };
+
+  const hasContent = Boolean(node.textContent.trim());
+  const label =
+    autoDetect && (!hasContent || language === "plaintext")
+      ? "Detectar automaticamente"
+      : languageLabel(language === "xml" && /<\/?[a-z]/i.test(node.textContent) ? "html" : language);
 
   return (
     <NodeViewWrapper className="synapsys-code-block group/code my-2" data-language={language}>
@@ -67,7 +81,7 @@ function CodeBlockView({ node, updateAttributes, editor }: NodeViewProps) {
                 onMouseDown={(event) => event.preventDefault()}
                 className="inline-flex items-center gap-1 rounded-[var(--radius-xs)] px-1.5 py-0.5 text-[11px] font-medium text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
               >
-                {languageLabel(language === "xml" && /<\/?[a-z]/i.test(node.textContent) ? "html" : language)}
+                {label}
                 {autoDetect ? <Sparkles className="size-3 text-[var(--accent)]" /> : null}
                 <ChevronDown className="size-3" />
               </button>

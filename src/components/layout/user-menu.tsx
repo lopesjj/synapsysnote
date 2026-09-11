@@ -44,7 +44,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   const email = user?.email ?? "";
   const photoURL = profile?.photoURL ?? user?.photoURL;
   const initial = displayName.trim().charAt(0).toUpperCase() || "?";
-  const planLabel = mode === "demo" || user?.uid === "demo-user" ? t("guest") : "Pro";
+  const planLabel = mode === "demo" || user?.uid === "demo-user" ? t("guest") : t("plan_pro");
 
   const avatar = photoURL ? (
     <img
