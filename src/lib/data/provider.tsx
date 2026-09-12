@@ -72,9 +72,23 @@ function readLocalStore<T>(key: string, fallback: T): T {
 
 function writeLocalStore(key: string, value: unknown) {
   if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
+  setTimeout(() => {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch {}
+  }, 0);
+}
+
+function stripHeavyPageFields(pages: Page[]): Page[] {
+  return pages.map((page) => ({
+    ...page,
+    blocks: [],
+    blocksJson: undefined,
+    plainText: "",
+    extractedOCRText: "",
+    transcriptText: "",
+    embedding: null,
+  }));
 }
 
 export const TRASH_RETENTION_DAYS: number = 30;
@@ -129,7 +143,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           if (cancelled) return;
           setPages(next);
           setLoadedAdapter(adapter);
-          writeLocalStore(`synapsys.cache.pages.${userKey}`, next);
+          writeLocalStore(`synapsys.cache.pages.${userKey}`, stripHeavyPageFields(next));
         }),
         adapter.subscribeDatabases((next) => {
           if (cancelled) return;

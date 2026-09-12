@@ -316,7 +316,6 @@ export class FirestoreAdapter implements DataAdapter {
   subscribePages(cb: (pages: Page[]) => void): Unsubscribe {
     return onSnapshot(
       query(this.col("pages"), orderBy("updatedAt", "desc")),
-      { includeMetadataChanges: true },
       (snap) => cb(snap.docs.map(mapPage)),
       () => {}
     );

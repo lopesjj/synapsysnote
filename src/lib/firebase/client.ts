@@ -54,7 +54,6 @@ export function getDb(): Firestore {
   try {
     firestore = initializeFirestore(instance, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-      experimentalAutoDetectLongPolling: true,
       ignoreUndefinedProperties: true,
     });
   } catch {
