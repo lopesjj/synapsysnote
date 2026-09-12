@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, type ChangeEvent, type DragEvent } from "react";
 import {
+  Camera,
   Check,
   Globe,
   Keyboard,
@@ -11,13 +12,17 @@ import {
   Palette,
   Settings,
   Sun,
+  Trash2,
   Type,
+  Upload,
   User,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { AvatarCropDialog } from "./avatar-crop-dialog";
+import { isCustomAvatar } from "@/lib/data/user-avatar";
 import {
   Input,
   Kbd,
@@ -667,13 +672,34 @@ function TypographySection() {
 
 function ProfileSection() {
   const { t } = useTranslation();
-  const { user, mode } = useAuth();
-  const { profile, rename } = useUserProfile();
+  const { user, mode, updateAuthPhoto } = useAuth();
+  const { profile, rename, updateAvatar, removeAvatar } = useUserProfile();
 
   const [draft, setDraft] = useState<string | null>(null);
+  const [cropOpen, setCropOpen] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const current = profile?.displayName ?? user?.displayName ?? "";
   const name = draft ?? current;
   const dirty = name.trim().length > 0 && name.trim() !== current;
+
+  const [imageError, setImageError] = useState(false);
+
+  const rawPhotoURL = isCustomAvatar(profile?.photoURL)
+    ? profile?.photoURL
+    : isCustomAvatar(user?.photoURL)
+    ? user?.photoURL
+    : null;
+
+  useEffect(() => {
+    setImageError(false);
+  }, [rawPhotoURL]);
+
+  const photoURL = imageError ? null : rawPhotoURL;
+  const hasPhoto = Boolean(photoURL);
+  const isBusyAvatar = updateAvatar.isPending || removeAvatar.isPending;
 
   const providerLabels: Record<string, string> = {
     password: t("provider_password"),
@@ -682,38 +708,192 @@ function ProfileSection() {
     demo: t("provider_demo"),
   };
 
+  const handleProcessFile = (file: File) => {
+    const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+      toast.error(t("avatar_invalid_type"));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(t("avatar_size_limit"));
+      return;
+    }
+    setPendingFile(file);
+    setCropOpen(true);
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleProcessFile(file);
+    }
+    e.target.value = "";
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleProcessFile(file);
+    }
+  };
+
+  const handleApplyCrop = async (blob: Blob) => {
+    try {
+      const newUrl = await updateAvatar.mutateAsync(blob);
+      await updateAuthPhoto(newUrl);
+      setImageError(false);
+      setCropOpen(false);
+      setPendingFile(null);
+      toast.success(t("avatar_updated"));
+    } catch {
+      toast.error(t("avatar_upload_failed"));
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    try {
+      await removeAvatar.mutateAsync();
+      await updateAuthPhoto(null);
+      setImageError(false);
+      toast.success(t("avatar_removed"));
+    } catch {
+      toast.error(t("avatar_remove_failed"));
+    }
+  };
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/30 p-4">
-        <Avatar name={profile?.displayName ?? user?.displayName ?? ""} url={user?.photoURL} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-semibold text-ink">
-            {profile?.displayName ?? user?.displayName}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDraggingOver(true);
+        }}
+        onDragLeave={() => setIsDraggingOver(false)}
+        onDrop={handleDrop}
+        className={cn(
+          "rounded-xl border p-4 sm:p-5 transition-all duration-200 space-y-4",
+          isDraggingOver
+            ? "border-[var(--accent)] bg-[var(--accent-soft)]/20 ring-2 ring-[var(--accent)]/30"
+            : "border-[var(--border)] bg-[var(--surface-2)]/30 hover:border-[var(--border-strong)]"
+        )}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-4.5">
+          <div
+            onClick={() => !isBusyAvatar && fileInputRef.current?.click()}
+            className="group relative size-16 sm:size-18 shrink-0 cursor-pointer overflow-hidden rounded-full border-2 border-[var(--border)] shadow-xs transition hover:border-[var(--accent)] active:scale-95"
+            title={t("avatar_upload_button")}
+          >
+            <Avatar
+              name={profile?.displayName ?? user?.displayName ?? ""}
+              url={photoURL}
+              onError={() => setImageError(true)}
+            />
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/55 text-white opacity-0 transition group-hover:opacity-100 backdrop-blur-[1px]">
+              <Camera className="size-4" />
+            </div>
+            {isBusyAvatar ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white">
+                <Loader2 className="size-5 animate-spin" />
+              </div>
+            ) : null}
+          </div>
+
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="min-w-0 space-y-0.5">
+              <p className="truncate text-[15.5px] font-semibold text-ink leading-tight">
+                {profile?.displayName ?? user?.displayName}
+              </p>
+              <p className="truncate text-[13px] text-muted leading-normal">
+                {user?.email}
+              </p>
+              {profile?.phone ? (
+                <p className="truncate text-[12px] text-faint leading-normal">
+                  {profile.phone}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={isBusyAvatar}
+                onClick={() => fileInputRef.current?.click()}
+                className="h-8 rounded-lg px-3 text-[12px] font-medium shrink-0"
+              >
+                <Upload className="size-3.5" />
+                {t("avatar_upload_button")}
+              </Button>
+              {hasPhoto ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={isBusyAvatar}
+                  onClick={handleRemovePhoto}
+                  className="h-8 rounded-lg px-2.5 text-[12px] text-red-500 hover:text-red-600 hover:bg-red-500/10 shrink-0"
+                >
+                  <Trash2 className="size-3.5" />
+                  {t("avatar_remove_button")}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-3 border-t border-[var(--border)]/60">
+          <p className="text-[11px] text-muted leading-relaxed">
+            {t("avatar_section_hint")}
           </p>
-          <p className="truncate text-[12.5px] text-muted">{user?.email}</p>
-          {profile?.phone ? (
-            <p className="truncate text-[12px] text-muted mt-0.5">{profile.phone}</p>
-          ) : null}
         </div>
       </div>
 
       <div className="space-y-2">
-        <label className="block text-[12.5px] font-medium text-ink" htmlFor="display-name">
-          {t("display_name")}
-        </label>
+        <div className="flex items-center justify-between">
+          <label className="block text-[12.5px] font-medium text-ink" htmlFor="display-name">
+            {t("display_name")}
+          </label>
+          <span
+            className={cn(
+              "text-[11px] font-mono transition-colors",
+              name.length >= 60 ? "text-amber-500 font-semibold" : "text-faint"
+            )}
+          >
+            {name.length}/60
+          </span>
+        </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <Input
             id="display-name"
             value={name}
-            onChange={(event) => setDraft(event.target.value)}
+            maxLength={60}
+            onChange={(event) => setDraft(event.target.value.slice(0, 60))}
             placeholder={t("display_name_placeholder")}
             className="rounded-lg flex-1"
           />
           <Button
             variant="primary"
-            disabled={!dirty || rename.isPending}
+            disabled={!dirty || rename.isPending || !name.trim() || name.trim().length > 60}
             onClick={() => {
-              rename.mutate(name.trim(), {
+              const trimmed = name.trim().slice(0, 60);
+              if (!trimmed) {
+                toast.error(t("name_required"));
+                return;
+              }
+              if (name.length > 60) {
+                toast.error(t("name_too_long"));
+                return;
+              }
+              rename.mutate(trimmed, {
                 onSuccess: () => {
                   setDraft(null);
                   toast.success(t("name_updated"));
@@ -727,6 +907,9 @@ function ProfileSection() {
             {t("save")}
           </Button>
         </div>
+        <p className="text-[11px] text-muted leading-relaxed">
+          {t("display_name_hint")}
+        </p>
       </div>
 
       <PreferenceCard>
@@ -750,24 +933,52 @@ function ProfileSection() {
           <span className="leading-relaxed">{t("demo_session_notice")}</span>
         </div>
       ) : null}
+
+      <AvatarCropDialog
+        open={cropOpen}
+        imageFile={pendingFile}
+        onClose={() => {
+          setCropOpen(false);
+          setPendingFile(null);
+        }}
+        onApply={handleApplyCrop}
+      />
     </div>
   );
 }
 
-function Avatar({ name, url }: { name: string; url?: string | null }) {
-  if (url) {
+function Avatar({
+  name,
+  url,
+  onError,
+}: {
+  name: string;
+  url?: string | null;
+  onError?: () => void;
+}) {
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [url]);
+
+  if (url && !imageError) {
     return (
       <img
         src={url}
         alt=""
-        width={48}
-        height={48}
-        className="size-12 shrink-0 rounded-full object-cover border border-[var(--border)] shadow-xs"
+        width={72}
+        height={72}
+        onError={() => {
+          setImageError(true);
+          onError?.();
+        }}
+        className="size-full object-cover"
       />
     );
   }
   return (
-    <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[16px] font-bold text-[var(--accent)] border border-[var(--accent)]/20 shadow-xs">
+    <div className="flex size-full items-center justify-center bg-[#ea580c] text-[20px] font-bold text-white shadow-inner select-none">
       {name.trim().charAt(0).toUpperCase() || "?"}
     </div>
   );

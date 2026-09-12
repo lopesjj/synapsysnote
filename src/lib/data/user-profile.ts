@@ -1,6 +1,7 @@
 import type { UserPreferences, UserProfile } from "@/types/models";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
 import { isValidPhoneBR } from "@/lib/phone";
+import { isCustomAvatar } from "./user-avatar";
 
 
 const LOCAL_KEY = "synapsys.profile.v1";
@@ -55,15 +56,24 @@ function buildProfile(
   now: number,
   completed: boolean
 ): UserProfile {
+  const customPhoto = isCustomAvatar(previous?.photoURL)
+    ? previous?.photoURL
+    : isCustomAvatar(identity.photoURL)
+    ? identity.photoURL
+    : null;
+
   return {
     uid: identity.uid,
     email: identity.email,
-    displayName: identity.displayName,
+    displayName: identity.displayName.trim().slice(0, 60),
     phone: identity.phone ?? previous?.phone,
-    photoURL: identity.photoURL ?? previous?.photoURL ?? null,
+    photoURL: customPhoto,
     providers: identity.providers ?? previous?.providers ?? [],
     registrationCompleted: completed,
-    preferences: previous?.preferences ?? {},
+    preferences: {
+      language: "pt",
+      ...(previous?.preferences ?? {}),
+    },
     createdAt: previous?.createdAt ?? now,
     updatedAt: now,
     lastSeenAt: now,
@@ -71,11 +81,31 @@ function buildProfile(
 }
 
 export async function loadUserProfile(uid: string): Promise<UserProfile | null> {
-  if (isLocalProfile(uid)) return readLocal(uid);
+  if (isLocalProfile(uid)) {
+    const local = readLocal(uid);
+    if (!local) return null;
+    return {
+      ...local,
+      photoURL: isCustomAvatar(local.photoURL) ? local.photoURL : null,
+      preferences: {
+        language: "pt",
+        ...(local.preferences ?? {}),
+      },
+    };
+  }
 
   const [{ getDoc }, ref] = await Promise.all([import("firebase/firestore"), profileRef(uid)]);
   const snap = await getDoc(ref);
-  return snap.exists() ? (snap.data() as UserProfile) : null;
+  if (!snap.exists()) return null;
+  const data = snap.data() as UserProfile;
+  return {
+    ...data,
+    photoURL: isCustomAvatar(data.photoURL) ? data.photoURL : null,
+    preferences: {
+      language: "pt",
+      ...(data.preferences ?? {}),
+    },
+  };
 }
 
 export async function ensureUserProfile(identity: ProfileIdentity): Promise<UserProfile> {
@@ -128,14 +158,19 @@ export async function updateUserProfile(
   uid: string,
   patch: Partial<Pick<UserProfile, "displayName" | "photoURL" | "phone" | "providers">>
 ): Promise<void> {
+  const cleanPatch = { ...patch };
+  if (typeof cleanPatch.displayName === "string") {
+    cleanPatch.displayName = cleanPatch.displayName.trim().slice(0, 60);
+  }
+
   if (isLocalProfile(uid)) {
     const existing = readLocal(uid);
-    if (existing) writeLocal({ ...existing, ...patch, updatedAt: Date.now() });
+    if (existing) writeLocal({ ...existing, ...cleanPatch, updatedAt: Date.now() });
     return;
   }
 
   const [{ setDoc }, ref] = await Promise.all([import("firebase/firestore"), profileRef(uid)]);
-  await setDoc(ref, { uid, ...patch, updatedAt: Date.now() }, { merge: true });
+  await setDoc(ref, { uid, ...cleanPatch, updatedAt: Date.now() }, { merge: true });
 }
 
 export async function saveUserPreferences(

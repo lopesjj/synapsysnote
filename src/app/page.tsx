@@ -25,6 +25,7 @@ import {
   recordFailedLoginAttempt,
   clearFailedLoginAttempts,
 } from "@/lib/auth/login-attempts";
+import { useUiStore } from "@/lib/store/ui-store";
 
 const SIGNUP_ENABLED = false;
 
@@ -118,7 +119,7 @@ export default function LandingPage() {
           toast.error("Informe um telefone válido com DDD.");
           return;
         }
-        await signUpWithEmail(name.trim() || email.split("@")[0], email, password, phone);
+        await signUpWithEmail((name.trim() || email.split("@")[0]).slice(0, 60), email, password, phone);
         navigateTo(appHref("/home"), router);
         return;
       }
@@ -126,6 +127,12 @@ export default function LandingPage() {
       clearFailedLoginAttempts(email);
       setFailedAttempts(0);
       const existing = await loadUserProfile(signedIn.uid);
+      if (existing?.preferences) {
+        const { theme: storedTheme, ...layout } = existing.preferences;
+        if (Object.keys(layout).length > 0) {
+          useUiStore.getState().hydratePreferences(layout);
+        }
+      }
       if (!profileNeedsCompletion(signedIn, existing)) navigateTo(appHref("/home"), router);
     } catch (error) {
       const isMissingCaptchaError =
@@ -148,6 +155,12 @@ export default function LandingPage() {
       clearFailedLoginAttempts(signedIn.email || undefined);
       setFailedAttempts(0);
       const existing = await loadUserProfile(signedIn.uid);
+      if (existing?.preferences) {
+        const { theme: storedTheme, ...layout } = existing.preferences;
+        if (Object.keys(layout).length > 0) {
+          useUiStore.getState().hydratePreferences(layout);
+        }
+      }
       if (!profileNeedsCompletion(signedIn, existing)) navigateTo(appHref("/home"), router);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha na autenticação", {
@@ -288,8 +301,9 @@ export default function LandingPage() {
               <AuthField label="Nome">
                 <Input
                   required
+                  maxLength={60}
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => setName(e.target.value.slice(0, 60))}
                   placeholder="Como te chamamos?"
                 />
               </AuthField>

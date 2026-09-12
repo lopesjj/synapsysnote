@@ -11,6 +11,7 @@ import {
   saveUserPreferences,
   updateUserProfile,
 } from "@/lib/data/user-profile";
+import { saveUserAvatar, removeUserAvatar } from "@/lib/data/user-avatar";
 import { currentPreferences, useUiStore } from "@/lib/store/ui-store";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "./use-auth";
@@ -54,15 +55,51 @@ export function useUserProfile() {
     },
   });
 
+  const updateAvatar = useMutation({
+    mutationFn: async (blob: Blob) => {
+      if (!user) throw new Error("Sessão expirada.");
+      const currentPhoto = query.data?.photoURL ?? user.photoURL;
+      const url = await saveUserAvatar(user.uid, blob, currentPhoto);
+      return url;
+    },
+    onSuccess: (url) => {
+      queryClient.setQueryData<UserProfile | null>(
+        queryKeys.userProfile(user?.uid ?? "anonymous"),
+        (previous) => (previous ? { ...previous, photoURL: url } : previous)
+      );
+    },
+  });
+
+  const removeAvatar = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Sessão expirada.");
+      const currentPhoto = query.data?.photoURL ?? user.photoURL;
+      await removeUserAvatar(user.uid, currentPhoto);
+    },
+    onSuccess: () => {
+      queryClient.setQueryData<UserProfile | null>(
+        queryKeys.userProfile(user?.uid ?? "anonymous"),
+        (previous) => (previous ? { ...previous, photoURL: null } : previous)
+      );
+    },
+  });
+
   const complete = async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.userProfile(user?.uid ?? "anonymous") });
   };
 
-  return { profile: query.data ?? null, loading: query.isLoading, rename, complete };
+  return {
+    profile: query.data ?? null,
+    loading: query.isLoading,
+    rename,
+    updateAvatar,
+    removeAvatar,
+    complete,
+  };
 }
 
 export function useUserPreferencesSync(): void {
-  const { user } = useAuth();
+  const { user, loggingOut } = useAuth();
   const { profile } = useUserProfile();
   const { theme, setTheme } = useTheme();
   const queryClient = useQueryClient();
@@ -73,7 +110,7 @@ export function useUserPreferencesSync(): void {
   const lastWritten = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || loggingOut) {
       hydratedFor.current = null;
       lastWritten.current = null;
       return;
@@ -95,12 +132,13 @@ export function useUserPreferencesSync(): void {
       ...(storedTheme ? { theme: storedTheme } : { theme }),
     };
     lastWritten.current = JSON.stringify(currentActive);
-  }, [hydratePreferences, profile, setTheme, theme, user]);
+  }, [hydratePreferences, loggingOut, profile, setTheme, theme, user]);
 
   useEffect(() => {
-    if (!user || hydratedFor.current !== user.uid) return;
+    if (!user || loggingOut || hydratedFor.current !== user.uid) return;
 
     const schedule = (immediate = false) => {
+      if (loggingOut) return;
       const preferences: UserPreferences = { ...currentPreferences(), theme };
       const serialized = JSON.stringify(preferences);
       if (serialized === lastWritten.current) return;
@@ -108,6 +146,7 @@ export function useUserPreferencesSync(): void {
       if (timer.current) clearTimeout(timer.current);
 
       const commit = () => {
+        if (loggingOut) return;
         lastWritten.current = serialized;
         void saveUserPreferences(user.uid, preferences)
           .then(() => {
@@ -133,6 +172,7 @@ export function useUserPreferencesSync(): void {
     let prevSidebar = useUiStore.getState().sidebarCollapsed;
 
     const unsubscribe = useUiStore.subscribe((state) => {
+      if (loggingOut) return;
       const langChanged = state.language !== prevLanguage;
       const sidebarChanged = state.sidebarCollapsed !== prevSidebar;
       prevLanguage = state.language;
@@ -151,19 +191,22 @@ export function useUserPreferencesSync(): void {
       unsubscribe();
       if (timer.current) {
         clearTimeout(timer.current);
-        const preferences: UserPreferences = { ...currentPreferences(), theme };
-        void saveUserPreferences(user.uid, preferences)
-          .then(() => {
-            queryClient.setQueryData<UserProfile | null>(
-              queryKeys.userProfile(user.uid),
-              (previous) =>
-                previous
-                  ? { ...previous, preferences: { ...previous.preferences, ...preferences } }
-                  : previous
-            );
-          })
-          .catch(() => {});
+        timer.current = null;
+        if (!loggingOut && user) {
+          const preferences: UserPreferences = { ...currentPreferences(), theme };
+          void saveUserPreferences(user.uid, preferences)
+            .then(() => {
+              queryClient.setQueryData<UserProfile | null>(
+                queryKeys.userProfile(user.uid),
+                (previous) =>
+                  previous
+                    ? { ...previous, preferences: { ...previous.preferences, ...preferences } }
+                    : previous
+              );
+            })
+            .catch(() => {});
+        }
       }
     };
-  }, [profile, queryClient, theme, user]);
+  }, [loggingOut, profile, queryClient, theme, user]);
 }

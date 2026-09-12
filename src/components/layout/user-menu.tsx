@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   KeyRound,
@@ -22,6 +22,7 @@ import { ChangePasswordDialog } from "@/components/auth/change-password-dialog";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuShortcut, MenuTrigger } from "@/components/ui/menu";
 import { cn, isMac } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/translations";
+import { isCustomAvatar } from "@/lib/data/user-avatar";
 
 const AVATAR_CLASS =
   "flex size-9 shrink-0 items-center justify-center rounded-full bg-[#ea580c] text-[14px] font-semibold text-white";
@@ -40,10 +41,21 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   const { user, signOut, mode } = useAuth();
   const { profile } = useUserProfile();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   const displayName = profile?.displayName || user?.displayName || t("account");
   const email = user?.email ?? "";
-  const photoURL = profile?.photoURL ?? user?.photoURL;
+  const rawPhotoURL = isCustomAvatar(profile?.photoURL)
+    ? profile?.photoURL
+    : isCustomAvatar(user?.photoURL)
+    ? user?.photoURL
+    : null;
+
+  useEffect(() => {
+    setImageError(false);
+  }, [rawPhotoURL]);
+
+  const photoURL = imageError ? null : rawPhotoURL;
   const initial = displayName.trim().charAt(0).toUpperCase() || "?";
   const planLabel = mode === "demo" || user?.uid === "demo-user" ? t("guest") : t("plan_pro");
 
@@ -53,6 +65,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
       alt=""
       width={36}
       height={36}
+      onError={() => setImageError(true)}
       className="size-9 shrink-0 rounded-full object-cover"
     />
   ) : (
@@ -108,6 +121,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
                 alt=""
                 width={44}
                 height={44}
+                onError={() => setImageError(true)}
                 className="size-11 shrink-0 rounded-full object-cover ring-2 ring-[var(--surface)]"
               />
             ) : (

@@ -113,33 +113,40 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const unsubs: Array<() => void> = [];
 
-    unsubs.push(
-      adapter.subscribeNotebooks((next) => {
-        if (cancelled) return;
-        setNotebooks(next);
-        writeLocalStore(`synapsys.cache.notebooks.${userKey}`, next);
-      }),
-      adapter.subscribePages((next) => {
-        if (cancelled) return;
-        setPages(next);
-        setLoadedAdapter(adapter);
-        writeLocalStore(`synapsys.cache.pages.${userKey}`, next);
-      }),
-      adapter.subscribeDatabases((next) => {
-        if (cancelled) return;
-        setDatabases(next);
-      }),
-      adapter.subscribeImportJobs((next) => {
-        if (cancelled) return;
-        setImportJobs(next);
-      }),
-      adapter.subscribeIntegration((next) => {
-        if (cancelled) return;
-        setIntegration(next);
-      })
-    );
+    const init = async () => {
+      try {
+        await adapter.ensureWorkspace();
+      } catch {}
+      if (cancelled) return;
 
-    void adapter.ensureWorkspace();
+      unsubs.push(
+        adapter.subscribeNotebooks((next) => {
+          if (cancelled) return;
+          setNotebooks(next);
+          writeLocalStore(`synapsys.cache.notebooks.${userKey}`, next);
+        }),
+        adapter.subscribePages((next) => {
+          if (cancelled) return;
+          setPages(next);
+          setLoadedAdapter(adapter);
+          writeLocalStore(`synapsys.cache.pages.${userKey}`, next);
+        }),
+        adapter.subscribeDatabases((next) => {
+          if (cancelled) return;
+          setDatabases(next);
+        }),
+        adapter.subscribeImportJobs((next) => {
+          if (cancelled) return;
+          setImportJobs(next);
+        }),
+        adapter.subscribeIntegration((next) => {
+          if (cancelled) return;
+          setIntegration(next);
+        })
+      );
+    };
+
+    void init();
 
     return () => {
       cancelled = true;

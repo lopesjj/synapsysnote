@@ -10,6 +10,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useUserProfile } from "@/hooks/use-user-profile";
 import { isValidPhoneBR } from "@/lib/phone";
 import { appHref, navigateTo } from "@/lib/domains";
+import { firebaseJson } from "@/lib/firebase/auth-headers";
+import { useUiStore } from "@/lib/store/ui-store";
 import { AuthField } from "./auth-field";
 import { PhoneField } from "./phone-field";
 
@@ -32,11 +34,15 @@ export function CompleteRegistrationForm() {
     setBusy(true);
     try {
       await completeRegistration({
-        name: name.trim() || user?.displayName || email.split("@")[0],
+        name: (name.trim() || user?.displayName || email.split("@")[0]).slice(0, 60),
         email: email.trim() || user?.email || "",
         phone,
       });
       await complete();
+      try {
+        await firebaseJson("/api/workspace/bootstrap", { method: "POST" });
+      } catch {}
+      useUiStore.getState().setLanguage("pt");
       navigateTo(appHref("/home"), router);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível salvar o cadastro");
@@ -60,8 +66,9 @@ export function CompleteRegistrationForm() {
             <AuthField label="Nome">
               <Input
                 required
+                maxLength={60}
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) => setName(event.target.value.slice(0, 60))}
                 placeholder="Como te chamamos?"
                 autoComplete="name"
               />

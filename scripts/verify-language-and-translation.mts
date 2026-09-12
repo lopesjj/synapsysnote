@@ -48,6 +48,14 @@ for (const code of expectedCodes) {
   assert.ok(dict.note_duplicated.length > 0);
   assert.ok(dict.account.length > 0);
   assert.ok(dict.align_left.length > 0);
+  assert.ok(dict.display_name.length > 0);
+  assert.ok(dict.display_name_placeholder.length > 0);
+  assert.ok(dict.display_name_hint.length > 0);
+  assert.ok(dict.name_required.length > 0);
+  assert.ok(dict.name_too_long.length > 0);
+  assert.ok(dict.save.length > 0);
+  assert.ok(dict.name_updated.length > 0);
+  assert.ok(dict.name_save_failed.length > 0);
 }
 
 const sevenHoursAgo = Date.now() - 7 * 3600 * 1000;
@@ -97,5 +105,29 @@ const mockPage: Page = {
 };
 
 assert.equal(mockPage.blocks.length, 4);
+
+import { pickPreferences, DEFAULT_PREFERENCES } from "../src/lib/store/ui-store";
+
+assert.equal(DEFAULT_PREFERENCES.language, "pt");
+
+const pickedEn = pickPreferences({ language: "en", sidebarCollapsed: true });
+assert.equal(pickedEn.language, "en");
+assert.equal(pickedEn.sidebarCollapsed, true);
+
+const pickedEs = pickPreferences({ language: "es" });
+assert.equal(pickedEs.language, "es");
+
+const existingPreferences = { language: "fr" as const, theme: "dark" as const };
+const mergedWithDefaults = {
+  language: "pt" as const,
+  ...existingPreferences,
+};
+assert.equal(mergedWithDefaults.language, "fr");
+
+const newProfilePreferences = {
+  language: "pt" as const,
+  ...({} as { language?: SupportedLanguage }),
+};
+assert.equal(newProfilePreferences.language, "pt");
 
 console.log("all language and translation verification tests passed");

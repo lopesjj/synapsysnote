@@ -10,6 +10,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
 import { createAuthError, toAuthError } from "@/lib/auth/errors";
 import {
@@ -29,6 +30,7 @@ async function applyAuthPersistence(remember: boolean) {
   markRemembered(remember);
 }
 import { completeUserRegistration, updateUserProfile } from "@/lib/data/user-profile";
+import { useUiStore } from "@/lib/store/ui-store";
 import {
   clearCrossHostSession,
   hydrateFromSessionCookie,
@@ -36,6 +38,7 @@ import {
   suppressSessionHydrate,
 } from "@/lib/auth/cross-host-session";
 import { loginHref, resolveUrl } from "@/lib/domains";
+import { isCustomAvatar } from "@/lib/data/user-avatar";
 
 function toAppUser(fbUser: {
   uid: string;
@@ -48,7 +51,7 @@ function toAppUser(fbUser: {
     uid: fbUser.uid,
     email: fbUser.email ?? "",
     displayName: fbUser.displayName ?? "",
-    photoURL: fbUser.photoURL,
+    photoURL: isCustomAvatar(fbUser.photoURL) ? fbUser.photoURL : null,
     providers: fbUser.providerData.map((entry) => entry.providerId),
   };
 }
@@ -82,6 +85,7 @@ interface AuthContextValue {
   confirmPasswordReset: (oobCode: string, password: string) => Promise<void>;
   changePassword: (currentPassword: string, nextPassword: string) => Promise<void>;
   continueAsGuest: () => Promise<void>;
+  updateAuthPhoto: (photoURL: string | null) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -188,6 +192,7 @@ function writeCachedUser(user: AppUser | null) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const configured = isFirebaseConfigured();
+  const queryClient = useQueryClient();
   const demoUser = useSyncExternalStore(subscribeDemo, readDemoUser, () => null);
 
   const [firebaseUser, setFirebaseUser] = useState<AppUser | null>(() => readCachedUser());
@@ -277,6 +282,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mode: configured ? "firebase" : "demo",
 
       async signInWithProvider(providerId, remember = true) {
+        setLoggingOut(false);
         if (!configured) {
           writeDemoUser(DEMO_USER);
           markRemembered(remember);
@@ -331,6 +337,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
 
       async signInWithEmail(email, password, remember = true) {
+        setLoggingOut(false);
         if (!configured) {
           const next = { ...DEMO_USER, email, displayName: email.split("@")[0] };
           writeDemoUser(next);
@@ -367,6 +374,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
 
       async signUpWithEmail(name, email, password, phone) {
+        setLoggingOut(false);
         if (!configured) {
           const next = { ...DEMO_USER, email, displayName: name };
           writeDemoUser(next);
@@ -400,6 +408,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await persistCrossHostSession(true);
           writeCachedUser(next);
           setFirebaseUser(next);
+          useUiStore.getState().setLanguage("pt");
           return next;
         } catch (error) {
           throw toAuthError(error);
@@ -445,6 +454,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         await persistCrossHostSession(true);
         setFirebaseUser(next);
+        useUiStore.getState().setLanguage("pt");
       },
 
       async resetPassword(email) {
@@ -514,6 +524,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         markRemembered(true);
       },
 
+      async updateAuthPhoto(photoURL) {
+        if (!configured || !firebaseUser || firebaseUser.uid === "demo-user") {
+          const next = { ...(firebaseUser ?? DEMO_USER), photoURL };
+          writeDemoUser(next);
+          setFirebaseUser(next);
+          return;
+        }
+        try {
+          const [{ updateProfile }, auth] = await Promise.all([
+            import("firebase/auth"),
+            firebaseAuth(),
+          ]);
+          if (auth.currentUser) {
+            await updateProfile(auth.currentUser, { photoURL });
+          }
+        } catch {}
+        const next = { ...firebaseUser, photoURL };
+        writeCachedUser(next);
+        setFirebaseUser(next);
+      },
+
       async signOut() {
         setLoggingOut(true);
         try {
@@ -527,6 +558,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           writeDemoUser(null);
           setFirebaseUser(null);
           clearRemembered();
+          queryClient.clear();
+          useUiStore.getState().setLanguage("pt");
           if (typeof window !== "undefined") {
             try {
               sessionStorage.removeItem("synapsys.session.openNotebooks");
@@ -534,9 +567,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             } catch {
             }
           }
-        } catch (error) {
+        } finally {
           setLoggingOut(false);
-          throw error;
         }
       },
     }),

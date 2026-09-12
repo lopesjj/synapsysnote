@@ -191,6 +191,7 @@ export class FirestoreAdapter implements DataAdapter {
   ) {}
 
   private bootstrapped = false;
+  private bootstrapPromise: Promise<void> | null = null;
   private lastPagePatch = new Map<string, Record<string, unknown>>();
 
   private isLocallyBootstrapped(): boolean {
@@ -221,61 +222,69 @@ export class FirestoreAdapter implements DataAdapter {
       this.bootstrapped = true;
       return;
     }
-    try {
-      await firebaseJson("/api/workspace/bootstrap", {
-        method: "POST",
-        body: JSON.stringify({ workspaceId: this.workspaceId }),
-      });
-      await this.purgeLegacyInbox();
-      this.bootstrapped = true;
-      this.markLocallyBootstrapped();
-      return;
-    } catch {
+    if (this.bootstrapPromise) {
+      return this.bootstrapPromise;
     }
-    try {
-      const wsRef = doc(getDb(), "workspaces", this.workspaceId);
-      const memberRef = doc(getDb(), "workspaces", this.workspaceId, "members", this.userId);
-      const ws = await getDoc(wsRef);
-      if (!ws.exists()) {
-        await setDoc(wsRef, {
-          id: this.workspaceId,
-          name: "Meu workspace",
-          emoji: "🧠",
-          ownerId: this.userId,
-          memberIds: [this.userId],
-          plan: "free",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        const memberIds = (ws.data()?.memberIds as string[] | undefined) ?? [];
-        if (!memberIds.includes(this.userId) && ws.data()?.ownerId === this.userId) {
-          await updateDoc(wsRef, {
-            memberIds: [...memberIds, this.userId],
-            updatedAt: serverTimestamp(),
-          });
-        }
-      }
-
+    this.bootstrapPromise = (async () => {
       try {
-        await setDoc(
-          memberRef,
-          {
-            userId: this.userId,
-            role: "owner",
-            joinedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
+        await firebaseJson("/api/workspace/bootstrap", {
+          method: "POST",
+          body: JSON.stringify({ workspaceId: this.workspaceId }),
+        });
+        await this.purgeLegacyInbox();
+        this.bootstrapped = true;
+        this.markLocallyBootstrapped();
+        return;
       } catch {
       }
+      try {
+        const wsRef = doc(getDb(), "workspaces", this.workspaceId);
+        const memberRef = doc(getDb(), "workspaces", this.workspaceId, "members", this.userId);
+        const ws = await getDoc(wsRef);
+        if (!ws.exists()) {
+          await setDoc(wsRef, {
+            id: this.workspaceId,
+            name: "Meu workspace",
+            emoji: "🧠",
+            ownerId: this.userId,
+            memberIds: [this.userId],
+            plan: "free",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          const memberIds = (ws.data()?.memberIds as string[] | undefined) ?? [];
+          if (!memberIds.includes(this.userId) && ws.data()?.ownerId === this.userId) {
+            await updateDoc(wsRef, {
+              memberIds: [...memberIds, this.userId],
+              updatedAt: serverTimestamp(),
+            });
+          }
+        }
 
-      this.bootstrapped = true;
-      this.markLocallyBootstrapped();
-    } catch (error) {
-      console.error("Falha ao provisionar workspace", error);
-    }
-    await this.purgeLegacyInbox();
+        try {
+          await setDoc(
+            memberRef,
+            {
+              userId: this.userId,
+              role: "owner",
+              joinedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+        } catch {
+        }
+
+        this.bootstrapped = true;
+        this.markLocallyBootstrapped();
+      } catch (error) {
+        console.error("Falha ao provisionar workspace", error);
+      }
+      await this.purgeLegacyInbox();
+    })().finally(() => {
+      this.bootstrapPromise = null;
+    });
+    return this.bootstrapPromise;
   }
 
   private col(name: string) {
@@ -286,26 +295,30 @@ export class FirestoreAdapter implements DataAdapter {
     return doc(getDb(), "workspaces", this.workspaceId, name, id);
   }
 
-
   subscribeNotebooks(cb: (notebooks: Notebook[]) => void): Unsubscribe {
-    return onSnapshot(query(this.col("notebooks"), orderBy("order", "asc")), (snap) => {
-      cb(
-        snap.docs.map((d) => ({
-          ...(d.data() as Notebook),
-          id: d.id,
-          parentId: (d.data().parentId as string | null | undefined) ?? null,
-          createdAt: ms(d.data().createdAt),
-          updatedAt: ms(d.data().updatedAt),
-        }))
-      );
-    });
+    return onSnapshot(
+      query(this.col("notebooks"), orderBy("order", "asc")),
+      (snap) => {
+        cb(
+          snap.docs.map((d) => ({
+            ...(d.data() as Notebook),
+            id: d.id,
+            parentId: (d.data().parentId as string | null | undefined) ?? null,
+            createdAt: ms(d.data().createdAt),
+            updatedAt: ms(d.data().updatedAt),
+          }))
+        );
+      },
+      () => {}
+    );
   }
 
   subscribePages(cb: (pages: Page[]) => void): Unsubscribe {
     return onSnapshot(
       query(this.col("pages"), orderBy("updatedAt", "desc")),
       { includeMetadataChanges: true },
-      (snap) => cb(snap.docs.map(mapPage))
+      (snap) => cb(snap.docs.map(mapPage)),
+      () => {}
     );
   }
 
@@ -346,23 +359,27 @@ export class FirestoreAdapter implements DataAdapter {
           const dbId = meta.id;
           rowUnsubs.set(
             dbId,
-            onSnapshot(query(collection(this.docRef("databases", dbId), "rows"), orderBy("order", "asc")), (rowsSnap) => {
-              rowsById.set(
-                dbId,
-                rowsSnap.docs.map((r) => ({
-                  ...(r.data() as DatabaseRow),
-                  id: r.id,
-                  createdAt: ms(r.data().createdAt),
-                  updatedAt: ms(r.data().updatedAt),
-                }))
-              );
-              emit();
-            })
+            onSnapshot(
+              query(collection(this.docRef("databases", dbId), "rows"), orderBy("order", "asc")),
+              (rowsSnap) => {
+                rowsById.set(
+                  dbId,
+                  rowsSnap.docs.map((r) => ({
+                    ...(r.data() as DatabaseRow),
+                    id: r.id,
+                    createdAt: ms(r.data().createdAt),
+                    updatedAt: ms(r.data().updatedAt),
+                  }))
+                );
+                emit();
+              },
+              () => {}
+            )
           );
         }
         emit();
       },
-      (error) => console.error("subscribeDatabases", error)
+      () => {}
     );
 
     return () => {
@@ -373,33 +390,41 @@ export class FirestoreAdapter implements DataAdapter {
   }
 
   subscribeImportJobs(cb: (jobs: ImportJob[]) => void): Unsubscribe {
-    return onSnapshot(query(this.col("import_jobs"), orderBy("createdAt", "desc")), (snap) => {
-      cb(
-        snap.docs.map((d) => ({
-          ...(d.data() as ImportJob),
-          id: d.id,
-          createdAt: ms(d.data().createdAt),
-          updatedAt: ms(d.data().updatedAt),
-          startedAt: d.data().startedAt ? ms(d.data().startedAt) : null,
-          finishedAt: d.data().finishedAt ? ms(d.data().finishedAt) : null,
-          errors: d.data().errors ?? [],
-          items: d.data().items ?? [],
-        }))
-      );
-    });
+    return onSnapshot(
+      query(this.col("import_jobs"), orderBy("createdAt", "desc")),
+      (snap) => {
+        cb(
+          snap.docs.map((d) => ({
+            ...(d.data() as ImportJob),
+            id: d.id,
+            createdAt: ms(d.data().createdAt),
+            updatedAt: ms(d.data().updatedAt),
+            startedAt: d.data().startedAt ? ms(d.data().startedAt) : null,
+            finishedAt: d.data().finishedAt ? ms(d.data().finishedAt) : null,
+            errors: d.data().errors ?? [],
+            items: d.data().items ?? [],
+          }))
+        );
+      },
+      () => {}
+    );
   }
 
   subscribeIntegration(cb: (integration: NotionIntegration | null) => void): Unsubscribe {
-    return onSnapshot(this.docRef("integrations", "notion"), (snap) => {
-      if (!snap.exists()) return cb(null);
-      const data = snap.data();
-      cb({
-        ...(data as NotionIntegration),
-        id: "notion",
-        connectedAt: ms(data.connectedAt),
-        lastSyncAt: data.lastSyncAt ? ms(data.lastSyncAt) : null,
-      });
-    });
+    return onSnapshot(
+      this.docRef("integrations", "notion"),
+      (snap) => {
+        if (!snap.exists()) return cb(null);
+        const data = snap.data();
+        cb({
+          ...(data as NotionIntegration),
+          id: "notion",
+          connectedAt: ms(data.connectedAt),
+          lastSyncAt: data.lastSyncAt ? ms(data.lastSyncAt) : null,
+        });
+      },
+      () => {}
+    );
   }
 
 
