@@ -26,6 +26,7 @@ import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { cn, compareNatural, formatRelative } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/translations";
 import type { Page } from "@/types/models";
+import { expandContainerInSession } from "@/lib/data/page-tree";
 
 export interface NotesScope {
   notebookId?: string | null;
@@ -110,11 +111,15 @@ export function NotesExplorer({
   );
 
   const createNote = async () => {
+    const notebookId = selected?.notebookId ?? notebookFilter ?? null;
+    const parentPageId = selected?.parentPageId ?? null;
     const page = await adapter.createPage({
-      notebookId: notebookFilter ?? null,
+      notebookId,
+      parentPageId,
       tags: scope.tag ? [scope.tag] : [],
       title: t("untitled"),
     });
+    expandContainerInSession({ notebookId, parentPageId });
     useUiStore.getState().closeMenu();
     router.push(`/home/p/${page.id}`);
   };

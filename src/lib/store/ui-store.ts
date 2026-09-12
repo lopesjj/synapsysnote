@@ -26,6 +26,7 @@ interface UiState extends UiPreferences {
   paletteOpen: boolean;
   importOpen: boolean;
   preferencesOpen: boolean;
+  changePasswordOpen: boolean;
 
   toggleSidebar: () => void;
   setSidebarCollapsed: (value: boolean) => void;
@@ -39,6 +40,7 @@ interface UiState extends UiPreferences {
   setPaletteOpen: (value: boolean) => void;
   setImportOpen: (value: boolean) => void;
   setPreferencesOpen: (value: boolean) => void;
+  setChangePasswordOpen: (value: boolean) => void;
   setNotesLayout: (value: NotesLayout) => void;
   setNotesSort: (value: NotesSortKey) => void;
   toggleNotesSortDirection: () => void;
@@ -104,6 +106,7 @@ export const useUiStore = create<UiState>()(
       paletteOpen: false,
       importOpen: false,
       preferencesOpen: false,
+      changePasswordOpen: false,
 
       toggleSidebar: () => set({ sidebarCollapsed: !get().sidebarCollapsed }),
       setSidebarCollapsed: (value) => set({ sidebarCollapsed: value }),
@@ -124,6 +127,7 @@ export const useUiStore = create<UiState>()(
       setPaletteOpen: (value) => set({ paletteOpen: value }),
       setImportOpen: (value) => set({ importOpen: value }),
       setPreferencesOpen: (value) => set({ preferencesOpen: value }),
+      setChangePasswordOpen: (value) => set({ changePasswordOpen: value }),
       setNotesLayout: (value) => set({ notesLayout: value }),
       setNotesSort: (value) => set({ notesSort: value }),
       toggleNotesSortDirection: () =>

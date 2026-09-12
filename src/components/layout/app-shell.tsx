@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { FilePlus, Home, Loader2, Minimize2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
-import { loginHref, navigateTo } from "@/lib/domains";
+import { appHref, isLoginHost, isSplitHosts, loginHref, navigateTo } from "@/lib/domains";
 import { useUserPreferencesSync } from "@/hooks/use-user-profile";
 import { useWorkspace } from "@/lib/data/provider";
 import {
@@ -19,6 +19,7 @@ import { EDITOR_WIDTHS, fontById } from "@/lib/typography";
 import { Sidebar, SidebarRail } from "./sidebar";
 import { CommandPalette } from "./command-palette";
 import { PreferencesDialog } from "./preferences-dialog";
+import { ChangePasswordDialog } from "@/components/auth/change-password-dialog";
 import { ImportWizard } from "@/components/notion/import-wizard";
 import { SynapsysWordmark } from "@/components/brand/logo";
 import { useDocumentTitle } from "./document-title";
@@ -26,12 +27,13 @@ import { useWorkspaceNavHistory } from "@/hooks/use-workspace-nav-history";
 import { useTranslation } from "@/lib/i18n/translations";
 import { Tooltip } from "@/components/ui/primitives";
 import { cn, isMac } from "@/lib/utils";
+import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const router = useRouter();
   const { user, loading, loggingOut } = useAuth();
-  const { mode, activeImportJob, adapter } = useWorkspace();
+  const { mode, activeImportJob, adapter, pages, databases } = useWorkspace();
   useDocumentTitle();
   useWorkspaceNavHistory();
 
@@ -43,6 +45,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const paletteOpen = useUiStore((state) => state.paletteOpen);
   const importOpen = useUiStore((state) => state.importOpen);
   const preferencesOpen = useUiStore((state) => state.preferencesOpen);
+  const changePasswordOpen = useUiStore((state) => state.changePasswordOpen);
   const editorFontId = useUiStore((state) => state.editorFontId);
   const editorFontSize = useUiStore((state) => state.editorFontSize);
   const editorWidth = useUiStore((state) => state.editorWidth);
@@ -64,16 +67,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [uiZoom]);
 
   useEffect(() => {
-    if (preferencesOpen || importOpen || paletteOpen) {
+    if (preferencesOpen || importOpen || paletteOpen || changePasswordOpen) {
       useUiStore.getState().setMobileSidebarOpen(false);
     }
-  }, [preferencesOpen, importOpen, paletteOpen]);
+  }, [preferencesOpen, importOpen, paletteOpen, changePasswordOpen]);
 
   useEffect(() => {
+    if (isSplitHosts() && isLoginHost()) {
+      if (user) {
+        navigateTo(appHref(pathname || "/home"), router, "replace");
+      } else if (!loading && !loggingOut) {
+        navigateTo(loginHref("/"), router, "replace");
+      }
+      return;
+    }
     if (!loading && !user && !loggingOut) {
       navigateTo(loginHref("/?session=sync_failed"), router, "replace");
     }
-  }, [loading, loggingOut, router, user]);
+  }, [loading, loggingOut, pathname, router, user]);
 
   const onKeyDown = useCallback(
     async (event: KeyboardEvent) => {
@@ -102,7 +113,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           router.push(`/home/n/${notebook.id}`);
           return;
         }
-        const page = await adapter.createPage({ title: "Sem título" });
+        const target = resolveNoteCreationTarget(pathname, pages, databases);
+        const page = await adapter.createPage({
+          notebookId: target.notebookId,
+          parentPageId: target.parentPageId,
+          title: "Sem título",
+        });
+        expandContainerInSession(target);
         useUiStore.getState().closeMenu();
         router.push(`/home/p/${page.id}`);
         return;
@@ -130,7 +147,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         store.toggleSidebar();
       }
     },
-    [adapter, router]
+    [adapter, databases, pages, pathname, router]
   );
 
   useEffect(() => {
@@ -261,6 +278,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         open={preferencesOpen}
         onOpenChange={(open) => useUiStore.getState().setPreferencesOpen(open)}
       />
+      <ChangePasswordDialog
+        open={changePasswordOpen}
+        onOpenChange={(open) => useUiStore.getState().setChangePasswordOpen(open)}
+      />
     </div>
   );
 }
@@ -318,10 +339,16 @@ function BottomNav() {
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
-  const { adapter } = useWorkspace();
+  const { adapter, pages, databases } = useWorkspace();
 
   const createNote = async () => {
-    const page = await adapter.createPage({ title: t("untitled") });
+    const target = resolveNoteCreationTarget(pathname, pages, databases);
+    const page = await adapter.createPage({
+      notebookId: target.notebookId,
+      parentPageId: target.parentPageId,
+      title: t("untitled"),
+    });
+    expandContainerInSession(target);
     useUiStore.getState().closeMenu();
     router.push(`/home/p/${page.id}`);
   };

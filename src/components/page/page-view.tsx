@@ -11,6 +11,7 @@ import {
   Copy,
   CloudOff,
   FileDown,
+  FilePlus,
   History,
   ImageOff,
   Loader2,
@@ -47,11 +48,12 @@ import {
 } from "@/lib/icons/workspace-icon";
 import { IconPickerMenu } from "@/components/ui/icon-picker";
 import { CoverPicker } from "./cover-picker";
+import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
 
 export function PageView({ pageId }: { pageId: string }) {
   const router = useRouter();
   const { t, language } = useTranslation();
-  const { adapter, pages, livePages, notebooks, pageById, ready } = useWorkspace();
+  const { adapter, pages, livePages, notebooks, databases, pageById, ready } = useWorkspace();
   const page = pageById(pageId);
 
   const [titleDraft, setTitleDraft] = useState<{ id: string; value: string } | null>(null);
@@ -271,6 +273,20 @@ export function PageView({ pageId }: { pageId: string }) {
             </Button>
           </MenuTrigger>
           <MenuContent align="end">
+            <MenuItem
+              onSelect={async () => {
+                const target = resolveNoteCreationTarget(`/home/p/${pageId}`, pages, databases);
+                const newPage = await adapter.createPage({
+                  notebookId: target.notebookId,
+                  parentPageId: target.parentPageId,
+                  title: t("untitled"),
+                });
+                expandContainerInSession(target);
+                router.push(`/home/p/${newPage.id}`);
+              }}
+            >
+              <FilePlus /> {t("new_note")}
+            </MenuItem>
             <MenuItem onSelect={() => fileInput.current?.click()}>
               <Paperclip /> {t("attach_file")}
             </MenuItem>

@@ -18,7 +18,6 @@ import { useUserProfile } from "@/hooks/use-user-profile";
 import { currentPreferences, useUiStore } from "@/lib/store/ui-store";
 import { saveUserPreferences } from "@/lib/data/user-profile";
 import { useTheme } from "@/components/theme-provider";
-import { ChangePasswordDialog } from "@/components/auth/change-password-dialog";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuShortcut, MenuTrigger } from "@/components/ui/menu";
 import { cn, isMac } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/translations";
@@ -40,7 +39,6 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   const { theme, toggle } = useTheme();
   const { user, signOut, mode } = useAuth();
   const { profile } = useUserProfile();
-  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
 
   const displayName = profile?.displayName || user?.displayName || t("account");
@@ -73,7 +71,6 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   );
 
   return (
-    <>
     <Menu>
       <MenuTrigger asChild>
         {collapsed ? (
@@ -155,7 +152,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
           <MenuItem
             onSelect={() => {
               useUiStore.getState().setMobileSidebarOpen(false);
-              setChangePasswordOpen(true);
+              useUiStore.getState().setChangePasswordOpen(true);
             }}
           >
             <KeyRound /> {t("change_password")}
@@ -194,7 +191,5 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
         </div>
       </MenuContent>
     </Menu>
-    <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
-    </>
   );
 }

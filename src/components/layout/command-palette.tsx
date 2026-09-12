@@ -13,6 +13,7 @@ import { Kbd } from "@/components/ui/primitives";
 import { cn, isMac } from "@/lib/utils";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { useTranslation } from "@/lib/i18n/translations";
+import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
 
 export function CommandPalette({
   open,
@@ -238,7 +239,13 @@ export function CommandPalette({
                         value="new-page"
                         className={itemClass}
                         onSelect={async () => {
-                          const page = await adapter.createPage({ title: t("untitled") });
+                          const target = resolveNoteCreationTarget(pathname, livePages, databases);
+                          const page = await adapter.createPage({
+                            notebookId: target.notebookId,
+                            parentPageId: target.parentPageId,
+                            title: t("untitled"),
+                          });
+                          expandContainerInSession(target);
                           go(`/home/p/${page.id}`);
                         }}
                       >

@@ -3,21 +3,32 @@ function trimOrigin(value: string | undefined): string {
   return value?.trim().replace(/\/$/, "") ?? "";
 }
 
-export const LOGIN_ORIGIN = trimOrigin(process.env.NEXT_PUBLIC_LOGIN_ORIGIN);
-export const APP_ORIGIN = trimOrigin(process.env.NEXT_PUBLIC_APP_ORIGIN);
+export const LOGIN_ORIGIN = trimOrigin(process.env.NEXT_PUBLIC_LOGIN_ORIGIN) || "https://synapsysnt.com.br";
+export const APP_ORIGIN = trimOrigin(process.env.NEXT_PUBLIC_APP_ORIGIN) || "https://app.synapsysnt.com.br";
 
 export function isSplitHosts(): boolean {
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname.endsWith(".local") ||
+      hostname.endsWith(".internal")
+    ) {
+      return false;
+    }
+  }
   return Boolean(LOGIN_ORIGIN && APP_ORIGIN && LOGIN_ORIGIN !== APP_ORIGIN);
 }
 
 export function cookieParentDomain(): string | undefined {
   if (!isSplitHosts()) return undefined;
   try {
-    const loginHost = new URL(LOGIN_ORIGIN).hostname;
+    const loginHost = new URL(LOGIN_ORIGIN).hostname.replace(/^www\./, "");
     const appHost = new URL(APP_ORIGIN).hostname;
-    if (appHost === loginHost) return undefined;
-    if (appHost.endsWith(`.${loginHost}`)) return `.${loginHost}`;
-    if (loginHost.endsWith(`.${appHost}`)) return `.${appHost}`;
+    if (appHost.endsWith(`.${loginHost}`) || loginHost === appHost) {
+      return `.${loginHost}`;
+    }
   } catch {}
   return undefined;
 }
@@ -45,16 +56,20 @@ function currentHostname(): string {
 export function isAppHost(hostname = currentHostname()): boolean {
   if (!isSplitHosts()) return false;
   try {
-    return hostname === new URL(APP_ORIGIN).hostname;
+    const appHost = new URL(APP_ORIGIN).hostname.toLowerCase();
+    const current = hostname.toLowerCase();
+    return current === appHost;
   } catch {
     return false;
   }
 }
 
 export function isLoginHost(hostname = currentHostname()): boolean {
-  if (!isSplitHosts()) return true;
+  if (!isSplitHosts()) return false;
   try {
-    return hostname === new URL(LOGIN_ORIGIN).hostname;
+    const loginHost = new URL(LOGIN_ORIGIN).hostname.toLowerCase().replace(/^www\./, "");
+    const current = hostname.toLowerCase().replace(/^www\./, "");
+    return current === loginHost;
   } catch {
     return false;
   }

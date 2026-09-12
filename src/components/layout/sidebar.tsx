@@ -55,6 +55,7 @@ import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/compo
 import { UserMenu } from "./user-menu";
 import type { Notebook } from "@/types/models";
 import { childrenOf, isNestedNotebook, parentIdOf } from "@/lib/data/notebook-tree";
+import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
 import {
   ORDER_STEP,
   decodeId,
@@ -108,11 +109,17 @@ const CHROME_HIT_CLASS = cn(
 export function SidebarRail() {
   const router = useRouter();
   const pathname = usePathname();
-  const { adapter } = useWorkspace();
+  const { adapter, pages, databases } = useWorkspace();
   const { t } = useTranslation();
 
   const createPage = async () => {
-    const page = await adapter.createPage({ notebookId: null, title: t("untitled") });
+    const target = resolveNoteCreationTarget(pathname, pages, databases);
+    const page = await adapter.createPage({
+      notebookId: target.notebookId,
+      parentPageId: target.parentPageId,
+      title: t("untitled"),
+    });
+    expandContainerInSession(target);
     useUiStore.getState().closeMenu();
     router.push(`/home/p/${page.id}`);
   };
