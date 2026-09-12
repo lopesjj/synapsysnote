@@ -310,16 +310,63 @@
 
 .synapsys-editor .ProseMirror ul,
 .synapsys-editor .ProseMirror ol {
-  padding-left: 1.35rem;
+  padding-left: 1.45rem;
 }
 .synapsys-editor .ProseMirror ul {
-  list-style: disc;
+  list-style-type: disc;
 }
 .synapsys-editor .ProseMirror ol {
-  list-style: decimal;
+  list-style-type: decimal;
+}
+.synapsys-editor .ProseMirror li {
+  position: relative;
+}
+.synapsys-editor .ProseMirror li::marker {
+  color: var(--muted);
+  font-size: 0.9em;
 }
 .synapsys-editor .ProseMirror li p {
   margin: 0;
+}
+
+.synapsys-editor .ProseMirror ul ul,
+.synapsys-editor .ProseMirror ol ul {
+  list-style-type: circle;
+  padding-left: 1.35rem;
+  margin-top: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+.synapsys-editor .ProseMirror ol ol,
+.synapsys-editor .ProseMirror ul ol {
+  list-style-type: lower-alpha;
+  padding-left: 1.35rem;
+  margin-top: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+.synapsys-editor .ProseMirror ul ul ul,
+.synapsys-editor .ProseMirror ol ul ul,
+.synapsys-editor .ProseMirror ul ol ul,
+.synapsys-editor .ProseMirror ol ol ul {
+  list-style-type: square;
+  padding-left: 1.35rem;
+  margin-top: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+.synapsys-editor .ProseMirror ol ol ol,
+.synapsys-editor .ProseMirror ul ol ol,
+.synapsys-editor .ProseMirror ol ul ol,
+.synapsys-editor .ProseMirror ul ul ol {
+  list-style-type: lower-roman;
+  padding-left: 1.35rem;
+  margin-top: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+.synapsys-editor .ProseMirror ul ul ul ul,
+.synapsys-editor .ProseMirror ol ul ul ul,
+.synapsys-editor .ProseMirror ul ol ul ul,
+.synapsys-editor .ProseMirror ol ol ul ul {
+  list-style-type: '- ';
+  padding-left: 1.35rem;
 }
 
 .synapsys-editor .ProseMirror blockquote {
@@ -527,6 +574,199 @@
   margin-left: 0.25rem;
   padding-left: 0.75rem;
   border-left: 1px solid var(--border);
+}
+
+.synapsys-editor .ProseMirror .synapsys-toggle--open [data-node-view-content-react] > ul:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle--open [data-node-view-content] > ul:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle--open .synapsys-toggle-content > ul:not(:first-child),
+.synapsys-editor .ProseMirror [data-toggle-open="true"] [data-node-view-content-react] > ul:not(:first-child),
+.synapsys-editor .ProseMirror [data-toggle-open="true"] [data-node-view-content] > ul:not(:first-child),
+.synapsys-editor .ProseMirror [data-toggle-open="true"] .synapsys-toggle-content > ul:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle--open [data-node-view-content-react] > ol:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle--open [data-node-view-content] > ol:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle--open .synapsys-toggle-content > ol:not(:first-child),
+.synapsys-editor .ProseMirror [data-toggle-open="true"] [data-node-view-content-react] > ol:not(:first-child),
+.synapsys-editor .ProseMirror [data-toggle-open="true"] [data-node-view-content] > ol:not(:first-child),
+.synapsys-editor .ProseMirror [data-toggle-open="true"] .synapsys-toggle-content > ol:not(:first-child) {
+  margin-left: 0.25rem;
+  padding-left: 1.85rem;
+  border-left: 1px solid var(--border);
+}
+
+.synapsys-editor .ProseMirror .synapsys-toggle--open [data-node-view-content-react] > ul[data-type="taskList"]:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle--open [data-node-view-content] > ul[data-type="taskList"]:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle--open .synapsys-toggle-content > ul[data-type="taskList"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-toggle-open="true"] [data-node-view-content-react] > ul[data-type="taskList"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-toggle-open="true"] [data-node-view-content] > ul[data-type="taskList"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-toggle-open="true"] .synapsys-toggle-content > ul[data-type="taskList"]:not(:first-child) {
+  margin-left: 0.25rem;
+  padding-left: 0.85rem;
+  border-left: 1px solid var(--border);
+}
+
+.synapsys-editor .ProseMirror .synapsys-toggle ul ul,
+.synapsys-editor .ProseMirror .synapsys-toggle ol ol,
+.synapsys-editor .ProseMirror .synapsys-toggle ul ol,
+.synapsys-editor .ProseMirror .synapsys-toggle ol ul {
+  border-left: none;
+  margin-left: 0;
+}
+
+.synapsys-editor .ProseMirror .synapsys-toggle[data-indent="1"] { margin-left: min(1.25cm, 15vw); }
+.synapsys-editor .ProseMirror .synapsys-toggle[data-indent="2"] { margin-left: min(2.5cm, 30vw); }
+.synapsys-editor .ProseMirror .synapsys-toggle[data-indent="3"] { margin-left: min(3.75cm, 45vw); }
+.synapsys-editor .ProseMirror .synapsys-toggle[data-indent="4"] { margin-left: min(5cm, 60vw); }
+.synapsys-editor .ProseMirror .synapsys-toggle[data-indent="5"] { margin-left: min(6.25cm, 70vw); }
+.synapsys-editor .ProseMirror .synapsys-toggle[data-indent="6"] { margin-left: min(7.5cm, 75vw); }
+.synapsys-editor .ProseMirror .synapsys-toggle[data-indent="7"] { margin-left: min(8.75cm, 80vw); }
+.synapsys-editor .ProseMirror .synapsys-toggle[data-indent="8"] { margin-left: min(10cm, 85vw); }
+
+.synapsys-editor .ProseMirror ul[data-indent="1"]:not(.synapsys-toggle-content *),
+.synapsys-editor .ProseMirror ol[data-indent="1"]:not(.synapsys-toggle-content *) {
+  margin-left: min(1.25cm, 15vw);
+}
+.synapsys-editor .ProseMirror ul[data-indent="2"]:not(.synapsys-toggle-content *),
+.synapsys-editor .ProseMirror ol[data-indent="2"]:not(.synapsys-toggle-content *) {
+  margin-left: min(2.5cm, 30vw);
+}
+.synapsys-editor .ProseMirror ul[data-indent="3"]:not(.synapsys-toggle-content *),
+.synapsys-editor .ProseMirror ol[data-indent="3"]:not(.synapsys-toggle-content *) {
+  margin-left: min(3.75cm, 45vw);
+}
+.synapsys-editor .ProseMirror ul[data-indent="4"]:not(.synapsys-toggle-content *),
+.synapsys-editor .ProseMirror ol[data-indent="4"]:not(.synapsys-toggle-content *) {
+  margin-left: min(5cm, 60vw);
+}
+.synapsys-editor .ProseMirror ul[data-indent="5"]:not(.synapsys-toggle-content *),
+.synapsys-editor .ProseMirror ol[data-indent="5"]:not(.synapsys-toggle-content *) {
+  margin-left: min(6.25cm, 70vw);
+}
+.synapsys-editor .ProseMirror ul[data-indent="6"]:not(.synapsys-toggle-content *),
+.synapsys-editor .ProseMirror ol[data-indent="6"]:not(.synapsys-toggle-content *) {
+  margin-left: min(7.5cm, 75vw);
+}
+.synapsys-editor .ProseMirror ul[data-indent="7"]:not(.synapsys-toggle-content *),
+.synapsys-editor .ProseMirror ol[data-indent="7"]:not(.synapsys-toggle-content *) {
+  margin-left: min(8.75cm, 80vw);
+}
+.synapsys-editor .ProseMirror ul[data-indent="8"]:not(.synapsys-toggle-content *),
+.synapsys-editor .ProseMirror ol[data-indent="8"]:not(.synapsys-toggle-content *) {
+  margin-left: min(10cm, 85vw);
+}
+
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-indent="1"]:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ol[data-indent="1"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-indent="1"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ol[data-indent="1"]:not(:first-child) {
+  padding-left: calc(1.85rem + min(1.25cm, 15vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-indent="2"]:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ol[data-indent="2"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-indent="2"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ol[data-indent="2"]:not(:first-child) {
+  padding-left: calc(1.85rem + min(2.5cm, 30vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-indent="3"]:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ol[data-indent="3"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-indent="3"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ol[data-indent="3"]:not(:first-child) {
+  padding-left: calc(1.85rem + min(3.75cm, 45vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-indent="4"]:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ol[data-indent="4"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-indent="4"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ol[data-indent="4"]:not(:first-child) {
+  padding-left: calc(1.85rem + min(5cm, 60vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-indent="5"]:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ol[data-indent="5"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-indent="5"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ol[data-indent="5"]:not(:first-child) {
+  padding-left: calc(1.85rem + min(6.25cm, 70vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-indent="6"]:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ol[data-indent="6"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-indent="6"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ol[data-indent="6"]:not(:first-child) {
+  padding-left: calc(1.85rem + min(7.5cm, 75vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-indent="7"]:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ol[data-indent="7"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-indent="7"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ol[data-indent="7"]:not(:first-child) {
+  padding-left: calc(1.85rem + min(8.75cm, 80vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-indent="8"]:not(:first-child),
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ol[data-indent="8"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-indent="8"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ol[data-indent="8"]:not(:first-child) {
+  padding-left: calc(1.85rem + min(10cm, 85vw)) !important;
+}
+
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-type="taskList"][data-indent="1"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-type="taskList"][data-indent="1"]:not(:first-child) {
+  padding-left: calc(0.85rem + min(1.25cm, 15vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-type="taskList"][data-indent="2"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-type="taskList"][data-indent="2"]:not(:first-child) {
+  padding-left: calc(0.85rem + min(2.5cm, 30vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-type="taskList"][data-indent="3"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-type="taskList"][data-indent="3"]:not(:first-child) {
+  padding-left: calc(0.85rem + min(3.75cm, 45vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-type="taskList"][data-indent="4"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-type="taskList"][data-indent="4"]:not(:first-child) {
+  padding-left: calc(0.85rem + min(5cm, 60vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-type="taskList"][data-indent="5"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-type="taskList"][data-indent="5"]:not(:first-child) {
+  padding-left: calc(0.85rem + min(6.25cm, 70vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-type="taskList"][data-indent="6"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-type="taskList"][data-indent="6"]:not(:first-child) {
+  padding-left: calc(0.85rem + min(7.5cm, 75vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-type="taskList"][data-indent="7"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-type="taskList"][data-indent="7"]:not(:first-child) {
+  padding-left: calc(0.85rem + min(8.75cm, 80vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > ul[data-type="taskList"][data-indent="8"]:not(:first-child),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > ul[data-type="taskList"][data-indent="8"]:not(:first-child) {
+  padding-left: calc(0.85rem + min(10cm, 85vw)) !important;
+}
+
+.synapsys-editor .ProseMirror .synapsys-toggle-content > [data-indent="1"]:not(ul):not(ol),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > [data-indent="1"]:not(ul):not(ol) {
+  padding-left: calc(0.75rem + min(1.25cm, 15vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > [data-indent="2"]:not(ul):not(ol),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > [data-indent="2"]:not(ul):not(ol) {
+  padding-left: calc(0.75rem + min(2.5cm, 30vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > [data-indent="3"]:not(ul):not(ol),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > [data-indent="3"]:not(ul):not(ol) {
+  padding-left: calc(0.75rem + min(3.75cm, 45vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > [data-indent="4"]:not(ul):not(ol),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > [data-indent="4"]:not(ul):not(ol) {
+  padding-left: calc(0.75rem + min(5cm, 60vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > [data-indent="5"]:not(ul):not(ol),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > [data-indent="5"]:not(ul):not(ol) {
+  padding-left: calc(0.75rem + min(6.25cm, 70vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > [data-indent="6"]:not(ul):not(ol),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > [data-indent="6"]:not(ul):not(ol) {
+  padding-left: calc(0.75rem + min(7.5cm, 75vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > [data-indent="7"]:not(ul):not(ol),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > [data-indent="7"]:not(ul):not(ol) {
+  padding-left: calc(0.75rem + min(8.75cm, 80vw)) !important;
+}
+.synapsys-editor .ProseMirror .synapsys-toggle-content > [data-indent="8"]:not(ul):not(ol),
+.synapsys-editor .ProseMirror [data-node-view-content-react] > [data-indent="8"]:not(ul):not(ol) {
+  padding-left: calc(0.75rem + min(10cm, 85vw)) !important;
 }
 
 .synapsys-editor .ProseMirror .ProseMirror-selectednode {

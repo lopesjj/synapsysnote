@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
@@ -8,50 +8,12 @@ import { TextSelection } from "@tiptap/pm/state";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-function ToggleView({ node, updateAttributes }: NodeViewProps) {
+function ToggleView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
   const [open, setOpen] = useState(() => Boolean(node.attrs.open ?? true));
-  const innerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setOpen(Boolean(node.attrs.open ?? true));
   }, [node.attrs.open]);
-
-  useEffect(() => {
-    const el = innerRef.current;
-    if (!el) return;
-
-    const apply = () => {
-      const target =
-        el.querySelector(":scope > .synapsys-toggle-content > [data-node-view-content-react]") ||
-        el.querySelector(":scope > .synapsys-toggle-content") ||
-        el.querySelector("[data-node-view-content-react]") ||
-        el.querySelector("[data-node-view-content]") ||
-        el.querySelector(".synapsys-toggle-content");
-      if (!target) return;
-      const children = Array.from(target.children) as HTMLElement[];
-      for (let i = 1; i < children.length; i++) {
-        if (open) {
-          children[i].style.removeProperty("display");
-        } else {
-          children[i].style.setProperty("display", "none", "important");
-        }
-      }
-    };
-
-    apply();
-    const timer = setTimeout(apply, 0);
-
-    const observer = new MutationObserver(() => {
-      apply();
-    });
-
-    observer.observe(el, { childList: true, subtree: true });
-
-    return () => {
-      clearTimeout(timer);
-      observer.disconnect();
-    };
-  }, [open]);
 
   const handleToggle = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -59,6 +21,22 @@ function ToggleView({ node, updateAttributes }: NodeViewProps) {
     const next = !open;
     setOpen(next);
     updateAttributes({ open: next });
+
+    if (!next && typeof getPos === "function") {
+      const togglePos = getPos();
+      if (typeof togglePos === "number") {
+        const { state } = editor;
+        const { selection } = state;
+        const firstChild = node.child(0);
+        const headerEnd = togglePos + 1 + firstChild.nodeSize;
+        const toggleEnd = togglePos + node.nodeSize;
+
+        if (selection.from >= headerEnd && selection.to <= toggleEnd) {
+          const targetPos = togglePos + 1 + Math.min(selection.from - togglePos - 1, firstChild.content.size);
+          editor.chain().setTextSelection(Math.max(togglePos + 1, targetPos)).run();
+        }
+      }
+    }
   };
 
   const handleMouseDown = (event: React.MouseEvent) => {
@@ -73,8 +51,9 @@ function ToggleView({ node, updateAttributes }: NodeViewProps) {
         open ? "synapsys-toggle--open" : "synapsys-toggle--closed"
       )}
       data-toggle-open={open ? "true" : "false"}
+      data-indent={node.attrs.indent ? String(node.attrs.indent) : undefined}
     >
-      <div ref={innerRef} className="synapsys-toggle-inner w-full">
+      <div className="synapsys-toggle-inner w-full">
         <button
           type="button"
           contentEditable={false}
@@ -112,6 +91,18 @@ export const ToggleBlock = Node.create({
           "data-toggle-open": attributes.open ? "true" : "false",
           "data-open": attributes.open ? "true" : "false",
         }),
+      },
+      indent: {
+        default: 0,
+        parseHTML: (element) => {
+          const val = parseInt(element.getAttribute("data-indent") || "0", 10);
+          return isNaN(val) ? 0 : Math.min(8, Math.max(0, val));
+        },
+        renderHTML: (attributes) => {
+          const indent = Number(attributes.indent ?? 0);
+          if (!indent || indent <= 0) return {};
+          return { "data-indent": String(Math.min(8, indent)) };
+        },
       },
     };
   },
@@ -151,47 +142,49 @@ export const ToggleBlock = Node.create({
 
         if (toggleDepth === -1) return false;
 
+        if (
+          this.editor.isActive("listItem") ||
+          this.editor.isActive("taskItem") ||
+          this.editor.isActive("table") ||
+          this.editor.isActive("codeBlock")
+        ) {
+          return false;
+        }
+
         const toggleNode = $from.node(toggleDepth);
         const togglePos = $from.before(toggleDepth);
         const childIndex = $from.index(toggleDepth);
         const currentChild = toggleNode.child(childIndex);
 
         if (childIndex === 0) {
-          const tr = state.tr;
-          if (!toggleNode.attrs.open) {
-            tr.setNodeMarkup(togglePos, undefined, {
-              ...toggleNode.attrs,
-              open: true,
-            });
-          }
-
-          if ($from.parent.type.name === "heading" && $from.parentOffset === $from.parent.content.size) {
-            const afterHeaderPos = $from.after();
-            tr.insert(afterHeaderPos, state.schema.nodes.paragraph.create());
-            tr.setSelection(TextSelection.create(tr.doc, afterHeaderPos + 1));
+          if (selection.empty && $from.parentOffset === 0) {
+            const tr = state.tr;
+            const newParagraph = state.schema.nodes.paragraph.create();
+            tr.insert(togglePos, newParagraph);
+            tr.setSelection(TextSelection.create(tr.doc, togglePos + newParagraph.nodeSize + 1));
             view.dispatch(tr.scrollIntoView());
             return true;
           }
 
-          if (tr.docChanged) {
-            view.dispatch(tr);
+          if ($from.parentOffset === $from.parent.content.size) {
+            const tr = state.tr;
+            const isOpen = Boolean(toggleNode.attrs.open ?? true);
+            if (!isOpen) {
+              const toggleAfterPos = togglePos + toggleNode.nodeSize;
+              const newParagraph = state.schema.nodes.paragraph.create();
+              tr.insert(toggleAfterPos, newParagraph);
+              tr.setSelection(TextSelection.create(tr.doc, toggleAfterPos + 1));
+              view.dispatch(tr.scrollIntoView());
+              return true;
+            } else {
+              const afterHeaderPos = $from.after();
+              const newParagraph = state.schema.nodes.paragraph.create();
+              tr.insert(afterHeaderPos, newParagraph);
+              tr.setSelection(TextSelection.create(tr.doc, afterHeaderPos + 1));
+              view.dispatch(tr.scrollIntoView());
+              return true;
+            }
           }
-        }
-
-        if (childIndex > 0 && currentChild.textContent === "" && currentChild.childCount === 0) {
-          const directChildDepth = toggleDepth + 1;
-          const currentBeforePos = $from.before(directChildDepth);
-          const currentAfterPos = $from.after(directChildDepth);
-          const toggleAfterPos = togglePos + toggleNode.nodeSize;
-
-          const tr = state.tr;
-          tr.delete(currentBeforePos, currentAfterPos);
-          const insertPos = tr.mapping.map(toggleAfterPos);
-          const newParagraph = state.schema.nodes.paragraph.create();
-          tr.insert(insertPos, newParagraph);
-          tr.setSelection(TextSelection.create(tr.doc, insertPos + 1));
-          view.dispatch(tr.scrollIntoView());
-          return true;
         }
 
         return this.editor.commands.splitBlock();
@@ -212,7 +205,35 @@ export const ToggleBlock = Node.create({
           }
         }
 
-        if (toggleDepth === -1) return false;
+        if (toggleDepth === -1) {
+          if ($from.parent.isTextblock && $from.parent.content.size === 0 && $from.parentOffset === 0) {
+            const currentParaPos = $from.before();
+            if (currentParaPos > 0) {
+              const $resolve = state.doc.resolve(currentParaPos);
+              const prevNode = $resolve.nodeBefore;
+              if (prevNode && prevNode.type.name === this.name) {
+                const tr = state.tr;
+                tr.delete(currentParaPos, currentParaPos + $from.parent.nodeSize);
+                const prevTogglePos = currentParaPos - prevNode.nodeSize;
+                const headerSize = prevNode.child(0).content.size;
+                const targetPos = prevTogglePos + 1 + headerSize;
+                tr.setSelection(TextSelection.create(tr.doc, targetPos));
+                view.dispatch(tr.scrollIntoView());
+                return true;
+              }
+            }
+          }
+          return false;
+        }
+
+        if (
+          this.editor.isActive("listItem") ||
+          this.editor.isActive("taskItem") ||
+          this.editor.isActive("table") ||
+          this.editor.isActive("codeBlock")
+        ) {
+          return false;
+        }
 
         if ($from.parentOffset !== 0) return false;
 
@@ -221,11 +242,220 @@ export const ToggleBlock = Node.create({
         const childIndex = $from.index(toggleDepth);
 
         if (childIndex === 0) {
+          if ((toggleNode.attrs.indent ?? 0) > 0) {
+            return this.editor.commands.outdent();
+          }
           const firstChild = toggleNode.child(0);
           if (firstChild.textContent === "" && firstChild.childCount === 0 && toggleNode.childCount === 1) {
             return this.editor.chain().lift(this.name).run() || this.editor.commands.clearNodes();
           }
           return false;
+        }
+
+        return false;
+      },
+
+      Delete: () => {
+        const { state, view } = this.editor;
+        const { selection } = state;
+        if (!selection.empty) return false;
+
+        const { $from } = selection;
+
+        let toggleDepth = -1;
+        for (let depth = $from.depth; depth > 0; depth--) {
+          if ($from.node(depth).type.name === this.name) {
+            toggleDepth = depth;
+            break;
+          }
+        }
+
+        if (toggleDepth === -1) {
+          if ($from.parent.isTextblock && $from.parent.content.size === 0 && $from.parentOffset === 0) {
+            const currentParaPos = $from.before();
+            if (currentParaPos > 0) {
+              const $resolve = state.doc.resolve(currentParaPos);
+              const prevNode = $resolve.nodeBefore;
+              if (prevNode && prevNode.type.name === this.name) {
+                const tr = state.tr;
+                tr.delete(currentParaPos, currentParaPos + $from.parent.nodeSize);
+                const prevTogglePos = currentParaPos - prevNode.nodeSize;
+                const headerSize = prevNode.child(0).content.size;
+                const targetPos = prevTogglePos + 1 + headerSize;
+                tr.setSelection(TextSelection.create(tr.doc, targetPos));
+                view.dispatch(tr.scrollIntoView());
+                return true;
+              }
+            }
+          }
+          return false;
+        }
+
+        if (
+          this.editor.isActive("listItem") ||
+          this.editor.isActive("taskItem") ||
+          this.editor.isActive("table") ||
+          this.editor.isActive("codeBlock")
+        ) {
+          return false;
+        }
+
+        const toggleNode = $from.node(toggleDepth);
+        const togglePos = $from.before(toggleDepth);
+        const childIndex = $from.index(toggleDepth);
+
+        if (childIndex === 0 && $from.parentOffset === $from.parent.content.size) {
+          const isOpen = Boolean(toggleNode.attrs.open ?? true);
+
+          if (!isOpen || toggleNode.childCount === 1) {
+            const toggleAfterPos = togglePos + toggleNode.nodeSize;
+            if (toggleAfterPos < state.doc.content.size) {
+              const $after = state.doc.resolve(toggleAfterPos);
+              const nextNode = $after.nodeAfter;
+              if (!nextNode) return false;
+
+              const tr = state.tr;
+              if (nextNode.isTextblock) {
+                const nextContent = nextNode.content;
+                tr.delete(toggleAfterPos, toggleAfterPos + nextNode.nodeSize);
+                if (nextContent.size > 0) {
+                  tr.insert($from.pos, nextContent);
+                }
+                tr.setSelection(TextSelection.create(tr.doc, $from.pos));
+                view.dispatch(tr.scrollIntoView());
+                return true;
+              } else if (nextNode.content.size === 0 || nextNode.textContent === "") {
+                tr.delete(toggleAfterPos, toggleAfterPos + nextNode.nodeSize);
+                view.dispatch(tr.scrollIntoView());
+                return true;
+              }
+            }
+            return false;
+          } else {
+            const firstChild = toggleNode.child(0);
+            const child1Pos = togglePos + 1 + firstChild.nodeSize;
+            const child1Node = toggleNode.child(1);
+
+            const tr = state.tr;
+            if (child1Node.isTextblock) {
+              const child1Content = child1Node.content;
+              tr.delete(child1Pos, child1Pos + child1Node.nodeSize);
+              if (child1Content.size > 0) {
+                tr.insert($from.pos, child1Content);
+              }
+              tr.setSelection(TextSelection.create(tr.doc, $from.pos));
+              view.dispatch(tr.scrollIntoView());
+              return true;
+            } else if (
+              child1Node.type.name === "bulletList" ||
+              child1Node.type.name === "orderedList" ||
+              child1Node.type.name === "taskList"
+            ) {
+              if (child1Node.childCount > 0) {
+                const firstItem = child1Node.child(0);
+                const itemPara = firstItem.firstChild;
+                if (child1Node.childCount === 1 && (!itemPara || itemPara.content.size === 0)) {
+                  tr.delete(child1Pos, child1Pos + child1Node.nodeSize);
+                  view.dispatch(tr.scrollIntoView());
+                  return true;
+                } else if (itemPara && itemPara.content.size > 0) {
+                  const itemContent = itemPara.content;
+                  if (child1Node.childCount === 1 && firstItem.childCount === 1) {
+                    tr.delete(child1Pos, child1Pos + child1Node.nodeSize);
+                  } else {
+                    tr.delete(child1Pos + 1, child1Pos + 1 + firstItem.nodeSize);
+                  }
+                  tr.insert($from.pos, itemContent);
+                  tr.setSelection(TextSelection.create(tr.doc, $from.pos));
+                  view.dispatch(tr.scrollIntoView());
+                  return true;
+                }
+              }
+            } else if (child1Node.content.size === 0 || child1Node.textContent === "") {
+              tr.delete(child1Pos, child1Pos + child1Node.nodeSize);
+              view.dispatch(tr.scrollIntoView());
+              return true;
+            }
+          }
+        }
+
+        if (childIndex === toggleNode.childCount - 1 && $from.parentOffset === $from.parent.content.size) {
+          const toggleAfterPos = togglePos + toggleNode.nodeSize;
+          if (toggleAfterPos < state.doc.content.size) {
+            const $after = state.doc.resolve(toggleAfterPos);
+            const nextNode = $after.nodeAfter;
+            if (nextNode && nextNode.isTextblock) {
+              const nextContent = nextNode.content;
+              const tr = state.tr;
+              tr.delete(toggleAfterPos, toggleAfterPos + nextNode.nodeSize);
+              if (nextContent.size > 0) {
+                tr.insert($from.pos, nextContent);
+              }
+              tr.setSelection(TextSelection.create(tr.doc, $from.pos));
+              view.dispatch(tr.scrollIntoView());
+              return true;
+            }
+          }
+        }
+
+        return false;
+      },
+
+      ArrowDown: () => {
+        const { state, view } = this.editor;
+        const { selection } = state;
+        const { $from } = selection;
+
+        let toggleDepth = -1;
+        for (let depth = $from.depth; depth > 0; depth--) {
+          if ($from.node(depth).type.name === this.name) {
+            toggleDepth = depth;
+            break;
+          }
+        }
+
+        if (toggleDepth === -1) return false;
+
+        const toggleNode = $from.node(toggleDepth);
+        const isOpen = Boolean(toggleNode.attrs.open ?? true);
+
+        if (!isOpen) {
+          const childIndex = $from.index(toggleDepth);
+          if (childIndex === 0) {
+            const togglePos = $from.before(toggleDepth);
+            const afterTogglePos = togglePos + toggleNode.nodeSize;
+            if (afterTogglePos < state.doc.content.size) {
+              const tr = state.tr;
+              tr.setSelection(TextSelection.near(tr.doc.resolve(afterTogglePos + 1)));
+              view.dispatch(tr.scrollIntoView());
+              return true;
+            }
+          }
+        }
+
+        return false;
+      },
+
+      ArrowUp: () => {
+        const { state, view } = this.editor;
+        const { selection } = state;
+        const { $from } = selection;
+
+        const posBefore = $from.before();
+        if (posBefore > 0) {
+          const $resolve = state.doc.resolve(posBefore);
+          const prevNode = $resolve.nodeBefore;
+          if (prevNode && prevNode.type.name === this.name) {
+            const isOpen = Boolean(prevNode.attrs.open ?? true);
+            if (!isOpen) {
+              const prevTogglePos = posBefore - prevNode.nodeSize;
+              const targetPos = prevTogglePos + 1 + prevNode.child(0).content.size;
+              const tr = state.tr;
+              tr.setSelection(TextSelection.near(tr.doc.resolve(targetPos)));
+              view.dispatch(tr.scrollIntoView());
+              return true;
+            }
+          }
         }
 
         return false;

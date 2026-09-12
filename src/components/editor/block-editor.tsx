@@ -129,6 +129,7 @@ export function BlockEditor({
   const emittedBlockCount = useRef(page.blocks.length);
   const trackedPageId = useRef(page.id);
   const applyingRemote = useRef(false);
+  const lastLocalEditAt = useRef(0);
   const effectiveCandidates = useMemo(() => {
     if (mentionCandidates !== undefined) {
       return mentionCandidates;
@@ -527,6 +528,8 @@ export function BlockEditor({
         if (!editable || applyingRemote.current) return;
         const blocks = docToBlocks(instance.getJSON());
         emittedBlockCount.current = blocks.length;
+        storeBlockCount.current = Math.max(storeBlockCount.current, blocks.length);
+        lastLocalEditAt.current = Date.now();
         onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
       },
     },
@@ -553,7 +556,13 @@ export function BlockEditor({
       return () => clearTimeout(timer);
     }
     const incoming = page.blocks.length;
-    if (incoming > storeBlockCount.current && incoming > emittedBlockCount.current) {
+    const isRecentlyEdited = Date.now() - lastLocalEditAt.current < 4000;
+    if (
+      !editor.isFocused &&
+      !isRecentlyEdited &&
+      incoming > storeBlockCount.current &&
+      incoming > emittedBlockCount.current
+    ) {
       const { from, to } = editor.state.selection;
       const focused = editor.isFocused;
       const timer = setTimeout(() => {

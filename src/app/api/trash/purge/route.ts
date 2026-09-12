@@ -51,7 +51,13 @@ async function deletePageStorageAndDoc(
 ) {
   const pageId = pageDoc.id;
   const pageData = pageDoc.data() ?? {};
-  const blocks = (pageData.blocks ?? []) as unknown[];
+  let blocks = (pageData.blocks ?? []) as unknown[];
+  if (!blocks.length && typeof pageData.blocksJson === "string") {
+    try {
+      const parsed = JSON.parse(pageData.blocksJson);
+      if (Array.isArray(parsed)) blocks = parsed;
+    } catch {}
+  }
 
   const storagePaths = new Set<string>(extractStoragePaths(blocks));
 
@@ -66,7 +72,14 @@ async function deletePageStorageAndDoc(
 
   const versionsSnap = await pageDoc.ref.collection("versions").get();
   for (const vDoc of versionsSnap.docs) {
-    const vBlocks = (vDoc.data().blocks ?? []) as unknown[];
+    const vData = vDoc.data();
+    let vBlocks = (vData.blocks ?? []) as unknown[];
+    if (!vBlocks.length && typeof vData.blocksJson === "string") {
+      try {
+        const parsed = JSON.parse(vData.blocksJson);
+        if (Array.isArray(parsed)) vBlocks = parsed;
+      } catch {}
+    }
     for (const p of extractStoragePaths(vBlocks)) {
       storagePaths.add(p);
     }

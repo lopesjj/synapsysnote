@@ -207,6 +207,7 @@ function blockToNode(block: AppBlock): JSONContent | null {
         type: "toggleBlock",
         attrs: {
           open: block.props?.open !== undefined ? Boolean(block.props.open) : true,
+          indent: block.props?.indent !== undefined ? Number(block.props.indent) : 0,
         },
         content: [headerNode, ...childrenNodes],
       };
@@ -271,6 +272,7 @@ export function blocksToNodes(blocks: AppBlock[]): JSONContent[] {
 
     if (listConfig) {
       const items: JSONContent[] = [];
+      const listIndent = Number(block.props?.indent ?? 0);
       while (index < blocks.length && blocks[index].type === block.type) {
         const current = blocks[index];
         const children = current.children?.length ? blocksToNodes(current.children) : [];
@@ -284,7 +286,11 @@ export function blocksToNodes(blocks: AppBlock[]): JSONContent[] {
         });
         index += 1;
       }
-      nodes.push({ type: listConfig.wrapper, content: items });
+      nodes.push({
+        type: listConfig.wrapper,
+        ...(listIndent > 0 ? { attrs: { indent: listIndent } } : {}),
+        content: items,
+      });
       continue;
     }
 
@@ -363,6 +369,7 @@ function nodeToBlocks(node: JSONContent): AppBlock[] {
       const [first, ...rest] = node.content ?? [];
       const isHeading = first?.type === "heading";
       const level = isHeading ? (Number(first?.attrs?.level) as 1 | 2 | 3) : undefined;
+      const indent = Number(node.attrs?.indent ?? 0);
       return [
         {
           id: id(),
@@ -370,6 +377,7 @@ function nodeToBlocks(node: JSONContent): AppBlock[] {
           richText: inlineToSpans(first?.content),
           props: {
             open: node.attrs?.open !== undefined ? Boolean(node.attrs.open) : true,
+            ...(indent > 0 ? { indent } : {}),
             ...(level ? { level } : {}),
           },
           children: rest.flatMap(nodeToBlocks),
@@ -423,13 +431,17 @@ function nodeToBlocks(node: JSONContent): AppBlock[] {
           : node.type === "orderedList"
             ? "numbered_list_item"
             : "todo";
+      const listIndent = Number(node.attrs?.indent ?? 0);
       return (node.content ?? []).map((item) => {
         const [paragraph, ...rest] = item.content ?? [];
         return {
           id: `blk_${nanoid(8)}`,
           type,
           richText: inlineToSpans(paragraph?.content),
-          ...(type === "todo" ? { props: { checked: Boolean(item.attrs?.checked) } } : {}),
+          props: {
+            ...(type === "todo" ? { checked: Boolean(item.attrs?.checked) } : {}),
+            ...(listIndent > 0 ? { indent: listIndent } : {}),
+          },
           ...(rest.length ? { children: rest.flatMap(nodeToBlocks) } : {}),
         };
       });

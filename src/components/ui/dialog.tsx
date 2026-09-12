@@ -17,12 +17,14 @@ export function DialogShell({
   className,
   onOpenChange,
   showClose = true,
+  closeAriaLabel,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
   className?: string;
   showClose?: boolean;
+  closeAriaLabel?: string;
 }) {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -54,7 +56,7 @@ export function DialogShell({
                 {showClose ? (
                   <DialogPrimitive.Close
                     className="absolute right-3.5 top-3.5 rounded-[var(--radius-xs)] p-1.5 text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink"
-                    aria-label="Fechar"
+                    aria-label={closeAriaLabel ?? "Fechar"}
                   >
                     <X className="size-4" />
                   </DialogPrimitive.Close>
@@ -72,17 +74,24 @@ export function DialogHeader({
   title,
   description,
   icon,
+  iconClassName,
   className,
 }: {
   title: string;
   description?: React.ReactNode;
   icon?: React.ReactNode;
+  iconClassName?: string;
   className?: string;
 }) {
   return (
     <div className={cn("flex shrink-0 items-start gap-3 border-b border-[var(--border)] px-5 py-4", className)}>
       {icon ? (
-        <div className="mt-0.5 flex size-8 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--accent-soft)] text-[var(--accent)]">
+        <div
+          className={cn(
+            "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] text-ink shadow-xs",
+            iconClassName
+          )}
+        >
           {icon}
         </div>
       ) : null}

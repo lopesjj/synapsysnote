@@ -80,7 +80,17 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
       label: t("strikethrough"),
       run: () => editor.chain().focus().toggleStrike().run(),
     },
-    { id: "code", label: t("code_inline"), run: () => editor.chain().focus().toggleCode().run() },
+    {
+      id: "codeBlock",
+      label: t("code_inline"),
+      run: () => {
+        if (editor.isActive("code")) {
+          editor.chain().focus().unsetCode().toggleCodeBlock().run();
+        } else {
+          editor.chain().focus().toggleCodeBlock().run();
+        }
+      },
+    },
   ];
 
   const currentColor = (editor.getAttributes("textStyle").color as string | undefined) ?? null;
@@ -124,7 +134,7 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
               editor.isActive(action.id) && "bg-[var(--accent-soft)] text-[var(--accent)]"
             )}
           >
-            {action.id === "code" ? (
+            {action.id === "codeBlock" || action.id === "code" ? (
               <span className="inline-flex items-center justify-center font-mono text-[14px] font-bold leading-none tracking-tight select-none">
                 {"</>"}
               </span>
@@ -191,6 +201,16 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
               ["Título 1", () => editor.chain().focus().toggleHeading({ level: 1 }).run()],
               ["Título 2", () => editor.chain().focus().toggleHeading({ level: 2 }).run()],
               ["Título 3", () => editor.chain().focus().toggleHeading({ level: 3 }).run()],
+              [
+                "Código",
+                () => {
+                  if (editor.isActive("code")) {
+                    editor.chain().focus().unsetCode().toggleCodeBlock().run();
+                  } else {
+                    editor.chain().focus().toggleCodeBlock().run();
+                  }
+                },
+              ],
             ] as const
           ).map(([label, run]) => (
             <button

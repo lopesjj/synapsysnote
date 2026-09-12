@@ -200,6 +200,7 @@ export interface Page {
   parentPageId: string | null;
   path: string[];
   blocks: AppBlock[];
+  blocksJson?: string;
   plainText: string;
   extractedOCRText?: string;
   transcriptText: string;
@@ -228,6 +229,7 @@ export interface PageVersion {
   pageId: string;
   title: string;
   blocks: AppBlock[];
+  blocksJson?: string;
   authorId: string;
   label?: string;
   createdAt: ISOTimestamp;

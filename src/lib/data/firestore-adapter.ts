@@ -92,6 +92,33 @@ function ms(value: unknown): number {
   return 0;
 }
 
+function parseBlocksFromData(data: DocumentData | undefined): Page["blocks"] {
+  if (!data) return [];
+  if (typeof data.blocksJson === "string") {
+    try {
+      const parsed = JSON.parse(data.blocksJson);
+      if (Array.isArray(parsed)) return parsed as Page["blocks"];
+    } catch {}
+  }
+  return (data.blocks ?? []) as Page["blocks"];
+}
+
+function hasUnsupportedFirestoreArrays(val: unknown, inArray = false): boolean {
+  if (Array.isArray(val)) {
+    if (inArray) return true;
+    for (const item of val) {
+      if (hasUnsupportedFirestoreArrays(item, true)) return true;
+    }
+    return false;
+  }
+  if (val && typeof val === "object" && (val as object).constructor === Object) {
+    for (const v of Object.values(val as Record<string, unknown>)) {
+      if (hasUnsupportedFirestoreArrays(v, inArray)) return true;
+    }
+  }
+  return false;
+}
+
 function mapPage(snap: QueryDocumentSnapshot<DocumentData>): Page {
   const data = snap.data();
   return {
@@ -100,7 +127,7 @@ function mapPage(snap: QueryDocumentSnapshot<DocumentData>): Page {
     createdAt: ms(data.createdAt),
     updatedAt: ms(data.updatedAt),
     deletedAt: data.deletedAt ? ms(data.deletedAt) : null,
-    blocks: data.blocks ?? [],
+    blocks: parseBlocksFromData(data),
     path: data.path ?? [],
     tags: data.tags ?? [],
     outgoingLinks: data.outgoingLinks ?? [],
@@ -588,14 +615,40 @@ export class FirestoreAdapter implements DataAdapter {
       updatedAt: Date.now(),
       order: Date.now(),
     };
+    const hasUnsupported = blocks && hasUnsupportedFirestoreArrays(blocks);
     const writable = Object.fromEntries(
-      Object.entries(page).filter(([key]) => !SERVER_OWNED.includes(key))
+      Object.entries(page).filter(([key]) => {
+        if (SERVER_OWNED.includes(key)) return false;
+        if (key === "blocks" && hasUnsupported) return false;
+        return true;
+      })
     );
-    await setDoc(this.docRef("pages", id), {
+    const createPayload: Record<string, unknown> = {
       ...writable,
+      ...(blocks ? { blocksJson: JSON.stringify(blocks) } : {}),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    };
+    try {
+      await setDoc(this.docRef("pages", id), createPayload);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        msg.includes("invalid nested entity") ||
+        msg.includes("nested array") ||
+        msg.includes("Nested arrays") ||
+        msg.includes("INVALID_ARGUMENT")
+      ) {
+        const fallbackPayload: Record<string, unknown> = { ...createPayload };
+        delete fallbackPayload.blocks;
+        if (blocks && !fallbackPayload.blocksJson) {
+          fallbackPayload.blocksJson = JSON.stringify(blocks);
+        }
+        await setDoc(this.docRef("pages", id), fallbackPayload);
+      } else {
+        throw err;
+      }
+    }
     return page;
   }
 
@@ -614,12 +667,13 @@ export class FirestoreAdapter implements DataAdapter {
       const current = await getDoc(this.docRef("pages", id));
       if (current.exists()) {
         currentData = current.data();
+        const currentBlocks = parseBlocksFromData(currentData);
         if (blocks && hasMergeableMedia(blocks)) {
-          blocks = mergeMediaEnrichment(blocks, (currentData.blocks ?? []) as Page["blocks"]);
+          blocks = mergeMediaEnrichment(blocks, currentBlocks);
         }
         const removed: string[] = [];
-        if (blocks && currentData.blocks) {
-          const oldPaths = extractMediaPathsFromBlocks(currentData.blocks);
+        if (blocks && currentBlocks.length > 0) {
+          const oldPaths = extractMediaPathsFromBlocks(currentBlocks);
           const newPaths = new Set(extractMediaPathsFromBlocks(blocks));
           for (const p of oldPaths) {
             if (!newPaths.has(p) && isStorageFile(p, this.workspaceId)) {
@@ -648,9 +702,10 @@ export class FirestoreAdapter implements DataAdapter {
         }
       }
     }
+    const hasUnsupported = blocks && hasUnsupportedFirestoreArrays(blocks);
     const payload: Record<string, unknown> = stripUndefined({
       ...patch,
-      ...(blocks ? { blocks } : {}),
+      ...(blocks ? { ...(hasUnsupported ? {} : { blocks }), blocksJson: JSON.stringify(blocks) } : {}),
       updatedBy: this.userId,
       updatedAt: serverTimestamp(),
     });
@@ -673,7 +728,26 @@ export class FirestoreAdapter implements DataAdapter {
       );
     }
 
-    await updateDoc(this.docRef("pages", id), payload);
+    try {
+      await updateDoc(this.docRef("pages", id), payload);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        msg.includes("invalid nested entity") ||
+        msg.includes("nested array") ||
+        msg.includes("Nested arrays") ||
+        msg.includes("INVALID_ARGUMENT")
+      ) {
+        const fallbackPayload = { ...payload };
+        delete fallbackPayload.blocks;
+        if (blocks && !fallbackPayload.blocksJson) {
+          fallbackPayload.blocksJson = JSON.stringify(blocks);
+        }
+        await updateDoc(this.docRef("pages", id), fallbackPayload);
+      } else {
+        throw err;
+      }
+    }
     this.rememberPagePatch(id, comparable);
   }
 
@@ -913,32 +987,58 @@ export class FirestoreAdapter implements DataAdapter {
     const snap = await getDocs(
       query(collection(this.docRef("pages", pageId), "versions"), orderBy("createdAt", "desc"))
     );
-    return snap.docs.map((d) => ({
-      ...(d.data() as PageVersion),
-      id: d.id,
-      createdAt: ms(d.data().createdAt),
-    }));
+    return snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        ...(data as PageVersion),
+        id: d.id,
+        blocks: parseBlocksFromData(data),
+        createdAt: ms(data.createdAt),
+      };
+    });
   }
 
   async snapshotVersion(pageId: string, label?: string) {
     const page = await getDoc(this.docRef("pages", pageId));
     if (!page.exists()) return;
-    await addDoc(collection(this.docRef("pages", pageId), "versions"), {
+    const data = page.data();
+    const blocks = parseBlocksFromData(data);
+    const blocksJson = data.blocksJson || JSON.stringify(blocks);
+    const versionPayload: Record<string, unknown> = {
       pageId,
-      title: page.data().title,
-      blocks: page.data().blocks ?? [],
+      title: data.title,
+      blocksJson,
       authorId: this.userId,
       label: label ?? null,
       createdAt: serverTimestamp(),
-    });
+    };
+    if (!hasUnsupportedFirestoreArrays(blocks)) {
+      versionPayload.blocks = blocks;
+    }
+    try {
+      await addDoc(collection(this.docRef("pages", pageId), "versions"), versionPayload);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (
+        errMsg.includes("invalid nested entity") ||
+        errMsg.includes("nested array") ||
+        errMsg.includes("INVALID_ARGUMENT")
+      ) {
+        delete versionPayload.blocks;
+        await addDoc(collection(this.docRef("pages", pageId), "versions"), versionPayload);
+      } else {
+        throw err;
+      }
+    }
   }
 
   async restoreVersion(pageId: string, versionId: string) {
     const version = await getDoc(doc(this.docRef("pages", pageId), "versions", versionId));
     if (!version.exists()) return;
+    const data = version.data();
     await this.updatePage(pageId, {
-      title: version.data().title,
-      blocks: version.data().blocks ?? [],
+      title: data.title,
+      blocks: parseBlocksFromData(data),
     });
   }
 
@@ -1125,7 +1225,7 @@ export class FirestoreAdapter implements DataAdapter {
 
     const page = await getDoc(this.docRef("pages", pageId));
     const blocks = [
-      ...((page.data()?.blocks ?? []) as Page["blocks"]),
+      ...parseBlocksFromData(page.data()),
       {
         id: `blk_${nanoid(8)}`,
         type: "audio" as const,
@@ -1190,7 +1290,7 @@ export class FirestoreAdapter implements DataAdapter {
   ) {
     const page = await getDoc(this.docRef("pages", pageId));
     if (!page.exists()) return;
-    const blocks = stampTranscript((page.data()?.blocks ?? []) as Page["blocks"], storagePath, result);
+    const blocks = stampTranscript(parseBlocksFromData(page.data()), storagePath, result);
     await this.updatePage(pageId, { blocks });
   }
 
@@ -1198,7 +1298,7 @@ export class FirestoreAdapter implements DataAdapter {
     const page = await getDoc(this.docRef("pages", pageId));
     if (!page.exists()) return;
     await this.updatePage(pageId, {
-      blocks: clearMediaPending((page.data()?.blocks ?? []) as Page["blocks"], storagePath),
+      blocks: clearMediaPending(parseBlocksFromData(page.data()), storagePath),
     });
   }
 
@@ -1230,7 +1330,7 @@ export class FirestoreAdapter implements DataAdapter {
 
     const page = await getDoc(this.docRef("pages", pageId));
     const blocks = [
-      ...((page.data()?.blocks ?? []) as Page["blocks"]),
+      ...parseBlocksFromData(page.data()),
       {
         id: `blk_${nanoid(8)}`,
         type: (isImage ? "image" : "file") as "image" | "file",

@@ -358,7 +358,15 @@ export function EditorToolbar({
           editor.isActive("table") ||
           editor.isActive("codeBlock")
         }
-        onClick={() => void editor.chain().focus().outdent().run()}
+        onClick={() => {
+          if (editor.isActive("listItem")) {
+            editor.chain().focus().liftListItem("listItem").run();
+          } else if (editor.isActive("taskItem")) {
+            editor.chain().focus().liftListItem("taskItem").run();
+          } else {
+            void editor.chain().focus().outdent().run();
+          }
+        }}
       >
         <IndentDecrease className="size-3.5" />
       </ToolButton>
@@ -368,7 +376,15 @@ export function EditorToolbar({
           editor.isActive("table") ||
           editor.isActive("codeBlock")
         }
-        onClick={() => void editor.chain().focus().indent().run()}
+        onClick={() => {
+          if (editor.isActive("listItem")) {
+            editor.chain().focus().sinkListItem("listItem").run();
+          } else if (editor.isActive("taskItem")) {
+            editor.chain().focus().sinkListItem("taskItem").run();
+          } else {
+            void editor.chain().focus().indent().run();
+          }
+        }}
       >
         <IndentIncrease className="size-3.5" />
       </ToolButton>
@@ -415,7 +431,13 @@ export function EditorToolbar({
       <ToolButton
         label={t("code_inline")}
         active={editor.isActive("codeBlock")}
-        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+        onClick={() => {
+          if (editor.isActive("code")) {
+            editor.chain().focus().unsetCode().toggleCodeBlock().run();
+          } else {
+            editor.chain().focus().toggleCodeBlock().run();
+          }
+        }}
       >
         <span className="inline-flex items-center justify-center font-mono text-[14px] font-bold leading-none tracking-tight select-none">
           {"</>"}

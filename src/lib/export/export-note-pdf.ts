@@ -243,7 +243,7 @@ function renderTableHtml(block: AppBlock): string {
   return html;
 }
 
-function renderBlockHtml(block: AppBlock, imageMap: Map<string, string>): string {
+function renderBlockHtml(block: AppBlock, imageMap: Map<string, string>, depth = 0): string {
   if (isAudioAttachment(block)) {
     return renderAudioCard(block);
   }
@@ -277,31 +277,40 @@ function renderBlockHtml(block: AppBlock, imageMap: Map<string, string>): string
     }
 
     case "bulleted_list_item": {
+      const bullets = ["•", "○", "▪", "–"];
+      const bullet = bullets[Math.min(depth, bullets.length - 1)];
+      const marginLeft = 6 + depth * 16;
+      const childrenHtml = (block.children || []).map((b) => renderBlockHtml(b, imageMap, depth + 1)).join("");
       return `
-        <table style="width:100%;border-collapse:collapse;margin:3px 0 3px 6px;">
+        <table style="width:100%;border-collapse:collapse;margin:3px 0 3px ${marginLeft}px;">
           <tr>
-            <td style="width:14px;vertical-align:top;padding-top:1px;font-size:14px;line-height:1.6;color:#64748b;">•</td>
+            <td style="width:14px;vertical-align:top;padding-top:1px;font-size:14px;line-height:1.6;color:#64748b;">${bullet}</td>
             <td style="vertical-align:top;font-size:13.5px;line-height:1.6;color:#1e293b;">${inline}</td>
           </tr>
         </table>
+        ${childrenHtml}
       `;
     }
 
     case "numbered_list_item": {
+      const marginLeft = 6 + depth * 16;
+      const childrenHtml = (block.children || []).map((b) => renderBlockHtml(b, imageMap, depth + 1)).join("");
       return `
-        <table style="width:100%;border-collapse:collapse;margin:3px 0 3px 6px;">
+        <table style="width:100%;border-collapse:collapse;margin:3px 0 3px ${marginLeft}px;">
           <tr>
             <td style="width:14px;vertical-align:top;padding-top:1px;font-size:13px;line-height:1.6;color:#64748b;">•</td>
             <td style="vertical-align:top;font-size:13.5px;line-height:1.6;color:#1e293b;">${inline}</td>
           </tr>
         </table>
+        ${childrenHtml}
       `;
     }
 
     case "todo": {
       const checked = Boolean(block.props?.checked);
+      const childrenHtml = (block.children || []).map((b) => renderBlockHtml(b, imageMap, depth + 1)).join("");
       return `
-        <table style="width:100%;border-collapse:collapse;margin:3px 0 3px 2px;">
+        <table style="width:100%;border-collapse:collapse;margin:3px 0 3px ${2 + depth * 16}px;">
           <tr>
             <td style="width:20px;vertical-align:top;padding-top:3px;line-height:0;">
               <span style="display:inline-block;width:14px;height:14px;border:1.5px solid ${checked ? "#0284c7" : "#94a3b8"};border-radius:3px;background:${checked ? "#0284c7" : "transparent"};color:white;font-size:10px;text-align:center;line-height:12px;box-sizing:border-box;">${checked ? "✓" : ""}</span>
@@ -311,11 +320,12 @@ function renderBlockHtml(block: AppBlock, imageMap: Map<string, string>): string
             </td>
           </tr>
         </table>
+        ${childrenHtml}
       `;
     }
 
     case "toggle": {
-      const childrenHtml = (block.children || []).map((b) => renderBlockHtml(b, imageMap)).join("");
+      const childrenHtml = (block.children || []).map((b) => renderBlockHtml(b, imageMap, 0)).join("");
       return `
         <div style="margin:10px 0;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;background:#fcfcfc;">
           <div style="font-weight:600;font-size:13.5px;color:#0f172a;display:flex;align-items:center;gap:6px;margin-bottom:6px;">
@@ -330,7 +340,7 @@ function renderBlockHtml(block: AppBlock, imageMap: Map<string, string>): string
 
     case "callout": {
       const emoji = block.props?.emoji || "💡";
-      const childrenHtml = (block.children || []).map((b) => renderBlockHtml(b, imageMap)).join("");
+      const childrenHtml = (block.children || []).map((b) => renderBlockHtml(b, imageMap, 0)).join("");
       return `
         <div style="margin:12px 0;padding:12px 14px;border-radius:8px;background:#f0f9ff;border:1px solid #bae6fd;">
           <table style="width:100%;border-collapse:collapse;">

@@ -1,13 +1,34 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { useTranslation } from "@/lib/i18n/translations";
 import { AuthField } from "@/components/auth/auth-field";
 import { Button } from "@/components/ui/button";
 import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/primitives";
+
+function PasswordIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-4 text-ink"
+      aria-hidden="true"
+    >
+      <rect width="16" height="11" x="4" y="11" rx="2.5" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      <circle cx="12" cy="15.5" r="1" fill="currentColor" />
+      <path d="M12 16.5v2" />
+    </svg>
+  );
+}
 
 export function ChangePasswordDialog({
   open,
@@ -16,6 +37,7 @@ export function ChangePasswordDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const { user, mode, changePassword } = useAuth();
   const isDemo = mode === "demo" || user?.uid === "demo-user" || user?.providers.includes("demo");
   const hasPassword = user?.providers.includes("password") ?? false;
@@ -36,40 +58,40 @@ export function ChangePasswordDialog({
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (nextPassword.length < 6) {
-      toast.error("Use uma senha com pelo menos 6 caracteres.");
+      toast.error(t("password_min_length"));
       return;
     }
     if (nextPassword !== confirm) {
-      toast.error("As senhas não coincidem.");
+      toast.error(t("passwords_dont_match"));
       return;
     }
     if (hasPassword && nextPassword === currentPassword) {
-      toast.error("A nova senha precisa ser diferente da atual.");
+      toast.error(t("new_password_must_differ"));
       return;
     }
     setBusy(true);
     try {
       await changePassword(currentPassword, nextPassword);
-      toast.success(hasPassword ? "Senha alterada." : "Senha adicionada. Você já pode entrar das duas formas.");
+      toast.success(hasPassword ? t("password_changed_success") : t("password_added_success"));
       close(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível alterar a senha");
+      toast.error(error instanceof Error ? error.message : t("password_change_failed"));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <DialogShell open={open} onOpenChange={close} className="max-w-md">
+    <DialogShell open={open} onOpenChange={close} closeAriaLabel={t("btn_close")} className="max-w-md">
       <DialogHeader
-        icon={<KeyRound className="size-4" />}
-        title="Alterar senha"
+        icon={<PasswordIcon />}
+        title={t("change_password")}
         description={
           isDemo
-            ? "No modo demonstração não existe senha no Firebase."
+            ? t("change_password_desc_demo")
             : hasPassword
-              ? "Informe a senha atual e escolha uma nova."
-              : "Adicione uma senha para também poder entrar com e-mail e senha. A conta continuará sendo a mesma."
+              ? t("change_password_desc_has_password")
+              : t("change_password_desc_add_password")
         }
       />
 
@@ -77,7 +99,7 @@ export function ChangePasswordDialog({
         <form onSubmit={submit}>
           <div className="space-y-3.5 px-5 py-4">
             {hasPassword ? (
-              <AuthField label="Senha atual">
+              <AuthField label={t("current_password")}>
                 <Input
                   type="password"
                   required
@@ -88,7 +110,7 @@ export function ChangePasswordDialog({
                 />
               </AuthField>
             ) : null}
-            <AuthField label="Nova senha">
+            <AuthField label={t("new_password")}>
               <Input
                 type="password"
                 required
@@ -99,7 +121,7 @@ export function ChangePasswordDialog({
                 autoComplete="new-password"
               />
             </AuthField>
-            <AuthField label="Confirmar nova senha">
+            <AuthField label={t("confirm_new_password")}>
               <Input
                 type="password"
                 required
@@ -113,18 +135,18 @@ export function ChangePasswordDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => close(false)}>
-              Cancelar
+              {t("btn_cancel")}
             </Button>
             <Button type="submit" variant="primary" disabled={busy}>
               {busy ? <Loader2 className="animate-spin" /> : null}
-              Salvar senha
+              {t("btn_save_password")}
             </Button>
           </DialogFooter>
         </form>
       ) : (
         <DialogFooter>
           <Button type="button" variant="primary" className="ml-auto" onClick={() => close(false)}>
-            Fechar
+            {t("btn_close")}
           </Button>
         </DialogFooter>
       )}
