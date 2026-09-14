@@ -5,14 +5,22 @@ export const ATTACHMENT_SIZE_LIMIT = PDF_SIZE_LIMIT;
 const MAX_ROUNDS = 18;
 const MIN_EDGE = 320;
 
+export const AUDIO_EXTENSIONS_REGEX = /\.(mp3|wav|ogg|oga|m4a|aac|flac|opus|webm|weba|wma)$/i;
+
+export function isAudioFile(file: { name?: string; type?: string }): boolean {
+  if (typeof file.type === "string" && file.type.startsWith("audio/")) return true;
+  if (typeof file.name === "string" && AUDIO_EXTENSIONS_REGEX.test(file.name)) return true;
+  return false;
+}
+
 export function needsCompression(file: File): boolean {
   if (file.type.startsWith("image/")) {
     return file.size > IMAGE_SIZE_LIMIT;
   }
-  if (file.type === "application/pdf") {
+  if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
     return file.size > PDF_SIZE_LIMIT;
   }
-  if (file.type.startsWith("audio/")) {
+  if (isAudioFile(file)) {
     return file.size > AUDIO_SIZE_LIMIT;
   }
   return false;
@@ -71,11 +79,19 @@ export async function prepareEditorAttachment(file: File): Promise<File> {
     if (!needsCompression(optimized)) return optimized;
     return compressImageUntilFits(optimized);
   }
-  if (file.type.startsWith("audio/")) {
+  if (isAudioFile(file)) {
     if (!needsCompression(file)) return file;
     const compressed = await compressAudioUntilFits(file);
-    return new File([compressed], file.name, {
-      type: compressed.type || file.type,
+    if (compressed.size > AUDIO_SIZE_LIMIT) {
+      throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+    }
+    const targetType = compressed.type || (file.type && file.type.startsWith("audio/") ? file.type : "audio/ogg");
+    const targetExt = targetType.includes("ogg") ? ".ogg" : targetType.includes("webm") ? ".webm" : "";
+    const targetName = targetExt && !file.name.toLowerCase().endsWith(targetExt)
+      ? replaceExtension(file.name, targetExt)
+      : file.name;
+    return new File([compressed], targetName, {
+      type: targetType,
       lastModified: Date.now(),
     });
   }
@@ -85,7 +101,11 @@ export async function prepareEditorAttachment(file: File): Promise<File> {
 
 export async function prepareAudioAttachment(blob: Blob): Promise<Blob> {
   if (!needsAudioCompression(blob)) return blob;
-  return compressAudioUntilFits(blob);
+  const compressed = await compressAudioUntilFits(blob);
+  if (compressed.size > AUDIO_SIZE_LIMIT) {
+    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+  }
+  return compressed;
 }
 
 async function compressImageUntilFits(file: File): Promise<File> {
@@ -303,21 +323,60 @@ function makeOpusTags(): Uint8Array {
   return tags;
 }
 
-async function encodeAudioBufferToOpus(audioBuffer: AudioBuffer, targetBitrate: number): Promise<Blob> {
+async function resampleAudioToMono48k(audioBuffer: AudioBuffer): Promise<Float32Array> {
   const sampleRate = 48000;
-  const numberOfChannels = 1;
-  const channelData = new Float32Array(Math.round(audioBuffer.duration * sampleRate));
+  const length = Math.max(1, Math.ceil(audioBuffer.duration * sampleRate));
+  const OfflineCtx =
+    window.OfflineAudioContext ||
+    (window as unknown as { webkitOfflineAudioContext?: typeof OfflineAudioContext }).webkitOfflineAudioContext;
 
-  const origData = audioBuffer.getChannelData(0);
+  if (OfflineCtx) {
+    try {
+      const offlineCtx = new OfflineCtx(1, length, sampleRate);
+      const source = offlineCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(offlineCtx.destination);
+      source.start(0);
+      const rendered = await offlineCtx.startRendering();
+      return rendered.getChannelData(0);
+    } catch {}
+  }
+
+  const numChannels = audioBuffer.numberOfChannels;
+  const channelData = new Float32Array(length);
   const origRate = audioBuffer.sampleRate;
   const step = origRate / sampleRate;
-  for (let i = 0; i < channelData.length; i++) {
-    const srcIdx = i * step;
-    const i0 = Math.floor(srcIdx);
-    const i1 = Math.min(origData.length - 1, i0 + 1);
-    const frac = srcIdx - i0;
-    channelData[i] = origData[i0] * (1 - frac) + origData[i1] * frac;
+  const origChannels: Float32Array[] = [];
+  for (let c = 0; c < numChannels; c++) {
+    origChannels.push(audioBuffer.getChannelData(c));
   }
+  const origLen = origChannels[0]?.length || 0;
+
+  for (let i = 0; i < length; i++) {
+    const srcIdx = i * step;
+    const s0 = Math.min(origLen - 1, Math.max(0, Math.floor(srcIdx)));
+    const s1 = Math.min(origLen - 1, s0 + 1);
+    const frac = Math.max(0, Math.min(1, srcIdx - s0));
+    let sum = 0;
+    for (let c = 0; c < numChannels; c++) {
+      const ch = origChannels[c];
+      sum += (ch[s0] || 0) * (1 - frac) + (ch[s1] || 0) * frac;
+    }
+    const val = sum / Math.max(1, numChannels);
+    channelData[i] = Number.isFinite(val) ? Math.max(-1, Math.min(1, val)) : 0;
+  }
+
+  return channelData;
+}
+
+async function encodeAudioBufferToOpus(audioBuffer: AudioBuffer, targetBitrate: number): Promise<Blob> {
+  if (typeof AudioEncoder === "undefined" || typeof AudioData === "undefined") {
+    throw new Error("O navegador não suporta codificação de áudio.");
+  }
+
+  const sampleRate = 48000;
+  const numberOfChannels = 1;
+  const channelData = await resampleAudioToMono48k(audioBuffer);
 
   const serial = (Math.random() * 0x7fffffff) >>> 0;
   const pages: Uint8Array[] = [];
@@ -328,6 +387,7 @@ async function encodeAudioBufferToOpus(audioBuffer: AudioBuffer, targetBitrate: 
 
   const packets: Uint8Array[] = [];
   let totalGranule = BigInt(0);
+  let encoderError: Error | null = null;
 
   const encoder = new AudioEncoder({
     output: (chunk) => {
@@ -336,7 +396,7 @@ async function encodeAudioBufferToOpus(audioBuffer: AudioBuffer, targetBitrate: 
       packets.push(buf);
     },
     error: (e) => {
-      throw e;
+      encoderError = e instanceof Error ? e : new Error(String(e));
     },
   });
 
@@ -349,22 +409,35 @@ async function encodeAudioBufferToOpus(audioBuffer: AudioBuffer, targetBitrate: 
 
   const frameSize = 960;
   for (let offset = 0; offset < channelData.length; offset += frameSize) {
+    if (encoderError) throw encoderError;
     const remaining = channelData.length - offset;
     const currentSize = Math.min(frameSize, remaining);
-    const frame = new Float32Array(currentSize);
+    const frame = new Float32Array(frameSize);
     frame.set(channelData.subarray(offset, offset + currentSize));
     const audioData = new AudioData({
       format: "f32-planar",
       sampleRate,
-      numberOfFrames: currentSize,
+      numberOfFrames: frameSize,
       numberOfChannels,
       timestamp: Math.round((offset / sampleRate) * 1_000_000),
       data: frame,
     });
     encoder.encode(audioData);
     audioData.close();
+
+    if (encoder.encodeQueueSize > 25) {
+      await new Promise<void>((resolve, reject) => {
+        const check = () => {
+          if (encoderError) return reject(encoderError);
+          if (encoder.encodeQueueSize <= 10) return resolve();
+          setTimeout(check, 10);
+        };
+        check();
+      });
+    }
   }
 
+  if (encoderError) throw encoderError;
   await encoder.flush();
   encoder.close();
 
@@ -381,36 +454,86 @@ export async function compressAudioUntilFits(blob: Blob): Promise<Blob> {
   if (blob.size <= AUDIO_SIZE_LIMIT) return blob;
 
   if (typeof window === "undefined") {
-    return blob.slice(0, AUDIO_SIZE_LIMIT, blob.type || "audio/webm");
+    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
   }
 
-  try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) {
-      return blob.slice(0, AUDIO_SIZE_LIMIT, blob.type || "audio/webm");
-    }
+  if (blob.size > 80 * 1024 * 1024) {
+    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+  }
 
-    const audioCtx = new AudioCtx();
+  const OfflineCtx =
+    window.OfflineAudioContext ||
+    (window as unknown as { webkitOfflineAudioContext?: typeof OfflineAudioContext }).webkitOfflineAudioContext;
+  const AudioCtx =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
+  if (!OfflineCtx && !AudioCtx) {
+    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+  }
+
+  let audioBuffer: AudioBuffer | null = null;
+  const arrayBuffer = await blob.arrayBuffer();
+
+  if (OfflineCtx) {
     try {
-      const buffer = await audioCtx.decodeAudioData(await blob.arrayBuffer());
-      const duration = Math.max(1, buffer.duration);
-      const targetBitrate = Math.max(
-        12000,
-        Math.min(32000, Math.floor(((AUDIO_SIZE_LIMIT * 0.82) * 8) / duration))
-      );
-
-      if (typeof AudioEncoder !== "undefined") {
-        const encoded = await encodeAudioBufferToOpus(buffer, targetBitrate);
-        if (encoded.size <= AUDIO_SIZE_LIMIT) {
-          return encoded;
+      const offCtx = new OfflineCtx(1, 48000, 48000);
+      audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
+        const promise = offCtx.decodeAudioData(arrayBuffer.slice(0), resolve, reject);
+        if (promise && typeof promise.then === "function") {
+          promise.then(resolve).catch(reject);
         }
-      }
-    } finally {
-      void audioCtx.close().catch(() => undefined);
-    }
-  } catch {}
+      });
+    } catch {}
+  }
 
-  return blob.slice(0, AUDIO_SIZE_LIMIT, blob.type || "audio/webm");
+  if (!audioBuffer && AudioCtx) {
+    try {
+      const actx = new AudioCtx();
+      try {
+        audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
+          const promise = actx.decodeAudioData(arrayBuffer.slice(0), resolve, reject);
+          if (promise && typeof promise.then === "function") {
+            promise.then(resolve).catch(reject);
+          }
+        });
+      } finally {
+        void actx.close().catch(() => undefined);
+      }
+    } catch {}
+  }
+
+  if (!audioBuffer) {
+    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+  }
+
+  const duration = Math.max(1, audioBuffer.duration);
+  const maxPossibleDuration = (AUDIO_SIZE_LIMIT * 8) / 6000;
+  if (duration > maxPossibleDuration) {
+    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+  }
+
+  let targetBitrate = Math.max(
+    8000,
+    Math.min(36000, Math.floor(((AUDIO_SIZE_LIMIT * 0.76) * 8) / duration))
+  );
+
+  try {
+    const encoded = await encodeAudioBufferToOpus(audioBuffer, targetBitrate);
+    if (encoded && encoded.size > 0 && encoded.size <= AUDIO_SIZE_LIMIT) {
+      return encoded;
+    }
+
+    if (encoded && encoded.size > AUDIO_SIZE_LIMIT && targetBitrate > 10000) {
+      targetBitrate = Math.max(8000, Math.floor(targetBitrate * (AUDIO_SIZE_LIMIT / encoded.size) * 0.85));
+      const retryEncoded = await encodeAudioBufferToOpus(audioBuffer, targetBitrate);
+      if (retryEncoded && retryEncoded.size > 0 && retryEncoded.size <= AUDIO_SIZE_LIMIT) {
+        return retryEncoded;
+      }
+    }
+  } catch (err) {
+    console.error("Erro na codificação de áudio:", err);
+  }
+
+  throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
 }

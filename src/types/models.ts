@@ -120,7 +120,8 @@ export type SupportedLanguage =
   | "ru"
   | "ja"
   | "zh"
-  | "de";
+  | "de"
+  | "ar";
 
 export interface UserPreferences {
   theme?: ThemePreference;
@@ -137,6 +138,14 @@ export interface UserPreferences {
   showSaveIndicator?: boolean;
   uiZoom?: number;
   autoCollapseSidebar?: boolean;
+  reducedMotion?: boolean;
+  highContrast?: boolean;
+  enhancedFocus?: boolean;
+  underlineLinks?: boolean;
+  dyslexicFont?: boolean;
+  screenReader?: boolean;
+  speechRate?: number;
+  libras?: boolean;
 }
 
 export interface UserProfile {

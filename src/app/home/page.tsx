@@ -81,7 +81,7 @@ function CoverStrip({
     return <div className={cn(className, preset.className)} style={preset.style} />;
   }
   return (
-    <img src={coverUrl} alt="" className={cn("object-cover", className)} />
+    <img src={coverUrl} alt="Capa" className={cn("object-cover", className)} />
   );
 }
 

@@ -90,7 +90,10 @@ function WorkspaceImageIcon({
   }, [src]);
 
   const handleError = () => {
-    if (!attemptedProxy && currentSrc.startsWith("http") && !currentSrc.startsWith("/api/media/proxy")) {
+    const isFirebase =
+      currentSrc.includes("firebasestorage.googleapis.com") ||
+      currentSrc.includes("storage.googleapis.com");
+    if (!attemptedProxy && !isFirebase && currentSrc.startsWith("http") && !currentSrc.startsWith("/api/media/proxy")) {
       setAttemptedProxy(true);
       setCurrentSrc(`/api/media/proxy?url=${encodeURIComponent(currentSrc)}`);
     } else {
@@ -146,7 +149,7 @@ function WorkspaceImageIcon({
     >
       <img
         src={currentSrc}
-        alt=""
+        alt={safeFallback || "Ícone"}
         onError={handleError}
         className={
           hero

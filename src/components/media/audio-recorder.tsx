@@ -7,8 +7,21 @@ import { toast } from "sonner";
 import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { formatDuration } from "@/lib/utils";
-import { useTranslation } from "@/lib/i18n/translations";
+import { localizeErrorMessage, useTranslation } from "@/lib/i18n/translations";
 import { prepareAudioAttachment } from "@/lib/media/compress-attachment";
+
+const SPEECH_LANG_MAP: Record<string, string> = {
+  pt: "pt-BR",
+  en: "en-US",
+  es: "es-ES",
+  fr: "fr-FR",
+  it: "it-IT",
+  de: "de-DE",
+  ru: "ru-RU",
+  ja: "ja-JP",
+  zh: "zh-CN",
+  ar: "ar-SA",
+};
 
 export function AudioRecorder({
   open,
@@ -17,9 +30,9 @@ export function AudioRecorder({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (blob: Blob, durationSeconds: number) => Promise<void>;
+  onSave: (blob: Blob, durationSeconds: number, transcript?: string) => Promise<void>;
 }) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [levels, setLevels] = useState<number[]>(Array.from({ length: 40 }, () => 0.08));
@@ -33,8 +46,16 @@ export function AudioRecorder({
   const raf = useRef<number | null>(null);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
   const openTimestamp = useRef(0);
+  const transcriptRef = useRef("");
+  const recognitionRef = useRef<{ stop: () => void } | null>(null);
 
   const cleanup = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      recognitionRef.current = null;
+    }
     if (raf.current) cancelAnimationFrame(raf.current);
     if (tick.current) clearInterval(tick.current);
     stream.current?.getTracks().forEach((track) => track.stop());
@@ -77,15 +98,33 @@ export function AudioRecorder({
     if (Date.now() - openTimestamp.current < 450) return;
     if (recording || recorder.current) return;
     setError(null);
+    transcriptRef.current = "";
     try {
       const media = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.current = media;
       chunks.current = [];
 
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : "audio/webm";
-      const instance = new MediaRecorder(media, { mimeType, audioBitsPerSecond: 28000 });
+      let mimeType = "";
+      const candidates = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/aac",
+        "audio/ogg;codecs=opus",
+      ];
+      if (typeof MediaRecorder.isTypeSupported === "function") {
+        for (const candidate of candidates) {
+          if (MediaRecorder.isTypeSupported(candidate)) {
+            mimeType = candidate;
+            break;
+          }
+        }
+      }
+      const recorderOptions: MediaRecorderOptions = { audioBitsPerSecond: 28000 };
+      if (mimeType) {
+        recorderOptions.mimeType = mimeType;
+      }
+      const instance = new MediaRecorder(media, recorderOptions);
       instance.ondataavailable = (event) => {
         if (event.data.size) chunks.current.push(event.data);
       };
@@ -94,22 +133,58 @@ export function AudioRecorder({
       setRecording(true);
       setSeconds(0);
 
+      const SpeechRec =
+        typeof window !== "undefined"
+          ? (window as unknown as { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any })
+              .SpeechRecognition ||
+            (window as unknown as { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any })
+              .webkitSpeechRecognition
+          : null;
+
+      if (SpeechRec) {
+        try {
+          const rec = new SpeechRec();
+          rec.continuous = true;
+          rec.interimResults = false;
+          rec.lang = SPEECH_LANG_MAP[language] || "pt-BR";
+          rec.onresult = (event: any) => {
+            let full = "";
+            for (let i = 0; i < event.results.length; i++) {
+              full += (event.results[i][0]?.transcript || "") + " ";
+            }
+            transcriptRef.current = full.trim();
+          };
+          rec.start();
+          recognitionRef.current = rec;
+        } catch {}
+      }
+
       tick.current = setInterval(() => setSeconds((prev) => prev + 1), 1000);
 
-      const context = new AudioContext();
-      audioContext.current = context;
-      const analyser = context.createAnalyser();
-      analyser.fftSize = 256;
-      context.createMediaStreamSource(media).connect(analyser);
-      const buffer = new Uint8Array(analyser.frequencyBinCount);
+      try {
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtx) {
+          const context = new AudioCtx();
+          if (context.state === "suspended") {
+            void context.resume().catch(() => {});
+          }
+          audioContext.current = context;
+          const analyser = context.createAnalyser();
+          analyser.fftSize = 256;
+          context.createMediaStreamSource(media).connect(analyser);
+          const buffer = new Uint8Array(analyser.frequencyBinCount);
 
-      const sample = () => {
-        analyser.getByteFrequencyData(buffer);
-        const average = buffer.reduce((sum, value) => sum + value, 0) / buffer.length / 255;
-        setLevels((prev) => [...prev.slice(1), Math.max(0.08, Math.min(1, average * 2.2))]);
-        raf.current = requestAnimationFrame(sample);
-      };
-      sample();
+          const sample = () => {
+            analyser.getByteFrequencyData(buffer);
+            const average = buffer.reduce((sum, value) => sum + value, 0) / buffer.length / 255;
+            setLevels((prev) => [...prev.slice(1), Math.max(0.08, Math.min(1, average * 2.2))]);
+            raf.current = requestAnimationFrame(sample);
+          };
+          sample();
+        }
+      } catch {}
     } catch {
       setError(t("mic_access_error"));
     }
@@ -129,6 +204,8 @@ export function AudioRecorder({
       raf.current = null;
     }
 
+    const capturedTranscript = transcriptRef.current.trim();
+
     const rawBlob = await new Promise<Blob>((resolve) => {
       instance.onstop = () => resolve(new Blob(chunks.current, { type: instance.mimeType }));
       instance.stop();
@@ -139,11 +216,14 @@ export function AudioRecorder({
     setSaving(true);
     try {
       const blob = await prepareAudioAttachment(rawBlob);
-      await onSave(blob, duration);
+      await onSave(blob, duration, capturedTranscript);
       close(false);
       toast.success(t("voice_note_saved"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("voice_note_save_error"));
+      toast.error(
+        localizeErrorMessage(err instanceof Error ? err.message : null, t) ||
+          t("voice_note_save_error")
+      );
     } finally {
       setSaving(false);
     }

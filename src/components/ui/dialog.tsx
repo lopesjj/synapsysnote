@@ -1,15 +1,12 @@
 "use client";
 
 import * as React from "react";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-
-export const Dialog = DialogPrimitive.Root;
-export const DialogTrigger = DialogPrimitive.Trigger;
-export const DialogClose = DialogPrimitive.Close;
+import { useUiStore } from "@/lib/store/ui-store";
 
 export function DialogShell({
   open,
@@ -26,47 +23,67 @@ export function DialogShell({
   showClose?: boolean;
   closeAriaLabel?: string;
 }) {
-  return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <AnimatePresence>
-        {open ? (
-          <DialogPrimitive.Portal forceMount>
-            <DialogPrimitive.Overlay asChild forceMount>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.16 }}
-                className="fixed inset-0 z-90 bg-black/50 backdrop-blur-[2px]"
-              />
-            </DialogPrimitive.Overlay>
-            <DialogPrimitive.Content asChild forceMount onOpenAutoFocus={(e) => e.preventDefault()}>
-              <motion.div
-                initial={{ opacity: 0, y: 14, scale: 0.985 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.99 }}
-                transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
-                className={cn(
-                  "fixed left-1/2 top-1/2 z-100 flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col",
-                  "overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-float)]",
-                  className
-                )}
+  const reducedMotion = useUiStore((state) => state.reducedMotion);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onOpenChange(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onOpenChange]);
+
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open]);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <AnimatePresence>
+      {open ? (
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <motion.div
+            initial={reducedMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={reducedMotion ? undefined : { opacity: 0 }}
+            transition={reducedMotion ? { duration: 0 } : { duration: 0.08 }}
+            onClick={() => onOpenChange(false)}
+            className="fixed inset-0 z-90 bg-black/50"
+          />
+          <motion.div
+            initial={reducedMotion ? false : { opacity: 0, scale: 0.985 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={reducedMotion ? undefined : { opacity: 0, scale: 0.985 }}
+            transition={reducedMotion ? { duration: 0 } : { duration: 0.08, ease: [0.16, 1, 0.3, 1] }}
+            className={cn(
+              "relative z-100 flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-lg flex-col",
+              "overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-float)]",
+              className
+            )}
+          >
+            {children}
+            {showClose ? (
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="absolute right-3.5 top-3.5 rounded-[var(--radius-xs)] p-1.5 text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink"
+                aria-label={closeAriaLabel ?? "Fechar"}
               >
-                {children}
-                {showClose ? (
-                  <DialogPrimitive.Close
-                    className="absolute right-3.5 top-3.5 rounded-[var(--radius-xs)] p-1.5 text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink"
-                    aria-label={closeAriaLabel ?? "Fechar"}
-                  >
-                    <X className="size-4" />
-                  </DialogPrimitive.Close>
-                ) : null}
-              </motion.div>
-            </DialogPrimitive.Content>
-          </DialogPrimitive.Portal>
-        ) : null}
-      </AnimatePresence>
-    </DialogPrimitive.Root>
+                <X className="size-4" />
+              </button>
+            ) : null}
+          </motion.div>
+        </div>
+      ) : null}
+    </AnimatePresence>,
+    document.body
   );
 }
 
@@ -96,13 +113,13 @@ export function DialogHeader({
         </div>
       ) : null}
       <div className="min-w-0 flex-1">
-        <DialogPrimitive.Title className="text-[15px] font-semibold tracking-[-0.01em] text-ink">
+        <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">
           {title}
-        </DialogPrimitive.Title>
+        </h2>
         {description ? (
-          <DialogPrimitive.Description className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
+          <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
             {description}
-          </DialogPrimitive.Description>
+          </p>
         ) : null}
       </div>
     </div>

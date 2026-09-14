@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
+  Accessibility,
   AudioLines,
   Check,
   Clock,
@@ -12,14 +13,19 @@ import {
   CloudOff,
   FileDown,
   FilePlus,
+  Hand,
   History,
   ImageOff,
   Loader2,
   MoreHorizontal,
   Paperclip,
+  Pause,
+  Play,
   RotateCcw,
   Star,
   Trash2,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -28,7 +34,15 @@ import { exportNoteToPdf } from "@/lib/export/export-note-pdf";
 import { useWorkspace } from "@/lib/data/provider";
 import { useDebounceAutoSave } from "@/hooks/use-debounce-auto-save";
 import { useUiStore } from "@/lib/store/ui-store";
+import {
+  announceToScreenReader,
+  speakText,
+  stopSpeaking,
+  pauseSpeaking,
+  resumeSpeaking,
+} from "@/components/accessibility/screen-reader";
 import { BlockEditor } from "@/components/editor/block-editor";
+import { blocksToPlainText } from "@/components/editor/serializer";
 import { getMentionCandidates } from "@/components/editor/extensions/mention-suggestion";
 import { AudioRecorder } from "@/components/media/audio-recorder";
 import { Button } from "@/components/ui/button";
@@ -36,8 +50,8 @@ import { Badge, Input, Tooltip } from "@/components/ui/primitives";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { WorkspaceCrumbs } from "./workspace-crumbs";
 import { cn, formatRelative } from "@/lib/utils";
-import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
-import { useTranslation } from "@/lib/i18n/translations";
+import { isAudioFile, prepareEditorAttachment } from "@/lib/media/compress-attachment";
+import { useTranslation, localizeErrorMessage } from "@/lib/i18n/translations";
 
 import { PAGE_ICONS } from "@/lib/icons/catalog";
 import {
@@ -49,6 +63,170 @@ import {
 import { IconPickerMenu } from "@/components/ui/icon-picker";
 import { CoverPicker } from "./cover-picker";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
+import { useLibrasStore } from "@/lib/store/libras-store";
+
+function isAudioBlockElement(el: Element): boolean {
+  if (el.tagName === "AUDIO") return true;
+  if (el.getAttribute("data-audio-block") === "true") return true;
+  if (el.getAttribute("data-media-type") === "audio") return true;
+  if (el.getAttribute("data-media") === "audio") return true;
+
+  const audioName = el.getAttribute("data-audio-name");
+  if (audioName && isAudioFile({ name: audioName })) return true;
+
+  if (el.hasAttribute("data-media") || el.hasAttribute("data-node-view-wrapper") || el.classList.contains("my-3")) {
+    if (el.querySelector('audio, [data-media-type="audio"], [data-audio-block="true"], [data-media="audio"]')) {
+      return true;
+    }
+    const innerName = el.querySelector("[data-audio-name]")?.getAttribute("data-audio-name");
+    if (innerName && isAudioFile({ name: innerName })) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function extractEditorDomText(
+  editorEl: HTMLElement,
+  audioFileLabel: string,
+  forLibras = false
+): string {
+  const parts: string[] = [];
+
+  function walk(node: Node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const val = node.nodeValue?.trim();
+      if (val) {
+        parts.push(val);
+      }
+      return;
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = node as HTMLElement;
+
+    if (isAudioBlockElement(el)) {
+      if (forLibras) {
+        const transcript = el.getAttribute("data-transcript")?.trim();
+        if (transcript) {
+          parts.push(transcript);
+        }
+      } else {
+        parts.push(audioFileLabel);
+      }
+      return;
+    }
+
+    if (
+      el.hasAttribute("data-drag-handle") ||
+      el.classList.contains("vlibras-ignore") ||
+      el.getAttribute("aria-hidden") === "true" ||
+      el.tagName === "BUTTON"
+    ) {
+      return;
+    }
+
+    const containsAudio =
+      el.querySelector(
+        'audio, [data-media-type="audio"], [data-audio-block="true"], [data-media="audio"], [data-audio-name]'
+      ) !== null;
+
+    if (containsAudio) {
+      for (const child of Array.from(el.childNodes)) {
+        walk(child);
+      }
+      return;
+    }
+
+    const blockTags = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "LI", "BLOCKQUOTE", "PRE"]);
+    if (blockTags.has(el.tagName)) {
+      const text = el.innerText?.trim();
+      if (text) {
+        parts.push(text);
+      }
+      return;
+    }
+
+    for (const child of Array.from(el.childNodes)) {
+      walk(child);
+    }
+  }
+
+  for (const child of Array.from(editorEl.childNodes)) {
+    walk(child);
+  }
+
+  return parts.join("\n\n").trim();
+}
+
+function extractPageText(
+  page?: Page | null,
+  includeTitle = true,
+  currentTitle?: string,
+  fallbackUntitled?: string,
+  audioFileLabel = "Arquivo de Áudio",
+  forLibras = false
+): string {
+  if (!page) return "";
+
+  let noteTitle = (currentTitle ?? "").trim();
+  if (!noteTitle && typeof document !== "undefined") {
+    const titleEl = document.getElementById("page-title-input") as HTMLTextAreaElement | null;
+    if (titleEl && titleEl.value.trim()) {
+      noteTitle = titleEl.value.trim();
+    }
+  }
+  if (!noteTitle) {
+    noteTitle = page.title?.trim() || "";
+  }
+
+  let editorText = "";
+  if (typeof document !== "undefined") {
+    const editorEl = document.querySelector<HTMLElement>(
+      ".synapsys-editor .ProseMirror, #synapsys-note-editor, [data-note-editor]"
+    );
+    if (editorEl) {
+      editorText = extractEditorDomText(editorEl, audioFileLabel, forLibras);
+    }
+  }
+
+  if (!editorText && Array.isArray(page.blocks) && page.blocks.length > 0) {
+    editorText = blocksToPlainText(page.blocks, audioFileLabel).trim();
+  }
+
+  if (!editorText && page.plainText?.trim()) {
+    editorText = page.plainText.trim();
+  }
+
+  if (!includeTitle) {
+    return editorText || noteTitle;
+  }
+
+  const effectiveTitle = noteTitle || fallbackUntitled || "";
+  if (!effectiveTitle && !editorText) {
+    return "";
+  }
+
+  const parts: string[] = [];
+  if (effectiveTitle) {
+    const cleanTitle = effectiveTitle.replace(/[.\s]+$/, "");
+    parts.push(`${cleanTitle}.`);
+  }
+
+  if (editorText) {
+    const titleRegex = effectiveTitle
+      ? new RegExp(`^${effectiveTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[.:\\s]*`, "i")
+      : null;
+    const cleanEditorText = titleRegex ? editorText.replace(titleRegex, "").trim() : editorText;
+    if (cleanEditorText) {
+      parts.push(cleanEditorText);
+    } else if (!effectiveTitle) {
+      parts.push(editorText);
+    }
+  }
+
+  return parts.join("\n\n");
+}
 
 export function PageView({ pageId }: { pageId: string }) {
   const router = useRouter();
@@ -67,12 +245,129 @@ export function PageView({ pageId }: { pageId: string }) {
   const [editorKey, setEditorKey] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const editorInsertFilesRef = useRef<((files: File[]) => Promise<void>) | null>(null);
-  const editorInsertAudioRef = useRef<((blob: Blob, duration: number) => Promise<void>) | null>(null);
+  const editorInsertAudioRef = useRef<((blob: Blob, duration: number, transcript?: string) => Promise<void>) | null>(null);
   const latestPageRef = useRef<Page | null>(null);
   const hasEditedRef = useRef(false);
+  const announcedPageIdRef = useRef<string | null>(null);
 
   const zenMode = useUiStore((state) => state.zenMode);
   const showSaveIndicator = useUiStore((state) => state.showSaveIndicator);
+  const screenReader = useUiStore((state) => state.screenReader);
+  const speechRate = useUiStore((state) => state.speechRate);
+  const [narrating, setNarrating] = useState(false);
+  const [pausedNarration, setPausedNarration] = useState(false);
+  const lastNarrationLangRef = useRef<string>(language);
+
+  useEffect(() => {
+    if (lastNarrationLangRef.current !== language) {
+      if (narrating || pausedNarration) {
+        stopSpeaking();
+        setNarrating(false);
+        setPausedNarration(false);
+      }
+      lastNarrationLangRef.current = language;
+    }
+  }, [language, narrating, pausedNarration]);
+
+  const toggleNarration = () => {
+    if (!page) return;
+
+    const isLangChanged = lastNarrationLangRef.current !== language;
+    if (narrating && !isLangChanged) {
+      if (pausedNarration) {
+        resumeSpeaking();
+        setPausedNarration(false);
+      } else {
+        pauseSpeaking();
+        setPausedNarration(true);
+      }
+      return;
+    }
+
+    stopSpeaking();
+    lastNarrationLangRef.current = language;
+
+    const currentTitleText = title?.trim() || page.title?.trim() || "";
+    const fullText = extractPageText(page, true, currentTitleText, t("untitled"), t("audio_file"));
+    if (!fullText.trim()) {
+      toast.error(t("empty_note"));
+      setNarrating(false);
+      setPausedNarration(false);
+      return;
+    }
+
+    setNarrating(true);
+    setPausedNarration(false);
+
+    speakText(fullText, {
+      rate: speechRate,
+      lang: language,
+      onStart: () => {
+        setNarrating(true);
+        setPausedNarration(false);
+      },
+      onEnd: () => {
+        setNarrating(false);
+        setPausedNarration(false);
+      },
+      onError: () => {
+        setNarrating(false);
+        setPausedNarration(false);
+      },
+    });
+  };
+
+  const handleStopNarration = () => {
+    stopSpeaking();
+    setNarrating(false);
+    setPausedNarration(false);
+  };
+
+  useEffect(() => {
+    if (!page || !screenReader) return;
+    if (announcedPageIdRef.current === page.id) return;
+    announcedPageIdRef.current = page.id;
+
+    const titleText = page.title || t("untitled");
+    const message = `${t("note_loaded_announcement")}, ${titleText}`;
+    announceToScreenReader(message);
+    speakText(message, { lang: language, rate: speechRate, translate: false });
+  }, [page?.id, screenReader, language, speechRate, t]);
+
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+    };
+  }, [pageId]);
+
+  const handleInterpretLibras = useCallback(() => {
+    if (!page) return;
+    const currentTitleText = title?.trim() || page.title?.trim() || "";
+    const fullText = extractPageText(page, true, currentTitleText, t("untitled"), t("audio_file"), true);
+    if (!fullText.trim()) {
+      toast.error(t("empty_note"));
+      return;
+    }
+    useLibrasStore.getState().openWithText(fullText, {
+      title: currentTitleText || t("untitled"),
+    });
+  }, [page, title, t]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (e.key === "r" || e.key === "R") {
+          e.preventDefault();
+          toggleNarration();
+        } else if (e.key === "l" || e.key === "L") {
+          e.preventDefault();
+          handleInterpretLibras();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [page, narrating, pausedNarration, speechRate, language, handleInterpretLibras]);
 
   const { schedule, flush, status, lastSavedAt } = useDebounceAutoSave<Partial<Page>>({
     resetKey: pageId,
@@ -188,23 +483,33 @@ export function PageView({ pageId }: { pageId: string }) {
   };
 
   const attachEditorFiles = async (files: File[]) => {
+    if (editorInsertFilesRef.current) {
+      await editorInsertFilesRef.current(files);
+      return;
+    }
     for (const file of files) {
-      if (file.type.startsWith("audio/")) {
-        toast.error("Use o gravador de áudio para notas de voz.");
-        continue;
-      }
       try {
+        const isAudio = isAudioFile(file);
         const prepared = await prepareEditorAttachment(file);
-        await adapter.saveAttachment(pageId, prepared);
+        if (isAudio && typeof adapter.uploadAudioNote === "function") {
+          await adapter.uploadAudioNote(pageId, prepared, 0);
+        } else {
+          await adapter.saveAttachment(pageId, prepared);
+        }
         toast.success(
-          prepared.type.startsWith("image/")
-            ? "Imagem anexada."
-            : prepared.type === "application/pdf"
-              ? "PDF anexado."
-              : "Arquivo anexado."
+          isAudio
+            ? t("audio_attached")
+            : prepared.type.startsWith("image/")
+              ? t("image_attached")
+              : prepared.type === "application/pdf"
+                ? t("pdf_attached")
+                : t("file_attached")
         );
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Não foi possível anexar o arquivo.");
+        toast.error(
+          localizeErrorMessage(error instanceof Error ? error.message : null, t) ||
+            t("file_attach_error")
+        );
       }
     }
   };
@@ -261,6 +566,69 @@ export function PageView({ pageId }: { pageId: string }) {
           </Button>
         </Tooltip>
 
+        <Tooltip label={t("interpret_in_libras")} shortcut="Alt L">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={hasCover ? "text-white hover:bg-white/15 hover:text-white" : undefined}
+            onClick={handleInterpretLibras}
+            aria-label={t("interpret_in_libras")}
+          >
+            <Hand className="size-4" />
+          </Button>
+        </Tooltip>
+
+        {screenReader || narrating ? (
+          <div className="flex items-center gap-1">
+            <Tooltip
+              label={
+                narrating
+                  ? pausedNarration
+                    ? t("resume_reading")
+                    : t("pause_reading")
+                  : t("read_note_aloud")
+              }
+              shortcut="Alt R"
+            >
+              <Button
+                variant={narrating ? "secondary" : "ghost"}
+                size="icon-sm"
+                className={cn(
+                  hasCover ? "text-white hover:bg-white/15 hover:text-white" : undefined,
+                  narrating && "text-[var(--accent)] font-semibold border border-[var(--accent)]/30"
+                )}
+                onClick={toggleNarration}
+                aria-label={
+                  narrating
+                    ? pausedNarration
+                      ? t("resume_reading")
+                      : t("pause_reading")
+                    : t("read_note_aloud")
+                }
+              >
+                {narrating ? (
+                  pausedNarration ? <Play className="size-4 fill-current" /> : <Pause className="size-4 fill-current" />
+                ) : (
+                  <Volume2 className="size-4" />
+                )}
+              </Button>
+            </Tooltip>
+            {narrating ? (
+              <Tooltip label={t("stop_reading")}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                  onClick={handleStopNarration}
+                  aria-label={t("stop_reading")}
+                >
+                  <VolumeX className="size-4" />
+                </Button>
+              </Tooltip>
+            ) : null}
+          </div>
+        ) : null}
+
         <Menu>
           <MenuTrigger asChild>
             <Button
@@ -287,6 +655,14 @@ export function PageView({ pageId }: { pageId: string }) {
             >
               <FilePlus /> {t("new_note")}
             </MenuItem>
+            <MenuItem onSelect={handleInterpretLibras}>
+              <Hand /> {t("interpret_in_libras")}
+            </MenuItem>
+            {screenReader || narrating ? (
+              <MenuItem onSelect={toggleNarration}>
+                <Volume2 /> {narrating ? t("stop_reading") : t("read_note_aloud")}
+              </MenuItem>
+            ) : null}
             <MenuItem onSelect={() => fileInput.current?.click()}>
               <Paperclip /> {t("attach_file")}
             </MenuItem>
@@ -302,7 +678,7 @@ export function PageView({ pageId }: { pageId: string }) {
               <MenuItem
                 onSelect={async () => {
                   await adapter.updatePage(pageId, { coverUrl: null });
-                  toast.success("Capa removida");
+                  toast.success(t("remove_cover"));
                 }}
               >
                 <ImageOff /> {t("remove_cover")}
@@ -312,7 +688,7 @@ export function PageView({ pageId }: { pageId: string }) {
             <MenuItem
               onSelect={async () => {
                 await adapter.snapshotVersion(pageId, "Manual");
-                toast.success("Versão salva no histórico");
+                toast.success(`${t("save_version")} - ${t("saved")}`);
               }}
             >
               <Clock /> {t("save_version")}
@@ -368,8 +744,11 @@ export function PageView({ pageId }: { pageId: string }) {
         />
       ) : null}
 
-      
-      <div className="relative z-10 mx-auto w-full max-w-full sm:max-w-[var(--reading-width,64rem)] px-4 pb-28 sm:pb-36 pb-safe sm:px-5 md:px-8">
+      <article
+        role="article"
+        aria-label={page.title || t("untitled")}
+        className="relative z-10 mx-auto w-full max-w-full sm:max-w-[var(--reading-width,64rem)] px-4 pb-28 sm:pb-36 pb-safe sm:px-5 md:px-8"
+      >
         
         <div
           className={cn(
@@ -400,13 +779,15 @@ export function PageView({ pageId }: { pageId: string }) {
                   isIconUrl(page.icon ?? "") ? "rounded-[22px] sm:rounded-[28px]" : "rounded-[10px]",
                   !hasCover && "hover:bg-[var(--surface-hover)]"
                 )}
-                aria-label="Alterar ícone da nota"
+                aria-label="Ícone da página"
               >
                 <WorkspaceIcon
                   icon={page.icon}
                   fallback="📄"
-                  variant="hero"
-                  className={hasCover && isIconUrl(page.icon ?? "") ? workspaceIconOnCoverClass : undefined}
+                  size={isIconUrl(page.icon ?? "") ? workspaceHeroSize(page.icon) : 30}
+                  className={cn(
+                    hasCover && isIconUrl(page.icon ?? "") && workspaceIconOnCoverClass
+                  )}
                 />
               </button>
             }
@@ -414,12 +795,13 @@ export function PageView({ pageId }: { pageId: string }) {
 
           <div
             className={cn(
-              "mt-2 w-full min-w-0 sm:mt-0 sm:flex sm:min-w-0 sm:flex-1 sm:items-center",
-              hasCover && isIconUrl(page.icon ?? "") && "sm:-mt-10",
-              isIconUrl(page.icon ?? "") ? "sm:min-h-[160px]" : "sm:min-h-[44px]"
+              "flex-1 min-w-0 w-full",
+              hasCover && isIconUrl(page.icon ?? "") && "pt-1 sm:pt-0"
             )}
           >
             <textarea
+              id="page-title-input"
+              aria-label={page.title ? `Título: ${page.title}` : t("untitled")}
               value={title}
               rows={1}
               cols={1}
@@ -495,7 +877,7 @@ export function PageView({ pageId }: { pageId: string }) {
         </div>
 
         
-        <div className="mt-4 sm:mt-6 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-1 py-2 sm:px-4 sm:py-3 dark:border-transparent dark:bg-transparent dark:px-0 dark:py-0 md:px-5">
+        <div className="vlibras-ignore mt-4 sm:mt-6 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-1 py-2 sm:px-4 sm:py-3 dark:border-transparent dark:bg-transparent dark:px-0 dark:py-0 md:px-5">
           <BlockEditor
             key={`${page.id}-${editorKey}`}
             page={page}
@@ -545,7 +927,7 @@ export function PageView({ pageId }: { pageId: string }) {
             </p>
           )}
         </div>
-      </div>
+      </article>
 
       {versionsOpen ? (
         <motion.div
@@ -602,7 +984,7 @@ export function PageView({ pageId }: { pageId: string }) {
       <input
         ref={fileInput}
         type="file"
-        accept="image/*,application/pdf"
+        accept="image/*,application/pdf,audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac,.opus,.wma,.webm,.weba"
         multiple
         hidden
         onChange={async (event) => {
@@ -620,9 +1002,9 @@ export function PageView({ pageId }: { pageId: string }) {
       <AudioRecorder
         open={audioOpen}
         onOpenChange={setAudioOpen}
-        onSave={async (blob, duration) => {
+        onSave={async (blob, duration, transcript) => {
           if (editorInsertAudioRef.current) {
-            await editorInsertAudioRef.current(blob, duration);
+            await editorInsertAudioRef.current(blob, duration, transcript);
           } else {
             await adapter.saveAudioNote(pageId, blob, duration);
           }

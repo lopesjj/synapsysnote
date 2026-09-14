@@ -89,6 +89,14 @@ const RELATIVE_LOCALES: Record<
     day: (n) => `${n}天前`,
     locale: "zh-CN",
   },
+  ar: {
+    never: "أبداً",
+    now: "الآن",
+    min: (n) => `منذ ${n} دقيقة`,
+    hour: (n) => `منذ ${n} ساعة`,
+    day: (n) => `منذ ${n} يوم`,
+    locale: "ar-SA",
+  },
 };
 
 export function formatRelative(ts: number | null | undefined, lang?: string): string {

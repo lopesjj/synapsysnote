@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { FilePlus, Home, Loader2, Minimize2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -21,6 +21,8 @@ import { CommandPalette } from "./command-palette";
 import { PreferencesDialog } from "./preferences-dialog";
 import { ChangePasswordDialog } from "@/components/auth/change-password-dialog";
 import { ImportWizard } from "@/components/notion/import-wizard";
+import { ScreenReaderLiveRegion } from "@/components/accessibility/screen-reader";
+import { LibrasPlayer } from "@/components/accessibility/libras-player";
 import { SynapsysWordmark } from "@/components/brand/logo";
 import { useDocumentTitle } from "./document-title";
 import { useWorkspaceNavHistory } from "@/hooks/use-workspace-nav-history";
@@ -52,9 +54,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const notesDensity = useUiStore((state) => state.notesDensity);
   const uiZoom = useUiStore((state) => state.uiZoom);
   const autoCollapseSidebar = useUiStore((state) => state.autoCollapseSidebar);
+  const reducedMotion = useUiStore((state) => state.reducedMotion);
+  const highContrast = useUiStore((state) => state.highContrast);
+  const enhancedFocus = useUiStore((state) => state.enhancedFocus);
+  const underlineLinks = useUiStore((state) => state.underlineLinks);
+  const dyslexicFont = useUiStore((state) => state.dyslexicFont);
+  const language = useUiStore((state) => state.language) || "pt";
 
   const pathname = usePathname();
   const isDocView = pathname?.startsWith("/home/p/") || pathname?.startsWith("/home/n/");
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("lang", language);
+    root.setAttribute("dir", "ltr");
+  }, [language]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (reducedMotion) root.setAttribute("data-reduced-motion", "true");
+    else root.removeAttribute("data-reduced-motion");
+
+    if (highContrast) root.setAttribute("data-high-contrast", "true");
+    else root.removeAttribute("data-high-contrast");
+
+    if (enhancedFocus) root.setAttribute("data-enhanced-focus", "true");
+    else root.removeAttribute("data-enhanced-focus");
+
+    if (underlineLinks) root.setAttribute("data-underline-links", "true");
+    else root.removeAttribute("data-underline-links");
+
+    if (dyslexicFont) root.setAttribute("data-dyslexic-font", "true");
+    else root.removeAttribute("data-dyslexic-font");
+  }, [reducedMotion, highContrast, enhancedFocus, underlineLinks, dyslexicFont]);
 
   useEffect(() => {
     if (pathname?.startsWith("/home/p/") && autoCollapseSidebar) {
@@ -166,8 +198,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const chromeHidden = zenMode;
 
   return (
-    <div
-      className="flex h-dvh overflow-hidden bg-[var(--canvas)]"
+    <MotionConfig reducedMotion={reducedMotion ? "always" : "user"}>
+      <div
+        className="flex h-dvh overflow-hidden bg-[var(--canvas)]"
       data-density={notesDensity}
       style={
         {
@@ -177,6 +210,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         } as React.CSSProperties
       }
     >
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2.5 focus:rounded-xl focus:bg-[var(--surface)] focus:text-ink focus:border focus:border-[var(--accent)] focus:shadow-[var(--shadow-float)] focus:text-[13px] focus:font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+      >
+        {t("skip_to_content")}
+      </a>
+
       {chromeHidden ? null : <DesktopSidebar />}
 
       <AnimatePresence>
@@ -196,7 +236,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               initial={{ x: -280 }}
               animate={{ x: 0 }}
               exit={{ x: -280 }}
-              transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+              transition={reducedMotion ? { duration: 0 } : { duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
             >
               <Sidebar collapsed={false} width={320} />
             </motion.div>
@@ -204,7 +244,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ) : null}
       </AnimatePresence>
 
-      <main className="flex min-w-0 flex-1 flex-col">
+      <main id="main-content" tabIndex={-1} className="flex min-w-0 flex-1 flex-col focus:outline-none">
         {chromeHidden || isDocView ? null : (
           <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface)]/90 px-3.5 py-2.5 backdrop-blur-xl md:hidden">
             <button
@@ -282,29 +322,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         open={changePasswordOpen}
         onOpenChange={(open) => useUiStore.getState().setChangePasswordOpen(open)}
       />
+      <ScreenReaderLiveRegion />
+      <LibrasPlayer />
     </div>
-  );
+  </MotionConfig>
+);
 }
 
-const COLLAPSED_SIDEBAR_WIDTH = 56;
+const COLLAPSED_SIDEBAR_WIDTH = 68;
 const SIDEBAR_SLIDE = { duration: 0.85, ease: [0.22, 1, 0.36, 1] as const };
 
 function DesktopSidebar() {
   const collapsed = useUiStore((state) => state.sidebarCollapsed);
   const width = useUiStore((state) => state.sidebarWidth);
+  const reducedMotion = useUiStore((state) => state.reducedMotion);
 
   return (
     <div className="hidden h-full md:flex">
       <motion.div
         initial={false}
         animate={{ width: collapsed ? COLLAPSED_SIDEBAR_WIDTH : width }}
-        transition={SIDEBAR_SLIDE}
+        transition={reducedMotion ? { duration: 0 } : SIDEBAR_SLIDE}
         className="relative h-full shrink-0 overflow-hidden"
       >
         <motion.div
           initial={false}
           animate={{ opacity: collapsed ? 0 : 1 }}
-          transition={{ duration: 0.42, ease: "easeOut" }}
+          transition={reducedMotion ? { duration: 0 } : { duration: 0.42, ease: "easeOut" }}
           className="h-full"
           style={{
             width,
@@ -316,8 +360,8 @@ function DesktopSidebar() {
         <motion.div
           initial={false}
           animate={{ opacity: collapsed ? 1 : 0 }}
-          transition={{ duration: 0.45, ease: "easeOut", delay: collapsed ? 0.18 : 0 }}
-          className="absolute inset-y-0 left-0 w-14"
+          transition={reducedMotion ? { duration: 0 } : { duration: 0.45, ease: "easeOut", delay: collapsed ? 0.18 : 0 }}
+          className="absolute inset-y-0 left-0 w-[68px]"
           style={{ pointerEvents: collapsed ? "auto" : "none" }}
         >
           <SidebarRail />

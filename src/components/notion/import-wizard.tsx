@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -122,51 +121,41 @@ export function ImportWizard({
       />
 
       <div className="relative min-h-0 flex-1 overflow-y-auto">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={step}
-            initial={{ opacity: 0, x: 18 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -18 }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-          >
-            {step === "connect" ? (
-              <ConnectStep connecting={connecting} onConnect={handleConnect} />
-            ) : null}
+        {step === "connect" ? (
+          <ConnectStep connecting={connecting} onConnect={handleConnect} />
+        ) : null}
 
-            {step === "select" ? (
-              <SelectStep
-                tree={tree}
-                loading={loadingTree}
-                error={treeError}
-                onRetry={loadTree}
-                selectedCount={selected.size}
-                stateOf={stateOf}
-                toggle={toggle}
-                toggleAll={toggleAll}
-                existingNotionIds={existingNotionIds}
-              />
-            ) : null}
+        {step === "select" ? (
+          <SelectStep
+            tree={tree}
+            loading={loadingTree}
+            error={treeError}
+            onRetry={loadTree}
+            selectedCount={selected.size}
+            stateOf={stateOf}
+            toggle={toggle}
+            toggleAll={toggleAll}
+            existingNotionIds={existingNotionIds}
+          />
+        ) : null}
 
-            {step === "preview" ? (
-              <PreviewStep
-                summary={summary}
-                notebooks={notebooks}
-                targetNotebookId={resolvedNotebookId}
-                onChangeNotebook={setTargetNotebookId}
-                options={options}
-                onChangeOptions={setOptions}
-              />
-            ) : null}
+        {step === "preview" ? (
+          <PreviewStep
+            summary={summary}
+            notebooks={notebooks}
+            targetNotebookId={resolvedNotebookId}
+            onChangeNotebook={setTargetNotebookId}
+            options={options}
+            onChangeOptions={setOptions}
+          />
+        ) : null}
 
-            {step === "progress" && job ? (
-              <ProgressStep job={job} progress={progress} onOpenPage={(id) => {
-                onOpenChange(false);
-                router.push(`/home/p/${id}`);
-              }} />
-            ) : null}
-          </motion.div>
-        </AnimatePresence>
+        {step === "progress" && job ? (
+          <ProgressStep job={job} progress={progress} onOpenPage={(id) => {
+            onOpenChange(false);
+            router.push(`/home/p/${id}`);
+          }} />
+        ) : null}
       </div>
 
       <DialogFooter>
@@ -440,19 +429,11 @@ function SelectStep({
             ) : null}
           </div>
 
-          <AnimatePresence initial={false}>
-            {open && hasChildren ? (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                className="overflow-hidden"
-              >
-                {renderNodes(node.children!, depth + 1)}
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
+          {open && hasChildren ? (
+            <div className="overflow-hidden">
+              {renderNodes(node.children!, depth + 1)}
+            </div>
+          ) : null}
         </div>
       );
     });

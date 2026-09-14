@@ -529,12 +529,10 @@ export class LocalAdapter implements DataAdapter {
 
 
   async fetchNotionTree(): Promise<NotionTreeNode[]> {
-    await new Promise((resolve) => setTimeout(resolve, 420));
     return NOTION_MOCK_TREE;
   }
 
   async connectNotion() {
-    await new Promise((resolve) => setTimeout(resolve, 600));
     const integration: NotionIntegration = {
       id: "notion",
       provider: "notion",

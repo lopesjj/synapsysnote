@@ -51,6 +51,14 @@ interface UiState extends UiPreferences {
   setShowSaveIndicator: (value: boolean) => void;
   setUiZoom: (value: number) => void;
   setAutoCollapseSidebar: (value: boolean) => void;
+  setReducedMotion: (value: boolean) => void;
+  setHighContrast: (value: boolean) => void;
+  setEnhancedFocus: (value: boolean) => void;
+  setUnderlineLinks: (value: boolean) => void;
+  setDyslexicFont: (value: boolean) => void;
+  setScreenReader: (value: boolean) => void;
+  setSpeechRate: (value: number) => void;
+  setLibras: (value: boolean) => void;
   setLanguage: (value: SupportedLanguage) => void;
   hydratePreferences: (value: Partial<UiPreferences>) => void;
 }
@@ -78,6 +86,14 @@ const DEFAULT_PREFERENCES: UiPreferences = {
   showSaveIndicator: true,
   uiZoom: 1.0,
   autoCollapseSidebar: true,
+  reducedMotion: false,
+  highContrast: false,
+  enhancedFocus: false,
+  underlineLinks: false,
+  dyslexicFont: false,
+  screenReader: false,
+  speechRate: 1.0,
+  libras: false,
 };
 
 const PREFERENCE_KEYS = Object.keys(DEFAULT_PREFERENCES) as (keyof UiPreferences)[];
@@ -141,6 +157,14 @@ export const useUiStore = create<UiState>()(
       setUiZoom: (value) =>
         set({ uiZoom: Math.round(clamp(value, UI_ZOOM_MIN, UI_ZOOM_MAX) * 100) / 100 }),
       setAutoCollapseSidebar: (value) => set({ autoCollapseSidebar: value }),
+      setReducedMotion: (value) => set({ reducedMotion: value }),
+      setHighContrast: (value) => set({ highContrast: value }),
+      setEnhancedFocus: (value) => set({ enhancedFocus: value }),
+      setUnderlineLinks: (value) => set({ underlineLinks: value }),
+      setDyslexicFont: (value) => set({ dyslexicFont: value }),
+      setScreenReader: (value) => set({ screenReader: value }),
+      setSpeechRate: (value) => set({ speechRate: clamp(value, 0.5, 2.0) }),
+      setLibras: (value) => set({ libras: value }),
       setLanguage: (value) => set({ language: value }),
       hydratePreferences: (value) => {
         const next = pickPreferences(value);
@@ -149,7 +173,7 @@ export const useUiStore = create<UiState>()(
     }),
     {
       name: "synapsys.ui.v1",
-      version: 7,
+      version: 9,
       migrate: (persisted) => {
         const state = (persisted ?? {}) as Partial<UiPreferences>;
         return {
@@ -158,6 +182,14 @@ export const useUiStore = create<UiState>()(
           sidebarWidth: state.sidebarWidth ?? SIDEBAR_MIN_WIDTH,
           uiZoom: state.uiZoom ?? 1.0,
           autoCollapseSidebar: state.autoCollapseSidebar ?? false,
+          reducedMotion: state.reducedMotion ?? false,
+          highContrast: state.highContrast ?? false,
+          enhancedFocus: state.enhancedFocus ?? false,
+          underlineLinks: state.underlineLinks ?? false,
+          dyslexicFont: state.dyslexicFont ?? false,
+          screenReader: state.screenReader ?? false,
+          speechRate: state.speechRate ?? 1.0,
+          libras: state.libras ?? false,
         };
       },
       storage: createJSONStorage(() => localStorage),

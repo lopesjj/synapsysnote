@@ -1207,3 +1207,142 @@
 .dark [data-table-block] mark[style*="rgb(231, 213, 197)"] {
   background-color: rgba(217, 119, 6, 0.28) !important;
 }
+
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Regular.woff") format("woff");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Bold.woff") format("woff");
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Italic.woff") format("woff");
+  font-weight: normal;
+  font-style: italic;
+  font-display: swap;
+}
+
+html[data-high-contrast="true"],
+[data-high-contrast="true"] {
+  --canvas: #ffffff !important;
+  --surface: #ffffff !important;
+  --surface-2: #f1f5f9 !important;
+  --surface-hover: rgba(0, 0, 0, 0.12) !important;
+  --border: #000000 !important;
+  --border-strong: #000000 !important;
+  --text: #000000 !important;
+  --text-muted: #0f172a !important;
+  --text-faint: #1e293b !important;
+  --accent: #0284c7 !important;
+  --accent-soft: rgba(2, 132, 199, 0.22) !important;
+  --accent-contrast: #ffffff !important;
+  --danger: #b91c1c !important;
+  --success: #047857 !important;
+  --warning: #b45309 !important;
+}
+
+html.dark[data-high-contrast="true"],
+[data-high-contrast="true"].dark,
+[data-high-contrast="true"] .dark {
+  --canvas: #000000 !important;
+  --surface: #0a0e14 !important;
+  --surface-2: #141b24 !important;
+  --surface-hover: rgba(255, 255, 255, 0.16) !important;
+  --border: #ffffff !important;
+  --border-strong: #ffffff !important;
+  --text: #ffffff !important;
+  --text-muted: #f1f5f9 !important;
+  --text-faint: #e2e8f0 !important;
+  --accent: #38bdf8 !important;
+  --accent-soft: rgba(56, 189, 248, 0.3) !important;
+  --accent-contrast: #000000 !important;
+  --danger: #f87171 !important;
+  --success: #34d399 !important;
+  --warning: #fbbf24 !important;
+}
+
+html[data-high-contrast="true"] .text-muted,
+html[data-high-contrast="true"] .text-faint {
+  color: var(--text-muted) !important;
+  font-weight: 500 !important;
+}
+
+html[data-high-contrast="true"] * {
+  border-color: var(--border);
+}
+
+html[data-high-contrast="true"] .panel,
+html[data-high-contrast="true"] [role="dialog"],
+html[data-high-contrast="true"] aside,
+html[data-high-contrast="true"] header,
+html[data-high-contrast="true"] [data-sidebar],
+html[data-high-contrast="true"] .border,
+html[data-high-contrast="true"] .border-t,
+html[data-high-contrast="true"] .border-b,
+html[data-high-contrast="true"] .border-l,
+html[data-high-contrast="true"] .border-r {
+  border-color: var(--border) !important;
+}
+
+html[data-underline-links="true"] a,
+html[data-underline-links="true"] a:visited,
+html[data-underline-links="true"] [role="link"],
+html[data-underline-links="true"] .synapsys-editor a,
+html[data-underline-links="true"] .ProseMirror a,
+html[data-underline-links="true"] [data-sidebar] a,
+html[data-underline-links="true"] a[href] {
+  text-decoration: underline !important;
+  text-decoration-thickness: 1.5px !important;
+  text-underline-offset: 3px !important;
+}
+
+html[data-dyslexic-font="true"],
+html[data-dyslexic-font="true"] * {
+  font-family: "OpenDyslexic", "Comic Sans MS", -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+html[data-dyslexic-font="true"] .synapsys-editor,
+html[data-dyslexic-font="true"] .synapsys-editor *,
+html[data-dyslexic-font="true"] .ProseMirror,
+html[data-dyslexic-font="true"] .ProseMirror * {
+  font-family: "OpenDyslexic", "Comic Sans MS", sans-serif !important;
+  letter-spacing: 0.03em !important;
+  word-spacing: 0.05em !important;
+  line-height: 1.8 !important;
+}
+
+html[data-enhanced-focus="true"] :focus-visible,
+html[data-enhanced-focus="true"] :focus,
+html[data-enhanced-focus="true"] button:focus-visible,
+html[data-enhanced-focus="true"] a:focus-visible,
+html[data-enhanced-focus="true"] input:focus-visible,
+html[data-enhanced-focus="true"] textarea:focus-visible,
+html[data-enhanced-focus="true"] select:focus-visible,
+html[data-enhanced-focus="true"] [role="button"]:focus-visible,
+html[data-enhanced-focus="true"] [role="switch"]:focus-visible,
+html[data-enhanced-focus="true"] [tabindex]:focus-visible,
+html[data-enhanced-focus="true"] [data-sidebar] button:focus-visible,
+html[data-enhanced-focus="true"] [data-sidebar] a:focus-visible {
+  outline: 3px solid var(--accent, #0ea5e9) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent, #0ea5e9) 40%, transparent) !important;
+}
+
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}

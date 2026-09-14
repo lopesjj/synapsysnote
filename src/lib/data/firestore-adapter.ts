@@ -1300,10 +1300,7 @@ export class FirestoreAdapter implements DataAdapter {
       ]);
       return data;
     } catch {
-      return firebaseJson<TranscriptResult>("/api/ai/transcribe", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      return { transcript: "", summary: "", actionItems: [] };
     }
   }
 

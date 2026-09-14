@@ -14,9 +14,10 @@ const expectedCodes: SupportedLanguage[] = [
   "ja",
   "zh",
   "de",
+  "ar",
 ];
 
-assert.equal(SUPPORTED_LANGUAGES.length, 9);
+assert.equal(SUPPORTED_LANGUAGES.length, 10);
 
 for (const code of expectedCodes) {
   const def = getLanguageDefinition(code);

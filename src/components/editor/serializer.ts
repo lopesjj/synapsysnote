@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import type { AppBlock, BlockType, RichTextSpan } from "@/types/models";
 import { fromTableRows, fromTableRowsAlignments, toTableRows } from "@/lib/data/table-rows";
+import { isAudioFile } from "@/lib/media/compress-attachment";
 
 
 type JSONContent = {
@@ -455,10 +456,22 @@ export function docToBlocks(doc: JSONContent): AppBlock[] {
   return (doc.content ?? []).flatMap(nodeToBlocks);
 }
 
-export function blocksToPlainText(blocks: AppBlock[]): string {
+export function blocksToPlainText(blocks: AppBlock[], audioFileLabel = "Arquivo de Áudio"): string {
   const out: string[] = [];
   const walk = (list: AppBlock[]) => {
     for (const block of list) {
+      const isAudio =
+        block.type === "audio" ||
+        (block.type === "file" &&
+          (block.media?.mimeType?.startsWith("audio/") ||
+            (block.media?.name && isAudioFile({ name: block.media.name, type: block.media.mimeType }))));
+
+      if (isAudio) {
+        out.push(audioFileLabel);
+        if (block.children?.length) walk(block.children);
+        continue;
+      }
+
       if (block.richText?.length) out.push(block.richText.map((s) => s.text).join(""));
       if (block.props?.expression) out.push(block.props.expression);
       if (block.props?.tableRows?.length) {
@@ -468,7 +481,9 @@ export function blocksToPlainText(blocks: AppBlock[]): string {
             .join("\n")
         );
       }
-      if (block.media?.name) out.push(block.media.name);
+      if (block.media?.name && block.type !== "image" && block.type !== "video") {
+        out.push(block.media.name);
+      }
       if (block.children?.length) walk(block.children);
     }
   };

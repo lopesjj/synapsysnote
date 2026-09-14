@@ -480,9 +480,95 @@ export type TranslationKey =
   | "password_changed_success"
   | "password_added_success"
   | "password_change_failed"
-  | "expand";
+  | "high_contrast"
+  | "high_contrast_desc"
+  | "underline_links"
+  | "underline_links_desc"
+  | "dyslexic_font"
+  | "dyslexic_font_desc"
+  | "reduced_motion"
+  | "reduced_motion_desc"
+  | "enhanced_focus"
+  | "enhanced_focus_desc"
+  | "screen_reader"
+  | "screen_reader_desc"
+  | "speech_rate"
+  | "keyboard_navigation_title"
+  | "keyboard_navigation_desc"
+  | "keyboard_next_element"
+  | "keyboard_previous_element"
+  | "keyboard_activate"
+  | "keyboard_close_modal"
+  | "read_note_aloud"
+  | "resume_reading"
+  | "pause_reading"
+  | "stop_reading"
+  | "focus_editor_shortcut"
+  | "focus_title_shortcut"
+  | "note_loaded_announcement"
+  | "audio_file"
+  | "transcription"
+  | "visual_captions"
+  | "visual_captions_desc"
+  | "transcribe_audio"
+  | "transcribing_audio"
+  | "copy_transcript"
+  | "copied"
+  | "audio_playing"
+  | "no_transcript_yet"
+  | "read_selection_aloud"
+  | "skip_to_content"
+  | "accessibility"
+  | "accessibility_description"
+  | "expand"
+  | "libras"
+  | "libras_interpreter"
+  | "libras_desc"
+  | "see_in_libras"
+  | "interpret_in_libras"
+  | "libras_shortcut"
+  | "libras_speed"
+  | "libras_repeat"
+  | "transcribe_speech"
+  | "retranscribe_speech"
+  | "transcribing_progress"
+  | "transcribing_audio_speech"
+  | "transcribing_speech_with_ai"
+  | "transcribe_again_title"
+  | "speech_transcript_title"
+  | "close_transcript"
+  | "compressing_audio"
+  | "compressing"
+  | "preparing_libras"
+  | "audio_attached"
+  | "image_attached"
+  | "pdf_attached"
+  | "file_attached"
+  | "file_attach_error"
+  | "audio_save_error"
+  | "no_speech_detected"
+  | "no_speech_detected_libras"
+  | "audio_transcribed_success"
+  | "audio_transcribe_error"
+  | "playback_speed"
+  | "speed_normal"
+  | "options"
+  | "audio"
+  | "expand_libras"
+  | "minimize"
+  | "maximize"
+  | "libras_gloss"
+  | "no_text_loaded"
+  | "libras_repeat_from_start"
+  | "libras_prev_sign"
+  | "libras_next_sign"
+  | "play"
+  | "pause"
+  | "mute"
+  | "unmute";
 
-export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, string>> = {
+export const TRANSLATIONS: Record<string, Record<string, string>> & Record<SupportedLanguage, Partial<Record<TranslationKey, string>>> & { pt: Record<TranslationKey, string>; en: Record<TranslationKey, string> } = {
+  ar: {} as Record<TranslationKey, string>,
   pt: {
     preferences_description: "Aparência, idioma, tipografia e atalhos. Suas escolhas acompanham a conta.",
     theme_hint: "O modo escuro usa tons de grafite azulado; o claro, cinzas sutis.",
@@ -961,6 +1047,91 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     password_changed_success: "Senha alterada.",
     password_added_success: "Senha adicionada. Você já pode entrar das duas formas.",
     password_change_failed: "Não foi possível alterar a senha",
+    high_contrast: "Alto contraste",
+    high_contrast_desc: "Aumenta o contraste entre o texto e o fundo",
+    underline_links: "Sublinhar links",
+    underline_links_desc: "Destaca links na interface com sublinhado para melhor identificação",
+    dyslexic_font: "Fonte para dislexia",
+    dyslexic_font_desc: "Aplica a tipografia OpenDyslexic para facilitar a leitura",
+    reduced_motion: "Redução de movimento",
+    reduced_motion_desc: "Minimiza animações e efeitos de transição na interface",
+    enhanced_focus: "Foco aprimorado",
+    enhanced_focus_desc: "Adiciona anéis de foco visíveis e nítidos nos elementos selecionados",
+    screen_reader: "Leitor de voz integrado",
+    screen_reader_desc: "Lê notificações, ações e conteúdos em voz alta pelo navegador",
+    speech_rate: "Velocidade da voz",
+    keyboard_navigation_title: "Navegação por teclado",
+    keyboard_navigation_desc: "O Synapsys Note é totalmente acessível por teclado:",
+    keyboard_next_element: "Próximo elemento interativo",
+    keyboard_previous_element: "Elemento anterior",
+    keyboard_activate: "Ativar botão ou link",
+    keyboard_close_modal: "Fechar modal ou diálogo",
+    read_note_aloud: "Ler nota em voz alta",
+    resume_reading: "Continuar leitura",
+    pause_reading: "Pausar leitura",
+    stop_reading: "Parar leitura",
+    focus_editor_shortcut: "Focar no editor de notas",
+    focus_title_shortcut: "Focar no título da nota",
+    note_loaded_announcement: "Nota carregada",
+    audio_file: "Arquivo de Áudio",
+    transcription: "Transcrição",
+    visual_captions: "Legendas e transcrições para surdos",
+    visual_captions_desc: "Exibe transcrições visuais, legendas dinâmicas e indicador sonoro para pessoas surdas",
+    transcribe_audio: "Transcrever áudio",
+    transcribing_audio: "Transcrevendo áudio...",
+    copy_transcript: "Copiar transcrição",
+    copied: "Copiado",
+    audio_playing: "Áudio reproduzindo (som ativo)",
+    no_transcript_yet: "Áudio sem transcrição de texto",
+    read_selection_aloud: "Ler seleção em voz alta",
+    skip_to_content: "Pular para o conteúdo principal",
+    accessibility: "Acessibilidade",
+    accessibility_description: "Opções de acessibilidade para surdos, leitor de voz, contraste e navegação.",
+    libras: "Libras",
+    libras_interpreter: "Intérprete de Libras",
+    libras_desc: "Traduz notas e áudios para a Língua Brasileira de Sinais de forma nativa e interativa",
+    see_in_libras: "Ver em Libras",
+    interpret_in_libras: "Interpretar em Libras",
+    libras_shortcut: "Interpretar nota em Libras",
+    libras_speed: "Velocidade",
+    libras_repeat: "Repetir",
+    transcribe_speech: "Transcrever fala",
+    retranscribe_speech: "Re-transcrever",
+    transcribing_progress: "Transcrevendo",
+    transcribing_audio_speech: "Transcrevendo fala do áudio...",
+    transcribing_speech_with_ai: "Transcrever fala do áudio com IA",
+    transcribe_again_title: "Transcrever novamente a fala do áudio",
+    speech_transcript_title: "Texto transcrito da fala",
+    close_transcript: "Fechar transcrição",
+    compressing_audio: "Comprimindo áudio...",
+    compressing: "Comprimindo...",
+    preparing_libras: "Preparando Libras...",
+    audio_attached: "Áudio anexado.",
+    image_attached: "Imagem anexada.",
+    pdf_attached: "PDF anexado.",
+    file_attached: "Arquivo anexado.",
+    file_attach_error: "Não foi possível anexar o arquivo.",
+    audio_save_error: "Não foi possível salvar o áudio.",
+    no_speech_detected: "Nenhuma fala identificada no áudio.",
+    no_speech_detected_libras: "Nenhuma fala identificada no áudio para o Libras.",
+    audio_transcribed_success: "Áudio transcrito com sucesso!",
+    audio_transcribe_error: "Erro ao transcrever o áudio.",
+    playback_speed: "Velocidade de reprodução",
+    speed_normal: "Normal",
+    options: "Opções",
+    audio: "Áudio",
+    expand_libras: "Expandir Intérprete de Libras",
+    minimize: "Minimizar",
+    maximize: "Maximizar",
+    libras_gloss: "Glosa de Libras",
+    no_text_loaded: "Nenhum texto carregado",
+    libras_repeat_from_start: "Repetir do início",
+    libras_prev_sign: "Sinal anterior",
+    libras_next_sign: "Próximo sinal",
+    play: "Reproduzir",
+    pause: "Pausar",
+    mute: "Silenciar",
+    unmute: "Ativar som",
   },
   en: {
     preferences_description: "Appearance, language, typography, and shortcuts. Your choices follow your account.",
@@ -1440,7 +1611,93 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     password_changed_success: "Password changed.",
     password_added_success: "Password added. You can now sign in both ways.",
     password_change_failed: "Could not change password",
+    high_contrast: "High contrast",
+    high_contrast_desc: "Increases contrast between text and background",
+    underline_links: "Underline links",
+    underline_links_desc: "Highlights links with an underline for easier identification",
+    dyslexic_font: "Dyslexia-friendly font",
+    dyslexic_font_desc: "Applies the OpenDyslexic typeface to improve reading clarity",
+    reduced_motion: "Reduce motion",
+    reduced_motion_desc: "Minimizes animations and transition effects",
+    enhanced_focus: "Enhanced focus",
+    enhanced_focus_desc: "Adds sharp, visible focus rings to active elements",
+    screen_reader: "Built-in voice reader",
+    screen_reader_desc: "Speaks notifications, actions, and note contents aloud",
+    speech_rate: "Voice speed",
+    keyboard_navigation_title: "Keyboard navigation",
+    keyboard_navigation_desc: "Synapsys Note is fully accessible via keyboard:",
+    keyboard_next_element: "Next interactive element",
+    keyboard_previous_element: "Previous element",
+    keyboard_activate: "Activate button or link",
+    keyboard_close_modal: "Close modal or dialog",
+    read_note_aloud: "Read note aloud",
+    resume_reading: "Resume reading",
+    pause_reading: "Pause reading",
+    stop_reading: "Stop reading",
+    focus_editor_shortcut: "Focus note editor",
+    focus_title_shortcut: "Focus note title",
+    note_loaded_announcement: "Note loaded",
+    audio_file: "Audio File",
+    transcription: "Transcription",
+    visual_captions: "Captions and transcripts for the deaf",
+    visual_captions_desc: "Shows visual transcripts, dynamic captions, and sound indicators for the deaf and hard of hearing",
+    transcribe_audio: "Transcribe audio",
+    transcribing_audio: "Transcribing audio...",
+    copy_transcript: "Copy transcript",
+    copied: "Copied",
+    audio_playing: "Audio playing (active sound)",
+    no_transcript_yet: "Audio without text transcript",
+    read_selection_aloud: "Read selection aloud",
+    skip_to_content: "Skip to main content",
+    accessibility: "Accessibility",
+    accessibility_description: "Accessibility options for the deaf, voice reader, contrast, and navigation.",
+    libras: "Libras",
+    libras_interpreter: "Libras Interpreter",
+    libras_desc: "Translates notes and audios into Brazilian Sign Language natively and interactively",
+    see_in_libras: "View in Libras",
+    interpret_in_libras: "Interpret in Libras",
+    libras_shortcut: "Interpret note in Libras",
+    libras_speed: "Speed",
+    libras_repeat: "Repeat",
+    transcribe_speech: "Transcribe speech",
+    retranscribe_speech: "Re-transcribe",
+    transcribing_progress: "Transcribing",
+    transcribing_audio_speech: "Transcribing speech from audio...",
+    transcribing_speech_with_ai: "Transcribe audio speech with AI",
+    transcribe_again_title: "Transcribe audio speech again",
+    speech_transcript_title: "Transcribed speech text",
+    close_transcript: "Close transcript",
+    compressing_audio: "Compressing audio...",
+    compressing: "Compressing...",
+    preparing_libras: "Preparing Libras...",
+    audio_attached: "Audio attached.",
+    image_attached: "Image attached.",
+    pdf_attached: "PDF attached.",
+    file_attached: "File attached.",
+    file_attach_error: "Could not attach file.",
+    audio_save_error: "Could not save audio.",
+    no_speech_detected: "No speech detected in audio.",
+    no_speech_detected_libras: "No speech detected in audio for Libras.",
+    audio_transcribed_success: "Audio transcribed successfully!",
+    audio_transcribe_error: "Error transcribing audio.",
+    playback_speed: "Playback speed",
+    speed_normal: "Normal",
+    options: "Options",
+    audio: "Audio",
+    expand_libras: "Expand Libras Interpreter",
+    minimize: "Minimize",
+    maximize: "Maximize",
+    libras_gloss: "Libras Gloss",
+    no_text_loaded: "No text loaded",
+    libras_repeat_from_start: "Repeat from start",
+    libras_prev_sign: "Previous sign",
+    libras_next_sign: "Next sign",
+    play: "Play",
+    pause: "Pause",
+    mute: "Mute",
+    unmute: "Unmute",
   },
+
   es: {
     preferences_description: "Apariencia, idioma, tipografía y atajos. Tus elecciones acompañan tu cuenta.",
     theme_hint: "El modo oscuro usa tonos de grafito azulado; el claro, grises sutiles.",
@@ -1919,7 +2176,47 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     password_changed_success: "Contraseña cambiada.",
     password_added_success: "Contraseña añadida. Ya puedes iniciar sesión de ambas formas.",
     password_change_failed: "No se pudo cambiar la contraseña",
+    audio_file: "Archivo de audio",
+    see_in_libras: "Ver en Libras",
+    transcribe_speech: "Transcribir voz",
+    retranscribe_speech: "Volver a transcribir",
+    transcribing_progress: "Transcribiendo",
+    transcribing_audio_speech: "Transcribiendo voz del audio...",
+    transcribing_speech_with_ai: "Transcribir voz del audio con IA",
+    transcribe_again_title: "Transcribir nuevamente la voz del audio",
+    speech_transcript_title: "Texto transcrito de la voz",
+    close_transcript: "Cerrar transcripción",
+    compressing_audio: "Comprimiendo audio...",
+    compressing: "Comprimiendo...",
+    preparing_libras: "Preparando Libras...",
+    audio_attached: "Audio adjuntado.",
+    image_attached: "Imagen adjuntada.",
+    pdf_attached: "PDF adjuntado.",
+    file_attached: "Archivo adjuntado.",
+    file_attach_error: "No se pudo adjuntar el archivo.",
+    audio_save_error: "No se pudo guardar el audio.",
+    no_speech_detected: "No se detectó voz en el audio.",
+    no_speech_detected_libras: "No se detectó voz en el audio para Libras.",
+    audio_transcribed_success: "¡Audio transcrito con éxito!",
+    audio_transcribe_error: "Error al transcribir el audio.",
+    playback_speed: "Velocidad de reproducción",
+    speed_normal: "Normal",
+    options: "Opciones",
+    audio: "Audio",
+    expand_libras: "Expandir Intérprete de Libras",
+    minimize: "Minimizar",
+    maximize: "Maximizar",
+    libras_gloss: "Glosa de Libras",
+    no_text_loaded: "Ningún texto cargado",
+    libras_repeat_from_start: "Repetir desde el inicio",
+    libras_prev_sign: "Seña anterior",
+    libras_next_sign: "Siguiente seña",
+    play: "Reproducir",
+    pause: "Pausar",
+    mute: "Silenciar",
+    unmute: "Activar sonido",
   },
+
   fr: {
     preferences_description: "Apparence, langue, typographie et raccourcis. Vos choix suivent votre compte.",
     theme_hint: "Le mode sombre utilise des tons graphite bleutés ; le clair, des gris subtils.",
@@ -2398,7 +2695,47 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     password_changed_success: "Mot de passe modifié.",
     password_added_success: "Mot de passe ajouté. Vous pouvez maintenant vous connecter des deux manières.",
     password_change_failed: "Impossible de modifier le mot de passe",
+    audio_file: "Fichier audio",
+    see_in_libras: "Voir en Libras",
+    transcribe_speech: "Transcrire la parole",
+    retranscribe_speech: "Retranscrire",
+    transcribing_progress: "Transcription en cours",
+    transcribing_audio_speech: "Transcription de la parole de l'audio...",
+    transcribing_speech_with_ai: "Transcrire la parole de l'audio avec l'IA",
+    transcribe_again_title: "Transcrire à nouveau la parole de l'audio",
+    speech_transcript_title: "Texte transcrit de la parole",
+    close_transcript: "Fermer la transcription",
+    compressing_audio: "Compression de l'audio...",
+    compressing: "Compression...",
+    preparing_libras: "Préparation de Libras...",
+    audio_attached: "Audio joint.",
+    image_attached: "Image jointe.",
+    pdf_attached: "PDF joint.",
+    file_attached: "Fichier joint.",
+    file_attach_error: "Impossible de joindre le fichier.",
+    audio_save_error: "Impossible d'enregistrer l'audio.",
+    no_speech_detected: "Aucune parole détectée dans l'audio.",
+    no_speech_detected_libras: "Aucune parole détectée dans l'audio pour Libras.",
+    audio_transcribed_success: "Audio transcrit avec succès !",
+    audio_transcribe_error: "Erreur lors de la transcription de l'audio.",
+    playback_speed: "Vitesse de lecture",
+    speed_normal: "Normal",
+    options: "Options",
+    audio: "Audio",
+    expand_libras: "Développer l'interprète Libras",
+    minimize: "Réduire",
+    maximize: "Agrandir",
+    libras_gloss: "Glose de Libras",
+    no_text_loaded: "Aucun texte chargé",
+    libras_repeat_from_start: "Répéter depuis le début",
+    libras_prev_sign: "Signe précédent",
+    libras_next_sign: "Signe suivant",
+    play: "Lire",
+    pause: "Pause",
+    mute: "Couper le son",
+    unmute: "Activer le son",
   },
+
   it: {
     preferences_description: "Aspetto, lingua, tipografia e scorciatoie. Le tue scelte seguono il tuo account.",
     theme_hint: "La modalità scura usa toni di grafite bluastra; la chiara, grigi sottili.",
@@ -2877,7 +3214,47 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     password_changed_success: "Password modificata.",
     password_added_success: "Password aggiunta. Ora puoi accedere in entrambi i modi.",
     password_change_failed: "Impossibile modificare la password",
+    audio_file: "File audio",
+    see_in_libras: "Vedi in Libras",
+    transcribe_speech: "Trascrivi voce",
+    retranscribe_speech: "Ritrascrivi",
+    transcribing_progress: "Trascrizione in corso",
+    transcribing_audio_speech: "Trascrizione della voce dall'audio...",
+    transcribing_speech_with_ai: "Trascrivi la voce dell'audio con l'IA",
+    transcribe_again_title: "Trascrivi di nuovo la voce dell'audio",
+    speech_transcript_title: "Testo trascritto della voce",
+    close_transcript: "Chiudi trascrizione",
+    compressing_audio: "Compressione audio...",
+    compressing: "Compressione...",
+    preparing_libras: "Preparazione di Libras...",
+    audio_attached: "Audio allegato.",
+    image_attached: "Immagine allegata.",
+    pdf_attached: "PDF allegato.",
+    file_attached: "File allegato.",
+    file_attach_error: "Impossibile allegare il file.",
+    audio_save_error: "Impossibile salvare l'audio.",
+    no_speech_detected: "Nessuna voce rilevata nell'audio.",
+    no_speech_detected_libras: "Nessuna voce rilevata nell'audio per Libras.",
+    audio_transcribed_success: "Audio trascritto con successo!",
+    audio_transcribe_error: "Errore durante la trascrizione dell'audio.",
+    playback_speed: "Velocità di riproduzione",
+    speed_normal: "Normale",
+    options: "Opzioni",
+    audio: "Audio",
+    expand_libras: "Espandi interprete Libras",
+    minimize: "Riduci a icona",
+    maximize: "Ingrandisci",
+    libras_gloss: "Glosa di Libras",
+    no_text_loaded: "Nessun testo caricato",
+    libras_repeat_from_start: "Ripeti dall'inizio",
+    libras_prev_sign: "Segno precedente",
+    libras_next_sign: "Segno successivo",
+    play: "Riproduci",
+    pause: "Pausa",
+    mute: "Disattiva audio",
+    unmute: "Attiva audio",
   },
+
   de: {
     preferences_description: "Erscheinungsbild, Sprache, Typografie und Tastaturkürzel. Ihre Auswahl folgt Ihrem Konto.",
     theme_hint: "Der Dunkelmodus verwendet bläuliche Graphittöne, der Hellmodus dezente Grautöne.",
@@ -3356,7 +3733,47 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     password_changed_success: "Passwort geändert.",
     password_added_success: "Passwort hinzugefügt. Sie können sich jetzt auf beide Arten anmelden.",
     password_change_failed: "Passwort konnte nicht geändert werden",
+    audio_file: "Audiodatei",
+    see_in_libras: "In Libras ansehen",
+    transcribe_speech: "Sprache transkribieren",
+    retranscribe_speech: "Erneut transkribieren",
+    transcribing_progress: "Wird transkribiert",
+    transcribing_audio_speech: "Sprache aus Audio wird transkribiert...",
+    transcribing_speech_with_ai: "Audiosprache mit KI transkribieren",
+    transcribe_again_title: "Audiosprache erneut transkribieren",
+    speech_transcript_title: "Transkribierter Sprachtext",
+    close_transcript: "Transkript schließen",
+    compressing_audio: "Audio wird komprimiert...",
+    compressing: "Wird komprimiert...",
+    preparing_libras: "Libras wird vorbereitet...",
+    audio_attached: "Audio angehängt.",
+    image_attached: "Bild angehängt.",
+    pdf_attached: "PDF angehängt.",
+    file_attached: "Datei angehängt.",
+    file_attach_error: "Datei konnte nicht angehängt werden.",
+    audio_save_error: "Audio konnte nicht gespeichert werden.",
+    no_speech_detected: "Keine Sprache im Audio erkannt.",
+    no_speech_detected_libras: "Keine Sprache im Audio für Libras erkannt.",
+    audio_transcribed_success: "Audio erfolgreich transkribiert!",
+    audio_transcribe_error: "Fehler beim Transkribieren des Audios.",
+    playback_speed: "Wiedergabegeschwindigkeit",
+    speed_normal: "Normal",
+    options: "Optionen",
+    audio: "Audio",
+    expand_libras: "Libras-Dolmetscher erweitern",
+    minimize: "Minimieren",
+    maximize: "Maximieren",
+    libras_gloss: "Libras-Glosse",
+    no_text_loaded: "Kein Text geladen",
+    libras_repeat_from_start: "Von vorne wiederholen",
+    libras_prev_sign: "Vorheriges Zeichen",
+    libras_next_sign: "Nächstes Zeichen",
+    play: "Abspielen",
+    pause: "Pausieren",
+    mute: "Stummschalten",
+    unmute: "Stummschaltung aufheben",
   },
+
   ru: {
     preferences_description: "Внешний вид, язык, типографика и горячие клавиши. Ваши настройки сохраняются в аккаунте.",
     theme_hint: "Темная тема использует синевато-графитовые тона, светлая — мягкие серые.",
@@ -3835,7 +4252,47 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     password_changed_success: "Пароль изменен.",
     password_added_success: "Пароль добавлен. Теперь вы можете входить обоими способами.",
     password_change_failed: "Не удалось изменить пароль",
+    audio_file: "Аудиофайл",
+    see_in_libras: "Смотреть в Libras",
+    transcribe_speech: "Транскрибировать речь",
+    retranscribe_speech: "Повторить транскрипцию",
+    transcribing_progress: "Транскрибирование",
+    transcribing_audio_speech: "Транскрибирование речи из аудио...",
+    transcribing_speech_with_ai: "Транскрибировать речь из аудио с помощью ИИ",
+    transcribe_again_title: "Повторно транскрибировать речь из аудио",
+    speech_transcript_title: "Транскрибированный текст речи",
+    close_transcript: "Закрыть транскрипцию",
+    compressing_audio: "Сжатие аудио...",
+    compressing: "Сжатие...",
+    preparing_libras: "Подготовка Libras...",
+    audio_attached: "Аудио прикреплено.",
+    image_attached: "Изображение прикреплено.",
+    pdf_attached: "PDF прикреплен.",
+    file_attached: "Файл прикреплен.",
+    file_attach_error: "Не удалось прикрепить файл.",
+    audio_save_error: "Не удалось сохранить аудио.",
+    no_speech_detected: "В аудио не обнаружена речь.",
+    no_speech_detected_libras: "В аудио не обнаружена речь для Libras.",
+    audio_transcribed_success: "Аудио успешно транскрибировано!",
+    audio_transcribe_error: "Ошибка при транскрибировании аудио.",
+    playback_speed: "Скорость воспроизведения",
+    speed_normal: "Обычная",
+    options: "Параметры",
+    audio: "Аудио",
+    expand_libras: "Развернуть сурдопереводчик Libras",
+    minimize: "Свернуть",
+    maximize: "Развернуть",
+    libras_gloss: "Глосса Libras",
+    no_text_loaded: "Текст не загружен",
+    libras_repeat_from_start: "Повторить сначала",
+    libras_prev_sign: "Предыдущий жест",
+    libras_next_sign: "Следующий жест",
+    play: "Воспроизвести",
+    pause: "Пауза",
+    mute: "Отключить звук",
+    unmute: "Включить звук",
   },
+
   ja: {
     preferences_description: "外観、言語、タイポグラフィ、ショートカット。設定はアカウントに保存されます。",
     theme_hint: "ダークモードは青みがかったグラファイトトーン、ライトモードは落ち着いたグレーです。",
@@ -4314,7 +4771,47 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     password_changed_success: "パスワードを変更しました。",
     password_added_success: "パスワードが追加されました。両方の方法でログインできます。",
     password_change_failed: "パスワードを変更できませんでした",
+    audio_file: "音声ファイル",
+    see_in_libras: "Librasで見る",
+    transcribe_speech: "音声を文字起こし",
+    retranscribe_speech: "再文字起こし",
+    transcribing_progress: "文字起こし中",
+    transcribing_audio_speech: "音声から発話を文字起こし中...",
+    transcribing_speech_with_ai: "AIで音声の発話を文字起こし",
+    transcribe_again_title: "音声の発話を再度文字起こし",
+    speech_transcript_title: "文字起こしされた音声テキスト",
+    close_transcript: "文字起こしを閉じる",
+    compressing_audio: "音声を圧縮中...",
+    compressing: "圧縮中...",
+    preparing_libras: "Librasを準備中...",
+    audio_attached: "音声を添付しました。",
+    image_attached: "画像を添付しました。",
+    pdf_attached: "PDFを添付しました。",
+    file_attached: "ファイルを添付しました。",
+    file_attach_error: "ファイルを添付できませんでした。",
+    audio_save_error: "音声を保存できませんでした。",
+    no_speech_detected: "音声内に発話が検出されませんでした。",
+    no_speech_detected_libras: "Libras用の発話が音声内に検出されませんでした。",
+    audio_transcribed_success: "音声の文字起こしが完了しました！" ,
+    audio_transcribe_error: "音声の文字起こし中にエラーが発生しました。",
+    playback_speed: "再生速度",
+    speed_normal: "標準",
+    options: "オプション",
+    audio: "音声",
+    expand_libras: "Libras通訳を展開",
+    minimize: "最小化",
+    maximize: "最大化",
+    libras_gloss: "Libras グロス",
+    no_text_loaded: "テキストが読み込まれていません",
+    libras_repeat_from_start: "最初から再生",
+    libras_prev_sign: "前の手話",
+    libras_next_sign: "次の手話",
+    play: "再生",
+    pause: "一時停止",
+    mute: "ミュート",
+    unmute: "ミュート解除",
   },
+
   zh: {
     preferences_description: "外观、语言、排版和快捷键。您的选择将随账户同步。",
     theme_hint: "暗色模式使用偏蓝石墨色调，浅色模式使用柔和灰色。",
@@ -4793,8 +5290,49 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<TranslationKey, stri
     password_changed_success: "密码已更改。",
     password_added_success: "密码已添加。您现在可以通过两种方式登录。",
     password_change_failed: "无法更改密码",
+    audio_file: "音频文件",
+    see_in_libras: "在 Libras 中查看",
+    transcribe_speech: "转录语音",
+    retranscribe_speech: "重新转录",
+    transcribing_progress: "正在转录",
+    transcribing_audio_speech: "正在转录音频中的语音...",
+    transcribing_speech_with_ai: "使用 AI 转录音频语音",
+    transcribe_again_title: "重新转录音频语音",
+    speech_transcript_title: "转录的语音文本",
+    close_transcript: "关闭转录",
+    compressing_audio: "正在压缩音频...",
+    compressing: "正在压缩...",
+    preparing_libras: "正在准备 Libras...",
+    audio_attached: "音频已附加。",
+    image_attached: "图片已附加。",
+    pdf_attached: "PDF已附加。",
+    file_attached: "文件已附加。",
+    file_attach_error: "无法附加文件。",
+    audio_save_error: "无法保存音频。",
+    no_speech_detected: "音频中未检测到语音。",
+    no_speech_detected_libras: "未在音频中检测到可用于 Libras 的语音。",
+    audio_transcribed_success: "音频转录成功！",
+    audio_transcribe_error: "转录音频时出错。",
+    playback_speed: "播放速度",
+    speed_normal: "正常",
+    options: "选项",
+    audio: "音频",
+    expand_libras: "展开 Libras 手语翻译",
+    minimize: "最小化",
+    maximize: "最大化",
+    libras_gloss: "Libras 手语注记",
+    no_text_loaded: "未加载文本",
+    libras_repeat_from_start: "从头重复",
+    libras_prev_sign: "上一个手语",
+    libras_next_sign: "下一个手语",
+    play: "播放",
+    pause: "暂停",
+    mute: "静音",
+    unmute: "取消静音",
   },
 };
+
+TRANSLATIONS.ar = { ...TRANSLATIONS.en };
 
 export function useTranslation() {
   const language = useUiStore((state) => state.language) || "pt";
@@ -4836,6 +5374,16 @@ export function localizeErrorMessage(
   }
   if (msg.includes("Não foi possível ler o workspace") || msg.includes("Could not read Notion workspace")) {
     return t("notion_tree_read_error");
+  }
+  if (
+    msg.includes("continua acima de") ||
+    msg.includes("muito grande para ser comprimido") ||
+    msg.includes("Tente um arquivo menor")
+  ) {
+    return t("file_attach_error");
+  }
+  if (msg.includes("Não foi possível comprimir") || msg.includes("Não foi possível salvar o áudio")) {
+    return t("audio_save_error");
   }
   return msg;
 }

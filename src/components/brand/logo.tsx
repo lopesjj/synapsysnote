@@ -17,7 +17,7 @@ export function SynapsysMark({
   return (
     <img
       src="/brand/synapsys-mark.png"
-      alt=""
+      alt="Synapsys Note"
       width={size}
       height={size}
       className={cn("shrink-0 select-none object-contain", className)}

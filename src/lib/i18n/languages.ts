@@ -62,6 +62,12 @@ export const SUPPORTED_LANGUAGES: LanguageDefinition[] = [
     nativeName: "简体中文",
     flag: "🇨🇳",
   },
+  {
+    code: "ar",
+    name: "Árabe",
+    nativeName: "العربية",
+    flag: "🇸🇦",
+  },
 ];
 
 export function getLanguageDefinition(code: SupportedLanguage): LanguageDefinition {

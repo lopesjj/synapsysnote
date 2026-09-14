@@ -3,12 +3,50 @@
 import * as React from "react";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const Menu = DropdownMenuPrimitive.Root;
 export const MenuTrigger = DropdownMenuPrimitive.Trigger;
 export const MenuSub = DropdownMenuPrimitive.Sub;
-export const MenuSubTrigger = DropdownMenuPrimitive.SubTrigger;
+
+export const MenuSubTrigger = React.forwardRef<
+  React.ComponentRef<typeof DropdownMenuPrimitive.SubTrigger>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubTrigger> & {
+    inset?: boolean;
+  }
+>(({ className, inset, children, ...props }, ref) => (
+  <DropdownMenuPrimitive.SubTrigger
+    ref={ref}
+    className={cn(
+      "relative flex cursor-default select-none items-center gap-2.5 rounded-[var(--radius-xs)] px-2 py-1.5 text-[12.5px] text-ink outline-none transition-colors",
+      "focus:bg-[var(--surface-hover)] data-[state=open]:bg-[var(--surface-hover)] data-[disabled]:pointer-events-none data-[disabled]:opacity-45",
+      "[&_svg]:size-3.5 [&_svg]:text-muted",
+      inset && "pl-8",
+      className
+    )}
+    {...props}
+  >
+    {children}
+    <ChevronRight className="ml-auto size-3.5 text-muted" />
+  </DropdownMenuPrimitive.SubTrigger>
+));
+MenuSubTrigger.displayName = "MenuSubTrigger";
+
+export const MenuSubContent = React.forwardRef<
+  React.ComponentRef<typeof DropdownMenuPrimitive.SubContent>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
+>(({ className, sideOffset = 4, ...props }, ref) => (
+  <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPrimitive.SubContent
+      ref={ref}
+      sideOffset={sideOffset}
+      className={cn(surface, className)}
+      {...props}
+    />
+  </DropdownMenuPrimitive.Portal>
+));
+MenuSubContent.displayName = "MenuSubContent";
 
 const surface =
   "z-100 min-w-[190px] overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--shadow-float)] " +

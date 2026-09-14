@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, type ChangeEvent, type DragEvent } from "react";
 import {
+  Accessibility,
   Camera,
   Check,
   Globe,
@@ -46,8 +47,9 @@ import { fontById, fontsByCategory } from "@/lib/typography";
 import { cn, isMac } from "@/lib/utils";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
 import { SUPPORTED_LANGUAGES } from "@/lib/i18n/languages";
+import { announceToScreenReader, speakText } from "@/components/accessibility/screen-reader";
 
-type PreferenceTab = "appearance" | "language" | "typography" | "profile" | "shortcuts";
+type PreferenceTab = "appearance" | "accessibility" | "language" | "typography" | "profile" | "shortcuts";
 
 export function PreferencesDialog({
   open,
@@ -61,6 +63,7 @@ export function PreferencesDialog({
 
   const navItems: { id: PreferenceTab; label: string; icon: React.ReactNode }[] = [
     { id: "appearance", label: t("appearance"), icon: <Palette className="size-4" /> },
+    { id: "accessibility", label: t("accessibility"), icon: <Accessibility className="size-4" /> },
     { id: "language", label: t("language"), icon: <Globe className="size-4" /> },
     { id: "typography", label: t("typography"), icon: <Type className="size-4" /> },
     { id: "profile", label: t("profile"), icon: <User className="size-4" /> },
@@ -71,6 +74,8 @@ export function PreferencesDialog({
     switch (activeTab) {
       case "appearance":
         return t("appearance");
+      case "accessibility":
+        return t("accessibility");
       case "language":
         return t("language_title");
       case "typography":
@@ -86,6 +91,8 @@ export function PreferencesDialog({
     switch (activeTab) {
       case "appearance":
         return t("theme_hint");
+      case "accessibility":
+        return t("accessibility_description");
       case "language":
         return t("language_description");
       default:
@@ -180,6 +187,7 @@ export function PreferencesDialog({
 
           <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-6 sm:py-4 md:px-8 md:py-6 space-y-5 sm:space-y-6 pb-8 md:pb-6 overscroll-contain">
             {activeTab === "appearance" && <AppearanceSection />}
+            {activeTab === "accessibility" && <AccessibilitySection />}
             {activeTab === "language" && <LanguageSection />}
             {activeTab === "typography" && <TypographySection />}
             {activeTab === "profile" && <ProfileSection />}
@@ -300,16 +308,7 @@ function AppearanceSection() {
   const notesDensity = useUiStore((state) => state.notesDensity);
   const showSaveIndicator = useUiStore((state) => state.showSaveIndicator);
   const zenMode = useUiStore((state) => state.zenMode);
-  const uiZoom = useUiStore((state) => state.uiZoom);
   const autoCollapseSidebar = useUiStore((state) => state.autoCollapseSidebar);
-
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const zoomOptions = UI_ZOOM_STEPS
-    .filter((step) => !isMobile || step <= UI_ZOOM_MOBILE_MAX)
-    .map((step) => ({
-      value: String(step),
-      label: `${Math.round(step * 100)}%`,
-    }));
 
   return (
     <div className="space-y-5">
@@ -459,14 +458,6 @@ function AppearanceSection() {
                 { value: "created", label: t("sort_created") },
                 { value: "title", label: t("sort_title") },
               ]}
-            />
-          </PreferenceRow>
-
-          <PreferenceRow label={t("ui_scale")} hint={t("ui_scale_hint")}>
-            <SegmentedControl<string>
-              value={String(uiZoom)}
-              onChange={(value) => useUiStore.getState().setUiZoom(Number(value))}
-              options={zoomOptions}
             />
           </PreferenceRow>
         </PreferenceCard>
@@ -966,7 +957,7 @@ function Avatar({
     return (
       <img
         src={url}
-        alt=""
+        alt={name || "Avatar"}
         width={72}
         height={72}
         onError={() => {
@@ -1014,6 +1005,15 @@ function ShortcutsSection() {
         { keys: ["mod", "E"], label: t("code_inline") },
       ],
     },
+    {
+      group: t("accessibility"),
+      items: [
+        { keys: ["Alt", "R"], label: t("read_note_aloud") },
+        { keys: ["Alt", "L"], label: t("libras_shortcut") },
+        { keys: ["Alt", "E"], label: t("focus_editor_shortcut") },
+        { keys: ["Alt", "T"], label: t("focus_title_shortcut") },
+      ],
+    },
   ];
 
   return (
@@ -1040,6 +1040,167 @@ function ShortcutsSection() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function AccessibilitySection() {
+  const { t, language } = useTranslation();
+  const highContrast = useUiStore((state) => state.highContrast);
+  const setHighContrast = useUiStore((state) => state.setHighContrast);
+  const underlineLinks = useUiStore((state) => state.underlineLinks);
+  const setUnderlineLinks = useUiStore((state) => state.setUnderlineLinks);
+  const dyslexicFont = useUiStore((state) => state.dyslexicFont);
+  const setDyslexicFont = useUiStore((state) => state.setDyslexicFont);
+  const reducedMotion = useUiStore((state) => state.reducedMotion);
+  const setReducedMotion = useUiStore((state) => state.setReducedMotion);
+  const enhancedFocus = useUiStore((state) => state.enhancedFocus);
+  const setEnhancedFocus = useUiStore((state) => state.setEnhancedFocus);
+  const screenReader = useUiStore((state) => state.screenReader);
+  const setScreenReader = useUiStore((state) => state.setScreenReader);
+  const speechRate = useUiStore((state) => state.speechRate);
+  const setSpeechRate = useUiStore((state) => state.setSpeechRate);
+  const libras = useUiStore((state) => state.libras);
+  const setLibras = useUiStore((state) => state.setLibras);
+  const uiZoom = useUiStore((state) => state.uiZoom);
+  const setUiZoom = useUiStore((state) => state.setUiZoom);
+
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const zoomOptions = UI_ZOOM_STEPS
+    .filter((step) => !isMobile || step <= UI_ZOOM_MOBILE_MAX)
+    .map((step) => ({
+      value: String(step),
+      label: `${Math.round(step * 100)}%`,
+    }));
+
+  const speechRateOptions = [
+    { value: "0.8", label: "0.8x" },
+    { value: "1", label: "1.0x" },
+    { value: "1.25", label: "1.25x" },
+    { value: "1.5", label: "1.5x" },
+  ];
+
+  return (
+    <div className="space-y-5 sm:space-y-6">
+      <div>
+        <p className="text-[12px] font-semibold tracking-wider text-faint uppercase mb-2 px-1">
+          {t("appearance")}
+        </p>
+        <PreferenceCard>
+          <PreferenceRow label={t("high_contrast")} hint={t("high_contrast_desc")} layout="horizontal">
+            <Switch checked={highContrast} onCheckedChange={setHighContrast} />
+          </PreferenceRow>
+          <PreferenceRow label={t("underline_links")} hint={t("underline_links_desc")} layout="horizontal">
+            <Switch checked={underlineLinks} onCheckedChange={setUnderlineLinks} />
+          </PreferenceRow>
+          <PreferenceRow label={t("dyslexic_font")} hint={t("dyslexic_font_desc")} layout="horizontal">
+            <Switch checked={dyslexicFont} onCheckedChange={setDyslexicFont} />
+          </PreferenceRow>
+        </PreferenceCard>
+      </div>
+
+      <div>
+        <p className="text-[12px] font-semibold tracking-wider text-faint uppercase mb-2 px-1">
+          {t("ui_scale")}
+        </p>
+        <PreferenceCard>
+          <PreferenceRow label={t("ui_scale")} hint={t("ui_scale_hint")}>
+            <SegmentedControl<string>
+              value={String(uiZoom)}
+              onChange={(value) => setUiZoom(Number(value))}
+              options={zoomOptions}
+            />
+          </PreferenceRow>
+        </PreferenceCard>
+      </div>
+
+      <div>
+        <p className="text-[12px] font-semibold tracking-wider text-faint uppercase mb-2 px-1">
+          {t("focus_mode")}
+        </p>
+        <PreferenceCard>
+          <PreferenceRow label={t("reduced_motion")} hint={t("reduced_motion_desc")} layout="horizontal">
+            <Switch checked={reducedMotion} onCheckedChange={setReducedMotion} />
+          </PreferenceRow>
+          <PreferenceRow label={t("enhanced_focus")} hint={t("enhanced_focus_desc")} layout="horizontal">
+            <Switch checked={enhancedFocus} onCheckedChange={setEnhancedFocus} />
+          </PreferenceRow>
+          <PreferenceRow label={t("screen_reader")} hint={t("screen_reader_desc")} layout="horizontal">
+            <Switch
+              checked={screenReader}
+              onCheckedChange={(checked) => {
+                setScreenReader(checked);
+                if (checked) {
+                  const msg = t("screen_reader");
+                  announceToScreenReader(msg);
+                  speakText(msg, { lang: language, rate: speechRate, translate: false });
+                }
+              }}
+            />
+          </PreferenceRow>
+          {screenReader ? (
+            <PreferenceRow label={t("speech_rate")}>
+              <SegmentedControl<string>
+                value={String(speechRate)}
+                onChange={(value) => {
+                  const rate = parseFloat(value);
+                  setSpeechRate(rate);
+                  speakText(`${value}x`, { lang: language, rate, translate: false });
+                }}
+                options={speechRateOptions}
+              />
+            </PreferenceRow>
+          ) : null}
+          <PreferenceRow label={t("libras_interpreter")} hint={t("libras_desc")} layout="horizontal">
+            <Switch checked={libras} onCheckedChange={setLibras} />
+          </PreferenceRow>
+        </PreferenceCard>
+      </div>
+
+      <div>
+        <p className="text-[12px] font-semibold tracking-wider text-faint uppercase mb-2 px-1">
+          {t("keyboard_navigation_title")}
+        </p>
+        <PreferenceCard className="p-3.5 space-y-2">
+          <p className="text-[12.5px] leading-relaxed text-muted">
+            {t("keyboard_navigation_desc")}
+          </p>
+          <div className="flex flex-wrap gap-2 pt-1 text-[12px]">
+            <div className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-ink">
+              <Kbd>Tab</Kbd>
+              <span className="text-muted">{t("keyboard_next_element")}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-ink">
+              <Kbd>Shift + Tab</Kbd>
+              <span className="text-muted">{t("keyboard_previous_element")}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-ink">
+              <Kbd>Enter</Kbd>
+              <span className="text-muted">{t("keyboard_activate")}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-ink">
+              <Kbd>Esc</Kbd>
+              <span className="text-muted">{t("keyboard_close_modal")}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-ink">
+              <Kbd>Alt + R</Kbd>
+              <span className="text-muted">{t("read_note_aloud")}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-ink">
+              <Kbd>Alt + L</Kbd>
+              <span className="text-muted">{t("libras_shortcut")}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-ink">
+              <Kbd>Alt + E</Kbd>
+              <span className="text-muted">{t("focus_editor_shortcut")}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-ink">
+              <Kbd>Alt + T</Kbd>
+              <span className="text-muted">{t("focus_title_shortcut")}</span>
+            </div>
+          </div>
+        </PreferenceCard>
+      </div>
     </div>
   );
 }

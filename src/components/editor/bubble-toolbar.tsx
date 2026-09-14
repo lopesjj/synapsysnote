@@ -5,23 +5,31 @@ import type { Editor } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
 import { BubbleMenu } from "@tiptap/react/menus";
 import {
+  Accessibility,
   Bold,
+  Hand,
   Highlighter,
   Italic,
   Link as LinkIcon,
   Strikethrough,
   Type,
   Underline as UnderlineIcon,
+  Volume2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/primitives";
 import { useTranslation } from "@/lib/i18n/translations";
+import { useUiStore } from "@/lib/store/ui-store";
+import { useLibrasStore } from "@/lib/store/libras-store";
+import { speakText, stopSpeaking } from "@/components/accessibility/screen-reader";
 import { HIGHLIGHT_COLORS, TEXT_COLORS, type PaletteColor } from "./editor-colors";
 
 type Panel = "turn" | "color" | "highlight" | "link" | null;
 
-function keepSelection(event: React.MouseEvent) {
+function keepSelection(event: React.SyntheticEvent) {
   event.preventDefault();
+  event.stopPropagation();
 }
 
 function SwatchGrid({
@@ -54,7 +62,9 @@ function SwatchGrid({
 }
 
 export function BubbleToolbar({ editor }: { editor: Editor }) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const screenReader = useUiStore((state) => state.screenReader);
+  const speechRate = useUiStore((state) => state.speechRate);
   const [panel, setPanel] = useState<Panel>(null);
   const [linkValue, setLinkValue] = useState("");
 
@@ -107,9 +117,14 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
         return true;
       }}
       style={{ zIndex: 80 }}
-      className="z-[80] flex flex-col rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--shadow-float)]"
+      className="vlibras-ignore z-[80] flex flex-col rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--shadow-float)]"
+      data-vlibras-ignore="true"
     >
-      <div className="flex items-center gap-0.5">
+      <div
+        className="flex items-center gap-0.5"
+        onMouseDown={keepSelection}
+        onPointerDown={keepSelection}
+      >
         <button
           type="button"
           title="Estilo"
@@ -191,6 +206,52 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
         >
           <LinkIcon className="size-3.5" />
         </button>
+        <span className="mx-0.5 h-4 w-px bg-[var(--border)]" />
+        <button
+          type="button"
+          title={t("interpret_in_libras")}
+          aria-label={t("interpret_in_libras")}
+          onPointerDown={keepSelection}
+          onMouseDown={keepSelection}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const { from, to } = editor.state.selection;
+            const text = editor.state.doc.textBetween(from, to, " ");
+            if (!text.trim()) return;
+            useLibrasStore.getState().openWithText(text, {
+              title: text.length > 25 ? `${text.slice(0, 25)}...` : text,
+            });
+          }}
+          className="rounded-[var(--radius-xs)] p-1.5 text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
+        >
+          <Hand className="size-3.5" />
+        </button>
+        {screenReader ? (
+          <>
+            <span className="mx-0.5 h-4 w-px bg-[var(--border)]" />
+            <button
+              type="button"
+              title={t("read_selection_aloud")}
+              aria-label={t("read_selection_aloud")}
+              onPointerDown={keepSelection}
+              onMouseDown={keepSelection}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const { from, to } = editor.state.selection;
+                const text = editor.state.doc.textBetween(from, to, " ");
+                if (!text.trim()) return;
+                editor.chain().focus().setTextSelection({ from, to }).run();
+                speakText(text, { rate: speechRate, lang: language });
+                editor.chain().focus().setTextSelection({ from, to }).run();
+              }}
+              className="rounded-[var(--radius-xs)] p-1.5 text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
+            >
+              <Volume2 className="size-3.5" />
+            </button>
+          </>
+        ) : null}
       </div>
 
       {panel === "turn" ? (

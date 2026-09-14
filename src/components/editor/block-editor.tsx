@@ -15,7 +15,7 @@ import CharacterCount from "@tiptap/extension-character-count";
 import type { AppBlock, BlockMedia, Page } from "@/types/models";
 import { useWorkspace } from "@/lib/data/provider";
 import { toast } from "sonner";
-import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
+import { isAudioFile, prepareAudioAttachment, prepareEditorAttachment } from "@/lib/media/compress-attachment";
 import { Callout } from "./extensions/callout";
 import { ToggleBlock } from "./extensions/toggle-block";
 import { EquationBlock } from "./extensions/equation-block";
@@ -40,7 +40,7 @@ import { ImageLightbox } from "./image-lightbox";
 import { blocksToDoc, collectMentionIds, docToBlocks } from "./serializer";
 import { indexMedia, isRicherMedia, mediaIdentity } from "@/lib/data/media-enrichment";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/lib/i18n/translations";
+import { useTranslation, localizeErrorMessage } from "@/lib/i18n/translations";
 
 export interface BlockEditorProps {
   page: Page;
@@ -52,7 +52,7 @@ export interface BlockEditorProps {
   onRequestAudio?: () => void;
   onInsertFiles?: (files: File[]) => void;
   onRegisterInsertFiles?: (fn: (files: File[]) => Promise<void>) => void;
-  onRegisterInsertAudio?: (fn: (blob: Blob, durationSeconds: number) => Promise<void>) => void;
+  onRegisterInsertAudio?: (fn: (blob: Blob, durationSeconds: number, transcript?: string) => Promise<void>) => void;
 }
 
 function mentionHref(
@@ -183,19 +183,54 @@ export function BlockEditor({
     insertFilesRef.current = onInsertFiles;
   }, [onInsertFiles]);
 
+  const getAudioFileDuration = (file: File | Blob): Promise<number> => {
+    return new Promise((resolve) => {
+      if (typeof window === "undefined") return resolve(0);
+      try {
+        const url = URL.createObjectURL(file);
+        const audio = new Audio();
+        let done = false;
+        const cleanup = () => {
+          if (!done) {
+            done = true;
+            try {
+              URL.revokeObjectURL(url);
+            } catch {}
+          }
+        };
+        audio.onloadedmetadata = () => {
+          const dur = Math.round(audio.duration) || 0;
+          cleanup();
+          resolve(dur);
+        };
+        audio.onerror = () => {
+          cleanup();
+          resolve(0);
+        };
+        audio.src = url;
+        setTimeout(() => {
+          if (!done) {
+            cleanup();
+            resolve(0);
+          }
+        }, 4000);
+      } catch {
+        resolve(0);
+      }
+    });
+  };
+
   const insertFilesIntoEditor = useCallback(
     async (files: File[], customPos?: number) => {
       const instance = editorRef.current;
       if (!instance || !editable) return;
 
       const supportedFiles = files.filter((f) => {
-        if (f.type.startsWith("audio/")) {
-          toast.error("Use o gravador de áudio para notas de voz.");
-          return false;
-        }
         return (
+          isAudioFile(f) ||
           f.type.startsWith("image/") ||
           f.type === "application/pdf" ||
+          /\.pdf$/i.test(f.name) ||
           f.type.startsWith("video/")
         );
       });
@@ -203,12 +238,14 @@ export function BlockEditor({
       if (!supportedFiles.length) return;
 
       for (const file of supportedFiles) {
-        const isImage = file.type.startsWith("image/");
-        const isVideo = file.type.startsWith("video/");
-        const mediaType = isImage ? "image" : isVideo ? "video" : "file";
+        const isAudio = isAudioFile(file);
+        const isImage = !isAudio && file.type.startsWith("image/");
+        const isVideo = !isAudio && file.type.startsWith("video/");
+        const mediaType = isAudio ? "audio" : isImage ? "image" : isVideo ? "video" : "file";
         const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
         const previewUrl = URL.createObjectURL(file);
+        const durationSeconds = isAudio ? await getAudioFileDuration(file) : undefined;
 
         let targetPos: number;
         if (typeof customPos === "number") {
@@ -231,8 +268,9 @@ export function BlockEditor({
               mediaType,
               url: previewUrl,
               name: file.name,
-              mimeType: file.type,
+              mimeType: file.type || (isAudio ? "audio/mpeg" : "application/octet-stream"),
               sizeBytes: file.size,
+              durationSeconds,
               pending: true,
               tempId,
             },
@@ -244,10 +282,10 @@ export function BlockEditor({
         void (async () => {
           try {
             const prepared = await prepareEditorAttachment(file);
-            const { url: permanentUrl, storagePath } = await adapter.uploadAttachment(
-              page.id,
-              prepared
-            );
+            const { url: permanentUrl, storagePath } =
+              isAudio && typeof adapter.uploadAudioNote === "function"
+                ? await adapter.uploadAudioNote(page.id, prepared, durationSeconds ?? 0)
+                : await adapter.uploadAttachment(page.id, prepared);
 
             const { tr } = instance.state;
             let found = false;
@@ -262,6 +300,9 @@ export function BlockEditor({
                   ...node.attrs,
                   url: permanentUrl,
                   storagePath: storagePath ?? null,
+                  name: prepared.name || node.attrs.name,
+                  mimeType: prepared.type || node.attrs.mimeType,
+                  sizeBytes: prepared.size,
                   pending: false,
                   tempId: null,
                 });
@@ -275,21 +316,43 @@ export function BlockEditor({
               const blocks = docToBlocks(instance.getJSON());
               emittedBlockCount.current = blocks.length;
               onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
+
+              toast.success(
+                isAudio
+                  ? t("audio_attached")
+                  : isImage
+                    ? t("image_attached")
+                    : prepared.type === "application/pdf"
+                      ? t("pdf_attached")
+                      : t("file_attached")
+              );
             } else if (storagePath) {
               void adapter.deleteMedia([storagePath], page.id);
             }
-
-            toast.success(
-              isImage
-                ? "Imagem anexada."
-                : prepared.type === "application/pdf"
-                  ? "PDF anexado."
-                  : "Arquivo anexado."
-            );
           } catch (error) {
             console.error("Erro ao salvar anexo:", error);
+            const { tr } = instance.state;
+            let removed = false;
+            instance.state.doc.descendants((node, pos) => {
+              if (removed) return false;
+              if (
+                node.type.name === "mediaBlock" &&
+                (node.attrs.tempId === tempId || node.attrs.url === previewUrl)
+              ) {
+                tr.delete(pos, pos + node.nodeSize);
+                removed = true;
+                return false;
+              }
+            });
+            if (removed) {
+              instance.view.dispatch(tr);
+              const blocks = docToBlocks(instance.getJSON());
+              emittedBlockCount.current = blocks.length;
+              onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
+            }
             toast.error(
-              error instanceof Error ? error.message : "Não foi possível anexar o arquivo."
+              localizeErrorMessage(error instanceof Error ? error.message : null, t) ||
+                t("file_attach_error")
             );
           } finally {
             setTimeout(() => {
@@ -309,7 +372,7 @@ export function BlockEditor({
   }, [insertFilesIntoEditor, onRegisterInsertFiles]);
 
   const insertAudioIntoEditor = useCallback(
-    async (blob: Blob, durationSeconds: number) => {
+    async (blob: Blob, durationSeconds: number, transcriptText?: string) => {
       const instance = editorRef.current;
       if (!instance || !editable) return;
 
@@ -338,6 +401,7 @@ export function BlockEditor({
             mimeType: blob.type || "audio/webm",
             sizeBytes: blob.size,
             durationSeconds,
+            transcript: transcriptText || undefined,
             pending: true,
             tempId,
           },
@@ -348,9 +412,10 @@ export function BlockEditor({
 
       void (async () => {
         try {
+          const prepared = await prepareAudioAttachment(blob);
           const { url: permanentUrl, storagePath } = await adapter.uploadAudioNote(
             page.id,
-            blob,
+            prepared,
             durationSeconds
           );
 
@@ -367,7 +432,9 @@ export function BlockEditor({
                 ...node.attrs,
                 url: permanentUrl,
                 storagePath: storagePath ?? null,
+                sizeBytes: prepared.size,
                 pending: false,
+                transcript: transcriptText || node.attrs.transcript || null,
                 tempId: null,
               });
               found = true;
@@ -380,11 +447,34 @@ export function BlockEditor({
             const blocks = docToBlocks(instance.getJSON());
             emittedBlockCount.current = blocks.length;
             onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
+            toast.success(t("audio_attached"));
+          } else if (storagePath) {
+            void adapter.deleteMedia([storagePath], page.id);
           }
         } catch (error) {
           console.error("Erro ao salvar áudio:", error);
+          const { tr } = instance.state;
+          let removed = false;
+          instance.state.doc.descendants((node, pos) => {
+            if (removed) return false;
+            if (
+              node.type.name === "mediaBlock" &&
+              (node.attrs.tempId === tempId || node.attrs.url === previewUrl)
+            ) {
+              tr.delete(pos, pos + node.nodeSize);
+              removed = true;
+              return false;
+            }
+          });
+          if (removed) {
+            instance.view.dispatch(tr);
+            const blocks = docToBlocks(instance.getJSON());
+            emittedBlockCount.current = blocks.length;
+            onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
+          }
           toast.error(
-            error instanceof Error ? error.message : "Não foi possível salvar o áudio."
+            localizeErrorMessage(error instanceof Error ? error.message : null, t) ||
+              t("audio_save_error")
           );
         } finally {
           setTimeout(() => {
@@ -476,8 +566,12 @@ export function BlockEditor({
       immediatelyRender: false,
       editorProps: {
         attributes: {
+          id: "synapsys-note-editor",
           class: "focus:outline-none",
           spellcheck: "true",
+          role: "textbox",
+          "aria-multiline": "true",
+          "aria-label": t("editor_placeholder"),
         },
         handleDOMEvents: {
           click: (_view, event) => openMentionRef.current(event),
@@ -536,6 +630,18 @@ export function BlockEditor({
     [page.id, editable]
   );
   editorRef.current = editor;
+
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) {
+      const storage = (editor.storage as unknown as Record<string, unknown>)?.mediaBlock as
+        | Record<string, unknown>
+        | undefined;
+      if (storage) {
+        storage.adapter = adapter;
+        storage.pageId = page.id;
+      }
+    }
+  }, [editor, adapter, page.id]);
 
   useEffect(() => {
     if (!editor) return;
@@ -616,7 +722,9 @@ export function BlockEditor({
         {chrome ? (
           <>
             <div className="min-h-6 cursor-text" onClick={focusEnd} />
-            <EditorStatusBar editor={editor} />
+            <div>
+              <EditorStatusBar editor={editor} />
+            </div>
           </>
         ) : null}
       </div>

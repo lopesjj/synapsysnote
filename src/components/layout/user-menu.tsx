@@ -60,7 +60,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   const avatar = photoURL ? (
     <img
       src={photoURL}
-      alt=""
+      alt={displayName || "Avatar"}
       width={36}
       height={36}
       onError={() => setImageError(true)}
@@ -115,7 +115,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
             {photoURL ? (
               <img
                 src={photoURL}
-                alt=""
+                alt={displayName || "Avatar"}
                 width={44}
                 height={44}
                 onError={() => setImageError(true)}

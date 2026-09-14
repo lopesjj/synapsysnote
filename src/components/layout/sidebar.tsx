@@ -125,7 +125,7 @@ export function SidebarRail() {
   };
 
   return (
-    <aside className="flex h-full w-14 shrink-0 flex-col items-center border-r border-[var(--border)] bg-[var(--surface)]">
+    <aside className="flex h-full w-[68px] shrink-0 flex-col items-center px-2 border-r border-[var(--border)] bg-[var(--surface)]">
       <div
         className="flex shrink-0 items-center justify-center pt-8 pb-6"
         style={{ paddingTop: "calc(2rem + env(safe-area-inset-top, 0px))" }}
@@ -622,10 +622,10 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
             aria-label={t("collapse_sidebar")}
             className={cn("relative flex w-full select-none items-center", CHROME_HIT_CLASS)}
           >
-            <span className="flex w-14 shrink-0 items-center justify-center">
+            <span className="flex w-[68px] shrink-0 items-center justify-center">
               <SynapsysMark size={SIDEBAR_MARK_SIZE} />
             </span>
-            <span className="pointer-events-none absolute inset-y-0 left-14 right-8 flex select-none items-center justify-center">
+            <span className="pointer-events-none absolute inset-y-0 left-[68px] right-8 flex select-none items-center justify-center">
               <SynapsysLettering />
             </span>
             <PanelLeftClose className="ml-auto size-4 shrink-0 text-ink" strokeWidth={1.75} />
@@ -660,9 +660,22 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           ) : null}
         </NavLink>
         <button
-          onClick={() => {
-            useUiStore.getState().setMobileSidebarOpen(false);
-            useUiStore.getState().setImportOpen(true);
+          onPointerDown={(e) => {
+            if (e.button === 0) {
+              if (useUiStore.getState().mobileSidebarOpen) {
+                useUiStore.setState({ mobileSidebarOpen: false, importOpen: true });
+              } else {
+                useUiStore.getState().setImportOpen(true);
+              }
+            }
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            if (useUiStore.getState().mobileSidebarOpen) {
+              useUiStore.setState({ mobileSidebarOpen: false, importOpen: true });
+            } else {
+              useUiStore.getState().setImportOpen(true);
+            }
           }}
           className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
         >

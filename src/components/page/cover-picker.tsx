@@ -119,7 +119,7 @@ export function CoverPicker({
             {preset ? (
               <div className={cn("h-full w-full", preset.className)} style={preset.style} />
             ) : (
-              <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+              <img src={coverUrl} alt="Capa" className="h-full w-full object-cover" />
             )}
           </div>
           <div className="absolute top-12 right-3 sm:top-14 sm:right-6 md:right-8 z-20 flex items-center gap-1.5 opacity-100 pointer-events-auto md:opacity-0 md:pointer-events-none md:group-hover/cover:opacity-100 md:group-hover/cover:pointer-events-auto md:focus-within:opacity-100 md:focus-within:pointer-events-auto transition-opacity duration-200">
