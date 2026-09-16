@@ -37,7 +37,7 @@ import {
   persistCrossHostSession,
   suppressSessionHydrate,
 } from "@/lib/auth/cross-host-session";
-import { loginHref, resolveUrl } from "@/lib/domains";
+import { isSplitHosts, loginHref, resolveUrl } from "@/lib/domains";
 import { isCustomAvatar } from "@/lib/data/user-avatar";
 
 function toAppUser(fbUser: {
@@ -105,6 +105,11 @@ const DEMO_USER: AppUser = {
 function hasLogoutIntent(): boolean {
   if (typeof window === "undefined") return false;
   return new URLSearchParams(window.location.search).get("logout") === "1";
+}
+
+function hasSessionSyncFailureIntent(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("session") === "sync_failed";
 }
 
 function clearLogoutIntent(): void {
@@ -211,7 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         firebaseAuth(),
       ]);
       if (cancelled) return;
-      if (hasLogoutIntent()) {
+      if (hasLogoutIntent() || (hasSessionSyncFailureIntent() && isSplitHosts())) {
         suppressSessionHydrate();
         await clearCrossHostSession().catch(() => {});
         await signOut(auth).catch(() => {});

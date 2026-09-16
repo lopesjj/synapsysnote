@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth, hasActiveSessionHint, type OAuthProviderId } from "@/hooks/use-auth";
+import { useAuth, type OAuthProviderId } from "@/hooks/use-auth";
 import { useUserProfile } from "@/hooks/use-user-profile";
 import { SynapsysLockup } from "@/components/brand/logo";
 import { AuthField } from "@/components/auth/auth-field";
@@ -17,8 +17,7 @@ import { Button } from "@/components/ui/button";
 import { RecaptchaField } from "@/components/auth/recaptcha-field";
 import { verifyRecaptchaToken } from "@/lib/recaptcha";
 import { Checkbox, Input } from "@/components/ui/primitives";
-import { appHref, isSplitHosts, loginHref, navigateTo } from "@/lib/domains";
-import { persistCrossHostSession } from "@/lib/auth/cross-host-session";
+import { appHref, isSplitHosts, navigateTo } from "@/lib/domains";
 import {
   LOGIN_ATTEMPTS_THRESHOLD,
   getFailedLoginAttempts,
@@ -33,13 +32,11 @@ export default function LandingPage() {
   const router = useRouter();
   const {
     user,
-    loading,
     mode,
     signInWithProvider,
     signInWithEmail,
     signUpWithEmail,
     resetPassword,
-    signOut,
   } = useAuth();
   const { profile, loading: profileLoading } = useUserProfile();
 
@@ -54,7 +51,11 @@ export default function LandingPage() {
   const [captcha, setCaptcha] = useState<string | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
   const [failedAttempts, setFailedAttempts] = useState(0);
-  const [sessionHint] = useState(() => hasActiveSessionHint());
+  const [sessionSyncFailed] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("session") === "sync_failed",
+  );
   const needsCompletion = profileNeedsCompletion(user, profile);
 
   useEffect(() => {
@@ -86,21 +87,14 @@ export default function LandingPage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("mode") === "resetPassword" && params.get("oobCode")) return;
     if (params.get("logout") === "1") return;
-    if (isSplitHosts() && params.get("session") === "sync_failed") return;
+    if (isSplitHosts() && sessionSyncFailed) return;
 
-    if (user && !profileLoading && !needsCompletion) {
+    if (!sessionSyncFailed && user && !profileLoading && !needsCompletion) {
       navigateTo(appHref("/home"), router, "replace");
       return;
     }
 
-    if (sessionHint && !user && !loading) {
-      return;
-    }
-
-    if (sessionHint && loading) {
-      navigateTo(appHref("/home"), router, "replace");
-    }
-  }, [loading, needsCompletion, profileLoading, router, sessionHint, user]);
+  }, [needsCompletion, profileLoading, router, sessionSyncFailed, user]);
 
   const refreshCaptcha = () => {
     setCaptcha(null);
@@ -226,9 +220,9 @@ export default function LandingPage() {
         </div>
 
         <div className="mx-auto w-full max-w-sm sm:max-w-none lux-gradient rounded-[var(--radius-xl)] border border-[var(--border)] p-6 shadow-[var(--shadow-float)]">
-          {user && !profileLoading && needsCompletion ? (
+          {user && !sessionSyncFailed && !profileLoading && needsCompletion ? (
             <CompleteRegistrationForm />
-          ) : (user || (sessionHint && loading)) && !needsCompletion ? (
+          ) : user && !sessionSyncFailed && !needsCompletion ? (
             <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
               <Loader2 className="size-6 animate-spin text-[var(--accent)]" />
               <p className="text-[13px] font-medium text-ink">Acessando seu ambiente de estudos...</p>
@@ -413,4 +407,3 @@ function GoogleGlyph() {
     </svg>
   );
 }
-
