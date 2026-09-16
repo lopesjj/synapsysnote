@@ -9,7 +9,7 @@
     "start": "next start --port 43127",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run verify:sidebar-dnd && npm run verify:page-tree && npm run verify:notebook-tree && npm run verify:media-enrichment && npm run verify:attachment-compress && npm run verify:notion-database-notebook && npm run verify:toggle && npm run verify:image-lightbox && npm run verify:document-title && npm run verify:table-multi && npm run verify:login-attempts && npm run verify:mention-scope && npm run verify:search-scope && npm run verify:language && npm run verify:media-deletion && npm run verify:user-avatar",
+    "verify": "npm run verify:sidebar-dnd && npm run verify:page-tree && npm run verify:notebook-tree && npm run verify:media-enrichment && npm run verify:attachment-compress && npm run verify:notion-database-notebook && npm run verify:toggle && npm run verify:image-lightbox && npm run verify:document-title && npm run verify:table-multi && npm run verify:login-attempts && npm run verify:mention-scope && npm run verify:search-scope && npm run verify:language && npm run verify:media-deletion && npm run verify:user-avatar && npm run verify:firebase-admin",
     "verify:sidebar-dnd": "tsx scripts/verify-sidebar-dnd.mts",
     "verify:page-tree": "tsx scripts/verify-page-tree.mts",
     "verify:notebook-tree": "tsx scripts/verify-notebook-tree.mts",
@@ -27,12 +27,14 @@
     "verify:language": "tsx scripts/verify-language-and-translation.mts",
     "verify:media-deletion": "tsx scripts/verify-media-deletion.mts",
     "verify:user-avatar": "tsx scripts/verify-user-avatar.mts",
+    "verify:firebase-admin": "tsx --conditions=react-server scripts/verify-firebase-admin.mts",
     "functions:build": "npm --prefix functions run build",
     "functions:typecheck": "npm --prefix functions run typecheck",
     "emulators": "firebase emulators:start --only auth,firestore,functions,storage",
     "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes,storage",
     "deploy:functions": "firebase deploy --only functions",
-    "deploy:web": "firebase deploy --only apphosting:synapsysnote"
+    "deploy:web": "firebase deploy --only apphosting:synapsysnote",
+    "deploy:secrets:admin": "firebase apphosting:secrets:set FIREBASE_SERVICE_ACCOUNT_JSON --data-file synapsysnote-firebase-adminsdk-fbsvc-b29e1e849c.json --force && firebase apphosting:secrets:grantaccess FIREBASE_SERVICE_ACCOUNT_JSON --backend synapsysnote"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -90,6 +92,7 @@
     "pdfjs-dist": "^6.3.289",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.6.0",
     "tippy.js": "^6.3.7",

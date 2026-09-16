@@ -435,7 +435,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         toast.success(t("notes_order_updated"));
       }
     } catch {
-      toast.error("Não foi possível reordenar. Tente novamente.");
+      toast.error(t("notes_order_failed"));
     }
   };
 

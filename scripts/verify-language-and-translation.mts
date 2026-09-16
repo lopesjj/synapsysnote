@@ -57,6 +57,34 @@ for (const code of expectedCodes) {
   assert.ok(dict.save.length > 0);
   assert.ok(dict.name_updated.length > 0);
   assert.ok(dict.name_save_failed.length > 0);
+  assert.ok(dict.lang_ar.length > 0);
+  assert.ok(dict.accessibility.length > 0);
+  assert.ok(dict.accessibility_description.length > 0);
+  assert.ok(dict.high_contrast.length > 0);
+  assert.ok(dict.high_contrast_desc.length > 0);
+  assert.ok(dict.underline_links.length > 0);
+  assert.ok(dict.underline_links_desc.length > 0);
+  assert.ok(dict.dyslexic_font.length > 0);
+  assert.ok(dict.dyslexic_font_desc.length > 0);
+  assert.ok(dict.reduced_motion.length > 0);
+  assert.ok(dict.reduced_motion_desc.length > 0);
+  assert.ok(dict.enhanced_focus.length > 0);
+  assert.ok(dict.enhanced_focus_desc.length > 0);
+  assert.ok(dict.screen_reader.length > 0);
+  assert.ok(dict.screen_reader_desc.length > 0);
+  assert.ok(dict.speech_rate.length > 0);
+  assert.ok(dict.libras_interpreter.length > 0);
+  assert.ok(dict.libras_desc.length > 0);
+  assert.ok(dict.keyboard_navigation_title.length > 0);
+  assert.ok(dict.keyboard_navigation_desc.length > 0);
+  assert.ok(dict.keyboard_next_element.length > 0);
+  assert.ok(dict.keyboard_previous_element.length > 0);
+  assert.ok(dict.keyboard_activate.length > 0);
+  assert.ok(dict.keyboard_close_modal.length > 0);
+  assert.ok(dict.read_note_aloud.length > 0);
+  assert.ok(dict.libras_shortcut.length > 0);
+  assert.ok(dict.focus_editor_shortcut.length > 0);
+  assert.ok(dict.focus_title_shortcut.length > 0);
 }
 
 const sevenHoursAgo = Date.now() - 7 * 3600 * 1000;
@@ -130,5 +158,24 @@ const newProfilePreferences = {
   ...({} as { language?: SupportedLanguage }),
 };
 assert.equal(newProfilePreferences.language, "pt");
+
+import {
+  translateDatabaseText,
+  formatRecordsProperties,
+  isPlanningName,
+} from "../src/components/database/database-i18n";
+
+assert.equal(formatRecordsProperties(1, 3, "ar"), "1 سجل · 3 خصائص");
+assert.equal(formatRecordsProperties(2, 4, "ar"), "2 سجلات · 4 خصائص");
+assert.equal(translateDatabaseText("A fazer", "ar"), "للقيام به");
+assert.equal(translateDatabaseText("Fazendo", "ar"), "قيد التنفيذ");
+assert.equal(translateDatabaseText("Concluído", "ar"), "مكتمل");
+assert.equal(translateDatabaseText("sem status", "ar"), "بدون حالة");
+assert.equal(translateDatabaseText("Nome", "ar"), "الاسم");
+assert.equal(translateDatabaseText("Status", "ar"), "الحالة");
+assert.equal(translateDatabaseText("Data", "ar"), "التاريخ");
+assert.equal(isPlanningName("التخطيط"), true);
+assert.equal(isPlanningName("تخطيط"), true);
+assert.equal(isPlanningName("Planejamento"), true);
 
 console.log("all language and translation verification tests passed");

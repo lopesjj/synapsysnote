@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { WorkspaceIcon, firstCustomIcon, isIconUrl } from "@/lib/icons/workspace-icon";
 import { Menu, MenuContent, MenuTrigger } from "@/components/ui/menu";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n/translations";
 
 function isImageFile(file: File) {
   if (file.type.startsWith("image/")) return true;
@@ -29,6 +30,7 @@ export function IconPicker({
   uploading?: boolean;
   onRequestUpload?: () => void;
 }) {
+  const { t } = useTranslation();
   const [custom, setCustom] = useState("");
   const [query, setQuery] = useState("");
 
@@ -55,7 +57,7 @@ export function IconPicker({
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
-        placeholder="Buscar ou cole 🇧🇷 / BR"
+        placeholder={t("icon_search_placeholder")}
         className="mb-1.5 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1 text-[11.5px] text-ink outline-none placeholder:text-faint focus:border-[var(--accent)]"
       />
       <div className="grid max-h-72 grid-cols-8 gap-0.5 overflow-y-auto pr-0.5">
@@ -70,7 +72,7 @@ export function IconPicker({
               onClick={() => onSelect(icon)}
               className="flex items-center justify-center rounded p-1.5 transition hover:bg-[var(--surface-hover)] data-[selected=true]:bg-[var(--accent-soft)]"
               data-selected={selected}
-              aria-label={`Ícone ${icon}`}
+              aria-label={`${icon}`}
             >
               <WorkspaceIcon icon={icon} fallback={fallback} size={18} />
             </button>
@@ -87,7 +89,7 @@ export function IconPicker({
             className="flex w-full items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-dashed border-[var(--border-strong)] px-2 py-1.5 text-[11.5px] text-muted transition hover:border-[var(--accent)] hover:text-ink disabled:opacity-60"
           >
             {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImagePlus className="size-3.5" />}
-            {uploading ? "Enviando…" : "Enviar imagem"}
+            {uploading ? t("uploading") : t("upload_image")}
           </button>
         ) : null}
         {current && isIconUrl(current) ? (
@@ -96,12 +98,12 @@ export function IconPicker({
             onPointerDown={(event) => event.preventDefault()}
             onClick={() => {
               onSelect(fallback);
-              toast.success("Logo removido");
+              toast.success(t("icon_logo_removed"));
             }}
             className="flex w-full items-center justify-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1.5 text-[11.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
           >
             <ImageOff className="size-3.5" />
-            Remover logo
+            {t("icon_remove_logo")}
           </button>
         ) : null}
         <input
@@ -115,7 +117,7 @@ export function IconPicker({
             }
           }}
           onPointerDown={(event) => event.stopPropagation()}
-          placeholder="Cole um emoji, BR ou URL da imagem"
+          placeholder={t("icon_paste_placeholder")}
           className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1 text-[11.5px] text-ink outline-none placeholder:text-faint focus:border-[var(--accent)]"
         />
       </div>
@@ -140,6 +142,7 @@ export function IconPickerMenu({
   onUploadImage?: (file: File) => Promise<string>;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
   const holdOpen = useRef(false);
   const [open, setOpen] = useState(false);
@@ -162,16 +165,16 @@ export function IconPickerMenu({
 
   const upload = async (file: File) => {
     if (!onUploadImage || !isImageFile(file)) {
-      toast.error("Escolha um arquivo de imagem");
+      toast.error(t("choose_image_file"));
       return;
     }
     setUploading(true);
     holdOpen.current = true;
     try {
       apply(await onUploadImage(file));
-      toast.success("Ícone atualizado");
+      toast.success(t("icon_updated"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível enviar a imagem");
+      toast.error(error instanceof Error ? error.message : t("image_upload_failed"));
     } finally {
       holdOpen.current = false;
       setUploading(false);

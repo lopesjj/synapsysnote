@@ -122,7 +122,7 @@ export function PreferencesDialog({
               <button
                 onClick={() => onOpenChange(false)}
                 className="md:hidden rounded-lg p-1.5 text-faint hover:bg-[var(--surface-hover)] hover:text-ink transition"
-                aria-label="Fechar"
+                aria-label={t("btn_close")}
               >
                 <X className="size-4" />
               </button>
@@ -179,7 +179,7 @@ export function PreferencesDialog({
             <button
               onClick={() => onOpenChange(false)}
               className="hidden md:flex rounded-lg p-1.5 text-faint hover:bg-[var(--surface-hover)] hover:text-ink transition"
-              aria-label="Fechar"
+              aria-label={t("btn_close")}
             >
               <X className="size-4" />
             </button>

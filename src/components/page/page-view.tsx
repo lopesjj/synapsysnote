@@ -378,7 +378,7 @@ export function PageView({ pageId }: { pageId: string }) {
     },
     onError: (error) =>
       toast.error(
-        error instanceof Error ? error.message : "Não foi possível salvar. Tentaremos novamente.",
+        error instanceof Error ? error.message : t("page_save_error"),
         { id: "page-save-error" }
       ),
   });
@@ -461,7 +461,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const handleExportPdf = async () => {
     if (!page || exportingPdf) return;
     setExportingPdf(true);
-    const toastId = toast.loading("Preparando exportação para PDF...");
+    const toastId = toast.loading(t("pdf_export_preparing"));
 
     try {
       await exportNoteToPdf(page, {
@@ -474,7 +474,7 @@ export function PageView({ pageId }: { pageId: string }) {
       toast.dismiss(toastId);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Não foi possível exportar a nota para PDF.",
+        error instanceof Error ? error.message : t("pdf_export_failed"),
         { id: toastId }
       );
     } finally {

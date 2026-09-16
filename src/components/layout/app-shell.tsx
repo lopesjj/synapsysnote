@@ -140,8 +140,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       if (key === "n") {
         event.preventDefault();
         if (event.shiftKey) {
-          const notebook = await adapter.createNotebook({ name: "Nova página" });
-          toast.success("Página criada");
+          const notebook = await adapter.createNotebook({ name: t("untitled") });
+          toast.success(t("page_created"));
           router.push(`/home/n/${notebook.id}`);
           return;
         }
@@ -149,7 +149,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         const page = await adapter.createPage({
           notebookId: target.notebookId,
           parentPageId: target.parentPageId,
-          title: "Sem título",
+          title: t("untitled"),
         });
         expandContainerInSession(target);
         useUiStore.getState().closeMenu();
@@ -519,11 +519,13 @@ function SidebarResizer() {
 }
 
 function DemoBanner() {
+  const { t, language } = useTranslation();
   return (
     <div className="border-b border-[var(--border)] bg-[var(--accent-soft)] px-4 py-1.5 text-[11.5px] text-[var(--accent)]">
-      Modo convidado: os dados desta sessão ficam no navegador. Entre com uma
-      conta para sincronizar no Firebase (projeto <code className="font-mono">synapsysnote</code>).
-      <span className="ml-1 text-faint">{isMac() ? "⌘," : "Ctrl ,"} abre as preferências.</span>
+      {t("demo_mode_banner")}
+      {language === "pt" && (
+        <span className="ml-1 text-faint">{isMac() ? "⌘," : "Ctrl ,"} abre as preferências.</span>
+      )}
     </div>
   );
 }

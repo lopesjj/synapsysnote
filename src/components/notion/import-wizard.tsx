@@ -92,7 +92,7 @@ export function ImportWizard({
       await start({ targetNotebookId: resolvedNotebookId, ...options });
       setStepOverride("progress");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível iniciar a importação");
+      toast.error(error instanceof Error ? error.message : t("import_start_failed"));
     }
   };
 

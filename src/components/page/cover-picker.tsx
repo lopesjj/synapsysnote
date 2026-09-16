@@ -25,15 +25,15 @@ export function CoverPicker({
   const upload = async (file: File) => {
     if (!onUploadImage) return;
     if (!file.type.startsWith("image/") && !/\.(png|jpe?g|webp|gif|svg)$/i.test(file.name)) {
-      toast.error("Escolha um arquivo de imagem");
+      toast.error(t("choose_image_file"));
       return;
     }
     setUploading(true);
     try {
       onChange(await onUploadImage(file));
-      toast.success("Capa atualizada");
+      toast.success(t("cover_updated"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível enviar a capa");
+      toast.error(error instanceof Error ? error.message : t("cover_upload_failed"));
     } finally {
       setUploading(false);
     }
@@ -119,7 +119,7 @@ export function CoverPicker({
             {preset ? (
               <div className={cn("h-full w-full", preset.className)} style={preset.style} />
             ) : (
-              <img src={coverUrl} alt="Capa" className="h-full w-full object-cover" />
+              <img src={coverUrl} alt={t("change_cover")} className="h-full w-full object-cover" />
             )}
           </div>
           <div className="absolute top-12 right-3 sm:top-14 sm:right-6 md:right-8 z-20 flex items-center gap-1.5 opacity-100 pointer-events-auto md:opacity-0 md:pointer-events-none md:group-hover/cover:opacity-100 md:group-hover/cover:pointer-events-auto md:focus-within:opacity-100 md:focus-within:pointer-events-auto transition-opacity duration-200">

@@ -10,6 +10,7 @@ import { SynapsysLockup } from "@/components/brand/logo";
 import { AuthField } from "@/components/auth/auth-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/primitives";
+import { useTranslation } from "@/lib/i18n/translations";
 
 export default function AuthActionPage() {
   return (
@@ -26,6 +27,7 @@ export default function AuthActionPage() {
 }
 
 function AuthActionForm() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useSearchParams();
   const { confirmPasswordReset, verifyResetCode } = useAuth();
@@ -68,20 +70,20 @@ function AuthActionForm() {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (password.length < 6) {
-      toast.error("Use uma senha com pelo menos 6 caracteres.");
+      toast.error(t("password_min_length"));
       return;
     }
     if (password !== confirm) {
-      toast.error("As senhas não coincidem.");
+      toast.error(t("passwords_dont_match"));
       return;
     }
     setBusy(true);
     try {
       await confirmPasswordReset(oobCode, password);
-      toast.success("Senha redefinida. Entre com a nova senha.");
+      toast.success(t("password_reset_success"));
       router.replace("/");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível redefinir a senha");
+      toast.error(error instanceof Error ? error.message : t("password_reset_failed"));
     } finally {
       setBusy(false);
     }
@@ -109,22 +111,22 @@ function AuthActionForm() {
             </div>
           ) : invalid ? (
             <>
-              <p className="text-[15px] font-medium tracking-[-0.015em] text-ink">Link inválido</p>
+              <p className="text-[15px] font-medium tracking-[-0.015em] text-ink">{t("reset_link_invalid_title")}</p>
               <p className="mt-2 text-[13px] leading-relaxed text-muted">
-                Este link expirou ou já foi usado. Peça outro em Esqueci a senha.
+                {t("reset_link_invalid_desc")}
               </p>
               <Button asChild variant="primary" size="lg" className="mt-5 w-full">
-                <Link href="/">Voltar ao login</Link>
+                <Link href="/">{t("back_to_login")}</Link>
               </Button>
             </>
           ) : (
             <>
-              <p className="text-[15px] font-medium tracking-[-0.015em] text-ink">Nova senha</p>
+              <p className="text-[15px] font-medium tracking-[-0.015em] text-ink">{t("reset_new_password_title")}</p>
               <p className="mt-1 text-[13px] leading-relaxed text-muted">
-                {email ? `Redefinindo a senha de ${email}.` : "Escolha uma senha nova."}
+                {email ? t("resetting_for_email", { email }) : t("choose_new_password")}
               </p>
               <form onSubmit={submit} className="mt-5 space-y-3.5">
-                <AuthField label="Nova senha">
+                <AuthField label={t("new_password_label")}>
                   <Input
                     type="password"
                     required
@@ -135,7 +137,7 @@ function AuthActionForm() {
                     autoComplete="new-password"
                   />
                 </AuthField>
-                <AuthField label="Confirmar senha">
+                <AuthField label={t("confirm_password_label")}>
                   <Input
                     type="password"
                     required
@@ -148,7 +150,7 @@ function AuthActionForm() {
                 </AuthField>
                 <Button type="submit" variant="primary" size="lg" className="w-full" disabled={busy}>
                   {busy ? <Loader2 className="animate-spin" /> : null}
-                  Salvar senha
+                  {t("save_password_btn")}
                 </Button>
               </form>
             </>

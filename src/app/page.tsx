@@ -25,10 +25,12 @@ import {
   clearFailedLoginAttempts,
 } from "@/lib/auth/login-attempts";
 import { useUiStore } from "@/lib/store/ui-store";
+import { useTranslation } from "@/lib/i18n/translations";
 
 const SIGNUP_ENABLED = false;
 
 export default function LandingPage() {
+  const { t } = useTranslation();
   const router = useRouter();
   const {
     user,
@@ -78,7 +80,7 @@ export default function LandingPage() {
       return;
     }
     if (params.get("reset") === "ok") {
-      toast.success("Senha redefinida. Entre com a nova senha.");
+      toast.success(t("password_reset_success"));
       window.history.replaceState({}, "", "/");
     }
   }, [router]);
@@ -110,7 +112,7 @@ export default function LandingPage() {
       }
       if (tab === "signup") {
         if (!isValidPhoneBR(phone)) {
-          toast.error("Informe um telefone válido com DDD.");
+          toast.error(t("phone_invalid"));
           return;
         }
         await signUpWithEmail((name.trim() || email.split("@")[0]).slice(0, 60), email, password, phone);
@@ -136,7 +138,7 @@ export default function LandingPage() {
         setFailedAttempts(nextAttempts);
       }
       refreshCaptcha();
-      toast.error(error instanceof Error ? error.message : "Não foi possível entrar");
+      toast.error(error instanceof Error ? error.message : t("login_failed"));
     } finally {
       setBusy(false);
     }
@@ -157,7 +159,7 @@ export default function LandingPage() {
       }
       if (!profileNeedsCompletion(signedIn, existing)) navigateTo(appHref("/home"), router);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha na autenticação", {
+      toast.error(error instanceof Error ? error.message : t("auth_failed"), {
         duration: 7000,
       });
       if (SIGNUP_ENABLED) setTab("signup");
@@ -172,11 +174,11 @@ export default function LandingPage() {
     try {
       await verifyRecaptchaToken(captcha);
       await resetPassword(email);
-      toast.success("Se este e-mail tiver conta, enviamos um link para redefinir a senha.");
+      toast.success(t("reset_email_sent"));
       setTab("signin");
     } catch (error) {
       refreshCaptcha();
-      toast.error(error instanceof Error ? error.message : "Não foi possível enviar o e-mail");
+      toast.error(error instanceof Error ? error.message : t("reset_email_failed"));
     } finally {
       setBusy(false);
     }
@@ -225,8 +227,8 @@ export default function LandingPage() {
           ) : user && !sessionSyncFailed && !needsCompletion ? (
             <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
               <Loader2 className="size-6 animate-spin text-[var(--accent)]" />
-              <p className="text-[13px] font-medium text-ink">Acessando seu ambiente de estudos...</p>
-              <p className="text-[11.5px] text-muted">Redirecionando para a página inicial</p>
+              <p className="text-[13px] font-medium text-ink">{t("accessing_workspace")}</p>
+              <p className="text-[11.5px] text-muted">{t("redirecting_home")}</p>
             </div>
           ) : tab === "reset" ? (
             <>

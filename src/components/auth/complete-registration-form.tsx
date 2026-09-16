@@ -12,11 +12,13 @@ import { isValidPhoneBR } from "@/lib/phone";
 import { appHref, navigateTo } from "@/lib/domains";
 import { firebaseJson } from "@/lib/firebase/auth-headers";
 import { useUiStore } from "@/lib/store/ui-store";
+import { useTranslation } from "@/lib/i18n/translations";
 import { AuthField } from "./auth-field";
 import { PhoneField } from "./phone-field";
 
 export function CompleteRegistrationForm() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { user, completeRegistration } = useAuth();
   const { profile, complete } = useUserProfile();
   const googleAccount = Boolean(user?.providers.includes("google.com"));
@@ -28,7 +30,7 @@ export function CompleteRegistrationForm() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!isValidPhoneBR(phone)) {
-      toast.error("Informe um telefone válido com DDD.");
+      toast.error(t("phone_invalid"));
       return;
     }
     setBusy(true);
@@ -42,10 +44,12 @@ export function CompleteRegistrationForm() {
       try {
         await firebaseJson("/api/workspace/bootstrap", { method: "POST" });
       } catch {}
-      useUiStore.getState().setLanguage("pt");
+      if (!useUiStore.getState().language) {
+        useUiStore.getState().setLanguage("pt");
+      }
       navigateTo(appHref("/home"), router);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível salvar o cadastro");
+      toast.error(error instanceof Error ? error.message : t("registration_save_failed"));
     } finally {
       setBusy(false);
     }
@@ -53,11 +57,11 @@ export function CompleteRegistrationForm() {
 
   return (
     <>
-      <p className="text-[15px] font-medium tracking-[-0.015em] text-ink">Complete seu cadastro</p>
+      <p className="text-[15px] font-medium tracking-[-0.015em] text-ink">{t("complete_registration_title")}</p>
       <p className="mt-1 text-[13px] text-muted">
         {googleAccount
-          ? "Sua conta Google já existe. Informe o telefone para continuar."
-          : "Sua conta já existe. Confirme nome e e-mail e informe o telefone para continuar."}
+          ? t("complete_registration_google")
+          : t("complete_registration_existing")}
       </p>
 
       <form onSubmit={submit} className="mt-5 space-y-3.5">

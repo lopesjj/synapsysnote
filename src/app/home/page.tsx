@@ -28,6 +28,7 @@ const LOCALE_MAP: Record<string, string> = {
   ru: "ru-RU",
   ja: "ja-JP",
   zh: "zh-CN",
+  ar: "ar-SA",
 };
 
 function greetingForHour(hour: number, t: (key: TranslationKey) => string) {

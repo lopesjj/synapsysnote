@@ -1,7 +1,7 @@
 import "server-only";
 
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve, isAbsolute } from "node:path";
 import { cert, getApp, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
@@ -53,9 +53,17 @@ export function resolveServiceAccountCredentials(): ServiceAccountCredentials | 
   }
 
   try {
-    const localKey = resolve(process.cwd(), "synapsysnote-firebase-adminsdk-fbsvc-dee68a0f58.json");
-    if (existsSync(localKey)) {
-      return JSON.parse(readFileSync(localKey, "utf-8")) as ServiceAccountCredentials;
+    const specificKey = resolve(process.cwd(), "synapsysnote-firebase-adminsdk-fbsvc-b29e1e849c.json");
+    if (existsSync(specificKey)) {
+      return JSON.parse(readFileSync(specificKey, "utf-8")) as ServiceAccountCredentials;
+    }
+    const files = readdirSync(process.cwd());
+    const matched = files.find((f) => f.includes("firebase-adminsdk") && f.endsWith(".json"));
+    if (matched) {
+      const candidate = resolve(process.cwd(), matched);
+      if (existsSync(candidate)) {
+        return JSON.parse(readFileSync(candidate, "utf-8")) as ServiceAccountCredentials;
+      }
     }
   } catch {}
 
@@ -77,13 +85,15 @@ export function getAdminApp(): App {
   if (existing) return existing;
 
   const creds = resolveServiceAccountCredentials();
-  const storageBucket =
-    process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
   const projectId =
     creds?.project_id ||
     process.env.FIREBASE_PROJECT_ID ||
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
     "synapsysnote";
+  const storageBucket =
+    process.env.FIREBASE_STORAGE_BUCKET ||
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
+    `${projectId}.firebasestorage.app`;
 
   if (creds?.client_email && creds?.private_key) {
     return initializeApp(
@@ -124,7 +134,12 @@ export function adminAuth(): Auth {
 }
 
 export function adminBucket() {
-  return getStorage(getAdminApp()).bucket();
+  const app = getAdminApp();
+  const bucketName =
+    process.env.FIREBASE_STORAGE_BUCKET ||
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
+    "synapsysnote.firebasestorage.app";
+  return getStorage(app).bucket(bucketName);
 }
 
 export async function verifyBearer(request: Request): Promise<{ uid: string; email?: string } | null> {

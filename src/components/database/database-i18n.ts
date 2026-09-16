@@ -10,6 +10,8 @@ export function isPlanningName(name: string): boolean {
     "планирование",
     "計画",
     "计划",
+    "التخطيط",
+    "تخطيط",
   ].includes(lower);
 }
 
@@ -21,6 +23,8 @@ const CANONICAL_MAP: Record<string, string> = {
   имя: "nome",
   名前: "nome",
   名称: "nome",
+  الاسم: "nome",
+  اسم: "nome",
 
   status: "status",
   estado: "status",
@@ -29,6 +33,8 @@ const CANONICAL_MAP: Record<string, string> = {
   статус: "status",
   ステータス: "status",
   状态: "status",
+  الحالة: "status",
+  حالة: "status",
 
   data: "data",
   date: "data",
@@ -37,6 +43,8 @@ const CANONICAL_MAP: Record<string, string> = {
   дата: "data",
   日付: "data",
   日期: "data",
+  التاريخ: "data",
+  تاريخ: "data",
 
   "a fazer": "a_fazer",
   "to do": "a_fazer",
@@ -47,6 +55,9 @@ const CANONICAL_MAP: Record<string, string> = {
   "сделать": "a_fazer",
   "未着手": "a_fazer",
   "待办": "a_fazer",
+  "للقيام به": "a_fazer",
+  "قيد الانتظار": "a_fazer",
+  "مهام للقيام بها": "a_fazer",
 
   fazendo: "fazendo",
   "in progress": "fazendo",
@@ -57,6 +68,9 @@ const CANONICAL_MAP: Record<string, string> = {
   "в процессе": "fazendo",
   "進行中": "fazendo",
   "进行中": "fazendo",
+  "قيد التنفيذ": "fazendo",
+  جار: "fazendo",
+  جاري: "fazendo",
 
   concluido: "concluido",
   concluído: "concluido",
@@ -68,6 +82,9 @@ const CANONICAL_MAP: Record<string, string> = {
   готово: "concluido",
   完了: "concluido",
   已完成: "concluido",
+  مكتمل: "concluido",
+  تم: "concluido",
+  منجز: "concluido",
 
   "sem status": "sem_status",
   "no status": "sem_status",
@@ -78,6 +95,8 @@ const CANONICAL_MAP: Record<string, string> = {
   "без статуса": "sem_status",
   "ステータスなし": "sem_status",
   "无状态": "sem_status",
+  "بدون حالة": "sem_status",
+  "بلا حالة": "sem_status",
 
   prioridade: "prioridade",
   priority: "prioridade",
@@ -91,6 +110,9 @@ const CANONICAL_MAP: Record<string, string> = {
   приоритет: "prioridade",
   優先度: "prioridade",
   优先级: "prioridade",
+  الأولوية: "prioridade",
+  أولوية: "prioridade",
+  اولوية: "prioridade",
 
   alta: "alta",
   high: "alta",
@@ -100,6 +122,9 @@ const CANONICAL_MAP: Record<string, string> = {
   hoch: "alta",
   высокий: "alta",
   高: "alta",
+  عالية: "alta",
+  مرتفع: "alta",
+  مرتفعة: "alta",
 
   media: "media",
   média: "media",
@@ -110,6 +135,8 @@ const CANONICAL_MAP: Record<string, string> = {
   mittel: "media",
   средний: "media",
   中: "media",
+  متوسطة: "media",
+  متوسط: "media",
 
   baixa: "baixa",
   low: "baixa",
@@ -120,6 +147,8 @@ const CANONICAL_MAP: Record<string, string> = {
   niedrig: "baixa",
   низкий: "baixa",
   低: "baixa",
+  منخفضة: "baixa",
+  منخفض: "baixa",
 
   tags: "tags",
   tag: "tags",
@@ -128,6 +157,9 @@ const CANONICAL_MAP: Record<string, string> = {
   теги: "tags",
   タグ: "tags",
   标签: "tags",
+  الوسوم: "tags",
+  وسوم: "tags",
+  علامات: "tags",
 
   tabela: "tabela",
   table: "tabela",
@@ -138,6 +170,7 @@ const CANONICAL_MAP: Record<string, string> = {
   таблица: "tabela",
   テーブル: "tabela",
   表格: "tabela",
+  جدول: "tabela",
 };
 
 const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
@@ -151,6 +184,7 @@ const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
     ru: "Имя",
     ja: "名前",
     zh: "名称",
+    ar: "الاسم",
   },
   status: {
     pt: "Status",
@@ -162,6 +196,7 @@ const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
     ru: "Статус",
     ja: "ステータス",
     zh: "状态",
+    ar: "الحالة",
   },
   data: {
     pt: "Data",
@@ -173,6 +208,7 @@ const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
     ru: "Дата",
     ja: "日付",
     zh: "日期",
+    ar: "التاريخ",
   },
   a_fazer: {
     pt: "A fazer",
@@ -184,6 +220,7 @@ const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
     ru: "Сделать",
     ja: "未着手",
     zh: "待办",
+    ar: "للقيام به",
   },
   fazendo: {
     pt: "Fazendo",
@@ -195,6 +232,7 @@ const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
     ru: "В процессе",
     ja: "進行中",
     zh: "进行中",
+    ar: "قيد التنفيذ",
   },
   concluido: {
     pt: "Concluído",
@@ -206,6 +244,7 @@ const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
     ru: "Готово",
     ja: "完了",
     zh: "已完成",
+    ar: "مكتمل",
   },
   sem_status: {
     pt: "Sem status",
@@ -217,6 +256,7 @@ const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
     ru: "Без статуса",
     ja: "ステータスなし",
     zh: "无状态",
+    ar: "بدون حالة",
   },
   prioridade: {
     pt: "Prioridade",
@@ -228,6 +268,7 @@ const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
     ru: "Приоритет",
     ja: "優先度",
     zh: "优先级",
+    ar: "الأولوية",
   },
   alta: {
     pt: "Alta",
@@ -239,6 +280,7 @@ const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
     ru: "Высокий",
     ja: "高",
     zh: "高",
+    ar: "عالية",
   },
   media: {
     pt: "Média",
@@ -250,6 +292,7 @@ const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
     ru: "Средний",
     ja: "中",
     zh: "中",
+    ar: "متوسطة",
   },
   baixa: {
     pt: "Baixa",
@@ -261,6 +304,7 @@ const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
     ru: "Низкий",
     ja: "低",
     zh: "低",
+    ar: "منخفضة",
   },
   tags: {
     pt: "Tags",
@@ -272,6 +316,7 @@ const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
     ru: "Теги",
     ja: "タグ",
     zh: "标签",
+    ar: "الوسوم",
   },
   tabela: {
     pt: "Tabela",
@@ -283,6 +328,7 @@ const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
     ru: "Таблица",
     ja: "テーブル",
     zh: "表格",
+    ar: "جدول",
   },
 };
 
@@ -335,6 +381,11 @@ export function formatRecordsProperties(rows: number, props: number, lang: strin
   }
   if (lang === "zh") {
     return `${rows} 条记录 · ${props} 项属性`;
+  }
+  if (lang === "ar") {
+    const rowWord = rows === 1 ? "سجل" : "سجلات";
+    const propWord = props === 1 ? "خاصية" : "خصائص";
+    return `${rows} ${rowWord} · ${props} ${propWord}`;
   }
   const rowWord = rows === 1 ? "record" : "records";
   const propWord = props === 1 ? "property" : "properties";
