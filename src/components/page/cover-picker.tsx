@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { ImageOff, ImagePlus, Loader2 } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { ImageOff, ImagePlus, LayoutGrid, Loader2, Palette, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { COVER_PRESETS, coverPresetById } from "@/lib/covers/presets";
+import { COVER_PRESETS, coverPresetById, type CoverCategory, type CoverImageTheme } from "@/lib/covers/presets";
 import { Menu, MenuContent, MenuTrigger } from "@/components/ui/menu";
 import { useTranslation } from "@/lib/i18n/translations";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,27 @@ export function CoverPicker({
   const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState<CoverCategory>("images");
+  const [activeTheme, setActiveTheme] = useState<CoverImageTheme | "all">("all");
+
   const preset = coverPresetById(coverUrl);
+
+  const imagePresets = useMemo(() => {
+    return COVER_PRESETS.filter((item) => item.category === "images");
+  }, []);
+
+  const gradientPresets = useMemo(() => {
+    return COVER_PRESETS.filter((item) => item.category === "gradients");
+  }, []);
+
+  const patternPresets = useMemo(() => {
+    return COVER_PRESETS.filter((item) => item.category === "patterns");
+  }, []);
+
+  const displayedImages = useMemo(() => {
+    if (activeTheme === "all") return imagePresets;
+    return imagePresets.filter((item) => item.theme === activeTheme);
+  }, [imagePresets, activeTheme]);
 
   const upload = async (file: File) => {
     if (!onUploadImage) return;
@@ -40,43 +60,213 @@ export function CoverPicker({
   };
 
   const swatches = (
-    <div className="w-[248px] p-1.5">
-      <div className="grid max-h-64 grid-cols-4 gap-1 overflow-y-auto pr-0.5">
+    <div className="flex w-[320px] sm:w-[380px] flex-col gap-2 p-2.5">
+      <div className="flex items-center rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-0.5">
+        <button
+          type="button"
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => setActiveTab("images")}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-xs)] py-1.5 text-[11.5px] font-medium transition",
+            activeTab === "images"
+              ? "bg-[var(--surface)] text-ink shadow-sm"
+              : "text-muted hover:text-ink"
+          )}
+        >
+          <Sparkles className="size-3" />
+          {t("cover_tab_gallery")}
+        </button>
+        <button
+          type="button"
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => setActiveTab("gradients")}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-xs)] py-1.5 text-[11.5px] font-medium transition",
+            activeTab === "gradients"
+              ? "bg-[var(--surface)] text-ink shadow-sm"
+              : "text-muted hover:text-ink"
+          )}
+        >
+          <Palette className="size-3" />
+          {t("cover_tab_gradients")}
+        </button>
+        <button
+          type="button"
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => setActiveTab("patterns")}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-xs)] py-1.5 text-[11.5px] font-medium transition",
+            activeTab === "patterns"
+              ? "bg-[var(--surface)] text-ink shadow-sm"
+              : "text-muted hover:text-ink"
+          )}
+        >
+          <LayoutGrid className="size-3" />
+          {t("cover_tab_patterns")}
+        </button>
+      </div>
+
+      {activeTab === "images" ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[11px]">
+            <button
+              type="button"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => setActiveTheme("all")}
+              className={cn(
+                "shrink-0 rounded-full px-2.5 py-0.5 font-medium transition",
+                activeTheme === "all"
+                  ? "bg-[var(--accent)] text-white"
+                  : "bg-[var(--surface-2)] text-muted hover:bg-[var(--surface-hover)] hover:text-ink"
+              )}
+            >
+              {t("cover_filter_all")}
+            </button>
+            <button
+              type="button"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => setActiveTheme("nature")}
+              className={cn(
+                "shrink-0 rounded-full px-2.5 py-0.5 font-medium transition",
+                activeTheme === "nature"
+                  ? "bg-[var(--accent)] text-white"
+                  : "bg-[var(--surface-2)] text-muted hover:bg-[var(--surface-hover)] hover:text-ink"
+              )}
+            >
+              {t("cover_cat_nature")}
+            </button>
+            <button
+              type="button"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => setActiveTheme("architecture")}
+              className={cn(
+                "shrink-0 rounded-full px-2.5 py-0.5 font-medium transition",
+                activeTheme === "architecture"
+                  ? "bg-[var(--accent)] text-white"
+                  : "bg-[var(--surface-2)] text-muted hover:bg-[var(--surface-hover)] hover:text-ink"
+              )}
+            >
+              {t("cover_cat_architecture")}
+            </button>
+            <button
+              type="button"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => setActiveTheme("art")}
+              className={cn(
+                "shrink-0 rounded-full px-2.5 py-0.5 font-medium transition",
+                activeTheme === "art"
+                  ? "bg-[var(--accent)] text-white"
+                  : "bg-[var(--surface-2)] text-muted hover:bg-[var(--surface-hover)] hover:text-ink"
+              )}
+            >
+              {t("cover_cat_art")}
+            </button>
+            <button
+              type="button"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => setActiveTheme("editorial")}
+              className={cn(
+                "shrink-0 rounded-full px-2.5 py-0.5 font-medium transition",
+                activeTheme === "editorial"
+                  ? "bg-[var(--accent)] text-white"
+                  : "bg-[var(--surface-2)] text-muted hover:bg-[var(--surface-hover)] hover:text-ink"
+              )}
+            >
+              {t("cover_cat_editorial")}
+            </button>
+          </div>
+
+          <div className="grid max-h-60 grid-cols-3 gap-1.5 overflow-y-auto pr-0.5">
+            {displayedImages.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                title={item.label}
+                onClick={() => onChange(item.id)}
+                className={cn(
+                  "group/thumb relative h-16 overflow-hidden rounded-[var(--radius-xs)] border border-[var(--border)] transition-all hover:scale-[1.02] active:scale-95",
+                  coverUrl === item.id && "ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--surface-1)] border-transparent"
+                )}
+                style={{
+                  backgroundImage: `url('${item.thumbnailUrl || item.imageUrl || ""}')`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  backgroundColor: "#0f172a",
+                }}
+              >
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-1 text-left opacity-0 transition-opacity duration-150 group-hover/thumb:opacity-100">
+                  <span className="block truncate text-[10px] font-medium text-white">
+                    {item.label}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {activeTab === "gradients" ? (
+        <div className="grid max-h-60 grid-cols-4 gap-1.5 overflow-y-auto pr-0.5">
+          {gradientPresets.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              title={item.label}
+              onClick={() => onChange(item.id)}
+              className={cn(
+                "h-12 overflow-hidden rounded-[var(--radius-xs)] border border-[var(--border)] transition-all hover:scale-105 active:scale-95",
+                coverUrl === item.id && "ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--surface-1)] border-transparent",
+                item.className
+              )}
+              style={item.style}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {activeTab === "patterns" ? (
+        <div className="grid max-h-60 grid-cols-3 gap-1.5 overflow-y-auto pr-0.5">
+          {patternPresets.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              title={item.label}
+              onClick={() => onChange(item.id)}
+              className={cn(
+                "h-14 overflow-hidden rounded-[var(--radius-xs)] border border-[var(--border)] transition-all hover:scale-105 active:scale-95",
+                coverUrl === item.id && "ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--surface-1)] border-transparent",
+                item.className
+              )}
+              style={item.style}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <div className="flex items-center justify-between gap-1.5 border-t border-[var(--border)] pt-2">
         <button
           type="button"
           title={t("no_cover")}
           onClick={() => onChange(null)}
-          className="flex h-11 items-center justify-center rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--surface-2)] text-[10px] text-faint"
+          className="flex items-center gap-1.5 rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1 text-[11.5px] text-faint transition hover:border-[var(--border-strong)] hover:text-ink"
         >
+          <ImageOff className="size-3" />
           {t("no_cover")}
         </button>
-        {COVER_PRESETS.map((item) => (
+
+        {onUploadImage ? (
           <button
-            key={item.id}
             type="button"
-            title={item.label}
-            onClick={() => onChange(item.id)}
-            className={cn(
-              "h-11 overflow-hidden rounded-[var(--radius-xs)] border border-[var(--border)]",
-              coverUrl === item.id && "ring-2 ring-[var(--accent)]",
-              item.className
-            )}
-            style={item.style}
-          />
-        ))}
+            disabled={uploading}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-1.5 rounded-[var(--radius-xs)] border border-dashed border-[var(--border-strong)] px-2.5 py-1 text-[11.5px] text-muted transition hover:border-[var(--accent)] hover:text-ink disabled:opacity-60"
+          >
+            {uploading ? <Loader2 className="size-3 animate-spin" /> : <ImagePlus className="size-3" />}
+            {uploading ? t("uploading") : t("upload_image")}
+          </button>
+        ) : null}
       </div>
-      {onUploadImage ? (
-        <button
-          type="button"
-          disabled={uploading}
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={() => fileRef.current?.click()}
-          className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-dashed border-[var(--border-strong)] px-2 py-1.5 text-[11.5px] text-muted transition hover:border-[var(--accent)] hover:text-ink disabled:opacity-60"
-        >
-          {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImagePlus className="size-3.5" />}
-          {uploading ? t("uploading") : t("upload_image")}
-        </button>
-      ) : null}
     </div>
   );
 
@@ -108,21 +298,24 @@ export function CoverPicker({
                 <ImagePlus className="size-3.5" /> {t("add_cover")}
               </button>
             </MenuTrigger>
-            <MenuContent align="end" className="min-w-0 p-0">
+            <MenuContent align="end" className="min-w-0 p-0 shadow-2xl border border-[var(--border)]">
               {swatches}
             </MenuContent>
           </Menu>
         </div>
       ) : (
         <div className="group/cover relative z-0 w-full overflow-hidden">
-          <div className="h-[28vh] max-h-[360px] min-h-[200px] w-full md:min-h-[240px]">
+          <div className="h-[28vh] max-h-[360px] min-h-[200px] w-full bg-[var(--surface-2)] md:min-h-[240px]">
             {preset ? (
-              <div className={cn("h-full w-full", preset.className)} style={preset.style} />
+              <div
+                className={cn("h-full w-full transition-all duration-300", preset.className)}
+                style={preset.style}
+              />
             ) : (
               <img src={coverUrl} alt={t("change_cover")} className="h-full w-full object-cover" />
             )}
           </div>
-          <div className="absolute top-12 right-3 sm:top-14 sm:right-6 md:right-8 z-20 flex items-center gap-1.5 opacity-100 pointer-events-auto md:opacity-0 md:pointer-events-none md:group-hover/cover:opacity-100 md:group-hover/cover:pointer-events-auto md:focus-within:opacity-100 md:focus-within:pointer-events-auto transition-opacity duration-200">
+          <div className="absolute top-12 right-3 z-20 flex items-center gap-1.5 opacity-100 pointer-events-auto transition-opacity duration-200 sm:top-14 sm:right-6 md:right-8 md:opacity-0 md:pointer-events-none md:group-hover/cover:opacity-100 md:group-hover/cover:pointer-events-auto md:focus-within:opacity-100 md:focus-within:pointer-events-auto">
             <Menu>
               <MenuTrigger asChild>
                 <button
@@ -132,7 +325,7 @@ export function CoverPicker({
                   <ImagePlus className="size-3" /> {t("change_cover")}
                 </button>
               </MenuTrigger>
-              <MenuContent align="end" className="min-w-0 p-0">
+              <MenuContent align="end" className="min-w-0 p-0 shadow-2xl border border-[var(--border)]">
                 {swatches}
               </MenuContent>
             </Menu>

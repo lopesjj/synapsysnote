@@ -227,5 +227,53 @@ check("ids containing a colon survive the round trip", () => {
     notebookIds: ["a:b"],
   });
 });
+check("a subnote dropped before a root note unnests and places before it", () => {
+  const plan = planSidebarDrop(pg("retro"), pg("tasks"), snapshot, "before");
+  assert.deepEqual(plan, {
+    kind: "move-page",
+    pageId: "retro",
+    notebookId: "work",
+    parentPageId: null,
+    pageIds: ["plan", "retro", "tasks"],
+  });
+});
+
+check("a subnote dropped after a root note unnests and places after it", () => {
+  const plan = planSidebarDrop(pg("retro"), pg("tasks"), snapshot, "after");
+  assert.deepEqual(plan, {
+    kind: "move-page",
+    pageId: "retro",
+    notebookId: "work",
+    parentPageId: null,
+    pageIds: ["plan", "tasks", "retro"],
+  });
+});
+
+check("a subnote dropped after its own parent unnests and places after it", () => {
+  const plan = planSidebarDrop(pg("meeting"), pg("plan"), snapshot, "after");
+  assert.deepEqual(plan, {
+    kind: "move-page",
+    pageId: "meeting",
+    notebookId: "work",
+    parentPageId: null,
+    pageIds: ["plan", "meeting", "tasks"],
+  });
+});
+
+check("sibling reorder with before intent", () => {
+  const plan = planSidebarDrop(pg("tasks"), pg("plan"), snapshot, "before");
+  assert.deepEqual(plan, {
+    kind: "reorder-pages",
+    pageIds: ["tasks", "plan"],
+  });
+});
+
+check("sibling reorder with after intent", () => {
+  const plan = planSidebarDrop(pg("plan"), pg("tasks"), snapshot, "after");
+  assert.deepEqual(plan, {
+    kind: "reorder-pages",
+    pageIds: ["tasks", "plan"],
+  });
+});
 
 console.log("all sidebar drag-and-drop checks passed");

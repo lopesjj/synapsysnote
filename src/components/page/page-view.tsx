@@ -21,6 +21,7 @@ import {
   Paperclip,
   Pause,
   Play,
+  Plus,
   RotateCcw,
   Star,
   Trash2,
@@ -258,6 +259,23 @@ export function PageView({ pageId }: { pageId: string }) {
   const [narrating, setNarrating] = useState(false);
   const [pausedNarration, setPausedNarration] = useState(false);
   const lastNarrationLangRef = useRef<string>(language);
+
+  const subnotes = useMemo(
+    () =>
+      pages
+        .filter((p) => p.parentPageId === pageId && !p.deletedAt)
+        .sort((a, b) => a.order - b.order || (a.title || "").localeCompare(b.title || "", language)),
+    [pages, pageId, language]
+  );
+
+  const createSubnote = useCallback(async () => {
+    const newPage = await adapter.createPage({
+      notebookId: page?.notebookId ?? null,
+      parentPageId: pageId,
+      title: t("untitled"),
+    });
+    router.push(`/home/p/${newPage.id}`);
+  }, [adapter, page?.notebookId, pageId, router, t]);
 
   useEffect(() => {
     if (lastNarrationLangRef.current !== language) {
@@ -910,7 +928,104 @@ export function PageView({ pageId }: { pageId: string }) {
 
 
 
-        <div className="mt-10 border-t border-[var(--border)] pt-6 pb-12 sm:pb-16">
+        <div className="mt-10 border-t border-[var(--border)] pt-6">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
+                {t("subnotes_title")}
+              </p>
+              {subnotes.length > 0 ? (
+                <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10.5px] font-medium text-faint">
+                  {subnotes.length}
+                </span>
+              ) : null}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void createSubnote()}
+              className="h-7 gap-1 px-2 text-[11.5px] text-muted hover:text-ink"
+            >
+              <Plus className="size-3.5" />
+              {t("new_subpage")}
+            </Button>
+          </div>
+
+          {subnotes.length ? (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {subnotes.map((subnote) => (
+                <div
+                  key={subnote.id}
+                  className="group relative flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3 transition hover:border-[var(--accent)] hover:bg-[var(--surface-hover)]"
+                >
+                  <Link
+                    href={`/home/p/${subnote.id}`}
+                    onClick={() => useUiStore.getState().closeMenu()}
+                    className="flex min-w-0 flex-1 items-center gap-2.5"
+                  >
+                    <WorkspaceIcon icon={subnote.icon} fallback="📄" size={18} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] font-medium text-ink">
+                        {subnote.title || t("untitled")}
+                      </p>
+                      <p className="text-[11px] text-faint">
+                        {formatRelative(subnote.updatedAt, language)}
+                      </p>
+                    </div>
+                  </Link>
+                  <div className="flex items-center opacity-0 transition-opacity group-hover:opacity-100">
+                    <Tooltip label={t("duplicate_note")}>
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          try {
+                            const copy = await adapter.duplicatePage(subnote.id);
+                            toast.success(t("note_duplicated"));
+                            router.push(`/home/p/${copy.id}`);
+                          } catch {
+                            toast.error(t("could_not_duplicate"));
+                          }
+                        }}
+                        className="rounded p-1 text-faint hover:text-ink"
+                        aria-label={t("duplicate_note")}
+                      >
+                        <Copy className="size-3.5" />
+                      </button>
+                    </Tooltip>
+                    <Tooltip label={t("delete_page")}>
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          await adapter.trashPage(subnote.id);
+                          toast.success(t("moved_to_trash"));
+                        }}
+                        className="rounded p-1 text-faint hover:text-[var(--danger)]"
+                        aria-label={t("delete_page")}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </Tooltip>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void createSubnote()}
+              className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-[var(--border)] py-4 text-[12.5px] text-muted transition hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-ink"
+            >
+              <Plus className="size-4" />
+              <span>{t("create_first_subnote")}</span>
+            </button>
+          )}
+        </div>
+
+        <div className="mt-8 border-t border-[var(--border)] pt-6 pb-12 sm:pb-16">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
             {t("backlinks_title", { count: backlinks.length })}
           </p>

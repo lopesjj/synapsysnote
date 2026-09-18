@@ -638,7 +638,19 @@ export type TranslationKey =
   | "current_location"
   | "cannot_move_here"
   | "search_destination"
-  | "note_moved_as_subnote";
+  | "note_moved_as_subnote"
+  | "create_subnote"
+  | "subnotes_title"
+  | "subnotes_empty"
+  | "create_first_subnote"
+  | "cover_tab_gallery"
+  | "cover_tab_gradients"
+  | "cover_tab_patterns"
+  | "cover_filter_all"
+  | "cover_cat_nature"
+  | "cover_cat_architecture"
+  | "cover_cat_art"
+  | "cover_cat_editorial";
 
 export const TRANSLATIONS: Record<string, Record<string, string>> & Record<SupportedLanguage, Partial<Record<TranslationKey, string>>> & { pt: Record<TranslationKey, string>; en: Record<TranslationKey, string> } = {
   ar: {} as Record<TranslationKey, string>,
@@ -922,6 +934,14 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_cover: "Trocar capa",
     remove_cover: "Remover capa",
     no_cover: "Nenhuma",
+    cover_tab_gallery: "Galeria",
+    cover_tab_gradients: "Gradientes",
+    cover_tab_patterns: "Padrões",
+    cover_filter_all: "Todos",
+    cover_cat_nature: "Natureza",
+    cover_cat_architecture: "Arquitetura",
+    cover_cat_art: "Arte & Texturas",
+    cover_cat_editorial: "Editorial",
     upload_image: "Enviar imagem",
     uploading: "Enviando…",
     updated: "Atualizada",
@@ -1278,6 +1298,10 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     cannot_move_here: "Não é possível mover para cá",
     search_destination: "Buscar destino...",
     note_moved_as_subnote: "Nota movida como subnota",
+    create_subnote: "Criar subnota",
+    subnotes_title: "Subnotas",
+    subnotes_empty: "Nenhuma subnota ainda",
+    create_first_subnote: "Criar primeira subnota",
   },
   en: {
     preferences_description: "Appearance, language, typography, and shortcuts. Your choices follow your account.",
@@ -1559,6 +1583,14 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_cover: "Change cover",
     remove_cover: "Remove cover",
     no_cover: "None",
+    cover_tab_gallery: "Gallery",
+    cover_tab_gradients: "Gradients",
+    cover_tab_patterns: "Patterns",
+    cover_filter_all: "All",
+    cover_cat_nature: "Nature",
+    cover_cat_architecture: "Architecture",
+    cover_cat_art: "Art & Textures",
+    cover_cat_editorial: "Editorial",
     upload_image: "Upload image",
     uploading: "Uploading…",
     updated: "Updated",
@@ -1915,6 +1947,10 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     cannot_move_here: "Cannot move here",
     search_destination: "Search destination...",
     note_moved_as_subnote: "Note moved as subnote",
+    create_subnote: "Create subnote",
+    subnotes_title: "Subnotes",
+    subnotes_empty: "No subnotes yet",
+    create_first_subnote: "Create first subnote",
   },
 
   es: {
@@ -2197,6 +2233,14 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_cover: "Cambiar portada",
     remove_cover: "Quitar portada",
     no_cover: "Ninguna",
+    cover_tab_gallery: "Galería",
+    cover_tab_gradients: "Gradientes",
+    cover_tab_patterns: "Patrones",
+    cover_filter_all: "Todos",
+    cover_cat_nature: "Naturaleza",
+    cover_cat_architecture: "Arquitectura",
+    cover_cat_art: "Arte y Texturas",
+    cover_cat_editorial: "Editorial",
     upload_image: "Subir imagen",
     uploading: "Subiendo…",
     updated: "Actualizada",
@@ -2553,6 +2597,10 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     cannot_move_here: "No se puede mover aquí",
     search_destination: "Buscar destino...",
     note_moved_as_subnote: "Nota movida como subnota",
+    create_subnote: "Crear subnota",
+    subnotes_title: "Subnotas",
+    subnotes_empty: "Sin subnotas aún",
+    create_first_subnote: "Crear primera subnota",
   },
 
   fr: {
@@ -2835,6 +2883,14 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_cover: "Changer la couverture",
     remove_cover: "Supprimer la couverture",
     no_cover: "Aucune",
+    cover_tab_gallery: "Galerie",
+    cover_tab_gradients: "Dégradés",
+    cover_tab_patterns: "Motifs",
+    cover_filter_all: "Tous",
+    cover_cat_nature: "Nature",
+    cover_cat_architecture: "Architecture",
+    cover_cat_art: "Art & Textures",
+    cover_cat_editorial: "Éditorial",
     upload_image: "Télécharger une image",
     uploading: "Téléchargement…",
     updated: "Mis à jour",
@@ -3191,6 +3247,10 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     cannot_move_here: "Impossible de déplacer ici",
     search_destination: "Rechercher une destination...",
     note_moved_as_subnote: "Note déplacée en tant que sous-note",
+    create_subnote: "Créer une sous-note",
+    subnotes_title: "Sous-notes",
+    subnotes_empty: "Aucune sous-note pour l'instant",
+    create_first_subnote: "Créer la première sous-note",
   },
 
   it: {
@@ -3473,6 +3533,14 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_cover: "Cambia copertina",
     remove_cover: "Rimuovi copertina",
     no_cover: "Nessuna",
+    cover_tab_gallery: "Galleria",
+    cover_tab_gradients: "Gradienti",
+    cover_tab_patterns: "Pattern",
+    cover_filter_all: "Tutti",
+    cover_cat_nature: "Natura",
+    cover_cat_architecture: "Architettura",
+    cover_cat_art: "Arte e Texture",
+    cover_cat_editorial: "Editoriale",
     upload_image: "Carica immagine",
     uploading: "Caricamento…",
     updated: "Aggiornata",
@@ -3829,6 +3897,10 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     cannot_move_here: "Impossibile spostare qui",
     search_destination: "Cerca destinazione...",
     note_moved_as_subnote: "Nota spostata come sottonota",
+    create_subnote: "Crea sottonota",
+    subnotes_title: "Sottonote",
+    subnotes_empty: "Nessuna sottonota per ora",
+    create_first_subnote: "Crea la prima sottonota",
   },
 
   de: {
@@ -4111,6 +4183,14 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_cover: "Titelbild ändern",
     remove_cover: "Titelbild entfernen",
     no_cover: "Keines",
+    cover_tab_gallery: "Galerie",
+    cover_tab_gradients: "Farbverläufe",
+    cover_tab_patterns: "Muster",
+    cover_filter_all: "Alle",
+    cover_cat_nature: "Natur",
+    cover_cat_architecture: "Architektur",
+    cover_cat_art: "Kunst & Texturen",
+    cover_cat_editorial: "Redaktionell",
     upload_image: "Bild hochladen",
     uploading: "Wird hochgeladen…",
     updated: "Aktualisiert",
@@ -4467,6 +4547,10 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     cannot_move_here: "Kann nicht hierhin verschoben werden",
     search_destination: "Ziel suchen...",
     note_moved_as_subnote: "Notiz als Unternotiz verschoben",
+    create_subnote: "Unternotiz erstellen",
+    subnotes_title: "Unternotizen",
+    subnotes_empty: "Noch keine Unternotizen",
+    create_first_subnote: "Erste Unternotiz erstellen",
   },
 
   ru: {
@@ -5105,6 +5189,10 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     cannot_move_here: "Нельзя переместить сюда",
     search_destination: "Поиск назначения...",
     note_moved_as_subnote: "Заметка перемещена как подзаметка",
+    create_subnote: "Создать подзаметку",
+    subnotes_title: "Подзаметки",
+    subnotes_empty: "Пока нет подзаметок",
+    create_first_subnote: "Создать первую подзаметку",
   },
 
   ja: {
@@ -5743,6 +5831,10 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     cannot_move_here: "ここには移動できません",
     search_destination: "移動先を検索...",
     note_moved_as_subnote: "サブノートとして移動しました",
+    create_subnote: "サブノートを作成",
+    subnotes_title: "サブノート",
+    subnotes_empty: "サブノートはまだありません",
+    create_first_subnote: "最初のサブノートを作成",
   },
 
   zh: {
@@ -6381,6 +6473,10 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     cannot_move_here: "无法移动到此处",
     search_destination: "搜索目标位置...",
     note_moved_as_subnote: "已作为子笔记移动",
+    create_subnote: "创建子笔记",
+    subnotes_title: "子笔记",
+    subnotes_empty: "暂无子笔记",
+    create_first_subnote: "创建第一条子笔记",
   },
 };
 
@@ -7021,6 +7117,10 @@ TRANSLATIONS.ar = {
   cannot_move_here: "لا يمكن النقل إلى هنا",
   search_destination: "البحث عن وجهة...",
   note_moved_as_subnote: "تم نقل الملاحظة كملاحظة فرعية",
+  create_subnote: "إنشاء ملاحظة فرعية",
+  subnotes_title: "الملاحظات الفرعية",
+  subnotes_empty: "لا توجد ملاحظات فرعية بعد",
+  create_first_subnote: "إنشاء أول ملاحظة فرعية",
 };
 
 export function useTranslation() {

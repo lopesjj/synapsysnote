@@ -982,14 +982,15 @@ function Avatar({
 function ShortcutsSection() {
   const { t } = useTranslation();
   const mod = isMac() ? "⌘" : "Ctrl";
+  const alt = isMac() ? "⌥" : "Alt";
 
   const shortcuts: { group: string; items: { keys: string[]; label: string }[] }[] = [
     {
       group: t("shortcut_global"),
       items: [
         { keys: ["mod", "K"], label: t("shortcut_search") },
-        { keys: ["mod", "N"], label: t("new_note") },
-        { keys: ["mod", "⇧", "N"], label: t("new_page") },
+        { keys: ["alt", "N"], label: t("new_note") },
+        { keys: ["alt", "⇧", "N"], label: t("new_page") },
         { keys: ["mod", "B"], label: t("shortcut_collapse_sidebar") },
         { keys: ["mod", "\\"], label: t("shortcut_collapse_sidebar_typing") },
         { keys: ["mod", "⇧", "F"], label: t("shortcut_toggle_focus") },
@@ -1036,7 +1037,9 @@ function ShortcutsSection() {
                 <span className="text-[12.5px] font-medium text-ink">{item.label}</span>
                 <span className="flex shrink-0 items-center gap-1">
                   {item.keys.map((key, index) => (
-                    <Kbd key={`${item.label}-${index}`}>{key === "mod" ? mod : key}</Kbd>
+                    <Kbd key={`${item.label}-${index}`}>
+                      {key === "mod" ? mod : key === "alt" ? alt : key}
+                    </Kbd>
                   ))}
                 </span>
               </div>

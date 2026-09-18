@@ -498,7 +498,7 @@ export class FirestoreAdapter implements DataAdapter {
     await updateDoc(this.docRef("notebooks", id), { ...patch, updatedAt: serverTimestamp() });
   }
 
-  async moveNotebook(id: string, target: { parentId: string | null }) {
+  async moveNotebook(id: string, target: { parentId: string | null; order?: number }) {
     if (target.parentId === id) return;
     if (target.parentId) {
       const parent = await getDoc(this.docRef("notebooks", target.parentId));
@@ -516,6 +516,7 @@ export class FirestoreAdapter implements DataAdapter {
     }
     await updateDoc(this.docRef("notebooks", id), {
       parentId: target.parentId,
+      ...(target.order !== undefined ? { order: target.order } : {}),
       updatedAt: serverTimestamp(),
     });
   }
@@ -812,7 +813,7 @@ export class FirestoreAdapter implements DataAdapter {
     );
   }
 
-  async movePage(id: string, target: { notebookId?: string | null; parentPageId?: string | null }) {
+  async movePage(id: string, target: { notebookId?: string | null; parentPageId?: string | null; order?: number }) {
     let path: string[] = [];
     if (target.parentPageId) {
       const parent = await getDoc(this.docRef("pages", target.parentPageId));
@@ -830,6 +831,7 @@ export class FirestoreAdapter implements DataAdapter {
       notebookId,
       parentPageId: target.parentPageId ?? null,
       path,
+      ...(target.order !== undefined ? { order: target.order } : {}),
       updatedBy: this.userId,
       updatedAt: serverTimestamp(),
     });

@@ -210,7 +210,7 @@ export class LocalAdapter implements DataAdapter {
     this.emit();
   }
 
-  async moveNotebook(id: string, target: { parentId: string | null }) {
+  async moveNotebook(id: string, target: { parentId: string | null; order?: number }) {
     if (target.parentId === id) return;
     if (target.parentId) {
       const seen = new Set<string>([id]);
@@ -227,7 +227,12 @@ export class LocalAdapter implements DataAdapter {
     }
     this.state.notebooks = this.state.notebooks.map((notebook) =>
       notebook.id === id
-        ? { ...notebook, parentId: target.parentId, updatedAt: nowMs() }
+        ? {
+            ...notebook,
+            parentId: target.parentId,
+            order: target.order !== undefined ? target.order : notebook.order,
+            updatedAt: nowMs(),
+          }
         : notebook
     );
     this.emit();
@@ -339,7 +344,7 @@ export class LocalAdapter implements DataAdapter {
     }));
   }
 
-  async movePage(id: string, target: { notebookId?: string | null; parentPageId?: string | null }) {
+  async movePage(id: string, target: { notebookId?: string | null; parentPageId?: string | null; order?: number }) {
     const page = this.state.pages.find((p) => p.id === id);
     if (!page) return;
 
@@ -357,6 +362,7 @@ export class LocalAdapter implements DataAdapter {
       notebookId,
       parentPageId: target.parentPageId ?? null,
       path,
+      ...(target.order !== undefined ? { order: target.order } : {}),
     });
   }
 

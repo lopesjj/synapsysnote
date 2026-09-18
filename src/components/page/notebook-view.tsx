@@ -23,10 +23,10 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Copy, FilePlus, FolderPlus, GripVertical, ImageOff, MoreHorizontal, Search, Trash2, X } from "lucide-react";
+import { ChevronRight, Copy, FilePlus, FolderPlus, GripVertical, ImageOff, MoreHorizontal, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useUiStore } from "@/lib/store/ui-store";
-import { useWorkspace } from "@/lib/data/provider";
+import { useWorkspace, type PageTreeNode } from "@/lib/data/provider";
 import { childrenOf, isNotebookDescendant, notebookSubtreeIds, parentIdOf } from "@/lib/data/notebook-tree";
 
 import { Button } from "@/components/ui/button";
@@ -62,6 +62,19 @@ function decodeId(value: string | number): { kind: DragKind; id: string } | null
   return { kind: kind as DragKind, id: raw.slice(separator + 1) };
 }
 
+function isPageDescendant(pages: Page[], candidate: Page, ancestorId: string): boolean {
+  if (candidate.path.includes(ancestorId)) return true;
+  const byId = new Map(pages.map((p) => [p.id, p]));
+  const seen = new Set<string>();
+  let current = candidate.parentPageId;
+  while (current && !seen.has(current)) {
+    if (current === ancestorId) return true;
+    seen.add(current);
+    current = byId.get(current)?.parentPageId ?? null;
+  }
+  return false;
+}
+
 const detectCollisions: CollisionDetection = (args) => {
   const within = pointerWithin(args);
   return within.length ? within : closestCenter(args);
@@ -88,14 +101,86 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     [notebookId, notebooks]
   );
 
-  const notes = useMemo(() => {
-    const tree = treeFor(notebookId);
-    return tree
-      .map((node) => node.page)
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || compareNatural(a.title, b.title));
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+
+  const toggleNoteExpanded = (noteId: string) => {
+    setExpandedNotes((prev) => ({ ...prev, [noteId]: !prev[noteId] }));
+  };
+
+  const noteTree = useMemo(() => {
+    return treeFor(notebookId);
   }, [notebookId, treeFor]);
 
-  const [searchQuery, setSearchQuery] = useState("");
+  const filterTree = (nodes: PageTreeNode[], query: string): PageTreeNode[] => {
+    if (!query) return nodes;
+    const result: PageTreeNode[] = [];
+    for (const node of nodes) {
+      const match =
+        node.page.title.toLowerCase().includes(query) ||
+        node.page.plainText.toLowerCase().includes(query);
+      const filteredChildren = filterTree(node.children, query);
+      if (match || filteredChildren.length > 0) {
+        result.push({
+          ...node,
+          children: filteredChildren,
+        });
+      }
+    }
+    return result;
+  };
+
+  const filteredNoteTree = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return filterTree(noteTree, q);
+  }, [noteTree, searchQuery]);
+
+  const visibleNoteIds = useMemo(() => {
+    const ids: string[] = [];
+    const q = searchQuery.trim().toLowerCase();
+    const walk = (nodes: PageTreeNode[]) => {
+      for (const node of nodes) {
+        ids.push(encodeId("note", node.page.id));
+        if ((q || expandedNotes[node.page.id]) && node.children.length > 0) {
+          walk(node.children);
+        }
+      }
+    };
+    walk(filteredNoteTree);
+    return ids;
+  }, [filteredNoteTree, expandedNotes, searchQuery]);
+
+  const renderNoteNodes = (nodes: PageTreeNode[]): React.ReactNode => {
+    const q = searchQuery.trim().toLowerCase();
+    return nodes.map((node) => {
+      const hasChildren = node.children.length > 0;
+      const isExpanded = Boolean(q || expandedNotes[node.page.id]);
+      return (
+        <div key={node.page.id} className="flex flex-col">
+          <NoteRow
+            page={node.page}
+            depth={node.depth}
+            hasChildren={hasChildren}
+            isExpanded={isExpanded}
+            onToggle={() => toggleNoteExpanded(node.page.id)}
+            isDropTarget={dropTarget?.id === node.page.id}
+            dropMode={dropTarget?.id === node.page.id ? dropTarget.mode : undefined}
+          />
+          {hasChildren && isExpanded ? (
+            <div className="flex flex-col">
+              {renderNoteNodes(node.children)}
+            </div>
+          ) : null}
+        </div>
+      );
+    });
+  };
+
+  const notes = useMemo(() => {
+    return livePages
+      .filter((p) => p.notebookId === notebookId && !p.deletedAt)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || compareNatural(a.title, b.title));
+  }, [notebookId, livePages]);
 
   const filteredChildNotebooks = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -130,10 +215,12 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     kind: DragKind;
     mode: DropMode;
   } | null>(null);
+  const pointerXRef = useRef<number>(0);
   const pointerYRef = useRef<number>(0);
 
   useEffect(() => {
     const handlePointerMove = (e: PointerEvent) => {
+      pointerXRef.current = e.clientX;
       pointerYRef.current = e.clientY;
     };
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
@@ -151,8 +238,8 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
   );
 
   const activeNote = useMemo(
-    () => (activeNoteId ? notes.find((p) => p.id === activeNoteId) : null),
-    [activeNoteId, notes]
+    () => (activeNoteId ? livePages.find((p) => p.id === activeNoteId) ?? null : null),
+    [activeNoteId, livePages]
   );
 
   const onDragStart = (event: DragStartEvent) => {
@@ -187,18 +274,33 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     const overRect = over.rect;
     if (!overRect) return;
 
+    const cursorX =
+      pointerXRef.current ||
+      (active.rect.current.translated
+        ? active.rect.current.translated.left + active.rect.current.translated.width / 2
+        : overRect.left + overRect.width / 2);
     const cursorY =
       pointerYRef.current ||
       (active.rect.current.translated
         ? active.rect.current.translated.top + active.rect.current.translated.height / 2
         : overRect.top + overRect.height / 2);
-    const relativeY = (cursorY - overRect.top) / overRect.height;
+    const relativeX = overRect.width > 0 ? (cursorX - overRect.left) / overRect.width : 0.5;
+    const relativeY = overRect.height > 0 ? (cursorY - overRect.top) / overRect.height : 0.5;
 
     if (activeDecoded.kind === "notebook") {
       if (overDecoded.kind === "notebook") {
         let mode: DropMode = "inside";
-        if (relativeY < 0.25) mode = "before";
-        else if (relativeY > 0.75) mode = "after";
+        const isIndented = relativeX > 0.05 || (cursorX - overRect.left) > 30;
+        const topBound = isIndented ? 0.15 : 0.25;
+        const bottomBound = isIndented ? 0.85 : 0.75;
+
+        if (relativeY < topBound) {
+          mode = "before";
+        } else if (relativeY > bottomBound) {
+          mode = "after";
+        } else {
+          mode = "inside";
+        }
         dropTargetRef.current = { id: overDecoded.id, kind: "notebook", mode };
         setDropTarget({ id: overDecoded.id, kind: "notebook", mode });
       } else {
@@ -213,7 +315,30 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
         dropTargetRef.current = { id: overDecoded.id, kind: "notebook", mode: "inside" };
         setDropTarget({ id: overDecoded.id, kind: "notebook", mode: "inside" });
       } else if (overDecoded.kind === "note") {
-        const mode: DropMode = relativeY < 0.5 ? "before" : "after";
+        if (overDecoded.id === activeDecoded.id) {
+          dropTargetRef.current = null;
+          setDropTarget(null);
+          return;
+        }
+        const overPage = livePages.find((p) => p.id === overDecoded.id);
+        const isDescendant = overPage ? isPageDescendant(livePages, overPage, activeDecoded.id) : false;
+
+        let mode: DropMode = "inside";
+        if (isDescendant) {
+          mode = relativeY < 0.5 ? "before" : "after";
+        } else {
+          const isIndented = relativeX > 0.05 || (cursorX - overRect.left) > 30;
+          const topBound = isIndented ? 0.15 : 0.25;
+          const bottomBound = isIndented ? 0.85 : 0.75;
+
+          if (relativeY < topBound) {
+            mode = "before";
+          } else if (relativeY > bottomBound) {
+            mode = "after";
+          } else {
+            mode = "inside";
+          }
+        }
         dropTargetRef.current = { id: overDecoded.id, kind: "note", mode };
         setDropTarget({ id: overDecoded.id, kind: "note", mode });
       } else {
@@ -245,7 +370,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     if (!activeDecoded || !overDecoded) return;
 
     if (activeDecoded.kind === "note" && overDecoded.kind === "notebook") {
-      const note = notes.find((p) => p.id === activeDecoded.id);
+      const note = livePages.find((p) => p.id === activeDecoded.id);
       const target = childNotebooks.find((n) => n.id === overDecoded.id);
       if (!note || !target) return;
       try {
@@ -258,8 +383,65 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     }
 
     if (activeDecoded.kind === "note" && overDecoded.kind === "note") {
-      const fromIndex = notes.findIndex((p) => p.id === activeDecoded.id);
-      let toIndex = notes.findIndex((p) => p.id === overDecoded.id);
+      if (targetState.mode === "inside") {
+        const note = livePages.find((p) => p.id === activeDecoded.id);
+        const target = livePages.find((p) => p.id === overDecoded.id);
+        if (!note || !target || note.id === target.id) return;
+        if (isPageDescendant(livePages, target, note.id)) {
+          toast.error(t("cannot_move_note"));
+          return;
+        }
+        try {
+          const siblings = livePages.filter(
+            (p) =>
+              p.id !== note.id &&
+              !p.deletedAt &&
+              p.notebookId === notebookId &&
+              p.parentPageId === target.id
+          );
+          const allInDestination = [
+            ...siblings,
+            { ...note, notebookId, parentPageId: target.id },
+          ].sort((a, b) =>
+            compareNatural(a.title || t("untitled"), b.title || t("untitled"))
+          );
+          const targetIndex = allInDestination.findIndex((p) => p.id === note.id);
+
+          await adapter.movePage(note.id, {
+            notebookId,
+            parentPageId: target.id,
+            order: targetIndex >= 0 ? targetIndex : 0,
+          });
+
+          const orderUpdates = allInDestination.map((page, index) => ({
+            id: page.id,
+            order: index,
+          }));
+          await adapter.applyPageOrders(orderUpdates);
+          setExpandedNotes((prev) => ({ ...prev, [target.id]: true }));
+          toast.success(t("note_moved_as_subnote"));
+        } catch {
+          toast.error(t("cannot_move_note"));
+        }
+        return;
+      }
+
+      const activePage = livePages.find((p) => p.id === activeDecoded.id);
+      const overPage = livePages.find((p) => p.id === overDecoded.id);
+      if (!activePage || !overPage) return;
+
+      const parentPageId = overPage.parentPageId ?? null;
+      const siblings = livePages
+        .filter(
+          (p) =>
+            p.notebookId === notebookId &&
+            p.parentPageId === parentPageId &&
+            !p.deletedAt
+        )
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || compareNatural(a.title, b.title));
+
+      const fromIndex = siblings.findIndex((p) => p.id === activePage.id);
+      let toIndex = siblings.findIndex((p) => p.id === overPage.id);
       if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
 
       if (targetState.mode === "after" && fromIndex > toIndex) {
@@ -267,9 +449,9 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
       } else if (targetState.mode === "before" && fromIndex < toIndex) {
         toIndex -= 1;
       }
-      toIndex = Math.max(0, Math.min(notes.length - 1, toIndex));
+      toIndex = Math.max(0, Math.min(siblings.length - 1, toIndex));
 
-      const reordered = moveItem(notes, fromIndex, toIndex);
+      const reordered = moveItem(siblings, fromIndex, toIndex);
       try {
         await adapter.applyPageOrders(
           reordered.map((p, index) => ({ id: p.id, order: index * 100 }))
@@ -601,6 +783,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
             collisionDetection={detectCollisions}
             onDragStart={onDragStart}
             onDragMove={onDragMove}
+            onDragOver={onDragMove}
             onDragCancel={onDragCancel}
             onDragEnd={onDragEnd}
           >
@@ -641,7 +824,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                 </section>
               ) : null}
 
-              {filteredNotes.length || (!searchQuery && notebookDatabases.length) ? (
+              {filteredNoteTree.length || (!searchQuery && notebookDatabases.length) ? (
                 <section>
                   <div className="mb-2 flex items-center justify-between">
                     <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
@@ -656,18 +839,11 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                     ) : null}
                   </div>
                   <SortableContext
-                    items={filteredNotes.map((p) => encodeId("note", p.id))}
+                    items={visibleNoteIds}
                     strategy={verticalListSortingStrategy}
                   >
                     <div className="divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]">
-                      {filteredNotes.map((page) => (
-                        <NoteRow
-                          key={page.id}
-                          page={page}
-                          isDropTarget={dropTarget?.id === page.id}
-                          dropMode={dropTarget?.id === page.id ? dropTarget.mode : undefined}
-                        />
-                      ))}
+                      {renderNoteNodes(filteredNoteTree)}
                       {!searchQuery &&
                         notebookDatabases.map((database) => (
                           <Link
@@ -700,6 +876,11 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                     <span className="ml-auto flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3 py-1 text-[11.5px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
                       <FolderPlus className="size-3.5" />
                       {t("move_inside")}
+                    </span>
+                  ) : dropTarget?.kind === "note" && dropTarget?.mode === "inside" ? (
+                    <span className="ml-auto flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3 py-1 text-[11.5px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
+                      <FilePlus className="size-3.5" />
+                      {t("create_subnote")}
                     </span>
                   ) : (
                     <span className="ml-auto text-[11px] font-medium text-faint">
@@ -897,16 +1078,24 @@ function NotebookRow({
 
 function NoteRow({
   page,
+  depth = 0,
+  hasChildren,
+  isExpanded,
+  onToggle,
   isDropTarget,
   dropMode,
 }: {
   page: Page;
+  depth?: number;
+  hasChildren?: boolean;
+  isExpanded?: boolean;
+  onToggle?: () => void;
   isDropTarget?: boolean;
   dropMode?: DropMode;
 }) {
   const router = useRouter();
   const { t, language } = useTranslation();
-  const { adapter } = useWorkspace();
+  const { adapter, livePages } = useWorkspace();
   const {
     attributes,
     listeners,
@@ -914,6 +1103,8 @@ function NoteRow({
     setActivatorNodeRef,
     isDragging,
   } = useSortable({ id: encodeId("note", page.id) });
+
+  const subCount = livePages.filter((p) => p.parentPageId === page.id && !p.deletedAt).length;
 
   const duplicate = async (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -950,8 +1141,12 @@ function NoteRow({
           router.push(`/home/p/${page.id}`);
         }
       }}
+      style={{ paddingLeft: `${depth * 22 + 12}px` }}
       className={cn(
-        "group relative flex cursor-pointer items-center gap-2 px-3 py-2.5 transition hover:bg-[var(--surface-hover)]",
+        "group relative flex cursor-pointer items-center gap-2 pr-3 py-2.5 transition",
+        isDropTarget && dropMode === "inside"
+          ? "bg-[var(--accent-soft)] ring-2 ring-inset ring-[var(--accent)]"
+          : "hover:bg-[var(--surface-hover)]",
         isDragging && "opacity-30"
       )}
     >
@@ -966,6 +1161,30 @@ function NoteRow({
           <div className="h-0.5 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
         </div>
       )}
+
+      {isDropTarget && dropMode === "inside" && (
+        <div className="pointer-events-none absolute right-3 top-1/2 z-30 -translate-y-1/2 flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3 py-1 text-[11px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
+          <FilePlus className="size-3.5" />
+          <span>{t("create_subnote")}</span>
+        </div>
+      )}
+
+      {hasChildren ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle?.();
+          }}
+          className="flex size-5 shrink-0 items-center justify-center rounded text-faint hover:text-ink transition -mr-1"
+        >
+          <ChevronRight
+            className={cn("size-3.5 transition-transform duration-150", isExpanded && "rotate-90")}
+          />
+        </button>
+      ) : depth > 0 ? (
+        <span className="w-4 shrink-0" />
+      ) : null}
 
       <button
         type="button"
@@ -987,8 +1206,13 @@ function NoteRow({
         className="flex min-w-0 flex-1 self-stretch items-center gap-3 -my-2.5 py-2.5"
       >
         <WorkspaceIcon icon={page.icon} fallback="📄" variant="list" />
-        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">
-          {page.title || t("untitled")}
+        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink flex items-center gap-2">
+          <span className="truncate">{page.title || t("untitled")}</span>
+          {subCount > 0 ? (
+            <span className="shrink-0 rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10.5px] font-normal text-muted">
+              {subCount} {subCount === 1 ? t("subnote") : t("subnotes_title")}
+            </span>
+          ) : null}
         </span>
         <span className="hidden shrink-0 text-[11.5px] text-faint sm:block">
           {formatRelative(page.updatedAt, language)}

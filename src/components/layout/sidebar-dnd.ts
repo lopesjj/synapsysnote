@@ -77,11 +77,13 @@ function isDescendant(pages: Page[], candidate: Page, ancestorId: string): boole
   return false;
 }
 
+export type DropIntentMode = "before" | "after" | "inside" | "reorder";
+
 export function planSidebarDrop(
   activeRawId: string | number,
   overRawId: string | number | null | undefined,
   { notebooks, pages }: SidebarSnapshot,
-  intent?: "reorder" | "inside"
+  intent?: DropIntentMode
 ): DropPlan | null {
   if (overRawId === null || overRawId === undefined) return null;
   if (String(activeRawId) === String(overRawId)) return null;
@@ -110,28 +112,30 @@ export function planSidebarDrop(
 
     if (draggedParent === null) {
       if (intent === "inside" || targetParent !== null) return null;
-      const from = siblings.findIndex((notebook) => notebook.id === dragged.id);
-      const to = siblings.findIndex((notebook) => notebook.id === target.id);
-      if (from < 0 || to < 0 || from === to) return null;
+      const without = siblings.filter((n) => n.id !== dragged.id);
+      const targetIdx = without.findIndex((n) => n.id === target.id);
+      if (targetIdx < 0) return null;
+      let insertAt = targetIdx;
+      if (intent === "after") {
+        insertAt = targetIdx + 1;
+      } else if (intent === "before") {
+        insertAt = targetIdx;
+      } else {
+        const from = siblings.findIndex((n) => n.id === dragged.id);
+        insertAt = from >= 0 && from < targetIdx ? targetIdx + 1 : targetIdx;
+      }
+      const ordered = without.map((n) => n.id);
+      ordered.splice(insertAt, 0, dragged.id);
+      const from = siblings.findIndex((n) => n.id === dragged.id);
+      const to = ordered.findIndex((id) => id === dragged.id);
+      if (from === to) return null;
       return {
         kind: "reorder-notebooks",
-        notebookIds: moveItem(siblings, from, to).map((notebook) => notebook.id),
+        notebookIds: ordered,
       };
     }
 
-    if (intent === "reorder") {
-      if (targetParent === draggedParent) {
-        const from = siblings.findIndex((notebook) => notebook.id === dragged.id);
-        const to = siblings.findIndex((notebook) => notebook.id === target.id);
-        if (from < 0 || to < 0 || from === to) return null;
-        return {
-          kind: "reorder-notebooks",
-          notebookIds: moveItem(siblings, from, to).map((notebook) => notebook.id),
-        };
-      }
-    }
-
-    if (intent === "inside" || over.kind === "notebook") {
+    if (intent === "inside" || (over.kind === "notebook" && !intent)) {
       if (draggedParent === target.id) return null;
       const destination = childrenOf(notebooks, target.id).filter(
         (notebook) => notebook.id !== dragged.id
@@ -145,25 +149,48 @@ export function planSidebarDrop(
     }
 
     if (targetParent === draggedParent) {
-      const from = siblings.findIndex((notebook) => notebook.id === dragged.id);
-      const to = siblings.findIndex((notebook) => notebook.id === target.id);
-      if (from < 0 || to < 0 || from === to) return null;
+      const without = siblings.filter((n) => n.id !== dragged.id);
+      const targetIdx = without.findIndex((n) => n.id === target.id);
+      if (targetIdx < 0) return null;
+      let insertAt = targetIdx;
+      if (intent === "after") {
+        insertAt = targetIdx + 1;
+      } else if (intent === "before") {
+        insertAt = targetIdx;
+      } else {
+        const from = siblings.findIndex((n) => n.id === dragged.id);
+        insertAt = from >= 0 && from < targetIdx ? targetIdx + 1 : targetIdx;
+      }
+      const ordered = without.map((n) => n.id);
+      ordered.splice(insertAt, 0, dragged.id);
+      const from = siblings.findIndex((n) => n.id === dragged.id);
+      const to = ordered.findIndex((id) => id === dragged.id);
+      if (from === to) return null;
       return {
         kind: "reorder-notebooks",
-        notebookIds: moveItem(siblings, from, to).map((notebook) => notebook.id),
+        notebookIds: ordered,
       };
     }
 
     if (draggedParent === target.id) return null;
 
-    const destination = childrenOf(notebooks, target.id).filter(
+    const destination = childrenOf(notebooks, targetParent).filter(
       (notebook) => notebook.id !== dragged.id
     );
+    const targetIdx = destination.findIndex((n) => n.id === target.id);
+    const insertAt =
+      targetIdx < 0
+        ? destination.length
+        : intent === "after"
+          ? targetIdx + 1
+          : targetIdx;
+    const ordered = destination.map((n) => n.id);
+    ordered.splice(insertAt, 0, dragged.id);
     return {
       kind: "move-notebook",
       notebookId: dragged.id,
-      parentId: target.id,
-      notebookIds: [...destination.map((notebook) => notebook.id), dragged.id],
+      parentId: targetParent,
+      notebookIds: ordered,
     };
   }
 
@@ -203,30 +230,44 @@ export function planSidebarDrop(
     };
   }
 
-  const siblings = siblingsOf(pages, target.notebookId, target.parentPageId);
+  const targetParentId = target.parentPageId;
+  const targetNotebookId = target.notebookId;
+  const siblings = siblingsOf(pages, targetNotebookId, targetParentId);
+  const without = siblings.filter((sibling) => sibling.id !== page.id);
+  const targetIdx = without.findIndex((sibling) => sibling.id === target.id);
+  if (targetIdx < 0) return null;
+
+  let insertAt = targetIdx;
+  if (intent === "after") {
+    insertAt = targetIdx + 1;
+  } else if (intent === "before") {
+    insertAt = targetIdx;
+  } else {
+    const from = siblings.findIndex((s) => s.id === page.id);
+    insertAt = from >= 0 && from < targetIdx ? targetIdx + 1 : targetIdx;
+  }
+
+  const ordered = without.map((sibling) => sibling.id);
+  ordered.splice(insertAt, 0, page.id);
+
   const sameParent =
-    page.notebookId === target.notebookId && page.parentPageId === target.parentPageId;
+    page.notebookId === targetNotebookId && page.parentPageId === targetParentId;
 
   if (sameParent) {
     const from = siblings.findIndex((sibling) => sibling.id === page.id);
-    const to = siblings.findIndex((sibling) => sibling.id === target.id);
-    if (from < 0 || to < 0 || from === to) return null;
+    const to = ordered.findIndex((id) => id === page.id);
+    if (from === to) return null;
     return {
       kind: "reorder-pages",
-      pageIds: moveItem(siblings, from, to).map((sibling) => sibling.id),
+      pageIds: ordered,
     };
   }
-
-  const destination = siblings.filter((sibling) => sibling.id !== page.id);
-  const insertAt = destination.findIndex((sibling) => sibling.id === target.id);
-  const ordered = destination.map((sibling) => sibling.id);
-  ordered.splice(insertAt < 0 ? ordered.length : insertAt, 0, page.id);
 
   return {
     kind: "move-page",
     pageId: page.id,
-    notebookId: target.notebookId,
-    parentPageId: target.parentPageId,
+    notebookId: targetNotebookId,
+    parentPageId: targetParentId,
     pageIds: ordered,
   };
 }

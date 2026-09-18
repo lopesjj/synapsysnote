@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronRight,
   FolderInput,
@@ -14,9 +14,9 @@ import { useTranslation } from "@/lib/i18n/translations";
 import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
-import { childrenOf, isNestedNotebook, isNotebookDescendant } from "@/lib/data/notebook-tree";
+import { childrenOf, isNestedNotebook, isNotebookDescendant, parentIdOf } from "@/lib/data/notebook-tree";
 import type { Notebook, Page } from "@/types/models";
-import { cn } from "@/lib/utils";
+import { cn, compareNatural } from "@/lib/utils";
 
 export interface MoveItemTarget {
   kind: "notebook" | "page";
@@ -55,6 +55,71 @@ export function MoveItemDialog({ open, onOpenChange, item }: MoveItemDialogProps
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const livePagesRef = useRef(livePages);
+  livePagesRef.current = livePages;
+  const notebooksRef = useRef(notebooks);
+  notebooksRef.current = notebooks;
+
+  useEffect(() => {
+    if (!open || !item) {
+      setExpanded({});
+      setSelectedTarget(null);
+      setSearch("");
+      return;
+    }
+
+    const currentLivePages = livePagesRef.current;
+    const currentNotebooks = notebooksRef.current;
+    const initial: Record<string, boolean> = {};
+
+    if (item.kind === "page") {
+      const page = currentLivePages.find((p) => p.id === item.id);
+      if (page) {
+        if (page.notebookId) {
+          let currentNbId: string | null | undefined = page.notebookId;
+          const nbById = new Map(currentNotebooks.map((n) => [n.id, n]));
+          const seenNbs = new Set<string>();
+          while (currentNbId && !seenNbs.has(currentNbId)) {
+            seenNbs.add(currentNbId);
+            initial[currentNbId] = true;
+            currentNbId = nbById.get(currentNbId)?.parentId ?? null;
+          }
+        }
+
+        const pageById = new Map(currentLivePages.map((p) => [p.id, p]));
+        const seenPages = new Set<string>();
+        if (Array.isArray(page.path)) {
+          for (const ancestorId of page.path) {
+            if (ancestorId && ancestorId !== page.id) {
+              initial[ancestorId] = true;
+            }
+          }
+        }
+        let currentParentId = page.parentPageId;
+        while (currentParentId && !seenPages.has(currentParentId)) {
+          seenPages.add(currentParentId);
+          initial[currentParentId] = true;
+          currentParentId = pageById.get(currentParentId)?.parentPageId ?? null;
+        }
+      }
+    } else if (item.kind === "notebook") {
+      const nbById = new Map(currentNotebooks.map((n) => [n.id, n]));
+      const currentNb = nbById.get(item.id);
+      if (currentNb) {
+        let parentId = currentNb.parentId;
+        const seenNbs = new Set<string>();
+        while (parentId && !seenNbs.has(parentId)) {
+          seenNbs.add(parentId);
+          initial[parentId] = true;
+          parentId = nbById.get(parentId)?.parentId ?? null;
+        }
+      }
+    }
+
+    setExpanded(initial);
+    setSelectedTarget(null);
+    setSearch("");
+  }, [open, item?.id, item?.kind]);
 
   const toggleExpand = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -117,13 +182,66 @@ export function MoveItemDialog({ open, onOpenChange, item }: MoveItemDialogProps
     setIsSubmitting(true);
     try {
       if (item.kind === "notebook") {
-        await adapter.moveNotebook(item.id, { parentId: selectedTarget.id });
+        const targetParentId = selectedTarget.id || null;
+        const currentNb = notebooks.find((n) => n.id === item.id);
+        if (currentNb) {
+          const siblings = notebooks.filter(
+            (n) => n.id !== item.id && parentIdOf(n) === targetParentId
+          );
+          const allInDestination = [
+            ...siblings,
+            { ...currentNb, parentId: targetParentId },
+          ].sort((a, b) => compareNatural(a.name, b.name));
+
+          const targetIndex = allInDestination.findIndex((n) => n.id === item.id);
+          await adapter.moveNotebook(item.id, {
+            parentId: targetParentId,
+            order: targetIndex >= 0 ? targetIndex : 0,
+          });
+
+          const orderUpdates = allInDestination.map((nb, index) => ({
+            id: nb.id,
+            order: index,
+          }));
+          await adapter.applyNotebookOrders(orderUpdates);
+        }
         toast.success(t("notebook_moved"));
       } else {
-        await adapter.movePage(item.id, {
-          notebookId: selectedTarget.notebookId,
-          parentPageId: selectedTarget.parentPageId,
-        });
+        const targetNotebookId = selectedTarget.notebookId;
+        const targetParentPageId = selectedTarget.parentPageId;
+        const currentPage = livePages.find((p) => p.id === item.id);
+        if (currentPage) {
+          const siblings = livePages.filter(
+            (p) =>
+              p.id !== item.id &&
+              !p.deletedAt &&
+              p.notebookId === targetNotebookId &&
+              p.parentPageId === targetParentPageId
+          );
+          const allInDestination = [
+            ...siblings,
+            {
+              ...currentPage,
+              notebookId: targetNotebookId,
+              parentPageId: targetParentPageId,
+            },
+          ].sort((a, b) =>
+            compareNatural(a.title || t("untitled"), b.title || t("untitled"))
+          );
+
+          const targetIndex = allInDestination.findIndex((p) => p.id === item.id);
+          await adapter.movePage(item.id, {
+            notebookId: targetNotebookId,
+            parentPageId: targetParentPageId,
+            order: targetIndex >= 0 ? targetIndex : 0,
+          });
+
+          const orderUpdates = allInDestination.map((page, index) => ({
+            id: page.id,
+            order: index,
+          }));
+          await adapter.applyPageOrders(orderUpdates);
+        }
         toast.success(
           selectedTarget.parentPageId
             ? t("note_moved_as_subnote")
@@ -148,13 +266,13 @@ export function MoveItemDialog({ open, onOpenChange, item }: MoveItemDialogProps
   ): React.ReactNode => {
     const childPages = livePages
       .filter((p) => p.notebookId === notebookId && p.parentPageId === parentPageId && !p.deletedAt)
-      .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
+      .sort((a, b) => a.order - b.order || compareNatural(a.title, b.title));
 
     if (!childPages.length) return null;
 
     return childPages.map((page) => {
       const subPages = livePages.filter((p) => p.parentPageId === page.id && !p.deletedAt);
-      const isExpanded = expanded[page.id] ?? (cleanSearch.length > 0);
+      const isExpanded = cleanSearch.length > 0 ? true : Boolean(expanded[page.id]);
       const validation = isValidDestination("page", page.id);
       const isSelected =
         selectedTarget?.kind === "page" && selectedTarget.id === page.id;
@@ -242,7 +360,7 @@ export function MoveItemDialog({ open, onOpenChange, item }: MoveItemDialogProps
         (p) => p.notebookId === notebook.id && !p.parentPageId && !p.deletedAt
       );
       const hasChildren = childNotebooks.length > 0 || rootPages.length > 0;
-      const isExpanded = expanded[notebook.id] ?? (cleanSearch.length > 0);
+      const isExpanded = cleanSearch.length > 0 ? true : Boolean(expanded[notebook.id]);
       const validation = isValidDestination("notebook", notebook.id);
       const isSelected =
         selectedTarget?.kind === "notebook" && selectedTarget.id === notebook.id;
@@ -351,6 +469,38 @@ export function MoveItemDialog({ open, onOpenChange, item }: MoveItemDialogProps
         </div>
 
         <div className="max-h-72 min-h-[160px] overflow-y-auto rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] p-1">
+          {item?.kind === "notebook" ? (
+            <div
+              onClick={() => {
+                const notebookItem = currentItem as Notebook;
+                if (!parentIdOf(notebookItem)) return;
+                setSelectedTarget({
+                  kind: "notebook",
+                  id: "",
+                  notebookId: null,
+                  parentPageId: null,
+                });
+              }}
+              className={cn(
+                "group flex items-center gap-2 py-1.5 px-3 mb-1 text-[13px] rounded-[var(--radius-sm)] transition-colors select-none",
+                selectedTarget?.kind === "notebook" && selectedTarget.id === ""
+                  ? "bg-[var(--accent-soft)] text-ink font-medium ring-1 ring-inset ring-[var(--accent)]"
+                  : currentItem && !parentIdOf(currentItem as Notebook)
+                    ? "opacity-45 cursor-not-allowed text-muted"
+                    : "hover:bg-[var(--surface-hover)] text-ink cursor-pointer"
+              )}
+            >
+              <WorkspaceIcon icon="📁" size={16} />
+              <span className="truncate flex-1 font-medium">{t("notebooks")}</span>
+              {currentItem && !parentIdOf(currentItem as Notebook) ? (
+                <span className="text-[11px] font-normal text-faint bg-[var(--surface-2)] px-1.5 py-0.5 rounded">
+                  {t("current_location")}
+                </span>
+              ) : selectedTarget?.kind === "notebook" && selectedTarget.id === "" ? (
+                <Check className="size-4 text-[var(--accent)] shrink-0" />
+              ) : null}
+            </div>
+          ) : null}
           {renderNotebookNodes(null, 0)}
         </div>
       </div>

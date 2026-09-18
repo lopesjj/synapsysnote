@@ -167,7 +167,7 @@ export function SidebarRail() {
             </Link>
           </Button>
         </Tooltip>
-        <Tooltip label={t("new_note")} shortcut={isMac() ? "⌘N" : "Ctrl N"} side="right">
+        <Tooltip label={t("new_note")} shortcut={isMac() ? "⌥N" : "Alt N"} side="right">
           <Button variant="ghost" size="icon" onClick={() => void createPage()} aria-label={t("new_note")}>
             <Plus />
           </Button>
@@ -349,7 +349,11 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
       if (overDecoded.kind === "notebook") {
         mode = "inside";
       } else {
-        if (relativeX >= 0.35 && relativeY >= 0.20 && relativeY <= 0.80) {
+        if (relativeY < 0.28) {
+          mode = "before";
+        } else if (relativeY > 0.72) {
+          mode = "after";
+        } else if (relativeX > 0.38) {
           mode = "inside";
         } else {
           mode = relativeY < 0.5 ? "before" : "after";
@@ -417,7 +421,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         notebooks,
         pages: livePages,
       },
-      currentIntent === "inside" ? "inside" : currentIntent ? "reorder" : undefined
+      currentIntent
     );
     if (!plan) return;
 
@@ -453,7 +457,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         if (plan.parentPageId) {
           setExpanded((prev) => ({ ...prev, [plan.parentPageId!]: true }));
         }
-        toast.success(t("note_moved_to_notebook"));
+        toast.success(plan.parentPageId ? t("note_moved_as_subnote") : t("note_moved_to_notebook"));
       }
 
       await adapter.applyPageOrders(
@@ -772,7 +776,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           <Section
             title={t("pages")}
             action={
-              <Tooltip label={t("new_page")} shortcut={isMac() ? "⌘⇧N" : "Ctrl ⇧ N"}>
+              <Tooltip label={t("new_page")} shortcut={isMac() ? "⌥⇧N" : "Alt ⇧ N"}>
                 <button
                   onClick={() => void createNotebook(null)}
                   className="rounded p-0.5 text-faint transition hover:text-ink"
@@ -828,19 +832,28 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               <span className="max-w-[130px] truncate text-[13px] font-semibold text-ink">
                 {draggedLabel || t("untitled")}
               </span>
-              {sidebarDropIntent?.mode === "inside" && (dragging.kind === "notebook" || sidebarDropIntent?.targetKind === "notebook") ? (
-                <span className="ml-auto flex items-center gap-1 rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold text-white shadow-sm animate-in fade-in zoom-in-95 duration-100">
-                  <FolderPlus className="size-3" />
-                  {dragging.kind === "notebook"
-                    ? t("move_inside")
-                    : t("move_to_notebook")}
+              {sidebarDropIntent?.mode === "inside" ? (
+                <span className="ml-auto flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-2.5 py-1 text-[11px] font-bold text-white shadow-sm animate-in fade-in zoom-in-95 duration-100">
+                  {sidebarDropIntent?.targetKind === "page" ? (
+                    <>
+                      <FilePlus className="size-3.5" />
+                      {t("create_subnote")}
+                    </>
+                  ) : (
+                    <>
+                      <FolderPlus className="size-3.5" />
+                      {dragging.kind === "notebook"
+                        ? t("move_inside")
+                        : t("move_to_notebook")}
+                    </>
+                  )}
                 </span>
               ) : sidebarDropIntent?.mode === "before" ? (
-                <span className="ml-auto rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[10px] font-bold shadow-sm animate-in fade-in duration-100">
+                <span className="ml-auto rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2.5 py-1 text-[11px] font-bold shadow-sm animate-in fade-in duration-100">
                   <span>↕</span> {t("dnd_reorder_above")}
                 </span>
               ) : sidebarDropIntent?.mode === "after" ? (
-                <span className="ml-auto rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[10px] font-bold shadow-sm animate-in fade-in duration-100">
+                <span className="ml-auto rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2.5 py-1 text-[11px] font-bold shadow-sm animate-in fade-in duration-100">
                   <span>↕</span> {t("dnd_reorder_below")}
                 </span>
               ) : null}
@@ -933,6 +946,7 @@ function NotebookRow({
     isDragging,
   } = useSortable({ id: encodeId("notebook", notebook.id) });
   const [renaming, setRenaming] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [draft, setDraft] = useState(notebook.name);
 
   return (
@@ -957,7 +971,7 @@ function NotebookRow({
           <div className="pointer-events-none absolute inset-x-0 -top-1 z-30 flex items-center">
             <div className="h-0.5 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
             <span className="absolute left-2 -top-2.5 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[9px] font-bold shadow-sm">
-              ↕ Acima
+              ↕ {t("dnd_reorder_above")}
             </span>
           </div>
         )}
@@ -965,14 +979,14 @@ function NotebookRow({
           <div className="pointer-events-none absolute inset-x-0 -bottom-1 z-30 flex items-center">
             <div className="h-0.5 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
             <span className="absolute left-2 -bottom-2.5 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[9px] font-bold shadow-sm">
-              ↕ Abaixo
+              ↕ {t("dnd_reorder_below")}
             </span>
           </div>
         )}
         {dropIntent === "inside" && (
-          <div className="pointer-events-none absolute right-1.5 top-1/2 z-30 -translate-y-1/2 flex items-center gap-1 rounded-full bg-[var(--accent)] px-2.5 py-0.5 text-[10.5px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
-            <FolderPlus className="size-3" />
-            <span>{draggingKind === "page" ? "Mover nota para cá" : "Inserir dentro"}</span>
+          <div className="pointer-events-none absolute right-1.5 top-1/2 z-30 -translate-y-1/2 flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3 py-1 text-[11px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
+            <FolderPlus className="size-3.5" />
+            <span>{draggingKind === "page" ? t("move_to_notebook") : t("move_inside")}</span>
           </div>
         )}
         <button
@@ -1024,7 +1038,12 @@ function NotebookRow({
           )}
         </Link>
         <span className="shrink-0 text-[10.5px] tabular-nums text-faint">{count}</span>
-        <div className="grid grid-cols-[0fr] transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:grid-cols-[1fr]">
+        <div
+          className={cn(
+            "grid transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+            menuOpen ? "grid-cols-[1fr]" : "grid-cols-[0fr] group-hover:grid-cols-[1fr]"
+          )}
+        >
           <div className="flex min-w-0 items-center overflow-hidden">
         <Tooltip label={t("new_notebook")}>
           <button
@@ -1044,7 +1063,7 @@ function NotebookRow({
             <Plus className="size-3.5" />
           </button>
         </Tooltip>
-        <Menu>
+        <Menu open={menuOpen} onOpenChange={setMenuOpen}>
           <MenuTrigger asChild>
             <button
               className="rounded p-0.5 text-faint hover:text-ink"
@@ -1137,6 +1156,7 @@ function SortablePageRow({
 }) {
   const router = useRouter();
   const { t } = useTranslation();
+  const [menuOpen, setMenuOpen] = useState(false);
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useSortable({
     id: encodeId("page", node.page.id),
   });
@@ -1153,7 +1173,7 @@ function SortablePageRow({
         <div className="pointer-events-none absolute inset-x-0 -top-1 z-30 flex items-center">
           <div className="h-0.5 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
           <span className="absolute left-2 -top-2.5 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[9px] font-bold shadow-sm">
-            ↕ Acima
+            ↕ {t("dnd_reorder_above")}
           </span>
         </div>
       )}
@@ -1161,7 +1181,7 @@ function SortablePageRow({
         <div className="pointer-events-none absolute inset-x-0 -bottom-1 z-30 flex items-center">
           <div className="h-0.5 flex-1 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
           <span className="absolute left-2 -bottom-2.5 rounded-full bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 px-2 py-0.5 text-[9px] font-bold shadow-sm">
-            ↕ Abaixo
+            ↕ {t("dnd_reorder_below")}
           </span>
         </div>
       )}
@@ -1176,9 +1196,9 @@ function SortablePageRow({
         )}
       >
       {dropIntent === "inside" && (
-        <div className="pointer-events-none absolute right-1.5 top-1/2 z-30 -translate-y-1/2 flex items-center gap-1 rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10.5px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
-          <FilePlus className="size-3" />
-          <span>{t("subnote")}</span>
+        <div className="pointer-events-none absolute right-1.5 top-1/2 z-30 -translate-y-1/2 flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3 py-1 text-[11px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
+          <FilePlus className="size-3.5" />
+          <span>{t("create_subnote")}</span>
         </div>
       )}
       <button
@@ -1206,9 +1226,24 @@ function SortablePageRow({
         <SidebarItemIcon icon={node.page.icon} fallback="📄" />
         <span className="truncate">{node.page.title || t("untitled")}</span>
       </Link>
-      <div className="grid grid-cols-[0fr] transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:grid-cols-[1fr]">
+      <div
+        className={cn(
+          "grid transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          menuOpen ? "grid-cols-[1fr]" : "grid-cols-[0fr] group-hover:grid-cols-[1fr]"
+        )}
+      >
         <div className="flex min-w-0 items-center overflow-hidden">
-          <Menu>
+          <Tooltip label={t("new_subpage")}>
+            <button
+              type="button"
+              onClick={() => void onCreateChild()}
+              className="rounded p-0.5 text-faint hover:text-ink"
+              aria-label={t("new_subpage")}
+            >
+              <Plus className="size-3.5" />
+            </button>
+          </Tooltip>
+          <Menu open={menuOpen} onOpenChange={setMenuOpen}>
             <MenuTrigger asChild>
               <button
                 type="button"

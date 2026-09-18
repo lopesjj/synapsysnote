@@ -1,6 +1,7 @@
 import type { AppBlock, Page, RichTextSpan, TableRow } from "@/types/models";
 import { formatBytes, formatDuration } from "@/lib/utils";
 import { isIconUrl } from "@/lib/icons/workspace-icon";
+import { coverPresetById } from "@/lib/covers/presets";
 import type { TranslationKey } from "@/lib/i18n/translations";
 import katex from "katex";
 
@@ -492,7 +493,9 @@ function renderDocumentHeader(page: Page, options: ExportPdfOptions, imageMap: M
   const title = escapeHtml(page.title || "Sem título");
   const tags = page.tags || [];
   const rawCoverUrl = page.coverUrl;
-  const coverUrl = rawCoverUrl ? imageMap.get(rawCoverUrl) || rawCoverUrl : null;
+  const preset = coverPresetById(rawCoverUrl);
+  const actualCoverUrl = preset?.imageUrl || (rawCoverUrl && !rawCoverUrl.startsWith("cover:") ? rawCoverUrl : null);
+  const coverUrl = actualCoverUrl ? imageMap.get(actualCoverUrl) || actualCoverUrl : null;
   const icon = page.icon;
   const notebook = options.notebookName ? escapeHtml(options.notebookName) : null;
   const author = options.authorName ? escapeHtml(options.authorName) : null;
@@ -662,7 +665,14 @@ async function renderPdfPagesToDataUrls(bytes: Uint8Array, scale = 2): Promise<s
 
 function collectImageUrls(page: Page): string[] {
   const urls: string[] = [];
-  if (page.coverUrl) urls.push(page.coverUrl);
+  if (page.coverUrl) {
+    const preset = coverPresetById(page.coverUrl);
+    if (preset?.imageUrl) {
+      urls.push(preset.imageUrl);
+    } else if (!page.coverUrl.startsWith("cover:")) {
+      urls.push(page.coverUrl);
+    }
+  }
   if (page.icon && isIconUrl(page.icon)) urls.push(page.icon);
 
   const walk = (blocks: AppBlock[]) => {

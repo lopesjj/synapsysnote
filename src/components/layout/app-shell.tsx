@@ -123,21 +123,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       const meta = event.metaKey || event.ctrlKey;
       const store = useUiStore.getState();
 
-      if (event.key === "Escape" && store.zenMode) {
-        store.setZenMode(false);
-        return;
+      if (event.key === "Escape") {
+        if (store.paletteOpen) {
+          event.preventDefault();
+          store.setPaletteOpen(false);
+          return;
+        }
+        if (store.preferencesOpen) {
+          event.preventDefault();
+          store.setPreferencesOpen(false);
+          return;
+        }
+        if (store.zenMode) {
+          event.preventDefault();
+          store.setZenMode(false);
+          return;
+        }
       }
-      if (!meta) return;
-
       const key = event.key.toLowerCase();
 
-      if (key === "k") {
-        event.preventDefault();
-        store.setPaletteOpen(!store.paletteOpen);
-        return;
-      }
+      const isAltN = event.altKey && key === "n";
+      const isModN = meta && key === "n";
 
-      if (key === "n") {
+      if (isAltN || isModN) {
+        if (isEditingText(event.target) && !meta) {
+          return;
+        }
         event.preventDefault();
         if (event.shiftKey) {
           const notebook = await adapter.createNotebook({ name: t("untitled") });
@@ -154,6 +165,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         expandContainerInSession(target);
         useUiStore.getState().closeMenu();
         router.push(`/home/p/${page.id}`);
+        return;
+      }
+
+      if (!meta) return;
+
+      if (key === "k") {
+        event.preventDefault();
+        store.setPaletteOpen(!store.paletteOpen);
         return;
       }
 

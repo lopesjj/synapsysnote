@@ -28,10 +28,13 @@ export function DialogShell({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onOpenChange(false);
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onOpenChange(false);
+      }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [open, onOpenChange]);
 
   useEffect(() => {

@@ -48,7 +48,7 @@ export interface DataAdapter {
     parentId?: string | null;
   }): Promise<Notebook>;
   updateNotebook(id: string, patch: Partial<Notebook>): Promise<void>;
-  moveNotebook(id: string, target: { parentId: string | null }): Promise<void>;
+  moveNotebook(id: string, target: { parentId: string | null; order?: number }): Promise<void>;
   deleteNotebook(id: string): Promise<void>;
 
   createPage(input: CreatePageInput): Promise<Page>;
@@ -56,7 +56,7 @@ export interface DataAdapter {
   updatePage(id: string, patch: Partial<Page>): Promise<void>;
   applyPageOrders(updates: { id: string; order: number }[]): Promise<void>;
   applyNotebookOrders(updates: { id: string; order: number }[]): Promise<void>;
-  movePage(id: string, target: { notebookId?: string | null; parentPageId?: string | null }): Promise<void>;
+  movePage(id: string, target: { notebookId?: string | null; parentPageId?: string | null; order?: number }): Promise<void>;
   trashPage(id: string): Promise<void>;
   restorePage(id: string): Promise<void>;
   purgePage(id: string): Promise<void>;

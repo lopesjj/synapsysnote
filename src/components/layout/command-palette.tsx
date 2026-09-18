@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Command } from "cmdk";
@@ -33,6 +33,19 @@ export function CommandPalette({
     : null;
   const { theme, toggle } = useTheme();
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onOpenChange(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [open, onOpenChange]);
 
   const run = (action: () => void) => {
     onOpenChange(false);
@@ -94,6 +107,13 @@ export function CommandPalette({
             <Command
               loop
               shouldFilter={false}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onOpenChange(false);
+                }
+              }}
               className="overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-float)]"
             >
               <div className="flex items-center gap-2.5 border-b border-[var(--border)] px-4">
@@ -101,10 +121,24 @@ export function CommandPalette({
                   autoFocus
                   value={query}
                   onValueChange={setQuery}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onOpenChange(false);
+                    }
+                  }}
                   placeholder={t("search_placeholder")}
                   className="h-12 w-full bg-transparent text-[13.5px] text-ink outline-none placeholder:text-faint"
                 />
-                <Kbd>esc</Kbd>
+                <button
+                  type="button"
+                  onClick={() => onOpenChange(false)}
+                  aria-label={t("close")}
+                  className="cursor-pointer transition-opacity hover:opacity-80"
+                >
+                  <Kbd>esc</Kbd>
+                </button>
               </div>
 
               <Command.List className="max-h-[52vh] overflow-y-auto p-1.5">
@@ -250,7 +284,7 @@ export function CommandPalette({
                         }}
                       >
                         <span className="flex-1 text-[13px] text-ink">{t("new_note")}</span>
-                        <Kbd>{isMac() ? "⌘N" : "Ctrl N"}</Kbd>
+                        <Kbd>{isMac() ? "⌥N" : "Alt N"}</Kbd>
                       </Command.Item>
                       <Command.Item
                         value="new-notebook"
@@ -261,7 +295,7 @@ export function CommandPalette({
                         }}
                       >
                         <span className="flex-1 text-[13px] text-ink">{t("new_page")}</span>
-                        <Kbd>{isMac() ? "⌘⇧N" : "Ctrl ⇧ N"}</Kbd>
+                        <Kbd>{isMac() ? "⌥⇧N" : "Alt ⇧ N"}</Kbd>
                       </Command.Item>
                       <Command.Item
                         value="new-database"
