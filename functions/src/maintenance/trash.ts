@@ -56,6 +56,55 @@ export const purgeExpiredTrash = onSchedule(
   }
 );
 
+export const purgeExpiredQuarantineMedia = onSchedule(
+  { schedule: "every 7 days", timeZone: "America/Sao_Paulo", region: REGION, memory: "512MiB" },
+  async () => {
+    const workspaces = await db.collection("workspaces").get();
+    let totalPurged = 0;
+    const now = Date.now();
+
+    for (const workspace of workspaces.docs) {
+      const trashedMediaSnap = await workspace.ref
+        .collection("trashed_media")
+        .where("expiresAt", "<=", now)
+        .limit(300)
+        .get();
+
+      if (trashedMediaSnap.empty) continue;
+
+      const pathsToDelete: string[] = [];
+      const docsToDelete: FirebaseFirestore.DocumentReference[] = [];
+
+      for (const doc of trashedMediaSnap.docs) {
+        const p = String(doc.get("storagePath") ?? "");
+        if (p) pathsToDelete.push(p);
+        docsToDelete.push(doc.ref);
+      }
+
+      await Promise.allSettled(
+        pathsToDelete.map((p) =>
+          bucket()
+            .file(p)
+            .delete({ ignoreNotFound: true })
+            .catch(() => {})
+        )
+      );
+
+      for (let i = 0; i < docsToDelete.length; i += 400) {
+        const batch = db.batch();
+        for (const ref of docsToDelete.slice(i, i + 400)) {
+          batch.delete(ref);
+        }
+        await batch.commit();
+      }
+
+      totalPurged += docsToDelete.length;
+    }
+
+    logger.info("quarantine media purge finished", { totalPurged });
+  }
+);
+
 export const purgePage = onCall({ region: REGION }, async (request: any) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login obrigatório");
   const { workspaceId, pageId } = request.data as { workspaceId: string; pageId: string };

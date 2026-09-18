@@ -393,7 +393,7 @@ function SelectStep({
             <Checkbox
               checked={state === "checked" ? true : state === "indeterminate" ? "indeterminate" : false}
               onCheckedChange={(value) => toggle(node.id, value === true)}
-              aria-label={`Selecionar ${node.title}`}
+              aria-label={node.title}
             />
 
             <span className="w-4 shrink-0 text-center text-[13px]">
@@ -600,6 +600,60 @@ function SummaryCard({ label, value }: { label: string; value: number }) {
   );
 }
 
+function formatImportStep(
+  job: import("@/types/models").ImportJob,
+  t: (key: import("@/lib/i18n/translations").TranslationKey, params?: Record<string, string | number>) => string
+): string {
+  if (job.status === "completed") {
+    return t("import_completed");
+  }
+  if (job.status === "completed_with_errors") {
+    return t("wizard_step_completed_with_warnings", { count: job.errors.length });
+  }
+  if (job.status === "canceled") {
+    return t("status_canceled");
+  }
+  if (job.status === "failed") {
+    const raw = job.currentStep || "";
+    const clean = raw.replace(/^Falhou:\s*/i, "").replace(/^Failed:\s*/i, "");
+    return localizeErrorMessage(clean, t) || t("status_failed");
+  }
+  const step = (job.currentStep || "").trim();
+  const convertingMatch = step.match(/^\((\d+\/\d+)\)\s*Convertendo\s*[“"']?(.*?)[”"']?[\.…]*$/i);
+  if (convertingMatch) {
+    return t("wizard_step_converting", {
+      current: convertingMatch[1],
+      title: convertingMatch[2],
+    });
+  }
+  const importingRecordsMatch = step.match(/^Importando registros de\s*[“"']?(.*?)[”"']?\s*\((.*?)\)[\.…]*$/i);
+  if (importingRecordsMatch) {
+    return t("wizard_step_importing_records", {
+      title: importingRecordsMatch[1],
+      order: importingRecordsMatch[2],
+    });
+  }
+  const preparingMatch = step.match(/^Preparando\s*(\d+)\s*itens[\.…]*$/i);
+  if (preparingMatch) {
+    return t("wizard_step_preparing", {
+      count: preparingMatch[1],
+    });
+  }
+  const completedWarningsMatch = step.match(/^Importação concluída com\s*(\d+)\s*avisos/i);
+  if (completedWarningsMatch) {
+    return t("wizard_step_completed_with_warnings", {
+      count: completedWarningsMatch[1],
+    });
+  }
+  const authFailedMatch = step.match(/^Falha de autenticação:\s*(.*)/i);
+  if (authFailedMatch) {
+    return t("wizard_step_auth_failed", {
+      message: localizeErrorMessage(authFailedMatch[1], t),
+    });
+  }
+  return localizeErrorMessage(step, t);
+}
+
 function ProgressStep({
   job,
   progress,
@@ -628,7 +682,7 @@ function ProgressStep({
     completed: t("status_completed"),
     completed_with_errors: t("status_completed_with_errors"),
     failed: t("status_failed"),
-    canceled: "Cancelada",
+    canceled: t("status_canceled"),
   };
 
   return (
@@ -646,7 +700,7 @@ function ProgressStep({
               )}
               {statusLabel[job.status]}
             </Badge>
-            <span className="text-[12.5px] text-muted">{job.currentStep}</span>
+            <span className="text-[12.5px] text-muted">{formatImportStep(job, t)}</span>
           </div>
           <span className="font-mono text-[12.5px] tabular-nums text-ink">{progress}%</span>
         </div>

@@ -755,7 +755,7 @@ export class FirestoreAdapter implements DataAdapter {
     const encoded = JSON.stringify(payload);
     if (encoded.length > MAX_PAGE_JSON_BYTES) {
       throw new Error(
-        "Esta nota ficou grande demais para salvar. Divida o conteúdo em subpáginas ou anexe arquivos em vez de colar mídia."
+        "Esta nota ficou grande demais para salvar. Divida o conteúdo em subnotas ou anexe arquivos em vez de colar mídia."
       );
     }
 

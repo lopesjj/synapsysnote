@@ -112,8 +112,8 @@ export function PreferencesDialog({
           <div className="space-y-2 md:space-y-3">
             <div className="flex items-center justify-between px-1.5 py-0.5 md:px-2 md:py-1">
               <div className="flex items-center gap-2 md:gap-2.5">
-                <div className="flex size-7 items-center justify-center rounded-lg bg-[var(--surface)] border border-[var(--border)] shadow-xs text-ink">
-                  <Settings className="size-3.5" />
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] border border-[var(--border)] shadow-xs text-ink">
+                  <Settings className="size-3.5 shrink-0 translate-x-px" />
                 </div>
                 <h2 className="text-[13.5px] font-semibold text-ink tracking-tight">
                   {t("preferences")}
@@ -678,11 +678,9 @@ function ProfileSection() {
 
   const [imageError, setImageError] = useState(false);
 
-  const rawPhotoURL = isCustomAvatar(profile?.photoURL)
-    ? profile?.photoURL
-    : isCustomAvatar(user?.photoURL)
-    ? user?.photoURL
-    : null;
+  const rawPhotoURL = profile
+    ? (isCustomAvatar(profile.photoURL) ? profile.photoURL : null)
+    : (isCustomAvatar(user?.photoURL) ? user?.photoURL : null);
 
   useEffect(() => {
     setImageError(false);
@@ -948,29 +946,35 @@ function Avatar({
   onError?: () => void;
 }) {
   const [imageError, setImageError] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     setImageError(false);
+    setLoaded(false);
   }, [url]);
 
-  if (url && !imageError) {
-    return (
-      <img
-        src={url}
-        alt={name || "Avatar"}
-        width={72}
-        height={72}
-        onError={() => {
-          setImageError(true);
-          onError?.();
-        }}
-        className="size-full object-cover"
-      />
-    );
-  }
+  const initial = name.trim().charAt(0).toUpperCase() || "?";
+
   return (
-    <div className="flex size-full items-center justify-center bg-[#ea580c] text-[20px] font-bold text-white shadow-inner select-none">
-      {name.trim().charAt(0).toUpperCase() || "?"}
+    <div className="relative flex size-full items-center justify-center bg-[#ea580c] text-[20px] font-bold text-white shadow-inner select-none overflow-hidden">
+      <span>{initial}</span>
+      {url && !imageError ? (
+        <img
+          src={url}
+          alt={name || "Avatar"}
+          width={72}
+          height={72}
+          onLoad={() => setLoaded(true)}
+          onError={() => {
+            setImageError(true);
+            onError?.();
+          }}
+          className={cn(
+            "absolute inset-0 size-full object-cover transition-opacity duration-150",
+            loaded ? "opacity-100" : "opacity-0"
+          )}
+        />
+      ) : null}
     </div>
   );
 }

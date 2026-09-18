@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/menu";
 import { useImageLightboxStore } from "@/lib/store/image-lightbox-store";
 import { useLibrasStore } from "@/lib/store/libras-store";
+import { useUiStore } from "@/lib/store/ui-store";
 import { transcribeAudioSource } from "@/lib/accessibility/audio-transcriber";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
 import { SUPPORTED_LANGUAGES } from "@/lib/i18n/languages";
@@ -533,6 +534,7 @@ function ResizablePdf({
 
 function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeViewProps) {
   const { t, language } = useTranslation();
+  const libras = useUiStore((state) => state.libras);
   const {
     mediaType,
     url,
@@ -1298,81 +1300,83 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
               </div>
               <div className="flex items-center justify-between gap-2 pt-0.5">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <button
-                    type="button"
-                    disabled={isBusy || isLibrasLoading || isTranscribing}
-                    onClick={async (e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      let transcriptText = audioTranscript;
-                      let quotaErr = false;
+                  {libras ? (
+                    <button
+                      type="button"
+                      disabled={isBusy || isLibrasLoading || isTranscribing}
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        let transcriptText = audioTranscript;
+                        let quotaErr = false;
 
-                      if (!transcriptText && url && typeof url === "string") {
-                        setIsLibrasLoading(true);
-                        setTranscribeProgress(0);
-                        try {
-                          let opened = false;
-                          transcriptText = await transcribeAudioSource(
-                            url,
-                            null,
-                            (partialText, percent, isInitialReady) => {
-                              setEphemeralTranscript(partialText);
-                              setTranscribeProgress(percent);
-                              if (isInitialReady && !opened && partialText) {
-                                opened = true;
-                                setIsLibrasLoading(false);
-                                useLibrasStore.getState().openWithText(partialText, {
-                                  title: displayName || t("audio_file"),
-                                  audioUrl: String(url),
-                                });
-                              } else if (opened && partialText) {
-                                useLibrasStore.getState().updateText(partialText);
-                              }
-                            },
-                            effectiveTranscribeLang
-                          );
-                          if (!opened && transcriptText) {
-                            useLibrasStore.getState().openWithText(transcriptText, {
-                              title: displayName || t("audio_file"),
-                              audioUrl: String(url),
-                            });
+                        if (!transcriptText && url && typeof url === "string") {
+                          setIsLibrasLoading(true);
+                          setTranscribeProgress(0);
+                          try {
+                            let opened = false;
+                            transcriptText = await transcribeAudioSource(
+                              url,
+                              null,
+                              (partialText, percent, isInitialReady) => {
+                                setEphemeralTranscript(partialText);
+                                setTranscribeProgress(percent);
+                                if (isInitialReady && !opened && partialText) {
+                                  opened = true;
+                                  setIsLibrasLoading(false);
+                                  useLibrasStore.getState().openWithText(partialText, {
+                                    title: displayName || t("audio_file"),
+                                    audioUrl: String(url),
+                                  });
+                                } else if (opened && partialText) {
+                                  useLibrasStore.getState().updateText(partialText);
+                                }
+                              },
+                              effectiveTranscribeLang
+                            );
+                            if (!opened && transcriptText) {
+                              useLibrasStore.getState().openWithText(transcriptText, {
+                                title: displayName || t("audio_file"),
+                                audioUrl: String(url),
+                              });
+                            }
+                          } catch (err) {
+                            if (err instanceof Error && err.message === "QUOTA_EXCEEDED") {
+                              quotaErr = true;
+                              toast.error(t("transcription_quota_exceeded"));
+                            }
+                          } finally {
+                            setIsLibrasLoading(false);
                           }
-                        } catch (err) {
-                          if (err instanceof Error && err.message === "QUOTA_EXCEEDED") {
-                            quotaErr = true;
-                            toast.error(t("transcription_quota_exceeded"));
-                          }
-                        } finally {
-                          setIsLibrasLoading(false);
+                        } else if (transcriptText) {
+                          useLibrasStore.getState().openWithText(transcriptText, {
+                            title: displayName || t("audio_file"),
+                            audioUrl: String(url),
+                          });
+                          return;
                         }
-                      } else if (transcriptText) {
-                        useLibrasStore.getState().openWithText(transcriptText, {
-                          title: displayName || t("audio_file"),
-                          audioUrl: String(url),
-                        });
-                        return;
-                      }
 
-                      if (!transcriptText && !quotaErr) {
-                        toast.error(t("no_speech_detected_libras"));
-                      }
-                    }}
-                    className="touch-manipulation inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11.5px] font-medium text-ink shadow-2xs transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
-                    aria-label={isLibrasLoading ? t("preparing_libras") : t("see_in_libras")}
-                    onTouchStart={(e) => {
-                      e.stopPropagation();
-                      if (document.activeElement instanceof HTMLElement) {
-                        document.activeElement.blur();
-                      }
-                    }}
-                  >
-                    {isLibrasLoading ? (
-                      <Loader2 className="size-3.5 animate-spin text-[var(--accent)]" />
-                    ) : (
-                      <Hand className="size-3.5 text-[var(--accent)]" />
-                    )}
-                    <span>{isLibrasLoading ? t("preparing_libras") : t("see_in_libras")}</span>
-                  </button>
+                        if (!transcriptText && !quotaErr) {
+                          toast.error(t("no_speech_detected_libras"));
+                        }
+                      }}
+                      className="touch-manipulation inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11.5px] font-medium text-ink shadow-2xs transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+                      aria-label={isLibrasLoading ? t("preparing_libras") : t("see_in_libras")}
+                      onTouchStart={(e) => {
+                        e.stopPropagation();
+                        if (document.activeElement instanceof HTMLElement) {
+                          document.activeElement.blur();
+                        }
+                      }}
+                    >
+                      {isLibrasLoading ? (
+                        <Loader2 className="size-3.5 animate-spin text-[var(--accent)]" />
+                      ) : (
+                        <Hand className="size-3.5 text-[var(--accent)]" />
+                      )}
+                      <span>{isLibrasLoading ? t("preparing_libras") : t("see_in_libras")}</span>
+                    </button>
+                  ) : null}
 
                   <button
                     type="button"

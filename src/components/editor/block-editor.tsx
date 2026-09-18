@@ -127,6 +127,10 @@ export function BlockEditor({
 }: BlockEditorProps) {
   const router = useRouter();
   const { t, language } = useTranslation();
+  const tRef = useRef(t);
+  tRef.current = t;
+  const languageRef = useRef(language);
+  languageRef.current = language;
   const { livePages, notebooks, adapter } = useWorkspace();
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   const storeBlockCount = useRef(page.blocks.length);
@@ -340,12 +344,12 @@ export function BlockEditor({
 
               toast.success(
                 isAudio
-                  ? t("audio_attached")
+                  ? tRef.current("audio_attached")
                   : isImage
-                    ? t("image_attached")
+                    ? tRef.current("image_attached")
                     : prepared.type === "application/pdf"
-                      ? t("pdf_attached")
-                      : t("file_attached")
+                      ? tRef.current("pdf_attached")
+                      : tRef.current("file_attached")
               );
             } else if (storagePath) {
               void adapter.deleteMedia([storagePath], page.id);
@@ -372,8 +376,8 @@ export function BlockEditor({
               onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
             }
             toast.error(
-              localizeErrorMessage(error instanceof Error ? error.message : null, t) ||
-                t("file_attach_error")
+              localizeErrorMessage(error instanceof Error ? error.message : null, tRef.current) ||
+                tRef.current("file_attach_error")
             );
           } finally {
             if (uploadSuccess) {
@@ -427,7 +431,7 @@ export function BlockEditor({
           attrs: {
             mediaType: "audio",
             url: previewUrl,
-            name: `${t("voice_note").toLowerCase().replace(/\s+/g, "-")}-${new Date().toLocaleTimeString(language === "pt" ? "pt-BR" : language)}.${(blob.type || "").includes("mp4") ? "mp4" : (blob.type || "").includes("ogg") ? "ogg" : (blob.type || "").includes("wav") ? "wav" : "webm"}`,
+            name: `${tRef.current("voice_note").toLowerCase().replace(/\s+/g, "-")}-${new Date().toLocaleTimeString(languageRef.current === "pt" ? "pt-BR" : languageRef.current)}.${(blob.type || "").includes("mp4") ? "mp4" : (blob.type || "").includes("ogg") ? "ogg" : (blob.type || "").includes("wav") ? "wav" : "webm"}`,
             mimeType: blob.type || "audio/webm",
             sizeBytes: blob.size,
             durationSeconds,
@@ -479,7 +483,7 @@ export function BlockEditor({
             const blocks = docToBlocks(instance.getJSON());
             emittedBlockCount.current = blocks.length;
             onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
-            toast.success(t("audio_attached"));
+            toast.success(tRef.current("audio_attached"));
           } else if (storagePath) {
             void adapter.deleteMedia([storagePath], page.id);
           }
@@ -505,8 +509,8 @@ export function BlockEditor({
             onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
           }
           toast.error(
-            localizeErrorMessage(error instanceof Error ? error.message : null, t) ||
-              t("audio_save_error")
+            localizeErrorMessage(error instanceof Error ? error.message : null, tRef.current) ||
+              tRef.current("audio_save_error")
           );
         } finally {
           if (uploadSuccess) {

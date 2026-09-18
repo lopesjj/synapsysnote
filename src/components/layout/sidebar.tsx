@@ -1113,7 +1113,7 @@ function SortablePageRow({
       {dropIntent === "inside" && (
         <div className="pointer-events-none absolute right-1.5 top-1/2 z-30 -translate-y-1/2 flex items-center gap-1 rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10.5px] font-bold text-white shadow-md animate-in fade-in zoom-in-95 duration-100">
           <FilePlus className="size-3" />
-          <span>Subpágina</span>
+          <span>{t("subnote")}</span>
         </div>
       )}
       <button

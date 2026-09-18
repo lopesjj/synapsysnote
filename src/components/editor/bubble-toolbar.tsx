@@ -65,6 +65,7 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
   const { t, language } = useTranslation();
   const screenReader = useUiStore((state) => state.screenReader);
   const speechRate = useUiStore((state) => state.speechRate);
+  const libras = useUiStore((state) => state.libras);
   const [panel, setPanel] = useState<Panel>(null);
   const [linkValue, setLinkValue] = useState("");
 
@@ -206,27 +207,31 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
         >
           <LinkIcon className="size-3.5" />
         </button>
-        <span className="mx-0.5 h-4 w-px bg-[var(--border)]" />
-        <button
-          type="button"
-          title={t("interpret_in_libras")}
-          aria-label={t("interpret_in_libras")}
-          onPointerDown={keepSelection}
-          onMouseDown={keepSelection}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            const { from, to } = editor.state.selection;
-            const text = editor.state.doc.textBetween(from, to, " ");
-            if (!text.trim()) return;
-            useLibrasStore.getState().openWithText(text, {
-              title: text.length > 25 ? `${text.slice(0, 25)}...` : text,
-            });
-          }}
-          className="rounded-[var(--radius-xs)] p-1.5 text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
-        >
-          <Hand className="size-3.5" />
-        </button>
+        {libras ? (
+          <>
+            <span className="mx-0.5 h-4 w-px bg-[var(--border)]" />
+            <button
+              type="button"
+              title={t("interpret_in_libras")}
+              aria-label={t("interpret_in_libras")}
+              onPointerDown={keepSelection}
+              onMouseDown={keepSelection}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const { from, to } = editor.state.selection;
+                const text = editor.state.doc.textBetween(from, to, " ");
+                if (!text.trim()) return;
+                useLibrasStore.getState().openWithText(text, {
+                  title: text.length > 25 ? `${text.slice(0, 25)}...` : text,
+                });
+              }}
+              className="rounded-[var(--radius-xs)] p-1.5 text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
+            >
+              <Hand className="size-3.5" />
+            </button>
+          </>
+        ) : null}
         {screenReader ? (
           <>
             <span className="mx-0.5 h-4 w-px bg-[var(--border)]" />

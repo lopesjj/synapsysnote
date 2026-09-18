@@ -134,6 +134,8 @@ export type TranslationKey =
   | "in_word"
   | "rename"
   | "new_subpage"
+  | "subnote"
+  | "new_subnote"
   | "empty_drag_notes"
   | "view_all_favorites"
   | "note_duplicated"
@@ -619,7 +621,17 @@ export type TranslationKey =
   | "reset_new_password_title"
   | "reset_new_password_desc"
   | "resetting_for_email"
-  | "choose_new_password";
+  | "choose_new_password"
+  | "status_canceled"
+  | "import_completed"
+  | "token_encryption_key_missing"
+  | "wizard_status_backlinks"
+  | "wizard_status_preparing"
+  | "wizard_step_converting"
+  | "wizard_step_importing_records"
+  | "wizard_step_preparing"
+  | "wizard_step_completed_with_warnings"
+  | "wizard_step_auth_failed";
 
 export const TRANSLATIONS: Record<string, Record<string, string>> & Record<SupportedLanguage, Partial<Record<TranslationKey, string>>> & { pt: Record<TranslationKey, string>; en: Record<TranslationKey, string> } = {
   ar: {} as Record<TranslationKey, string>,
@@ -966,7 +978,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     open: "Abrir",
     in_word: "em",
     rename: "Renomear",
-    new_subpage: "Nova subpágina",
+    new_subpage: "Nova subnota",
+    new_subnote: "Nova subnota",
+    subnote: "Subnota",
     empty_drag_notes: "Vazio - arraste notas para cá",
     view_all_favorites: "Ver todos os favoritos",
     note_duplicated: "Nota duplicada",
@@ -1087,7 +1101,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     slash_audio_title: "Gravar nota de voz",
     slash_audio_desc: "Gravar áudio diretamente na nota",
     slash_attachment_title: "Anexar do computador",
-    slash_attachment_desc: "PDF e imagens (imagem até 1 MB, PDF até 3 MB)",
+    slash_attachment_desc: "PDF, imagens e áudios",
     change_password_desc_demo: "No modo demonstração não existe senha no Firebase.",
     change_password_desc_has_password: "Informe a senha atual e escolha uma nova.",
     change_password_desc_add_password: "Adicione uma senha para também poder entrar com e-mail e senha. A conta continuará sendo a mesma.",
@@ -1141,7 +1155,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     read_selection_aloud: "Ler seleção em voz alta",
     skip_to_content: "Pular para o conteúdo principal",
     accessibility: "Acessibilidade",
-    accessibility_description: "Opções de acessibilidade para surdos, leitor de voz, contraste e navegação.",
+    accessibility_description: "Funcionalidades de acessibilidade, incluindo suporte para libras, leitor de voz, contraste aprimorado e navegação acessível.",
     libras: "Libras",
     libras_interpreter: "Intérprete de Libras",
     libras_desc: "Traduz notas e áudios para a Língua Brasileira de Sinais de forma nativa e interativa",
@@ -1240,6 +1254,16 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     reset_new_password_desc: "Escolha uma senha nova.",
     resetting_for_email: "Redefinindo a senha de {email}.",
     choose_new_password: "Escolha uma senha nova.",
+    status_canceled: "Cancelada",
+    import_completed: "Importação concluída",
+    token_encryption_key_missing: "Chave de criptografia ausente no servidor. Defina TOKEN_ENCRYPTION_KEY.",
+    wizard_status_backlinks: "Reconstruindo links internos…",
+    wizard_status_preparing: "Preparando itens…",
+    wizard_step_converting: "({current}) Convertendo “{title}”…",
+    wizard_step_importing_records: "Importando registros de “{title}” ({order})…",
+    wizard_step_preparing: "Preparando {count} itens…",
+    wizard_step_completed_with_warnings: "Importação concluída com {count} avisos",
+    wizard_step_auth_failed: "Falha de autenticação: {message}",
   },
   en: {
     preferences_description: "Appearance, language, typography, and shortcuts. Your choices follow your account.",
@@ -1584,7 +1608,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     open: "Open",
     in_word: "in",
     rename: "Rename",
-    new_subpage: "New subpage",
+    new_subpage: "New subnote",
+    new_subnote: "New subnote",
+    subnote: "Subnote",
     empty_drag_notes: "Empty - drag notes here",
     view_all_favorites: "View all favorites",
     note_duplicated: "Note duplicated",
@@ -1705,7 +1731,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     slash_audio_title: "Record voice note",
     slash_audio_desc: "Record audio directly into the note",
     slash_attachment_title: "Attach from computer",
-    slash_attachment_desc: "PDF and images (image up to 1 MB, PDF up to 3 MB)",
+    slash_attachment_desc: "PDF, images, and audio",
     change_password_desc_demo: "In demo mode there is no password in Firebase.",
     change_password_desc_has_password: "Enter your current password and choose a new one.",
     change_password_desc_add_password: "Add a password to also sign in with email and password. The account will remain the same.",
@@ -1759,7 +1785,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     read_selection_aloud: "Read selection aloud",
     skip_to_content: "Skip to main content",
     accessibility: "Accessibility",
-    accessibility_description: "Accessibility options for the deaf, voice reader, contrast, and navigation.",
+    accessibility_description: "Accessibility features, including sign language (Libras) support, voice reader, enhanced contrast, and accessible navigation.",
     libras: "Libras",
     libras_interpreter: "Libras Interpreter",
     libras_desc: "Translates notes and audios into Brazilian Sign Language natively and interactively",
@@ -1858,6 +1884,16 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     reset_new_password_desc: "Choose a new password.",
     resetting_for_email: "Resetting password for {email}.",
     choose_new_password: "Choose a new password.",
+    status_canceled: "Canceled",
+    import_completed: "Import completed",
+    token_encryption_key_missing: "Encryption key missing on server. Set TOKEN_ENCRYPTION_KEY.",
+    wizard_status_backlinks: "Rebuilding internal links…",
+    wizard_status_preparing: "Preparing items…",
+    wizard_step_converting: "({current}) Converting “{title}”…",
+    wizard_step_importing_records: "Importing records from “{title}” ({order})…",
+    wizard_step_preparing: "Preparing {count} items…",
+    wizard_step_completed_with_warnings: "Import completed with {count} warnings",
+    wizard_step_auth_failed: "Authentication failed: {message}",
   },
 
   es: {
@@ -2203,7 +2239,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     open: "Abrir",
     in_word: "en",
     rename: "Renombrar",
-    new_subpage: "Nueva subpágina",
+    new_subpage: "Nueva subnota",
+    new_subnote: "Nueva subnota",
+    subnote: "Subnota",
     empty_drag_notes: "Vacío - arrastra notas aquí",
     view_all_favorites: "Ver todos los favoritos",
     note_duplicated: "Nota duplicada",
@@ -2324,7 +2362,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     slash_audio_title: "Grabar nota de voz",
     slash_audio_desc: "Graba audio directamente en la nota",
     slash_attachment_title: "Adjuntar desde la computadora",
-    slash_attachment_desc: "PDF e imágenes (imagen hasta 1 MB, PDF hasta 3 MB)",
+    slash_attachment_desc: "PDF, imágenes y audios",
     change_password_desc_demo: "En el modo de demostración no hay contraseña en Firebase.",
     change_password_desc_has_password: "Introduce la contraseña actual y elige una nueva.",
     change_password_desc_add_password: "Añade una contraseña para iniciar sesión también con correo y contraseña. La cuenta seguirá siendo la misma.",
@@ -2378,7 +2416,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     read_selection_aloud: "Leer selección en voz alta",
     skip_to_content: "Saltar al contenido principal",
     accessibility: "Accesibilidad",
-    accessibility_description: "Opciones de accesibilidad para personas sordas, lector de voz, contraste y navegación.",
+    accessibility_description: "Funcionalidades de accesibilidad, incluyendo soporte para lengua de señas (Libras), lector de voz, contraste mejorado y navegación accesible.",
     libras: "Libras",
     libras_interpreter: "Intérprete de Libras",
     libras_desc: "Traduce notas y audios a la Lengua de Señas Brasileña de forma nativa e interactiva",
@@ -2477,6 +2515,16 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     reset_new_password_desc: "Elige una nueva contraseña.",
     resetting_for_email: "Restableciendo la contraseña de {email}.",
     choose_new_password: "Elige una nueva contraseña.",
+    status_canceled: "Cancelada",
+    import_completed: "Importación completada",
+    token_encryption_key_missing: "Falta la clave de cifrado en el servidor. Defina TOKEN_ENCRYPTION_KEY.",
+    wizard_status_backlinks: "Reconstruyendo enlaces internos…",
+    wizard_status_preparing: "Preparando elementos…",
+    wizard_step_converting: "({current}) Convirtiendo “{title}”…",
+    wizard_step_importing_records: "Importando registros de “{title}” ({order})…",
+    wizard_step_preparing: "Preparando {count} elementos…",
+    wizard_step_completed_with_warnings: "Importación completada con {count} avisos",
+    wizard_step_auth_failed: "Fallo de autenticación: {message}",
   },
 
   fr: {
@@ -2822,7 +2870,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     open: "Ouvrir",
     in_word: "dans",
     rename: "Renommer",
-    new_subpage: "Nouvelle sous-page",
+    new_subpage: "Nouvelle sous-note",
+    new_subnote: "Nouvelle sous-note",
+    subnote: "Sous-note",
     empty_drag_notes: "Vide - glissez des notes ici",
     view_all_favorites: "Voir tous les favoris",
     note_duplicated: "Note dupliquée",
@@ -2943,7 +2993,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     slash_audio_title: "Enregistrer une note vocale",
     slash_audio_desc: "Enregistrez de l'audio directement dans la note",
     slash_attachment_title: "Joindre depuis l'ordinateur",
-    slash_attachment_desc: "PDF et images (image jusqu'à 1 Mo, PDF jusqu'à 3 Mo)",
+    slash_attachment_desc: "PDF, images et audios",
     change_password_desc_demo: "En mode démo, il n'y a pas de mot de passe dans Firebase.",
     change_password_desc_has_password: "Entrez votre mot de passe actuel et choisissez-en un nouveau.",
     change_password_desc_add_password: "Ajoutez un mot de passe pour vous connecter aussi par e-mail et mot de passe. Le compte restera le même.",
@@ -2997,7 +3047,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     read_selection_aloud: "Lire la sélection à haute voix",
     skip_to_content: "Aller au contenu principal",
     accessibility: "Accessibilité",
-    accessibility_description: "Options d'accessibilité pour les sourds, lecteur vocal, contraste et navigation.",
+    accessibility_description: "Fonctionnalités d'accessibilité, incluant le support de la langue des signes (Libras), lecteur vocal, contraste amélioré et navigation accessible.",
     libras: "Libras",
     libras_interpreter: "Interprète Libras",
     libras_desc: "Traduit les notes et audios en langue des signes brésilienne de manière native et interactive",
@@ -3096,6 +3146,16 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     reset_new_password_desc: "Choisissez un nouveau mot de passe.",
     resetting_for_email: "Réinitialisation du mot de passe pour {email}.",
     choose_new_password: "Choisissez un nouveau mot de passe.",
+    status_canceled: "Annulée",
+    import_completed: "Importation terminée",
+    token_encryption_key_missing: "Clé de chiffrement manquante sur le serveur. Définissez TOKEN_ENCRYPTION_KEY.",
+    wizard_status_backlinks: "Reconstruction des liens internes…",
+    wizard_status_preparing: "Préparation des éléments…",
+    wizard_step_converting: "({current}) Conversion de « {title} »…",
+    wizard_step_importing_records: "Importation des enregistrements de « {title} » ({order})…",
+    wizard_step_preparing: "Préparation de {count} éléments…",
+    wizard_step_completed_with_warnings: "Importation terminée avec {count} avertissements",
+    wizard_step_auth_failed: "Échec de l'authentification : {message}",
   },
 
   it: {
@@ -3441,7 +3501,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     open: "Apri",
     in_word: "in",
     rename: "Rinomina",
-    new_subpage: "Nuova sottopagina",
+    new_subpage: "Nuova sottonota",
+    new_subnote: "Nuova sottonota",
+    subnote: "Sottonota",
     empty_drag_notes: "Vuoto - trascina qui le note",
     view_all_favorites: "Vedi tutti i preferiti",
     note_duplicated: "Nota duplicata",
@@ -3562,7 +3624,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     slash_audio_title: "Registra nota vocale",
     slash_audio_desc: "Registra audio diretamente nella nota",
     slash_attachment_title: "Allega dal computer",
-    slash_attachment_desc: "PDF e immagini (immagine fino a 1 MB, PDF fino a 3 MB)",
+    slash_attachment_desc: "PDF, immagini e audio",
     change_password_desc_demo: "In modalità demo non c'è password in Firebase.",
     change_password_desc_has_password: "Inserisci la password attuale e scegline una nuova.",
     change_password_desc_add_password: "Aggiungi una password per accedere anche con email e password. L'account rimarrà lo stesso.",
@@ -3616,7 +3678,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     read_selection_aloud: "Leggi la selezione ad alta voce",
     skip_to_content: "Passa al contenuto principale",
     accessibility: "Accessibilità",
-    accessibility_description: "Opzioni di accessibilità per non udenti, lettore vocale, contrasto e navigazione.",
+    accessibility_description: "Funzionalità di accessibilità, compreso il supporto per la lingua dei segni (Libras), lettore vocale, contrasto migliorato e navigazione accessibile.",
     libras: "Libras",
     libras_interpreter: "Interprete Libras",
     libras_desc: "Traduce note e audio nella lingua dei segni brasiliana in modo nativo e interattivo",
@@ -3715,6 +3777,16 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     reset_new_password_desc: "Scegli una nuova password.",
     resetting_for_email: "Reimpostazione password per {email}.",
     choose_new_password: "Scegli una nuova password.",
+    status_canceled: "Annullata",
+    import_completed: "Importazione completata",
+    token_encryption_key_missing: "Chiave di crittografia mancante sul server. Configura TOKEN_ENCRYPTION_KEY.",
+    wizard_status_backlinks: "Ricostruzione dei collegamenti interni…",
+    wizard_status_preparing: "Preparazione degli elementos…",
+    wizard_step_converting: "({current}) Conversione di “{title}”…",
+    wizard_step_importing_records: "Importazione dei record da “{title}” ({order})…",
+    wizard_step_preparing: "Preparazione di {count} elementi…",
+    wizard_step_completed_with_warnings: "Importazione completata con {count} avvisi",
+    wizard_step_auth_failed: "Autenticazione non riuscita: {message}",
   },
 
   de: {
@@ -4060,7 +4132,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     open: "Öffnen",
     in_word: "in",
     rename: "Umbenennen",
-    new_subpage: "Neue Unterseite",
+    new_subpage: "Neue Unternotiz",
+    new_subnote: "Neue Unternotiz",
+    subnote: "Unternotiz",
     empty_drag_notes: "Leer – Notizen hierher ziehen",
     view_all_favorites: "Alle Favoriten anzeigen",
     note_duplicated: "Notiz dupliziert",
@@ -4181,7 +4255,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     slash_audio_title: "Sprachnotiz aufnehmen",
     slash_audio_desc: "Audio direkt in der Notiz aufnehmen",
     slash_attachment_title: "Vom Computer anhängen",
-    slash_attachment_desc: "PDF und Bilder (Bild bis zu 1 MB, PDF bis zu 3 MB)",
+    slash_attachment_desc: "PDF, Bilder und Audios",
     change_password_desc_demo: "Im Demo-Modus gibt es kein Passwort in Firebase.",
     change_password_desc_has_password: "Geben Sie das aktuelle Passwort ein und wählen Sie ein neues.",
     change_password_desc_add_password: "Fügen Sie ein Passwort hinzu, um sich auch mit E-Mail und Passwort anzumelden. Das Konto bleibt dasselbe.",
@@ -4235,7 +4309,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     read_selection_aloud: "Auswahl laut vorlesen",
     skip_to_content: "Zum Hauptinhalt springen",
     accessibility: "Barrierefreiheit",
-    accessibility_description: "Optionen für Barrierefreiheit für Gehörlose, Sprachleser, Kontrast und Navigation.",
+    accessibility_description: "Barrierefreiheitsfunktionen, einschließlich Unterstützung für Gebärdensprache (Libras), Sprachleser, verbesserter Kontrast und barrierefreie Navigation.",
     libras: "Libras",
     libras_interpreter: "Libras-Dolmetscher",
     libras_desc: "Übersetzt Notizen und Audios nativ und interaktiv in die brasilianische Gebärdensprache",
@@ -4334,6 +4408,16 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     reset_new_password_desc: "Wählen Sie ein neues Passwort.",
     resetting_for_email: "Passwort für {email} zurücksetzen.",
     choose_new_password: "Wählen Sie ein neues Passwort.",
+    status_canceled: "Abgebrochen",
+    import_completed: "Import abgeschlossen",
+    token_encryption_key_missing: "Verschlüsselungsschlüssel auf dem Server fehlt. Setzen Sie TOKEN_ENCRYPTION_KEY.",
+    wizard_status_backlinks: "Interne Links werden neu aufgebaut…",
+    wizard_status_preparing: "Elemente werden vorbereitet…",
+    wizard_step_converting: "({current}) „{title}“ wird konvertiert…",
+    wizard_step_importing_records: "Datensätze aus „{title}“ werden importiert ({order})…",
+    wizard_step_preparing: "{count} Elemente werden vorbereitet…",
+    wizard_step_completed_with_warnings: "Import mit {count} Warnungen abgeschlossen",
+    wizard_step_auth_failed: "Authentifizierung fehlgeschlagen: {message}",
   },
 
   ru: {
@@ -4679,7 +4763,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     open: "Открыть",
     in_word: "в",
     rename: "Переименовать",
-    new_subpage: "Новая подстраница",
+    new_subpage: "Новая подзаметка",
+    new_subnote: "Новая подзаметка",
+    subnote: "Подзаметка",
     empty_drag_notes: "Пусто — перетащите заметки сюда",
     view_all_favorites: "Все избранные",
     note_duplicated: "Заметка продублирована",
@@ -4800,7 +4886,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     slash_audio_title: "Записать голосовую заметку",
     slash_audio_desc: "Записать аудио прямо в заметку",
     slash_attachment_title: "Прикрепить с компьютера",
-    slash_attachment_desc: "PDF и изображения (изображение до 1 МБ, PDF до 3 МБ)",
+    slash_attachment_desc: "PDF, изображения и аудио",
     change_password_desc_demo: "В демо-режиме пароль в Firebase отсутствует.",
     change_password_desc_has_password: "Введите текущий пароль и выберите новый.",
     change_password_desc_add_password: "Добавьте пароль, чтобы также входить по электронной почте и паролю. Аккаунт останется прежним.",
@@ -4854,7 +4940,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     read_selection_aloud: "Прочитать выделение вслух",
     skip_to_content: "Перейти к основному содержимому",
     accessibility: "Специальные возможности",
-    accessibility_description: "Параметры доступности для глухих, голосовой помощник, контраст и навигация.",
+    accessibility_description: "Функции специальных возможностей, включая поддержку жестового языка (Libras), голосовой помощник, улучшенный контраст и доступную навигацию.",
     libras: "Libras",
     libras_interpreter: "Сурдопереводчик Libras",
     libras_desc: "Переводит заметки и аудио на бразильский жестовый язык в интерактивном режиме",
@@ -4953,6 +5039,16 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     reset_new_password_desc: "Выберите новый пароль.",
     resetting_for_email: "Сброс пароля для {email}.",
     choose_new_password: "Выберите новый пароль.",
+    status_canceled: "Отменено",
+    import_completed: "Импорт завершен",
+    token_encryption_key_missing: "На сервере отсутствует ключ шифрования. Задайте TOKEN_ENCRYPTION_KEY.",
+    wizard_status_backlinks: "Восстановление внутренних ссылок…",
+    wizard_status_preparing: "Подготовка элементов…",
+    wizard_step_converting: "({current}) Конвертация «{title}»…",
+    wizard_step_importing_records: "Импорт записей из «{title}» ({order})…",
+    wizard_step_preparing: "Подготовка элементов ({count})…",
+    wizard_step_completed_with_warnings: "Импорт завершен с {count} предупреждениями",
+    wizard_step_auth_failed: "Ошибка аутентификации: {message}",
   },
 
   ja: {
@@ -5298,7 +5394,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     open: "開く",
     in_word: "：",
     rename: "名前を変更",
-    new_subpage: "新規サブページ",
+    new_subpage: "新規サブノート",
+    new_subnote: "新規サブノート",
+    subnote: "サブノート",
     empty_drag_notes: "空です - ここにノートをドラッグ",
     view_all_favorites: "すべてのお気に入りを表示",
     note_duplicated: "ノートを複製しました",
@@ -5419,7 +5517,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     slash_audio_title: "音声ノートを録音",
     slash_audio_desc: "ノートに音声を直接録音",
     slash_attachment_title: "パソコンから添付",
-    slash_attachment_desc: "PDFと画像（画像最大1MB、PDF最大3MB）",
+    slash_attachment_desc: "PDF、画像、音声",
     change_password_desc_demo: "デモモードではFirebaseにパスワードはありません。",
     change_password_desc_has_password: "現在のパスワードを入力し、新しいパスワードを設定してください。",
     change_password_desc_add_password: "メールアドレスとパスワードでもログインできるようにパスワードを追加します。アカウントは同じままです。",
@@ -5473,7 +5571,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     read_selection_aloud: "選択範囲を音声で読み上げる",
     skip_to_content: "メインコンテンツへスキップ",
     accessibility: "アクセシビリティ",
-    accessibility_description: "聴覚障害者向けオプション、音声リーダー、コントラスト、ナビゲーションの設定。",
+    accessibility_description: "手話（Libras）サポート、音声リーダー、強化コントラスト、アクセシブルなナビゲーションを含むアクセシビリティ機能。",
     libras: "Libras",
     libras_interpreter: "Libras手話通訳",
     libras_desc: "メモや音声をブラジル手話（Libras）にインタラクティブに翻訳します",
@@ -5572,6 +5670,16 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     reset_new_password_desc: "新しいパスワードを選択してください。",
     resetting_for_email: "{email}のパスワードをリセット中。",
     choose_new_password: "新しいパスワードを選択してください。",
+    status_canceled: "キャンセル済み",
+    import_completed: "インポート完了",
+    token_encryption_key_missing: "サーバーの暗号化キーがありません。TOKEN_ENCRYPTION_KEYを設定してください。",
+    wizard_status_backlinks: "内部リンクを再構築中…",
+    wizard_status_preparing: "アイテムを準備中…",
+    wizard_step_converting: "({current}) 「{title}」を変換中…",
+    wizard_step_importing_records: "「{title}」からレコードをインポート中 ({order})…",
+    wizard_step_preparing: "{count}個のアイテムを準備中…",
+    wizard_step_completed_with_warnings: "{count}件の警告付きでインポート完了",
+    wizard_step_auth_failed: "認証に失敗しました: {message}",
   },
 
   zh: {
@@ -5917,7 +6025,9 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     open: "打开",
     in_word: "于",
     rename: "重命名",
-    new_subpage: "新建子页面",
+    new_subpage: "新建子笔记",
+    new_subnote: "新建子笔记",
+    subnote: "子笔记",
     empty_drag_notes: "空白 - 将笔记拖拽至此",
     view_all_favorites: "查看所有收藏",
     note_duplicated: "已复制笔记",
@@ -6038,7 +6148,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     slash_audio_title: "录制语音笔记",
     slash_audio_desc: "直接在笔记中录制音频",
     slash_attachment_title: "从电脑上传附件",
-    slash_attachment_desc: "PDF与图片（图片最大1MB，PDF最大3MB）",
+    slash_attachment_desc: "PDF、图片和音频",
     change_password_desc_demo: "演示模式下Firebase中没有密码。",
     change_password_desc_has_password: "输入当前密码并选择新密码。",
     change_password_desc_add_password: "添加密码以便还可以使用邮箱和密码登录。账户保持不变。",
@@ -6092,7 +6202,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     read_selection_aloud: "朗读选中文本",
     skip_to_content: "跳转到主要内容",
     accessibility: "无障碍功能",
-    accessibility_description: "包含听障辅助、语音朗读器、对比度和键盘导航等无障碍选项。",
+    accessibility_description: "无障碍辅助功能，包括手语（Libras）支持、语音朗读器、增强对比度与无障碍导航。",
     libras: "Libras",
     libras_interpreter: "Libras 手语翻译",
     libras_desc: "以原生交互方式将笔记和音频翻译为巴西手语（Libras）",
@@ -6191,6 +6301,16 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     reset_new_password_desc: "选择一个新密码。",
     resetting_for_email: "正在重置 {email} 的密码。",
     choose_new_password: "选择一个新密码。",
+    status_canceled: "已取消",
+    import_completed: "导入完成",
+    token_encryption_key_missing: "服务器缺少加密密钥。请设置 TOKEN_ENCRYPTION_KEY。",
+    wizard_status_backlinks: "正在重建内部链接…",
+    wizard_status_preparing: "正在准备项目…",
+    wizard_step_converting: "({current}) 正在转换“{title}”…",
+    wizard_step_importing_records: "正在从“{title}”导入记录 ({order})…",
+    wizard_step_preparing: "正在准备 {count} 个项目…",
+    wizard_step_completed_with_warnings: "导入完成，带有 {count} 个警告",
+    wizard_step_auth_failed: "认证失败: {message}",
   },
 };
 
@@ -6540,7 +6660,9 @@ TRANSLATIONS.ar = {
   could_not_duplicate: "تعذر التكرار",
   moved_to_trash: "تم النقل إلى سلة المهملات",
   undo_action: "تراجع",
-  new_subpage: "صفحة فرعية جديدة",
+  new_subpage: "ملاحظة فرعية جديدة",
+    new_subnote: "ملاحظة فرعية جديدة",
+    subnote: "ملاحظة فرعية",
   empty_drag_notes: "فارغ - اسحب الملاحظات إلى هنا",
   view_all_favorites: "عرض جميع المفضلة",
   account: "الحساب",
@@ -6659,7 +6781,7 @@ TRANSLATIONS.ar = {
   slash_audio_title: "تسجيل ملاحظة صوتية",
   slash_audio_desc: "تسجيل صوتي مباشر في الملاحظة",
   slash_attachment_title: "إرفاق من الجهاز",
-  slash_attachment_desc: "ملفات PDF وصور (الصور حتى 1 ميغابايت، PDF حتى 3 ميغابايت)",
+  slash_attachment_desc: "ملفات PDF وصور وتسجيلات صوتية",
   change_password_desc_demo: "في الوضع التجريبي لا توجد كلمة مرور في Firebase.",
   change_password_desc_has_password: "أدخل كلمة المرور الحالية واختر كلمة مرور جديدة.",
   change_password_desc_add_password: "أضف كلمة مرور لتتمكن من تسجيل الدخول بالبريد وكلمة المرور أيضاً. سيبقى الحساب كما هو.",
@@ -6713,7 +6835,7 @@ TRANSLATIONS.ar = {
   read_selection_aloud: "قراءة النص المحدد بصوت عالٍ",
   skip_to_content: "الانتقال إلى المحتوى الرئيسي",
   accessibility: "إمكانية الوصول",
-  accessibility_description: "تخصيص الخيارات لجعل التطبيق أكثر سهولة وشمولاً.",
+  accessibility_description: "ميزات إمكانية الوصول، بما في ذلك دعم لغة الإشارة (Libras)، والقارئ الصوتي، والتباين المحسّن، والتنقل السهل.",
   libras: "لغة الإشارة (Libras)",
   libras_interpreter: "مترجم لغة الإشارة",
   libras_desc: "ترجمة الملاحظات والملفات الصوتية إلى لغة الإشارة بشكل تفاعلي",
@@ -6812,6 +6934,16 @@ TRANSLATIONS.ar = {
   reset_new_password_desc: "اختر كلمة مرور جديدة.",
   resetting_for_email: "جارٍ إعادة تعيين كلمة المرور لـ {email}.",
   choose_new_password: "اختر كلمة مرور جديدة.",
+    status_canceled: "ملغاة",
+    import_completed: "اكتمل الاستيراد",
+    token_encryption_key_missing: "مفتاح التشفير مفقود على الخادم. يرجى تكوين TOKEN_ENCRYPTION_KEY.",
+    wizard_status_backlinks: "جارٍ إعادة بناء الروابط الداخلية…",
+    wizard_status_preparing: "جارٍ إعداد العناصر…",
+    wizard_step_converting: "({current}) جارٍ تحويل \"{title}\"…",
+    wizard_step_importing_records: "جارٍ استيراد السجلات من \"{title}\" ({order})…",
+    wizard_step_preparing: "جارٍ إعداد {count} من العناصر…",
+    wizard_step_completed_with_warnings: "اكتمل الاستيراد مع {count} من التحذيرات",
+    wizard_step_auth_failed: "فشل المصادقة: {message}",
 };
 
 export function useTranslation() {
@@ -6837,6 +6969,13 @@ export function localizeErrorMessage(
   t: (key: TranslationKey, params?: Record<string, string | number>) => string
 ): string {
   if (!msg) return "";
+  if (msg.startsWith("Falhou:") || msg.startsWith("Failed:")) {
+    const cleaned = msg.replace(/^(Falhou|Failed):s*/i, "");
+    return localizeErrorMessage(cleaned, t) || t("status_failed");
+  }
+  if (msg.includes("TOKEN_ENCRYPTION_KEY")) {
+    return t("token_encryption_key_missing");
+  }
   if (msg.includes("FIREBASE_SERVICE_ACCOUNT_JSON")) {
     if (msg.toLowerCase().includes("salvar") || msg.toLowerCase().includes("save")) {
       return t("firebase_admin_not_configured_save");
@@ -6854,6 +6993,24 @@ export function localizeErrorMessage(
   }
   if (msg.includes("Não foi possível ler o workspace") || msg.includes("Could not read Notion workspace")) {
     return t("notion_tree_read_error");
+  }
+  if (msg.includes("Importação concluída") || msg.toLowerCase().includes("import completed")) {
+    return t("import_completed");
+  }
+  if (msg.includes("Lendo estrutura") || msg.toLowerCase().includes("discovering")) {
+    return t("wizard_status_discovering");
+  }
+  if (msg.includes("Reconstruindo backlinks") || msg.toLowerCase().includes("backlinks")) {
+    return t("wizard_status_backlinks");
+  }
+  if (msg.includes("Job enfileirado") || msg.toLowerCase().includes("enfileirado")) {
+    return t("wizard_status_queued");
+  }
+  if (msg.includes("Preparando") || msg.toLowerCase().includes("preparing")) {
+    return t("wizard_status_preparing");
+  }
+  if (msg.includes("Cancelado pelo usuário") || msg.includes("Cancelada") || msg.toLowerCase().includes("canceled")) {
+    return t("status_canceled");
   }
   if (
     msg.includes("continua acima de") ||

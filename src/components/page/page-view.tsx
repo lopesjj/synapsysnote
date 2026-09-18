@@ -254,6 +254,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const showSaveIndicator = useUiStore((state) => state.showSaveIndicator);
   const screenReader = useUiStore((state) => state.screenReader);
   const speechRate = useUiStore((state) => state.speechRate);
+  const libras = useUiStore((state) => state.libras);
   const [narrating, setNarrating] = useState(false);
   const [pausedNarration, setPausedNarration] = useState(false);
   const lastNarrationLangRef = useRef<string>(language);
@@ -342,6 +343,7 @@ export function PageView({ pageId }: { pageId: string }) {
 
   const handleInterpretLibras = useCallback(() => {
     if (!page) return;
+    if (!useUiStore.getState().libras) return;
     const currentTitleText = title?.trim() || page.title?.trim() || "";
     const fullText = extractPageText(page, true, currentTitleText, t("untitled"), t("audio_file"), true);
     if (!fullText.trim()) {
@@ -359,7 +361,7 @@ export function PageView({ pageId }: { pageId: string }) {
         if (e.key === "r" || e.key === "R") {
           e.preventDefault();
           toggleNarration();
-        } else if (e.key === "l" || e.key === "L") {
+        } else if ((e.key === "l" || e.key === "L") && libras) {
           e.preventDefault();
           handleInterpretLibras();
         }
@@ -367,7 +369,7 @@ export function PageView({ pageId }: { pageId: string }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [page, narrating, pausedNarration, speechRate, language, handleInterpretLibras]);
+  }, [page, narrating, pausedNarration, speechRate, language, handleInterpretLibras, libras]);
 
   const { schedule, flush, status, lastSavedAt } = useDebounceAutoSave<Partial<Page>>({
     resetKey: pageId,
@@ -567,17 +569,19 @@ export function PageView({ pageId }: { pageId: string }) {
           </Button>
         </Tooltip>
 
-        <Tooltip label={t("interpret_in_libras")} shortcut="Alt L">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className={hasCover ? "text-white hover:bg-white/15 hover:text-white" : undefined}
-            onClick={handleInterpretLibras}
-            aria-label={t("interpret_in_libras")}
-          >
-            <Hand className="size-4" />
-          </Button>
-        </Tooltip>
+        {libras ? (
+          <Tooltip label={t("interpret_in_libras")} shortcut="Alt L">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className={hasCover ? "text-white hover:bg-white/15 hover:text-white" : undefined}
+              onClick={handleInterpretLibras}
+              aria-label={t("interpret_in_libras")}
+            >
+              <Hand className="size-4" />
+            </Button>
+          </Tooltip>
+        ) : null}
 
         {screenReader || narrating ? (
           <div className="flex items-center gap-1">
@@ -656,9 +660,11 @@ export function PageView({ pageId }: { pageId: string }) {
             >
               <FilePlus /> {t("new_note")}
             </MenuItem>
-            <MenuItem onSelect={handleInterpretLibras}>
-              <Hand /> {t("interpret_in_libras")}
-            </MenuItem>
+            {libras ? (
+              <MenuItem onSelect={handleInterpretLibras}>
+                <Hand /> {t("interpret_in_libras")}
+              </MenuItem>
+            ) : null}
             {screenReader || narrating ? (
               <MenuItem onSelect={toggleNarration}>
                 <Volume2 /> {narrating ? t("stop_reading") : t("read_note_aloud")}

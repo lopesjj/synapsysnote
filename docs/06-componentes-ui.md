@@ -56,7 +56,7 @@ notas, importação, favoritos, **páginas** (cadernos-raiz) com cadernos aninha
 e árvore de notas, bases de dados, tags globais, lixeira. O rodapé tem o
 [`user-menu.tsx`](../src/components/layout/user-menu.tsx) (tema, foco,
 preferências, integrações, sair). Cada linha tem menu de contexto (nova
-subpágina / caderno, duplicar, favoritar, mover para lixeira com desfazer no
+subnota / caderno, duplicar, favoritar, mover para lixeira com desfazer no
 toast). Recolhe para uma faixa de ícones com `Cmd/Ctrl+B`, é redimensionável
 arrastando a borda, e no mobile vira overlay.
 

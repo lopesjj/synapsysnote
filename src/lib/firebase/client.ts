@@ -17,6 +17,7 @@ import {
   memoryLocalCache,
   persistentLocalCache,
   persistentMultipleTabManager,
+  setLogLevel,
   type Firestore,
 } from "firebase/firestore";
 import { connectStorageEmulator, getStorage, type FirebaseStorage } from "firebase/storage";
@@ -52,14 +53,17 @@ export function getDb(): Firestore {
   if (firestore) return firestore;
   const instance = getFirebaseApp();
   try {
+    setLogLevel("error");
     firestore = initializeFirestore(instance, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
       ignoreUndefinedProperties: true,
+      experimentalAutoDetectLongPolling: true,
     });
   } catch {
     firestore = initializeFirestore(instance, {
       localCache: memoryLocalCache(),
       ignoreUndefinedProperties: true,
+      experimentalAutoDetectLongPolling: true,
     });
   }
   if (firebaseEmulatorsEnabled()) connectFirestoreEmulator(firestore, "127.0.0.1", 8080);

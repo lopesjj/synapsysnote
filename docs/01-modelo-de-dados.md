@@ -79,7 +79,7 @@ Arquivos: [`firestore.rules`](../firestore.rules) ·
 inteira; embutir `blocks[]` transforma a abertura em **uma** leitura e permite
 edição transacional do documento. O limite de 1 MiB por documento acomoda
 páginas muito longas porque binários nunca entram no Firestore — só a URL do
-Storage. Páginas que passariam do limite indicam que deveriam ser subpáginas.
+Storage. Notas que passariam do limite indicam que deveriam ser subnotas.
 
 **Página, caderno e nota.** `notebooks/{id}` cobre dois papéis na UI: raiz
 (`parentId` nulo ou ausente) é **página**; filho é **caderno**. Documentos em

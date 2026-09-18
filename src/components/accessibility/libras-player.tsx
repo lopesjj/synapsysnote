@@ -21,10 +21,12 @@ import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/primitives";
 import { LibrasHandSign } from "@/lib/accessibility/libras-dictionary";
 import { useLibrasStore, type LibrasSpeed } from "@/lib/store/libras-store";
+import { useUiStore } from "@/lib/store/ui-store";
 import { useTranslation } from "@/lib/i18n/translations";
 
 export function LibrasPlayer() {
   const { t } = useTranslation();
+  const libras = useUiStore((state) => state.libras);
   const isOpen = useLibrasStore((state) => state.isOpen);
   const isMinimized = useLibrasStore((state) => state.isMinimized);
   const isPlaying = useLibrasStore((state) => state.isPlaying);
@@ -100,7 +102,13 @@ export function LibrasPlayer() {
     }
   }, [currentTokenIndex]);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!libras && isOpen) {
+      close();
+    }
+  }, [libras, isOpen, close]);
+
+  if (!isOpen || !libras) return null;
 
   return (
     <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:bottom-4 right-2 sm:right-4 z-60 pointer-events-none select-none max-w-[calc(100vw-16px)]">

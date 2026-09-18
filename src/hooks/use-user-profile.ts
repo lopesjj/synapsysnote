@@ -19,7 +19,7 @@ import { useAuth } from "./use-auth";
 const PREFERENCE_WRITE_DELAY = 900;
 
 export function useUserProfile() {
-  const { user } = useAuth();
+  const { user, updateAuthPhoto } = useAuth();
   const queryClient = useQueryClient();
 
   const query = useQuery<UserProfile | null>({
@@ -40,6 +40,12 @@ export function useUserProfile() {
       });
     },
   });
+
+  useEffect(() => {
+    if (query.data && query.data.photoURL === null && user?.photoURL) {
+      void updateAuthPhoto(null);
+    }
+  }, [query.data, user?.photoURL, updateAuthPhoto]);
 
   const rename = useMutation({
     mutationFn: async (displayName: string) => {

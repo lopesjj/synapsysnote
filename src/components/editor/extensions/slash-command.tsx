@@ -236,6 +236,7 @@ function getCommands(t: (key: TranslationKey) => string): CommandDescriptor[] {
         "imagens",
         "arquivo",
         "audio",
+        "audios",
         "som",
         "musica",
         "mp3",
