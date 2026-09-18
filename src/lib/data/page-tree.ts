@@ -56,7 +56,7 @@ export function resolveNoteCreationTarget(
     if (currentPage) {
       return {
         notebookId: currentPage.notebookId ?? null,
-        parentPageId: currentPage.parentPageId ?? null,
+        parentPageId: currentPage.id,
       };
     }
   }

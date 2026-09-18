@@ -32,12 +32,14 @@ import {
   Copy,
   FilePlus,
   FileStack,
+  FolderInput,
   FolderPlus,
   GripVertical,
   Home,
   Import,
   MoreHorizontal,
   PanelLeftClose,
+  Pencil,
   Plus,
   Search,
   Star,
@@ -56,6 +58,7 @@ import { UserMenu } from "./user-menu";
 import type { Notebook } from "@/types/models";
 import { childrenOf, isNestedNotebook, parentIdOf } from "@/lib/data/notebook-tree";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
+import { MoveItemDialog, type MoveItemTarget } from "./move-dialog";
 import {
   ORDER_STEP,
   decodeId,
@@ -234,6 +237,8 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
     getSessionState<Record<string, boolean>>(SESSION_EXPANDED_PAGES_KEY, {})
   );
+  const [moveItem, setMoveItem] = useState<MoveItemTarget | null>(null);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [dragging, setDragging] = useState<DragId | null>(null);
   const [sidebarDropIntent, setSidebarDropIntent] = useState<{
     id: string;
@@ -344,22 +349,46 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
       if (overDecoded.kind === "notebook") {
         mode = "inside";
       } else {
-        mode = relativeY < 0.5 ? "before" : "after";
+        if (relativeX >= 0.35 && relativeY >= 0.20 && relativeY <= 0.80) {
+          mode = "inside";
+        } else {
+          mode = relativeY < 0.5 ? "before" : "after";
+        }
       }
     } else {
+      const draggedNotebook = notebooks.find((n) => n.id === activeDecoded.id);
+      const isDraggedRoot = draggedNotebook && !draggedNotebook.parentId;
+
       if (overDecoded.kind === "notebook") {
-        if (relativeX < 0.55) {
+        const overNotebook = notebooks.find((n) => n.id === overDecoded.id);
+        const isOverRoot = overNotebook && !overNotebook.parentId;
+
+        if (isDraggedRoot) {
+          if (!isOverRoot) {
+            sidebarDropIntentRef.current = null;
+            setSidebarDropIntent(null);
+            return;
+          }
           mode = relativeY < 0.5 ? "before" : "after";
         } else {
-          if (relativeY < 0.2) {
-            mode = "before";
-          } else if (relativeY > 0.8) {
-            mode = "after";
+          if (relativeX < 0.55) {
+            mode = relativeY < 0.5 ? "before" : "after";
           } else {
-            mode = "inside";
+            if (relativeY < 0.2) {
+              mode = "before";
+            } else if (relativeY > 0.8) {
+              mode = "after";
+            } else {
+              mode = "inside";
+            }
           }
         }
       } else {
+        if (isDraggedRoot) {
+          sidebarDropIntentRef.current = null;
+          setSidebarDropIntent(null);
+          return;
+        }
         mode = relativeY < 0.5 ? "before" : "after";
       }
     }
@@ -471,6 +500,10 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
             }
             onCreatePage={() => createPage(notebook.id)}
             onCreateSubnotebook={() => void createNotebook(notebook.id)}
+            onMove={() => {
+              setMoveItem({ kind: "notebook", id: notebook.id, title: notebook.name });
+              setMoveDialogOpen(true);
+            }}
             onDuplicate={async () => {
               try {
                 const copy = await adapter.duplicateNotebook(notebook.id);
@@ -547,6 +580,14 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
             isOpen={isOpen}
             dropIntent={sidebarDropIntent?.id === node.page.id ? sidebarDropIntent.mode : undefined}
             onToggle={() => setExpanded((prev) => ({ ...prev, [node.page.id]: !isOpen }))}
+            onMove={() => {
+              setMoveItem({
+                kind: "page",
+                id: node.page.id,
+                title: node.page.title || t("untitled"),
+              });
+              setMoveDialogOpen(true);
+            }}
             onCreateChild={async () => {
               const child = await adapter.createPage({
                 parentPageId: node.page.id,
@@ -811,6 +852,12 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
       <div className="border-t border-[var(--border)] px-2.5 pt-3 pb-[calc(1.125rem+env(safe-area-inset-bottom,0px))]">
         <UserMenu />
       </div>
+
+      <MoveItemDialog
+        open={moveDialogOpen}
+        onOpenChange={setMoveDialogOpen}
+        item={moveItem}
+      />
     </aside>
   );
 }
@@ -852,6 +899,7 @@ function NotebookRow({
   onToggle,
   onCreatePage,
   onCreateSubnotebook,
+  onMove,
   onDuplicate,
   onRename,
   onDelete,
@@ -869,6 +917,7 @@ function NotebookRow({
   onToggle: () => void;
   onCreatePage: () => void;
   onCreateSubnotebook: () => void;
+  onMove?: () => void;
   onDuplicate: () => Promise<void>;
   onRename: (name: string) => Promise<void>;
   onDelete: () => Promise<void>;
@@ -926,59 +975,66 @@ function NotebookRow({
             <span>{draggingKind === "page" ? "Mover nota para cá" : "Inserir dentro"}</span>
           </div>
         )}
-        {renaming ? (
-          <input
-            autoFocus
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={async () => {
-              setRenaming(false);
-              if (draft.trim() && draft.trim() !== notebook.name) await onRename(draft.trim());
-              else setDraft(notebook.name);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-              if (event.key === "Escape") {
-                setDraft(notebook.name);
-                setRenaming(false);
-              }
-            }}
-            className="my-0.5 min-w-0 flex-1 rounded border border-[var(--accent)] bg-[var(--surface)] px-1 py-0.5 text-[13.5px] text-ink outline-none"
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex size-4 shrink-0 items-center justify-center rounded text-faint transition hover:text-ink"
+          aria-label={open ? "Recolher caderno" : "Expandir caderno"}
+        >
+          <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
+        </button>
+        <Link
+          href={`/home/n/${notebook.id}`}
+          prefetch={true}
+          onMouseEnter={() => router.prefetch(`/home/n/${notebook.id}`)}
+          draggable={false}
+          onClick={closeMenuBar}
+          className={cn(
+            "flex min-w-0 flex-1 items-center gap-1.5 py-1 text-[13.5px]",
+            active ? "font-medium text-ink" : "text-muted group-hover:text-ink"
+          )}
+        >
+          <SidebarItemIcon
+            icon={notebook.emoji}
+            fallback={isNestedNotebook(notebook) ? "📁" : "📓"}
           />
-        ) : (
-          <div className="flex min-w-0 flex-1 items-center gap-1 py-1">
-            <button
-              type="button"
-              onClick={onToggle}
-              className="flex size-4 shrink-0 items-center justify-center rounded text-faint transition hover:text-ink"
-              aria-label={open ? t("collapse") : t("expand")}
-            >
-              <ChevronRight
-                className={cn("size-3 transition-transform", open && "rotate-90")}
-              />
-            </button>
-            <Link
-              href={`/home/n/${notebook.id}`}
-              prefetch={true}
-              onMouseEnter={() => router.prefetch(`/home/n/${notebook.id}`)}
-              draggable={false}
-              className={cn(
-                "flex min-w-0 flex-1 items-center gap-1.5 text-left",
-                active ? "font-medium text-ink" : "text-ink"
-              )}
-            >
-              <SidebarItemIcon
-                icon={notebook.emoji}
-                fallback="📓"
-                size={isNestedNotebook(notebook) ? undefined : isIconUrl(notebook.emoji ?? "") ? 24 : 16}
-              />
-              <span className="truncate text-[13.5px] font-medium">{notebook.name}</span>
-            </Link>
-          </div>
-        )}
+          {renaming ? (
+            <input
+              type="text"
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === "Enter") {
+                  await onRename(draft.trim() || notebook.name);
+                  setRenaming(false);
+                } else if (e.key === "Escape") {
+                  setDraft(notebook.name);
+                  setRenaming(false);
+                }
+              }}
+              onBlur={async () => {
+                await onRename(draft.trim() || notebook.name);
+                setRenaming(false);
+              }}
+              className="h-6 w-full rounded bg-[var(--surface-2)] px-1 text-[13.5px] text-ink outline-none ring-1 ring-[var(--accent)]"
+            />
+          ) : (
+            <span className="truncate">{notebook.name}</span>
+          )}
+        </Link>
         <span className="shrink-0 text-[10.5px] tabular-nums text-faint">{count}</span>
         <div className="grid grid-cols-[0fr] transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:grid-cols-[1fr]">
           <div className="flex min-w-0 items-center overflow-hidden">
+        <Tooltip label={t("new_notebook")}>
+          <button
+            onClick={onCreateSubnotebook}
+            className="rounded p-0.5 text-faint hover:text-ink"
+            aria-label={t("new_notebook")}
+          >
+            <FolderPlus className="size-3.5" />
+          </button>
+        </Tooltip>
         <Tooltip label={t("new_note")}>
           <button
             onClick={onCreatePage}
@@ -1004,7 +1060,14 @@ function NotebookRow({
             <MenuItem onSelect={() => router.push(`/home/notes?notebook=${notebook.id}`)}>
               <FileStack /> {t("all_notes")}
             </MenuItem>
-            <MenuItem onSelect={() => setRenaming(true)}>{t("rename")}</MenuItem>
+            <MenuItem onSelect={() => setRenaming(true)}>
+              <Pencil className="size-4" /> {t("rename")}
+            </MenuItem>
+            {isNestedNotebook(notebook) && onMove ? (
+              <MenuItem onSelect={onMove}>
+                <FolderInput className="size-4" /> {t("move_to")}
+              </MenuItem>
+            ) : null}
             <MenuItem onSelect={onCreateSubnotebook}>
               <FolderPlus /> {t("new_notebook")}
             </MenuItem>
@@ -1039,7 +1102,7 @@ function NotebookRow({
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="overflow-hidden pl-2"
+            className="overflow-hidden"
           >
             {children}
           </motion.div>
@@ -1055,6 +1118,7 @@ function SortablePageRow({
   isOpen,
   dropIntent,
   onToggle,
+  onMove,
   onCreateChild,
   onToggleFavorite,
   onDuplicate,
@@ -1065,6 +1129,7 @@ function SortablePageRow({
   isOpen: boolean;
   dropIntent?: "before" | "after" | "inside";
   onToggle: () => void;
+  onMove?: () => void;
   onCreateChild: () => Promise<void>;
   onToggleFavorite: () => void;
   onDuplicate: () => Promise<void>;
@@ -1157,6 +1222,11 @@ function SortablePageRow({
               <MenuItem onSelect={() => void onCreateChild()}>
                 <Plus /> {t("new_subpage")}
               </MenuItem>
+              {onMove ? (
+                <MenuItem onSelect={onMove}>
+                  <FolderInput className="size-4" /> {t("move_to")}
+                </MenuItem>
+              ) : null}
               <MenuItem onSelect={onToggleFavorite}>
                 <Star /> {node.page.favorite ? t("unfavorite") : t("favorite")}
               </MenuItem>

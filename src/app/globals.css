@@ -769,10 +769,22 @@
   padding-left: calc(0.75rem + min(10cm, 85vw)) !important;
 }
 
-.synapsys-editor .ProseMirror .ProseMirror-selectednode {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 6px;
+.synapsys-editor .ProseMirror .ProseMirror-selectednode,
+.synapsys-editor .ProseMirror .is-selected-in-range {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px !important;
+  border-radius: 8px !important;
+  position: relative;
+}
+
+.synapsys-editor .ProseMirror .is-selected-in-range::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: var(--selection);
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 10;
 }
 
 .synapsys-editor .ProseMirror .react-renderer.node-mediaBlock,

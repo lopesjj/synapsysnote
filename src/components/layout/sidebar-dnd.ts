@@ -108,6 +108,17 @@ export function planSidebarDrop(
     const targetParent = parentIdOf(target);
     const siblings = childrenOf(notebooks, draggedParent);
 
+    if (draggedParent === null) {
+      if (intent === "inside" || targetParent !== null) return null;
+      const from = siblings.findIndex((notebook) => notebook.id === dragged.id);
+      const to = siblings.findIndex((notebook) => notebook.id === target.id);
+      if (from < 0 || to < 0 || from === to) return null;
+      return {
+        kind: "reorder-notebooks",
+        notebookIds: moveItem(siblings, from, to).map((notebook) => notebook.id),
+      };
+    }
+
     if (intent === "reorder") {
       if (targetParent === draggedParent) {
         const from = siblings.findIndex((notebook) => notebook.id === dragged.id);

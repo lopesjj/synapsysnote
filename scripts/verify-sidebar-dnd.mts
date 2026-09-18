@@ -57,14 +57,13 @@ function check(name: string, run: () => void) {
   console.log(`  ${name}`);
 }
 
-check("a notebook dropped on another notebook nests under it", () => {
+check("a root page dropped on another root page reorders and does not nest", () => {
   const plan = planSidebarDrop(nb("work"), nb("archive"), snapshot);
   assert.deepEqual(plan, {
-    kind: "move-notebook",
-    notebookId: "work",
-    parentId: "archive",
-    notebookIds: ["work"],
+    kind: "reorder-notebooks",
+    notebookIds: ["personal", "archive", "work"],
   });
+  assert.equal(planSidebarDrop(nb("work"), nb("archive"), snapshot, "inside"), null);
 });
 
 check("a notebook dropped on a page reorders to that page's notebook", () => {
@@ -218,7 +217,7 @@ check("sibling sub-notebooks dropped on each other's header nest", () => {
 
 check("ids containing a colon survive the round trip", () => {
   const odd = {
-    notebooks: [notebook("a:b", 0), notebook("c", 100)],
+    notebooks: [notebook("root", 0), notebook("a:b", 0, "root"), notebook("c", 100)],
     pages: [],
   };
   assert.deepEqual(planSidebarDrop(nb("a:b"), nb("c"), odd), {

@@ -28,6 +28,7 @@ import { TextAlign } from "./extensions/text-align";
 import { SynapsysCodeBlock } from "./extensions/code-block";
 import { SlashCommand } from "./extensions/slash-command";
 import { HeadingShortcut } from "./extensions/heading-shortcut";
+import { MultiSelectionDecorator } from "./extensions/multi-selection-decorator";
 import {
   createMentionSuggestion,
   getMentionCandidates,
@@ -580,6 +581,7 @@ export function BlockEditor({
       TableBlock,
       ParagraphIndent,
       TextAlign,
+      MultiSelectionDecorator,
       ...(editable ? [DragAutoScroll, DragHandle, HeadingShortcut, SlashCommand.configure({ handlers })] : []),
       Mention.configure({
         HTMLAttributes: { class: "mention" },

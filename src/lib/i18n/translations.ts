@@ -631,7 +631,14 @@ export type TranslationKey =
   | "wizard_step_importing_records"
   | "wizard_step_preparing"
   | "wizard_step_completed_with_warnings"
-  | "wizard_step_auth_failed";
+  | "wizard_step_auth_failed"
+  | "move_to"
+  | "move_item"
+  | "move_item_description"
+  | "current_location"
+  | "cannot_move_here"
+  | "search_destination"
+  | "note_moved_as_subnote";
 
 export const TRANSLATIONS: Record<string, Record<string, string>> & Record<SupportedLanguage, Partial<Record<TranslationKey, string>>> & { pt: Record<TranslationKey, string>; en: Record<TranslationKey, string> } = {
   ar: {} as Record<TranslationKey, string>,
@@ -1264,6 +1271,13 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     wizard_step_preparing: "Preparando {count} itens…",
     wizard_step_completed_with_warnings: "Importação concluída com {count} avisos",
     wizard_step_auth_failed: "Falha de autenticação: {message}",
+    move_to: "Mover para...",
+    move_item: "Mover item",
+    move_item_description: "Escolha para onde deseja mover este item.",
+    current_location: "Local atual",
+    cannot_move_here: "Não é possível mover para cá",
+    search_destination: "Buscar destino...",
+    note_moved_as_subnote: "Nota movida como subnota",
   },
   en: {
     preferences_description: "Appearance, language, typography, and shortcuts. Your choices follow your account.",
@@ -1894,6 +1908,13 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     wizard_step_preparing: "Preparing {count} items…",
     wizard_step_completed_with_warnings: "Import completed with {count} warnings",
     wizard_step_auth_failed: "Authentication failed: {message}",
+    move_to: "Move to...",
+    move_item: "Move item",
+    move_item_description: "Choose where you want to move this item.",
+    current_location: "Current location",
+    cannot_move_here: "Cannot move here",
+    search_destination: "Search destination...",
+    note_moved_as_subnote: "Note moved as subnote",
   },
 
   es: {
@@ -2525,6 +2546,13 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     wizard_step_preparing: "Preparando {count} elementos…",
     wizard_step_completed_with_warnings: "Importación completada con {count} avisos",
     wizard_step_auth_failed: "Fallo de autenticación: {message}",
+    move_to: "Mover a...",
+    move_item: "Mover elemento",
+    move_item_description: "Elija adónde desea mover este elemento.",
+    current_location: "Ubicación actual",
+    cannot_move_here: "No se puede mover aquí",
+    search_destination: "Buscar destino...",
+    note_moved_as_subnote: "Nota movida como subnota",
   },
 
   fr: {
@@ -3156,6 +3184,13 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     wizard_step_preparing: "Préparation de {count} éléments…",
     wizard_step_completed_with_warnings: "Importation terminée avec {count} avertissements",
     wizard_step_auth_failed: "Échec de l'authentification : {message}",
+    move_to: "Déplacer vers...",
+    move_item: "Déplacer l'élément",
+    move_item_description: "Choisissez où vous souhaitez déplacer cet élément.",
+    current_location: "Emplacement actuel",
+    cannot_move_here: "Impossible de déplacer ici",
+    search_destination: "Rechercher une destination...",
+    note_moved_as_subnote: "Note déplacée en tant que sous-note",
   },
 
   it: {
@@ -3787,6 +3822,13 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     wizard_step_preparing: "Preparazione di {count} elementi…",
     wizard_step_completed_with_warnings: "Importazione completata con {count} avvisi",
     wizard_step_auth_failed: "Autenticazione non riuscita: {message}",
+    move_to: "Sposta in...",
+    move_item: "Sposta elemento",
+    move_item_description: "Scegli dove spostare questo elemento.",
+    current_location: "Posizione attuale",
+    cannot_move_here: "Impossibile spostare qui",
+    search_destination: "Cerca destinazione...",
+    note_moved_as_subnote: "Nota spostata come sottonota",
   },
 
   de: {
@@ -4418,6 +4460,13 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     wizard_step_preparing: "{count} Elemente werden vorbereitet…",
     wizard_step_completed_with_warnings: "Import mit {count} Warnungen abgeschlossen",
     wizard_step_auth_failed: "Authentifizierung fehlgeschlagen: {message}",
+    move_to: "Verschieben nach...",
+    move_item: "Element verschieben",
+    move_item_description: "Wählen Sie, wohin dieses Element verschoben werden soll.",
+    current_location: "Aktueller Ort",
+    cannot_move_here: "Kann nicht hierhin verschoben werden",
+    search_destination: "Ziel suchen...",
+    note_moved_as_subnote: "Notiz als Unternotiz verschoben",
   },
 
   ru: {
@@ -5049,6 +5098,13 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     wizard_step_preparing: "Подготовка элементов ({count})…",
     wizard_step_completed_with_warnings: "Импорт завершен с {count} предупреждениями",
     wizard_step_auth_failed: "Ошибка аутентификации: {message}",
+    move_to: "Переместить в...",
+    move_item: "Переместить элемент",
+    move_item_description: "Выберите, куда переместить этот элемент.",
+    current_location: "Текущее расположение",
+    cannot_move_here: "Нельзя переместить сюда",
+    search_destination: "Поиск назначения...",
+    note_moved_as_subnote: "Заметка перемещена как подзаметка",
   },
 
   ja: {
@@ -5680,6 +5736,13 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     wizard_step_preparing: "{count}個のアイテムを準備中…",
     wizard_step_completed_with_warnings: "{count}件の警告付きでインポート完了",
     wizard_step_auth_failed: "認証に失敗しました: {message}",
+    move_to: "移動...",
+    move_item: "アイテムを移動",
+    move_item_description: "このアイテムの移動先を選択してください。",
+    current_location: "現在の場所",
+    cannot_move_here: "ここには移動できません",
+    search_destination: "移動先を検索...",
+    note_moved_as_subnote: "サブノートとして移動しました",
   },
 
   zh: {
@@ -6311,6 +6374,13 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     wizard_step_preparing: "正在准备 {count} 个项目…",
     wizard_step_completed_with_warnings: "导入完成，带有 {count} 个警告",
     wizard_step_auth_failed: "认证失败: {message}",
+    move_to: "移动到...",
+    move_item: "移动项目",
+    move_item_description: "选择要将此项目移动到的位置。",
+    current_location: "当前位置",
+    cannot_move_here: "无法移动到此处",
+    search_destination: "搜索目标位置...",
+    note_moved_as_subnote: "已作为子笔记移动",
   },
 };
 
@@ -6944,6 +7014,13 @@ TRANSLATIONS.ar = {
     wizard_step_preparing: "جارٍ إعداد {count} من العناصر…",
     wizard_step_completed_with_warnings: "اكتمل الاستيراد مع {count} من التحذيرات",
     wizard_step_auth_failed: "فشل المصادقة: {message}",
+  move_to: "نقل إلى...",
+  move_item: "نقل العنصر",
+  move_item_description: "اختر المكان الذي تريد نقل هذا العنصر إليه.",
+  current_location: "الموقع الحالي",
+  cannot_move_here: "لا يمكن النقل إلى هنا",
+  search_destination: "البحث عن وجهة...",
+  note_moved_as_subnote: "تم نقل الملاحظة كملاحظة فرعية",
 };
 
 export function useTranslation() {

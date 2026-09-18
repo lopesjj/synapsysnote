@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
-import { NodeSelection } from "@tiptap/pm/state";
+import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import {
@@ -234,7 +234,6 @@ function ResizableImage({
   };
 
   const handlePointerDownImage = (e: React.PointerEvent<HTMLImageElement>) => {
-    e.stopPropagation();
     if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
@@ -667,6 +666,15 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
     if (typeof getPos === "function") {
       const pos = getPos();
       if (typeof pos === "number") {
+        if (e.shiftKey) {
+          const anchor = editor.state.selection.anchor;
+          const nodeEnd = pos + node.nodeSize;
+          const from = Math.min(anchor, pos);
+          const to = Math.max(anchor, nodeEnd);
+          const tr = editor.state.tr.setSelection(TextSelection.create(editor.state.doc, from, to));
+          editor.view.dispatch(tr);
+          return;
+        }
         editor.commands.setNodeSelection(pos);
       }
     }
