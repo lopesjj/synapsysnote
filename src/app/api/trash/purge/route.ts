@@ -99,12 +99,21 @@ async function deletePageStorageAndDoc(
       ),
     ]);
   }
+
+  const db = adminDb();
+  const trashedMediaSnap = await db
+    .collection("workspaces")
+    .doc(workspaceId)
+    .collection("trashed_media")
+    .where("pageId", "==", pageId)
+    .get();
+
   const refsToDelete: FirebaseFirestore.DocumentReference[] = [
     ...versionsSnap.docs.map((v) => v.ref),
+    ...trashedMediaSnap.docs.map((m) => m.ref),
     pageDoc.ref,
   ];
 
-  const db = adminDb();
   for (let i = 0; i < refsToDelete.length; i += 400) {
     const batch = db.batch();
     for (const ref of refsToDelete.slice(i, i + 400)) {
@@ -171,6 +180,23 @@ export async function POST(request: Request) {
           }
           await batch.commit();
         }
+      }
+
+      const trashedMediaCol = wsRef.collection("trashed_media");
+      const expiredSnap = await trashedMediaCol.where("expiresAt", "<=", Date.now()).get();
+      if (!expiredSnap.empty) {
+        if (isAdminConfigured()) {
+          const bucket = adminBucket();
+          const expiredPaths: string[] = [];
+          for (const doc of expiredSnap.docs) {
+            const p = doc.data().storagePath;
+            if (p && typeof p === "string") expiredPaths.push(p);
+          }
+          await Promise.allSettled(expiredPaths.map((p) => bucket.file(p).delete().catch(() => {})));
+        }
+        const batch = db.batch();
+        for (const doc of expiredSnap.docs) batch.delete(doc.ref);
+        await batch.commit();
       }
 
       return Response.json({ ok: true, purgedPages: trashedPages.size, purgedDatabases: trashedDatabases.size });

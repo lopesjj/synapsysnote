@@ -82,8 +82,10 @@ function filesFromDataTransfer(data: DataTransfer | null): File[] {
         const file = item.getAsFile();
         if (
           file &&
-          (file.type.startsWith("image/") ||
+          (isAudioFile(file) ||
+            file.type.startsWith("image/") ||
             file.type === "application/pdf" ||
+            /\.pdf$/i.test(file.name) ||
             file.type.startsWith("audio/") ||
             file.type.startsWith("video/"))
         ) {
@@ -97,8 +99,10 @@ function filesFromDataTransfer(data: DataTransfer | null): File[] {
       const file = data.files[i];
       if (
         file &&
-        (file.type.startsWith("image/") ||
+        (isAudioFile(file) ||
+          file.type.startsWith("image/") ||
           file.type === "application/pdf" ||
+          /\.pdf$/i.test(file.name) ||
           file.type.startsWith("audio/") ||
           file.type.startsWith("video/"))
       ) {
@@ -183,6 +187,20 @@ export function BlockEditor({
     insertFilesRef.current = onInsertFiles;
   }, [onInsertFiles]);
 
+  const activePreviewUrlsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const urls = activePreviewUrlsRef.current;
+    return () => {
+      urls.forEach((u) => {
+        try {
+          URL.revokeObjectURL(u);
+        } catch {}
+      });
+      urls.clear();
+    };
+  }, []);
+
   const getAudioFileDuration = (file: File | Blob): Promise<number> => {
     return new Promise((resolve) => {
       if (typeof window === "undefined") return resolve(0);
@@ -245,6 +263,7 @@ export function BlockEditor({
         const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
         const previewUrl = URL.createObjectURL(file);
+        activePreviewUrlsRef.current.add(previewUrl);
         const durationSeconds = isAudio ? await getAudioFileDuration(file) : undefined;
 
         let targetPos: number;
@@ -280,6 +299,7 @@ export function BlockEditor({
         lastSelectionRef.current = instance.state.selection;
 
         void (async () => {
+          let uploadSuccess = false;
           try {
             const prepared = await prepareEditorAttachment(file);
             const { url: permanentUrl, storagePath } =
@@ -312,6 +332,7 @@ export function BlockEditor({
             });
 
             if (found) {
+              uploadSuccess = true;
               instance.view.dispatch(tr);
               const blocks = docToBlocks(instance.getJSON());
               emittedBlockCount.current = blocks.length;
@@ -355,11 +376,19 @@ export function BlockEditor({
                 t("file_attach_error")
             );
           } finally {
-            setTimeout(() => {
+            if (uploadSuccess) {
+              setTimeout(() => {
+                try {
+                  activePreviewUrlsRef.current.delete(previewUrl);
+                  URL.revokeObjectURL(previewUrl);
+                } catch {}
+              }, 60000);
+            } else {
+              activePreviewUrlsRef.current.delete(previewUrl);
               try {
                 URL.revokeObjectURL(previewUrl);
               } catch {}
-            }, 10000);
+            }
           }
         })();
       }
@@ -387,6 +416,7 @@ export function BlockEditor({
 
       const tempId = `temp_audio_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const previewUrl = URL.createObjectURL(blob);
+      activePreviewUrlsRef.current.add(previewUrl);
 
       instance
         .chain()
@@ -397,7 +427,7 @@ export function BlockEditor({
           attrs: {
             mediaType: "audio",
             url: previewUrl,
-            name: `${t("voice_note").toLowerCase().replace(/\s+/g, "-")}-${new Date().toLocaleTimeString(language === "pt" ? "pt-BR" : language)}.webm`,
+            name: `${t("voice_note").toLowerCase().replace(/\s+/g, "-")}-${new Date().toLocaleTimeString(language === "pt" ? "pt-BR" : language)}.${(blob.type || "").includes("mp4") ? "mp4" : (blob.type || "").includes("ogg") ? "ogg" : (blob.type || "").includes("wav") ? "wav" : "webm"}`,
             mimeType: blob.type || "audio/webm",
             sizeBytes: blob.size,
             durationSeconds,
@@ -411,6 +441,7 @@ export function BlockEditor({
       lastSelectionRef.current = instance.state.selection;
 
       void (async () => {
+        let uploadSuccess = false;
         try {
           const prepared = await prepareAudioAttachment(blob);
           const { url: permanentUrl, storagePath } = await adapter.uploadAudioNote(
@@ -443,6 +474,7 @@ export function BlockEditor({
           });
 
           if (found) {
+            uploadSuccess = true;
             instance.view.dispatch(tr);
             const blocks = docToBlocks(instance.getJSON());
             emittedBlockCount.current = blocks.length;
@@ -477,11 +509,19 @@ export function BlockEditor({
               t("audio_save_error")
           );
         } finally {
-          setTimeout(() => {
+          if (uploadSuccess) {
+            setTimeout(() => {
+              try {
+                activePreviewUrlsRef.current.delete(previewUrl);
+                URL.revokeObjectURL(previewUrl);
+              } catch {}
+            }, 60000);
+          } else {
+            activePreviewUrlsRef.current.delete(previewUrl);
             try {
               URL.revokeObjectURL(previewUrl);
             } catch {}
-          }, 10000);
+          }
         }
       })();
     },
@@ -757,6 +797,8 @@ function applyRemoteMediaEnrichment(
       pending: Boolean(node.attrs.pending),
       transcript: (node.attrs.transcript as string) ?? undefined,
       transcriptSummary: (node.attrs.transcriptSummary as string) ?? undefined,
+      transcriptLanguage: (node.attrs.transcriptLanguage as string) ?? undefined,
+      transcriptCollapsed: typeof node.attrs.transcriptCollapsed === "boolean" ? node.attrs.transcriptCollapsed : undefined,
     };
     if (!isRicherMedia(match, local)) return;
     tr.setNodeMarkup(pos, undefined, {
@@ -764,6 +806,8 @@ function applyRemoteMediaEnrichment(
       pending: match.pending ?? false,
       transcript: match.transcript ?? node.attrs.transcript,
       transcriptSummary: match.transcriptSummary ?? node.attrs.transcriptSummary,
+      transcriptLanguage: match.transcriptLanguage ?? node.attrs.transcriptLanguage,
+      transcriptCollapsed: typeof match.transcriptCollapsed === "boolean" ? match.transcriptCollapsed : node.attrs.transcriptCollapsed,
     });
     changed = true;
   });

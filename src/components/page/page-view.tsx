@@ -466,6 +466,7 @@ export function PageView({ pageId }: { pageId: string }) {
     try {
       await exportNoteToPdf(page, {
         notebookName: notebook?.name,
+        t,
         onProgress: (status) => {
           toast.loading(status, { id: toastId });
         },
@@ -821,7 +822,7 @@ export function PageView({ pageId }: { pageId: string }) {
                 schedule({ title: val });
               }}
               style={{ fontFamily: "var(--font-editor, var(--font-sans))" }}
-              className="w-full min-w-0 resize-none overflow-hidden border-none bg-transparent py-0 text-[26px] font-bold leading-[1.2] tracking-[-0.025em] text-ink outline-none placeholder:text-faint [scrollbar-width:none] [-ms-overflow-style:none] sm:text-[34px] sm:font-semibold sm:leading-[1.15] [&::-webkit-scrollbar]:hidden"
+              className="w-full min-w-0 resize-none overflow-hidden border-none bg-transparent py-0 text-[34px] font-semibold leading-[1.15] tracking-[-0.025em] text-ink outline-none placeholder:text-faint [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
             />
           </div>
         </div>
@@ -877,7 +878,7 @@ export function PageView({ pageId }: { pageId: string }) {
         </div>
 
         
-        <div className="vlibras-ignore mt-4 sm:mt-6 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-1 py-2 sm:px-4 sm:py-3 dark:border-transparent dark:bg-transparent dark:px-0 dark:py-0 md:px-5">
+        <div className="vlibras-ignore mt-4 sm:mt-6 -mx-4 sm:mx-0 rounded-none sm:rounded-[var(--radius-lg)] border-x-0 sm:border border-y border-[var(--border)] bg-[var(--surface)] px-2 py-2 sm:px-4 sm:py-3 dark:border-transparent dark:bg-transparent dark:px-0 dark:py-0 md:px-5">
           <BlockEditor
             key={`${page.id}-${editorKey}`}
             page={page}
@@ -984,7 +985,7 @@ export function PageView({ pageId }: { pageId: string }) {
       <input
         ref={fileInput}
         type="file"
-        accept="image/*,application/pdf,audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac,.opus,.wma,.webm,.weba"
+        accept="image/*,application/pdf,audio/*,.mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,.opus,.wma,.webm,.weba,.mp4"
         multiple
         hidden
         onChange={async (event) => {

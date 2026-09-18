@@ -51,19 +51,43 @@ export function pendingAudioPaths(blocks: AppBlock[]): string[] {
   return paths;
 }
 
+export function extractAggregatedTranscripts(blocks: AppBlock[]): string {
+  const parts: string[] = [];
+  walkBlocks(blocks, (block) => {
+    if (block.type === "audio" && typeof block.media?.transcript === "string") {
+      const text = block.media.transcript.trim();
+      if (text) parts.push(text);
+    }
+  });
+  return parts.join("\n\n");
+}
+
 export function isRicherMedia(remote: BlockMedia, local: BlockMedia): boolean {
-  if (remote.transcript && remote.transcript !== local.transcript) return true;
-  if (remote.transcriptSummary && remote.transcriptSummary !== local.transcriptSummary) return true;
+  if (local.transcript && remote.transcript && local.transcript !== remote.transcript) {
+    return false;
+  }
+  if (remote.transcript && !local.transcript) return true;
+  if (remote.transcriptSummary && !local.transcriptSummary) return true;
   if (remote.pending === false && local.pending === true) return true;
   return false;
 }
 
 export function stampMedia(local: BlockMedia, remote: BlockMedia): BlockMedia {
+  const isTranscriptUpdated = Boolean(
+    local.transcript && remote.transcript && local.transcript !== remote.transcript
+  );
   return {
     ...local,
-    transcript: remote.transcript || local.transcript,
-    transcriptSummary: remote.transcriptSummary || local.transcriptSummary,
-    pending: remote.pending === false ? false : local.pending,
+    transcript: local.transcript || remote.transcript,
+    transcriptSummary: isTranscriptUpdated
+      ? local.transcriptSummary
+      : local.transcriptSummary || remote.transcriptSummary,
+    transcriptLanguage: local.transcriptLanguage || remote.transcriptLanguage,
+    transcriptCollapsed:
+      typeof local.transcriptCollapsed === "boolean"
+        ? local.transcriptCollapsed
+        : remote.transcriptCollapsed,
+    pending: remote.pending === false && !local.transcript ? false : local.pending,
   };
 }
 

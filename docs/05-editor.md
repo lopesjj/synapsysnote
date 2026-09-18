@@ -82,7 +82,7 @@ backlinks da página lê.
 **Básico** — texto, título 1, título 2, título 3
 **Listas** — marcadores, numerada, tarefas, toggle
 **Blocos** — callout, citação, código, equação (LaTeX), divisor, tabela
-**Mídia** — gravar nota de voz, anexar do computador (PDF e imagens)
+**Mídia** — gravar nota de voz, anexar do computador (PDF, imagens e áudios)
 
 Os itens de mídia não manipulam o documento diretamente: eles chamam callbacks do
 componente hospedeiro, porque o upload depende do adaptador de dados (Cloud

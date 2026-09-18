@@ -40,6 +40,7 @@ import { subtreePatches } from "./page-tree";
 import { plainTextOf } from "./seed";
 import {
   clearMediaPending,
+  extractAggregatedTranscripts,
   hasMergeableMedia,
   mergeMediaEnrichment,
   stampTranscript,
@@ -722,7 +723,13 @@ export class FirestoreAdapter implements DataAdapter {
           removed.push(currentData.icon);
         }
         if (removed.length > 0) {
-          void this.deleteMedia(removed, id);
+          void this.quarantineMedia(removed, id);
+        }
+        if (blocks && currentBlocks.length > 0) {
+          const newPaths = extractMediaPathsFromBlocks(blocks);
+          if (newPaths.length > 0) {
+            void this.unquarantineMedia(newPaths);
+          }
         }
       }
     }
@@ -1230,20 +1237,58 @@ export class FirestoreAdapter implements DataAdapter {
 
 
   async uploadAudioNote(pageId: string, blob: Blob, _durationSeconds: number): Promise<{ url: string; storagePath: string }> {
-    const fileId = `${Date.now()}-${nanoid(6)}.webm`;
+    const rawMime = (blob.type || "audio/webm").split(";")[0] || "audio/webm";
+    const nameExt = (blob as File).name ? (blob as File).name.split(".").pop()?.toLowerCase() : null;
+    const ext = nameExt && /^(mp3|wav|ogg|oga|m4a|aac|flac|opus|webm|weba|mp4)$/.test(nameExt)
+      ? nameExt
+      : rawMime.includes("mpeg") || rawMime.includes("mp3")
+        ? "mp3"
+        : rawMime.includes("mp4") || rawMime.includes("m4a")
+          ? "mp4"
+          : rawMime.includes("aac")
+            ? "aac"
+            : rawMime.includes("wav")
+              ? "wav"
+              : rawMime.includes("ogg")
+                ? "ogg"
+                : rawMime.includes("flac")
+                  ? "flac"
+                  : rawMime.includes("opus")
+                    ? "opus"
+                    : "webm";
+    const mimeType = ext === "mp3" && rawMime === "audio/webm" ? "audio/mpeg" : rawMime;
+    const fileId = `${Date.now()}-${nanoid(6)}.${ext}`;
     const path = `workspaces/${this.workspaceId}/audio/${pageId}/${fileId}`;
     const storageRef = ref(getFirebaseStorage(), path);
-    const mimeType = (blob.type || "audio/webm").split(";")[0] || "audio/webm";
     await uploadBytes(storageRef, blob, { contentType: mimeType });
     const url = await getDownloadURL(storageRef);
     return { url, storagePath: path };
   }
 
   async saveAudioNote(pageId: string, blob: Blob, durationSeconds: number) {
-    const fileId = `${Date.now()}-${nanoid(6)}.webm`;
+    const rawMime = (blob.type || "audio/webm").split(";")[0] || "audio/webm";
+    const nameExt = (blob as File).name ? (blob as File).name.split(".").pop()?.toLowerCase() : null;
+    const ext = nameExt && /^(mp3|wav|ogg|oga|m4a|aac|flac|opus|webm|weba|mp4)$/.test(nameExt)
+      ? nameExt
+      : rawMime.includes("mpeg") || rawMime.includes("mp3")
+        ? "mp3"
+        : rawMime.includes("mp4") || rawMime.includes("m4a")
+          ? "mp4"
+          : rawMime.includes("aac")
+            ? "aac"
+            : rawMime.includes("wav")
+              ? "wav"
+              : rawMime.includes("ogg")
+                ? "ogg"
+                : rawMime.includes("flac")
+                  ? "flac"
+                  : rawMime.includes("opus")
+                    ? "opus"
+                    : "webm";
+    const mimeType = ext === "mp3" && rawMime === "audio/webm" ? "audio/mpeg" : rawMime;
+    const fileId = `${Date.now()}-${nanoid(6)}.${ext}`;
     const path = `workspaces/${this.workspaceId}/audio/${pageId}/${fileId}`;
     const storageRef = ref(getFirebaseStorage(), path);
-    const mimeType = (blob.type || "audio/webm").split(";")[0] || "audio/webm";
     await uploadBytes(storageRef, blob, { contentType: mimeType });
     const url = await getDownloadURL(storageRef);
 
@@ -1448,5 +1493,38 @@ export class FirestoreAdapter implements DataAdapter {
         })
       );
     } catch {}
+  }
+
+  async quarantineMedia(storagePaths: string[], pageId?: string): Promise<void> {
+    if (!storagePaths || storagePaths.length === 0) return;
+    try {
+      await firebaseJson("/api/media/quarantine", {
+        method: "POST",
+        body: JSON.stringify({
+          workspaceId: this.workspaceId,
+          pageId,
+          storagePaths,
+          action: "quarantine",
+        }),
+      });
+    } catch (err) {
+      console.error("Falha ao colocar mídia em quarentena:", err);
+    }
+  }
+
+  async unquarantineMedia(storagePaths: string[]): Promise<void> {
+    if (!storagePaths || storagePaths.length === 0) return;
+    try {
+      await firebaseJson("/api/media/quarantine", {
+        method: "POST",
+        body: JSON.stringify({
+          workspaceId: this.workspaceId,
+          storagePaths,
+          action: "unquarantine",
+        }),
+      });
+    } catch (err) {
+      console.error("Falha ao desmarcar mídia da quarentena:", err);
+    }
   }
 }

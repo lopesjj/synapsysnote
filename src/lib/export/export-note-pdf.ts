@@ -1,11 +1,13 @@
 import type { AppBlock, Page, RichTextSpan, TableRow } from "@/types/models";
 import { formatBytes, formatDuration } from "@/lib/utils";
 import { isIconUrl } from "@/lib/icons/workspace-icon";
+import type { TranslationKey } from "@/lib/i18n/translations";
 import katex from "katex";
 
 export interface ExportPdfOptions {
   notebookName?: string;
   authorName?: string;
+  t?: (key: TranslationKey, params?: Record<string, string | number>) => string;
   onProgress?: (status: string) => void;
 }
 
@@ -711,8 +713,9 @@ function isEmptyBlock(block: AppBlock): boolean {
 }
 
 export async function exportNoteToPdf(page: Page, options: ExportPdfOptions = {}): Promise<boolean> {
+  const t = options.t;
   const onProgress = options.onProgress ?? (() => undefined);
-  onProgress("Carregando imagens e anexos...");
+  onProgress(t ? t("pdf_export_loading_attachments") : "Carregando imagens e anexos...");
 
   const imageUrls = collectImageUrls(page);
   const imageMap = new Map<string, string>();
@@ -736,7 +739,11 @@ export async function exportNoteToPdf(page: Page, options: ExportPdfOptions = {}
 
   const pdfPagesMap = new Map<string, string[]>();
   if (pdfBlocks.length > 0) {
-    onProgress(`Processando PDFs anexos (${pdfBlocks.length})...`);
+    onProgress(
+      t
+        ? t("pdf_export_processing_pdfs", { count: pdfBlocks.length })
+        : `Processando PDFs anexos (${pdfBlocks.length})...`
+    );
     for (const pb of pdfBlocks) {
       const url = pb.media?.url;
       if (!url) continue;
@@ -877,7 +884,7 @@ export async function exportNoteToPdf(page: Page, options: ExportPdfOptions = {}
 </body>
 </html>`;
 
-  onProgress("Preparando documento...");
+  onProgress(t ? t("pdf_export_preparing_doc") : "Preparando documento...");
 
   await new Promise<boolean>((resolve) => {
     const iframe = document.createElement("iframe");
@@ -910,7 +917,10 @@ export async function exportNoteToPdf(page: Page, options: ExportPdfOptions = {}
 
       const afterLoad = () => {
         setTimeout(() => {
-          onProgress('No diálogo de impressão, selecione "Salvar como PDF".');
+          const dialogHint = t
+            ? t("pdf_export_dialog_hint")
+            : 'No diálogo de impressão, selecione "Salvar como PDF".';
+          onProgress(dialogHint);
           let handled = false;
           const finish = () => {
             if (handled) return;
@@ -939,7 +949,9 @@ export async function exportNoteToPdf(page: Page, options: ExportPdfOptions = {}
       const printWin = window.open("", "_blank", "width=960,height=800,menubar=no,toolbar=no");
       if (!printWin) {
         throw new Error(
-          "Não foi possível abrir a janela de exportação. Permita popups para este site e tente novamente."
+          t
+            ? t("pdf_export_popup_blocked")
+            : "Não foi possível abrir a janela de exportação. Permita popups para este site e tente novamente."
         );
       }
       printWin.document.write(fullHtml);
@@ -950,7 +962,10 @@ export async function exportNoteToPdf(page: Page, options: ExportPdfOptions = {}
         setTimeout(resolve, 5000);
       });
       await new Promise((r) => setTimeout(r, 600));
-      onProgress("No diálogo de impressão, selecione \"Salvar como PDF\".");
+      const dialogHint = t
+        ? t("pdf_export_dialog_hint")
+        : 'No diálogo de impressão, selecione "Salvar como PDF".';
+      onProgress(dialogHint);
       printWin.focus();
       printWin.print();
     }

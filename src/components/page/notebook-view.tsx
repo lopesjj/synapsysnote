@@ -497,6 +497,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
             )}
           >
             <textarea
+              id="notebook-title-input"
               value={title}
               rows={1}
               cols={1}
@@ -511,7 +512,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                 setTitleDraft({ id: notebookId, value });
                 if (value.trim()) void adapter.updateNotebook(notebookId, { name: value });
               }}
-              className="w-full min-w-0 resize-none overflow-hidden border-none bg-transparent py-0 text-[26px] font-bold leading-[1.18] tracking-[-0.025em] text-ink outline-none placeholder:text-faint [scrollbar-width:none] [-ms-overflow-style:none] sm:text-[34px] sm:font-semibold sm:leading-[1.15] [&::-webkit-scrollbar]:hidden"
+              className="w-full min-w-0 resize-none overflow-hidden border-none bg-transparent py-0 text-[34px] font-semibold leading-[1.15] tracking-[-0.025em] text-ink outline-none placeholder:text-faint [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
             />
           </div>
         </div>

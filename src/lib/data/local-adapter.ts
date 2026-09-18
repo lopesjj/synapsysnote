@@ -29,7 +29,7 @@ import { pageSubtree, subtreePatches } from "./page-tree";
 import { notebookSubtreeIds } from "./notebook-tree";
 import { duplicateNotebookTree, duplicatePageTree } from "./duplicate";
 import { buildSeed, plainTextOf } from "./seed";
-import { mergeMediaEnrichment } from "./media-enrichment";
+import { extractAggregatedTranscripts, mergeMediaEnrichment } from "./media-enrichment";
 import { pagePatchIsNoop } from "./page-write";
 import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
 import {
@@ -900,6 +900,15 @@ export class LocalAdapter implements DataAdapter {
   }
 
   async deleteMedia(storagePaths: string[], _pageId?: string): Promise<void> {
+    void storagePaths;
+  }
+
+  async quarantineMedia(storagePaths: string[], _pageId?: string): Promise<void> {
+    void storagePaths;
+    void _pageId;
+  }
+
+  async unquarantineMedia(storagePaths: string[]): Promise<void> {
     void storagePaths;
   }
 }

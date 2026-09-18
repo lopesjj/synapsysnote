@@ -62,6 +62,8 @@ export interface BlockMedia {
   caption?: RichTextSpan[];
   transcript?: string;
   transcriptSummary?: string;
+  transcriptLanguage?: string;
+  transcriptCollapsed?: boolean;
   pending?: boolean;
 }
 

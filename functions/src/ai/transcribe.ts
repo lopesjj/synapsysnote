@@ -8,7 +8,7 @@ import type { AppBlock } from "../types";
 
 
 const REGION = process.env.FUNCTIONS_REGION || "us-central1";
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const SECRETS = ["GEMINI_API_KEY"];
 
 const PROMPT = `Você recebe uma nota de voz em português.

@@ -214,6 +214,11 @@ service cloud.firestore {
           allow read, write: if false;
         }
       }
+
+      match /trashed_media/{mediaId} {
+        allow read: if isMember(workspaceId);
+        allow write: if false;
+      }
     }
 
     match /{document=**} {

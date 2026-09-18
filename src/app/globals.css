@@ -1346,3 +1346,36 @@ html[data-reduced-motion="true"] *::after {
   transition-duration: 0.001ms !important;
   scroll-behavior: auto !important;
 }
+
+html,
+body {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+@media screen and (max-width: 768px) {
+  .synapsys-editor .ProseMirror,
+  .synapsys-editor,
+  .synapsys-editor p {
+    font-size: 16px;
+  }
+}
+
+[data-radix-dropdown-menu-content] {
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain !important;
+}
+
+[data-radix-dropdown-menu-content].overflow-y-auto,
+[data-radix-dropdown-menu-content][data-scrollable="true"] {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+}
+
+[data-radix-dropdown-menu-content] [role="menuitem"],
+[data-radix-dropdown-menu-content] [role="menuitem"] * {
+  touch-action: pan-y !important;
+}

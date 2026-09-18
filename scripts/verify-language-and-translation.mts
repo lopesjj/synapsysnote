@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { SUPPORTED_LANGUAGES, getLanguageDefinition } from "../src/lib/i18n/languages";
-import { TRANSLATIONS } from "../src/lib/i18n/translations";
+import { TRANSLATIONS, type TranslationKey } from "../src/lib/i18n/translations";
 import { formatRelative } from "../src/lib/utils";
 import type { SupportedLanguage, AppBlock, Page } from "../src/types/models";
 
@@ -26,8 +26,8 @@ for (const code of expectedCodes) {
   assert.ok(def.nativeName.length > 0);
   assert.ok(def.flag.length > 0);
 
-  const dict = TRANSLATIONS[code];
-  assert.ok(dict, `Dicionário para ${code} deve existir`);
+  const dict = TRANSLATIONS[code] as Record<TranslationKey, string>;
+  if (!dict) throw new Error(`Dicionário para ${code} deve existir`);
   assert.ok(dict.all_notes.length > 0);
   assert.ok(dict.trash.length > 0);
   assert.ok(dict.preferences.length > 0);
@@ -94,11 +94,15 @@ assert.equal(formatRelative(sevenHoursAgo, "es"), "hace 7 h");
 
 const mockPage: Page = {
   id: "test_page_1",
-  workspaceId: "ws_1",
   title: "Anotação em Português",
   icon: "📝",
+  coverUrl: null,
+  notebookId: null,
+  parentPageId: null,
+  path: [],
   favorite: false,
   archived: false,
+  deletedAt: null,
   order: 0,
   blocks: [
     {
@@ -127,8 +131,13 @@ const mockPage: Page = {
       richText: [{ text: "Tarefa pendente" }],
     },
   ],
+  plainText: "Anotação em Português",
+  transcriptText: "",
   tags: ["trabalho"],
   outgoingLinks: [],
+  backlinks: [],
+  createdBy: "test_user",
+  updatedBy: "test_user",
   createdAt: Date.now(),
   updatedAt: Date.now(),
 };
@@ -146,9 +155,10 @@ assert.equal(pickedEn.sidebarCollapsed, true);
 const pickedEs = pickPreferences({ language: "es" });
 assert.equal(pickedEs.language, "es");
 
+const defaultPreferences = { language: "pt" as const };
 const existingPreferences = { language: "fr" as const, theme: "dark" as const };
 const mergedWithDefaults = {
-  language: "pt" as const,
+  ...defaultPreferences,
   ...existingPreferences,
 };
 assert.equal(mergedWithDefaults.language, "fr");

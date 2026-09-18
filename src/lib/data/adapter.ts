@@ -87,4 +87,6 @@ export interface DataAdapter {
 
   uploadWorkspaceIcon(file: File): Promise<string>;
   deleteMedia(storagePaths: string[], pageId?: string): Promise<void>;
+  quarantineMedia(storagePaths: string[], pageId?: string): Promise<void>;
+  unquarantineMedia(storagePaths: string[]): Promise<void>;
 }
