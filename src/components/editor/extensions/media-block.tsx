@@ -423,12 +423,28 @@ function ResizablePdf({
           className="h-full w-full"
           aria-label={name || "PDF"}
         >
-          
-          <iframe
-            src={`https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`}
-            title={name || "PDF"}
-            className="h-full w-full border-0"
-          />
+          <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-4 text-center text-sm text-muted">
+            <p>Não foi possível exibir a prévia do PDF diretamente.</p>
+            <div className="flex items-center gap-2">
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-ink hover:bg-[var(--surface-hover)]"
+              >
+                <ExternalLink className="size-3.5" />
+                Abrir PDF
+              </a>
+              <a
+                href={url}
+                download={name || "documento.pdf"}
+                className="inline-flex items-center gap-1.5 rounded-md bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-ink hover:bg-[var(--surface-hover)]"
+              >
+                <Download className="size-3.5" />
+                Baixar PDF
+              </a>
+            </div>
+          </div>
         </object>
       </div>
 

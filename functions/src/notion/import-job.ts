@@ -390,6 +390,7 @@ async function importPage(args: ImportArgs): Promise<string> {
       parentPageId,
       path,
       blocks: omitUndefined(blocks),
+      blocksJson: JSON.stringify(omitUndefined(blocks)),
       plainText: blocksToPlainText(blocks),
       transcriptText: existing.empty ? "" : (existing.docs[0].get("transcriptText") ?? ""),
       tags: ["notion"],
