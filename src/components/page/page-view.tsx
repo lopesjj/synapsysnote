@@ -550,7 +550,9 @@ export function PageView({ pageId }: { pageId: string }) {
       {hasCover ? (
         <CoverPicker
           coverUrl={page.coverUrl}
+          coverPosition={page.coverPosition}
           onChange={(coverUrl) => adapter.updatePage(pageId, { coverUrl })}
+          onPositionChange={(pos) => adapter.updatePage(pageId, { coverPosition: pos })}
           onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
         />
       ) : null}
@@ -764,7 +766,9 @@ export function PageView({ pageId }: { pageId: string }) {
       {!hasCover ? (
         <CoverPicker
           coverUrl={page.coverUrl}
+          coverPosition={page.coverPosition}
           onChange={(coverUrl) => adapter.updatePage(pageId, { coverUrl })}
+          onPositionChange={(pos) => adapter.updatePage(pageId, { coverPosition: pos })}
           onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
         />
       ) : null}

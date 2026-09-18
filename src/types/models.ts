@@ -194,6 +194,7 @@ export interface Notebook {
   color?: string;
   description?: string;
   coverUrl?: string | null;
+  coverPosition?: number | null;
   parentId?: string | null;
   order: number;
   notionPageId?: string | null;
@@ -207,6 +208,7 @@ export interface Page {
   title: string;
   icon?: string;
   coverUrl?: string | null;
+  coverPosition?: number | null;
   notebookId: string | null;
   parentPageId: string | null;
   path: string[];

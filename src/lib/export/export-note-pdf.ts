@@ -523,7 +523,7 @@ function renderDocumentHeader(page: Page, options: ExportPdfOptions, imageMap: M
     <div style="margin-bottom:20px;">
       ${
         coverUrl
-          ? `<div style="margin-bottom:16px;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;"><img src="${escapeHtml(coverUrl)}" crossorigin="anonymous" style="width:100%;height:140px;object-fit:cover;display:block;" /></div>`
+          ? `<div style="margin-bottom:16px;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;"><img src="${escapeHtml(coverUrl)}" crossorigin="anonymous" style="width:100%;height:140px;object-fit:cover;object-position:center ${Math.round((page.coverPosition ?? 0.5) * 100)}%;display:block;" /></div>`
           : ""
       }
 

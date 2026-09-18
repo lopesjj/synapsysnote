@@ -62,9 +62,11 @@ function pageCountLabel(count: number, t: (key: TranslationKey) => string) {
 
 function CoverStrip({
   coverUrl,
+  coverPosition,
   className,
 }: {
   coverUrl?: string | null;
+  coverPosition?: number | null;
   className?: string;
 }) {
   const preset = coverPresetById(coverUrl);
@@ -78,11 +80,22 @@ function CoverStrip({
       />
     );
   }
+  const posPercentage = `${Math.round((coverPosition ?? 0.5) * 100)}%`;
   if (preset) {
-    return <div className={cn(className, preset.className)} style={preset.style} />;
+    return (
+      <div
+        className={cn(className, preset.className)}
+        style={{ ...preset.style, backgroundPosition: `center ${posPercentage}` }}
+      />
+    );
   }
   return (
-    <img src={coverUrl} alt="Capa" className={cn("object-cover", className)} />
+    <img
+      src={coverUrl}
+      alt="Capa"
+      className={cn("object-cover", className)}
+      style={{ objectPosition: `center ${posPercentage}` }}
+    />
   );
 }
 
@@ -330,7 +343,11 @@ function PageCard({
       onMouseEnter={() => router.prefetch(`/home/n/${notebook.id}`)}
       className="group block overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-panel)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/45 hover:shadow-[var(--shadow-float)]"
     >
-      <CoverStrip coverUrl={notebook.coverUrl} className="h-[4.5rem] w-full" />
+      <CoverStrip
+        coverUrl={notebook.coverUrl}
+        coverPosition={notebook.coverPosition}
+        className="h-[4.5rem] w-full"
+      />
       <div className="px-4 pb-4">
         <div
           className={cn(
@@ -366,7 +383,11 @@ function NoteCard({ page, notebook }: { page: Page; notebook?: Notebook }) {
       className="group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] transition hover:border-[var(--accent)]/45 hover:shadow-[var(--shadow-panel)]"
     >
       {page.coverUrl ? (
-        <CoverStrip coverUrl={page.coverUrl} className="h-14 w-full" />
+        <CoverStrip
+          coverUrl={page.coverUrl}
+          coverPosition={page.coverPosition}
+          className="h-14 w-full"
+        />
       ) : null}
       <div className="flex flex-1 flex-col p-3.5">
         <div className="flex items-start gap-2">

@@ -15,6 +15,7 @@ export interface CreatePageInput {
   title?: string;
   icon?: string;
   coverUrl?: string | null;
+  coverPosition?: number | null;
   notebookId?: string | null;
   parentPageId?: string | null;
   blocks?: Page["blocks"];

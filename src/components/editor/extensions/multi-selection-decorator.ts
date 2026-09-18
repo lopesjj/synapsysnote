@@ -20,16 +20,12 @@ export const MultiSelectionDecorator = Extension.create({
 
             const decorations: Decoration[] = [];
             state.doc.nodesBetween(from, to, (node, pos) => {
-              if (node.isBlock) {
+              if (node.isAtom) {
                 const end = pos + node.nodeSize;
-                if (
-                  (pos >= from && end <= to) ||
-                  (node.isAtom && pos < to && end > from)
-                ) {
+                if (pos < to && end > from) {
                   decorations.push(
                     Decoration.node(pos, end, {
-                      class: "is-selected-in-range ProseMirror-selectednode",
-                      "data-multi-selected": "true",
+                      class: "ProseMirror-selectednode",
                     })
                   );
                 }

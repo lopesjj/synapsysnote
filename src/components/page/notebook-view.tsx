@@ -550,7 +550,9 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
       {hasCover ? (
         <CoverPicker
           coverUrl={notebook.coverUrl}
+          coverPosition={notebook.coverPosition}
           onChange={(coverUrl) => void adapter.updateNotebook(notebookId, { coverUrl })}
+          onPositionChange={(pos) => void adapter.updateNotebook(notebookId, { coverPosition: pos })}
           onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
         />
       ) : null}
@@ -624,7 +626,9 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
       {!hasCover ? (
         <CoverPicker
           coverUrl={notebook.coverUrl}
+          coverPosition={notebook.coverPosition}
           onChange={(coverUrl) => void adapter.updateNotebook(notebookId, { coverUrl })}
+          onPositionChange={(pos) => void adapter.updateNotebook(notebookId, { coverPosition: pos })}
           onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
         />
       ) : null}

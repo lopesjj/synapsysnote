@@ -617,6 +617,7 @@ export class FirestoreAdapter implements DataAdapter {
       title: input.title ?? "Sem título",
       icon: input.icon ?? "📄",
       coverUrl: input.coverUrl ?? null,
+      coverPosition: input.coverPosition ?? 0.5,
       notebookId: input.notebookId ?? null,
       parentPageId: input.parentPageId ?? null,
       path,

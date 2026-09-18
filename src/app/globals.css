@@ -43,7 +43,7 @@
   --warning: #d97706;
   --shadow-panel: 0 1px 2px rgba(15, 44, 76, 0.04), 0 8px 24px -12px rgba(15, 44, 76, 0.14);
   --shadow-float: 0 12px 48px -12px rgba(15, 44, 76, 0.22);
-  --selection: rgba(14, 116, 144, 0.16);
+  --selection: rgba(14, 116, 144, 0.22);
   --editor-line-height: 1.75;
   --editor-block-gap: 0.55rem;
   --editor-h1-mt: 2rem;
@@ -82,7 +82,7 @@
   --warning: #fbbf24;
   --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 24px 48px -24px rgba(0, 0, 0, 0.8);
   --shadow-float: 0 24px 64px -16px rgba(0, 0, 0, 0.85);
-  --selection: rgba(58, 166, 184, 0.22);
+  --selection: rgba(58, 166, 184, 0.32);
   --code-syntax-plain: #e2e8f4;
   --code-syntax-comment: #94a3b8;
   --code-syntax-keyword: #38bdf8;
@@ -769,22 +769,22 @@
   padding-left: calc(0.75rem + min(10cm, 85vw)) !important;
 }
 
-.synapsys-editor .ProseMirror .ProseMirror-selectednode,
-.synapsys-editor .ProseMirror .is-selected-in-range {
-  outline: 2px solid var(--accent) !important;
-  outline-offset: 2px !important;
-  border-radius: 8px !important;
-  position: relative;
+::selection {
+  background-color: var(--selection);
+  color: inherit;
 }
 
-.synapsys-editor .ProseMirror .is-selected-in-range::after {
-  content: "";
-  position: absolute;
-  inset: 0;
+.synapsys-editor ::selection,
+.synapsys-editor .ProseMirror ::selection,
+.synapsys-editor .ProseMirror *::selection {
   background-color: var(--selection);
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: 10;
+  color: inherit;
+}
+
+.synapsys-editor .ProseMirror .ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .synapsys-editor .ProseMirror .react-renderer.node-mediaBlock,

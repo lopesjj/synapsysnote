@@ -81,6 +81,7 @@ export async function duplicatePageTree(
     title: rename ? copyTitle(source.title) : source.title,
     icon: source.icon,
     coverUrl: source.coverUrl ?? null,
+    coverPosition: source.coverPosition ?? null,
     notebookId: options.notebookId !== undefined ? options.notebookId : source.notebookId,
     parentPageId:
       options.parentPageId !== undefined ? options.parentPageId : source.parentPageId,
@@ -130,6 +131,7 @@ export async function duplicateNotebookTree(
 
   const extras: Partial<Notebook> = {};
   if (source.coverUrl) extras.coverUrl = source.coverUrl;
+  if (source.coverPosition !== undefined) extras.coverPosition = source.coverPosition;
   if (source.description) extras.description = source.description;
   if (Object.keys(extras).length) await host.updateNotebook(created.id, extras);
 

@@ -268,6 +268,7 @@ export class LocalAdapter implements DataAdapter {
       title: input.title ?? "Sem título",
       icon: input.icon ?? "📄",
       coverUrl: input.coverUrl ?? null,
+      coverPosition: input.coverPosition ?? 0.5,
       notebookId: input.notebookId ?? parent?.notebookId ?? null,
       parentPageId: input.parentPageId ?? null,
       path: parent ? [...parent.path, parent.id] : [],
