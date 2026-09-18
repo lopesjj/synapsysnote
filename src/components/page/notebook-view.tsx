@@ -584,7 +584,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
         ) : searchQuery && !filteredChildNotebooks.length && !filteredNotes.length ? (
           <div className="mt-8 rounded-[var(--radius-lg)] border border-dashed border-[var(--border)] p-8 text-center">
             <p className="text-[13px] text-muted">
-              {t("no_items_match_in_notebook")}
+              {t("no_items_match_in_notebook", { query: searchQuery })}
             </p>
             <Button
               variant="ghost"

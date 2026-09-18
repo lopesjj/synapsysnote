@@ -36,6 +36,77 @@ import {
 } from "@/lib/notion/classify-import";
 import { defaultViews, mapDatabaseSchema, mapPropertyValues } from "./property-mapper";
 import { rehostNotionFile, rehostNotionIcon } from "./media";
+import { adminBucket, isAdminConfigured } from "@/lib/firebase/admin";
+
+function extractStoragePathsFromBlocks(blocks: unknown[], workspaceId: string): string[] {
+  const paths = new Set<string>();
+  const prefix = `workspaces/${workspaceId}/`;
+
+  const checkAndAdd = (val: unknown) => {
+    if (typeof val !== "string" || !val.trim()) return;
+    const trimmed = val.trim();
+    if (trimmed.startsWith(prefix)) {
+      paths.add(trimmed);
+      return;
+    }
+    if (trimmed.includes("firebasestorage.googleapis.com") || trimmed.includes("firebasestorage.app")) {
+      const match = trimmed.match(/\/o\/([^?]+)/);
+      if (match && match[1]) {
+        try {
+          const decoded = decodeURIComponent(match[1]);
+          if (decoded.startsWith(prefix)) paths.add(decoded);
+        } catch {
+          if (match[1].startsWith(prefix)) paths.add(match[1]);
+        }
+      }
+    }
+  };
+
+  const walk = (item: unknown) => {
+    if (!item || typeof item !== "object") return;
+    if (Array.isArray(item)) {
+      for (const child of item) walk(child);
+      return;
+    }
+    const record = item as Record<string, unknown>;
+    if (record.storagePath) checkAndAdd(record.storagePath);
+    if (record.url) checkAndAdd(record.url);
+    if (record.media && typeof record.media === "object") {
+      const media = record.media as Record<string, unknown>;
+      if (media.storagePath) checkAndAdd(media.storagePath);
+      if (media.url) checkAndAdd(media.url);
+    }
+    if (record.props && typeof record.props === "object") {
+      const props = record.props as Record<string, unknown>;
+      if (props.storagePath) checkAndAdd(props.storagePath);
+      if (props.url) checkAndAdd(props.url);
+    }
+    if (Array.isArray(record.children)) walk(record.children);
+    if (Array.isArray(record.content)) walk(record.content);
+  };
+
+  walk(blocks);
+  return Array.from(paths);
+}
+
+function parseBlocksFromSnapshot(doc: FirebaseFirestore.DocumentSnapshot): unknown[] {
+  const blocksJsonRaw = doc.get("blocksJson");
+  if (typeof blocksJsonRaw === "string" && blocksJsonRaw.trim().length > 0) {
+    try {
+      const parsed = JSON.parse(blocksJsonRaw);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+  const blocksRaw = doc.get("blocks");
+  if (Array.isArray(blocksRaw)) return blocksRaw;
+  return [];
+}
+
+async function deleteStorageFilesSafe(paths: string[]) {
+  if (!paths.length || !isAdminConfigured()) return;
+  const bucket = adminBucket();
+  await Promise.allSettled(paths.map((p) => bucket.file(p).delete({ ignoreNotFound: true })));
+}
 
 type JobOptions = ImportJob["options"];
 
@@ -224,7 +295,12 @@ async function importNotebook(args: ImportArgs): Promise<string> {
 
   const oldPage = await pagesRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
   if (!oldPage.empty) {
+    const oldBlocks = parseBlocksFromSnapshot(oldPage.docs[0]);
+    const oldPaths = extractStoragePathsFromBlocks(oldBlocks, workspaceId);
     await oldPage.docs[0].ref.delete();
+    if (oldPaths.length > 0) {
+      await deleteStorageFilesSafe(oldPaths);
+    }
   }
 
   const oldDb = await databasesRef(workspaceId).where("notionDatabaseId", "==", node.id).limit(1).get();
@@ -331,6 +407,12 @@ async function importPage(args: ImportArgs): Promise<string> {
   const existing = await pagesRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
   const ref = existing.empty ? pagesRef(workspaceId).doc(`page_${randomUUID().slice(0, 10)}`) : existing.docs[0].ref;
 
+  let oldMediaPaths: string[] = [];
+  if (!existing.empty) {
+    const oldBlocks = parseBlocksFromSnapshot(existing.docs[0]);
+    oldMediaPaths = extractStoragePathsFromBlocks(oldBlocks, workspaceId);
+  }
+
   await ref.set(
     {
       title: node.title,
@@ -360,6 +442,14 @@ async function importPage(args: ImportArgs): Promise<string> {
     },
     { merge: true }
   );
+
+  if (oldMediaPaths.length > 0) {
+    const currentMediaPaths = new Set(extractStoragePathsFromBlocks(blocks, workspaceId));
+    const pathsToDelete = oldMediaPaths.filter((p) => !currentMediaPaths.has(p));
+    if (pathsToDelete.length > 0) {
+      await deleteStorageFilesSafe(pathsToDelete);
+    }
+  }
 
   return ref.id;
 }
@@ -408,7 +498,12 @@ async function importDatabase(args: ImportArgs): Promise<string> {
 
   const oldPage = await pagesRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
   if (!oldPage.empty) {
+    const oldBlocks = parseBlocksFromSnapshot(oldPage.docs[0]);
+    const oldPaths = extractStoragePathsFromBlocks(oldBlocks, workspaceId);
     await oldPage.docs[0].ref.delete();
+    if (oldPaths.length > 0) {
+      await deleteStorageFilesSafe(oldPaths);
+    }
   }
 
   const oldNotebook = await notebooksRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
