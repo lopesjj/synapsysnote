@@ -26,6 +26,24 @@ export function ImageLightbox() {
     setMounted(true);
   }, []);
 
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  const panRef = useRef(pan);
+  panRef.current = pan;
+
+  const touchDataRef = useRef<{
+    mode: "pinch" | "pan";
+    initialDist: number;
+    initialZoom: number;
+    initialPan: { x: number; y: number };
+    startCenterX: number;
+    startCenterY: number;
+    startTouchX: number;
+    startTouchY: number;
+  } | null>(null);
+
+  const lastTapRef = useRef<number>(0);
+
   const resetTransform = useCallback(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
@@ -108,11 +126,153 @@ export function ImageLightbox() {
       });
     };
 
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length === 2) {
+        event.preventDefault();
+        const t1 = event.touches[0];
+        const t2 = event.touches[1];
+        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        touchDataRef.current = {
+          mode: "pinch",
+          initialDist: dist,
+          initialZoom: zoomRef.current,
+          initialPan: { ...panRef.current },
+          startCenterX: (t1.clientX + t2.clientX) / 2,
+          startCenterY: (t1.clientY + t2.clientY) / 2,
+          startTouchX: 0,
+          startTouchY: 0,
+        };
+        setIsDragging(true);
+        return;
+      }
+
+      if (event.touches.length === 1) {
+        const now = Date.now();
+        const touch = event.touches[0];
+
+        if (now - lastTapRef.current < 300) {
+          event.preventDefault();
+          if (zoomRef.current > 1) {
+            resetTransform();
+          } else {
+            setZoom(2.5);
+            setPan({ x: 0, y: 0 });
+          }
+          lastTapRef.current = 0;
+          touchDataRef.current = null;
+          return;
+        }
+        lastTapRef.current = now;
+
+        if (zoomRef.current > 1) {
+          touchDataRef.current = {
+            mode: "pan",
+            initialDist: 0,
+            initialZoom: zoomRef.current,
+            initialPan: { ...panRef.current },
+            startCenterX: 0,
+            startCenterY: 0,
+            startTouchX: touch.clientX,
+            startTouchY: touch.clientY,
+          };
+          setIsDragging(true);
+        }
+      }
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (!touchDataRef.current) return;
+
+      if (event.touches.length === 2 && touchDataRef.current.mode === "pinch") {
+        event.preventDefault();
+        const t1 = event.touches[0];
+        const t2 = event.touches[1];
+        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+        if (touchDataRef.current.initialDist > 0) {
+          const factor = dist / touchDataRef.current.initialDist;
+          const nextZoom = Math.min(
+            MAX_ZOOM,
+            Math.max(MIN_ZOOM, Number((touchDataRef.current.initialZoom * factor).toFixed(2)))
+          );
+          setZoom(nextZoom);
+
+          const currentCenterX = (t1.clientX + t2.clientX) / 2;
+          const currentCenterY = (t1.clientY + t2.clientY) / 2;
+          const deltaX = currentCenterX - touchDataRef.current.startCenterX;
+          const deltaY = currentCenterY - touchDataRef.current.startCenterY;
+
+          if (nextZoom <= 1) {
+            setPan({ x: 0, y: 0 });
+          } else {
+            setPan({
+              x: touchDataRef.current.initialPan.x + deltaX,
+              y: touchDataRef.current.initialPan.y + deltaY,
+            });
+          }
+        }
+        return;
+      }
+
+      if (event.touches.length === 1 && touchDataRef.current.mode === "pan") {
+        if (zoomRef.current > 1) {
+          event.preventDefault();
+          const touch = event.touches[0];
+          const deltaX = touch.clientX - touchDataRef.current.startTouchX;
+          const deltaY = touch.clientY - touchDataRef.current.startTouchY;
+          setPan({
+            x: touchDataRef.current.initialPan.x + deltaX,
+            y: touchDataRef.current.initialPan.y + deltaY,
+          });
+        }
+      }
+    };
+
+    const handleTouchEnd = (event: TouchEvent) => {
+      if (event.touches.length === 1 && touchDataRef.current?.mode === "pinch") {
+        const touch = event.touches[0];
+        if (zoomRef.current > 1) {
+          touchDataRef.current = {
+            mode: "pan",
+            initialDist: 0,
+            initialZoom: zoomRef.current,
+            initialPan: { ...panRef.current },
+            startCenterX: 0,
+            startCenterY: 0,
+            startTouchX: touch.clientX,
+            startTouchY: touch.clientY,
+          };
+        } else {
+          touchDataRef.current = null;
+          setIsDragging(false);
+        }
+        return;
+      }
+
+      if (event.touches.length === 0) {
+        touchDataRef.current = null;
+        setIsDragging(false);
+        if (zoomRef.current < 1) {
+          setZoom(1);
+          setPan({ x: 0, y: 0 });
+        }
+      }
+    };
+
     container.addEventListener("wheel", handleWheel, { passive: false });
+    container.addEventListener("touchstart", handleTouchStart, { passive: false });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    container.addEventListener("touchend", handleTouchEnd);
+    container.addEventListener("touchcancel", handleTouchEnd);
+
     return () => {
       container.removeEventListener("wheel", handleWheel);
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchmove", handleTouchMove);
+      container.removeEventListener("touchend", handleTouchEnd);
+      container.removeEventListener("touchcancel", handleTouchEnd);
     };
-  }, [isOpen]);
+  }, [isOpen, resetTransform]);
 
   const handlePointerDown = (event: React.PointerEvent) => {
     if (zoom <= 1) return;
@@ -163,7 +323,8 @@ export function ImageLightbox() {
     <div
       ref={containerRef}
       tabIndex={-1}
-      className="fixed inset-0 z-[9999] flex select-none items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-200 outline-none"
+      className="fixed inset-0 z-[9999] flex select-none items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-200 outline-none touch-none"
+      style={{ touchAction: "none" }}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
     >
@@ -221,9 +382,10 @@ export function ImageLightbox() {
 
       <div
         className={cn(
-          "relative flex max-h-full max-w-full items-center justify-center p-4",
+          "relative flex max-h-full max-w-full items-center justify-center p-4 touch-none",
           zoom > 1 ? (isDragging ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
         )}
+        style={{ touchAction: "none" }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
       >
@@ -235,7 +397,7 @@ export function ImageLightbox() {
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
             transition: isDragging ? "none" : "transform 150ms ease-out",
           }}
-          className="max-h-[85vh] max-w-[90vw] rounded-md object-contain shadow-2xl pointer-events-auto"
+          className="max-h-[85vh] max-w-[90vw] rounded-md object-contain shadow-2xl pointer-events-auto touch-none"
         />
       </div>
 
