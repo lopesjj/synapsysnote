@@ -429,6 +429,11 @@
   display: block;
   white-space: pre;
 }
+.synapsys-editor .ProseMirror pre [style*="color"] [class*="hljs"],
+.synapsys-editor .ProseMirror .synapsys-code-block [style*="color"] [class*="hljs"],
+.synapsys-editor .ProseMirror .synapsys-code-block__pre [style*="color"] [class*="hljs"] {
+  color: inherit !important;
+}
 
 .synapsys-editor .ProseMirror ul[data-type="taskList"] {
   list-style: none;

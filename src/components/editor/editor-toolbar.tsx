@@ -235,9 +235,20 @@ export function EditorToolbar({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
                   if (dispatchTableMultiAction({ type: "color", color: color.value })) return;
-                  color.value
-                    ? editor.chain().focus().setColor(color.value).run()
-                    : editor.chain().focus().unsetColor().run();
+                  if (editor.isActive("codeBlock")) {
+                    const current = (editor.getAttributes("textStyle").color as string | undefined) ?? null;
+                    if (color.value) {
+                      editor.chain().focus().setColor(color.value).run();
+                    } else if (current === "var(--text)" || current === "var(--code-syntax-plain)") {
+                      editor.chain().focus().unsetColor().run();
+                    } else {
+                      editor.chain().focus().setColor("var(--text)").run();
+                    }
+                  } else {
+                    color.value
+                      ? editor.chain().focus().setColor(color.value).run()
+                      : editor.chain().focus().unsetColor().run();
+                  }
                 }}
                 className="size-6 rounded-full border border-[var(--border)]"
                 style={{ background: color.value ?? "var(--text)" }}

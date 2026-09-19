@@ -143,6 +143,8 @@ function CodeBlockView({ node, updateAttributes, editor }: NodeViewProps) {
 }
 
 export const SynapsysCodeBlock = CodeBlockLowlight.extend({
+  marks: "_",
+
   addAttributes() {
     return {
       ...this.parent?.(),

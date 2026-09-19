@@ -178,9 +178,11 @@ function blockToNode(block: AppBlock): JSONContent | null {
               : "plaintext",
           autoDetect: block.props?.language === "auto" || Boolean(block.props?.autoDetect) || !block.props?.language,
         },
-        ...(block.richText?.length
-          ? { content: [{ type: "text", text: block.richText.map((s) => s.text).join("") }] }
-          : {}),
+        ...(inline.length
+          ? { content: inline }
+          : block.richText?.length
+            ? { content: [{ type: "text", text: block.richText.map((s) => s.text).join("") }] }
+            : {}),
       };
     case "equation":
       return { type: "equationBlock", attrs: { expression: block.props?.expression ?? "" } };
@@ -347,7 +349,7 @@ function nodeToBlocks(node: JSONContent): AppBlock[] {
         {
           id: id(),
           type: "code",
-          richText: [{ text: node.content?.map((c) => c.text ?? "").join("") ?? "" }],
+          richText: inlineToSpans(node.content),
           props: {
             language: (node.attrs?.language as string) ?? "plaintext",
             ...(node.attrs?.autoDetect ? { autoDetect: true } : {}),

@@ -113,7 +113,7 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
       options={{ placement: "top", offset: 10 }}
       shouldShow={({ editor: instance, from, to }) => {
         if (!instance.isEditable || from === to) return false;
-        if (instance.isActive("codeBlock") || instance.isActive("mediaBlock")) return false;
+        if (instance.isActive("mediaBlock")) return false;
         if (instance.state.selection instanceof NodeSelection) return false;
         return true;
       }}
@@ -304,8 +304,19 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
             colors={TEXT_COLORS}
             round
             onPick={(value) => {
-              if (value) editor.chain().focus().setColor(value).run();
-              else editor.chain().focus().unsetColor().run();
+              if (editor.isActive("codeBlock")) {
+                const current = (editor.getAttributes("textStyle").color as string | undefined) ?? null;
+                if (value) {
+                  editor.chain().focus().setColor(value).run();
+                } else if (current === "var(--text)" || current === "var(--code-syntax-plain)") {
+                  editor.chain().focus().unsetColor().run();
+                } else {
+                  editor.chain().focus().setColor("var(--text)").run();
+                }
+              } else {
+                if (value) editor.chain().focus().setColor(value).run();
+                else editor.chain().focus().unsetColor().run();
+              }
             }}
           />
         </div>

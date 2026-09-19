@@ -90,7 +90,7 @@ function spansToHtml(spans: RichTextSpan[] | undefined): string {
       if (a?.underline) html = `<u>${html}</u>`;
       if (a?.strikethrough) html = `<s>${html}</s>`;
       if (a?.code) html = `<code style="padding:1px 4px;border-radius:4px;background:#f1f5f9;color:#0f172a;font-family:monospace;font-size:12px;">${html}</code>`;
-      if (a?.color) html = `<span style="color:${a.color};">${html}</span>`;
+      if (a?.color) html = `<span style="color:${a.color === "var(--text)" ? "inherit" : a.color};">${html}</span>`;
       if (a?.highlight) {
         const bg = typeof a.highlight === "string" ? a.highlight : "#fef08a";
         html = `<mark style="background-color:${bg};color:inherit;padding:1px 2px;border-radius:2px;">${html}</mark>`;
@@ -375,13 +375,27 @@ function renderBlockHtml(block: AppBlock, imageMap: Map<string, string>, depth =
 
     case "code": {
       const language = block.props?.language && block.props.language !== "auto" ? block.props.language : "código";
-      const codeText = spans.map((s) => s.text).join("");
+      const codeHtml = spans.some((s) => s.annotations && Object.keys(s.annotations).length > 0)
+        ? spans
+            .map((span) => {
+              const rawText = span.text || "";
+              let html = rawText.split("\n").map(escapeHtml).join("<br>");
+              const a = span.annotations;
+              if (a?.color) html = `<span style="color:${a.color === "var(--text)" ? "#f8fafc" : a.color};">${html}</span>`;
+              if (a?.highlight) {
+                const bg = typeof a.highlight === "string" ? a.highlight : "#fef08a";
+                html = `<mark style="background-color:${bg};color:inherit;padding:1px 2px;border-radius:2px;">${html}</mark>`;
+              }
+              return html;
+            })
+            .join("")
+        : escapeHtml(spans.map((s) => s.text).join(""));
       return `
         <div style="margin:12px 0;border-radius:8px;background:#0f172a;color:#f8fafc;overflow:hidden;border:1px solid #1e293b;">
           <div style="background:#1e293b;padding:5px 12px;font-size:11px;font-family:monospace;color:#94a3b8;text-transform:uppercase;">
             ${escapeHtml(language)}
           </div>
-          <pre style="margin:0;padding:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word;"><code>${escapeHtml(codeText)}</code></pre>
+          <pre style="margin:0;padding:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word;"><code>${codeHtml}</code></pre>
         </div>
       `;
     }
