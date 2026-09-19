@@ -14,6 +14,8 @@ import { cn, isMac } from "@/lib/utils";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { useTranslation } from "@/lib/i18n/translations";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
+import { isNestedNotebook } from "@/lib/data/notebook-tree";
+import type { Notebook } from "@/types/models";
 
 export function CommandPalette({
   open,
@@ -72,6 +74,48 @@ export function CommandPalette({
     [notebooks]
   );
 
+  const [recentNotebookIds, setRecentNotebookIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const stored = localStorage.getItem("synapsys.recent_notebooks");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setRecentNotebookIds(parsed);
+        }
+      }
+    } catch {}
+  }, [open]);
+
+  const recordRecentNotebook = (id: string) => {
+    try {
+      const stored = localStorage.getItem("synapsys.recent_notebooks");
+      const currentList: string[] = stored ? JSON.parse(stored) : [];
+      const updated = [id, ...currentList.filter((item) => item !== id)].slice(0, 10);
+      setRecentNotebookIds(updated);
+      localStorage.setItem("synapsys.recent_notebooks", JSON.stringify(updated));
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (currentNotebookId) {
+      recordRecentNotebook(currentNotebookId);
+    }
+  }, [currentNotebookId]);
+
+  const recentNotebooks = useMemo(() => {
+    const fromRecentIds = recentNotebookIds
+      .map((id) => notebookMap.get(id))
+      .filter((nb): nb is Notebook => Boolean(nb));
+    const recentSet = new Set(fromRecentIds.map((nb) => nb.id));
+    const remaining = [...notebooks]
+      .filter((nb) => !recentSet.has(nb.id))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+    return [...fromRecentIds, ...remaining].slice(0, 6);
+  }, [notebooks, notebookMap, recentNotebookIds]);
+
   const recents = useMemo(
     () => [...livePages].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5),
     [livePages]
@@ -79,6 +123,10 @@ export function CommandPalette({
 
   const go = (href: string) => {
     onOpenChange(false);
+    if (href.startsWith("/home/n/")) {
+      const id = href.slice("/home/n/".length);
+      recordRecentNotebook(id);
+    }
     if (href.startsWith("/home/p/")) {
       useUiStore.getState().closeMenu();
     }
@@ -147,28 +195,32 @@ export function CommandPalette({
                 </Command.Empty>
 
                 {query && notebookHits.length ? (
-                  <Command.Group heading={<GroupLabel>{t("notebooks")}</GroupLabel>}>
-                    {notebookHits.map((hit) => (
-                      <Command.Item
-                        key={`hit-notebook-${hit.id}`}
-                        value={`hit-notebook-${hit.id}`}
-                        onSelect={() => go(`/home/n/${hit.id}`)}
-                        className={itemClass}
-                      >
-                        <WorkspaceIcon icon={hit.icon ?? undefined} fallback="📓" size={14} />
-                        <div className="min-w-0 flex-1">
-                          <span className="block truncate text-[13px] font-medium text-ink">{hit.title}</span>
-                          {hit.snippet ? (
-                            <span className="block truncate text-[11.5px] text-muted">{hit.snippet}</span>
-                          ) : null}
-                        </div>
-                      </Command.Item>
-                    ))}
+                  <Command.Group heading={<GroupLabel>{t("pages_and_notebooks")}</GroupLabel>}>
+                    {notebookHits.map((hit) => {
+                      const nb = notebookMap.get(hit.id);
+                      const isNested = nb ? isNestedNotebook(nb) : false;
+                      const typeLabel = isNested ? t("notebook_count_singular") : t("page_singular");
+                      const subtitle = hit.snippet || typeLabel;
+                      return (
+                        <Command.Item
+                          key={`hit-notebook-${hit.id}`}
+                          value={`hit-notebook-${hit.id}`}
+                          onSelect={() => go(`/home/n/${hit.id}`)}
+                          className={itemClass}
+                        >
+                          <WorkspaceIcon icon={hit.icon ?? undefined} fallback={isNested ? "📁" : "📓"} size={14} />
+                          <div className="min-w-0 flex-1">
+                            <span className="block truncate text-[13px] font-medium text-ink">{hit.title}</span>
+                            <span className="block truncate text-[11.5px] text-muted capitalize">{subtitle}</span>
+                          </div>
+                        </Command.Item>
+                      );
+                    })}
                   </Command.Group>
                 ) : null}
 
                 {query && pageHits.length ? (
-                  <Command.Group heading={<GroupLabel>{t("pages")}</GroupLabel>}>
+                  <Command.Group heading={<GroupLabel>{t("notes")}</GroupLabel>}>
                     {pageHits.map((hit) => {
                       const parentNotebook = hit.notebookId ? notebookMap.get(hit.notebookId) : null;
                       return (
@@ -200,21 +252,30 @@ export function CommandPalette({
 
                 {!query ? (
                   <>
-                    {notebooks.length ? (
-                      <Command.Group heading={<GroupLabel>{t("notebooks")}</GroupLabel>}>
-                        {notebooks.slice(0, 6).map((notebook) => (
-                          <Command.Item
-                            key={notebook.id}
-                            value={`notebook-${notebook.id}`}
-                            onSelect={() => go(`/home/n/${notebook.id}`)}
-                            className={itemClass}
-                          >
-                            <WorkspaceIcon icon={notebook.emoji} fallback="📓" size={14} />
-                            <span className="flex-1 truncate text-[13px] text-ink">
-                              {notebook.name}
-                            </span>
-                          </Command.Item>
-                        ))}
+                    {recentNotebooks.length ? (
+                      <Command.Group heading={<GroupLabel>{t("pages_and_notebooks")}</GroupLabel>}>
+                        {recentNotebooks.map((notebook) => {
+                          const isNested = isNestedNotebook(notebook);
+                          const typeLabel = isNested ? t("notebook_count_singular") : t("page_singular");
+                          return (
+                            <Command.Item
+                              key={notebook.id}
+                              value={`notebook-${notebook.id}`}
+                              onSelect={() => go(`/home/n/${notebook.id}`)}
+                              className={itemClass}
+                            >
+                              <WorkspaceIcon icon={notebook.emoji} fallback={isNested ? "📁" : "📓"} size={14} />
+                              <div className="min-w-0 flex-1">
+                                <span className="block truncate text-[13px] text-ink">
+                                  {notebook.name}
+                                </span>
+                                <span className="block truncate text-[11.5px] text-muted capitalize">
+                                  {notebook.description || typeLabel}
+                                </span>
+                              </div>
+                            </Command.Item>
+                          );
+                        })}
                       </Command.Group>
                     ) : null}
 

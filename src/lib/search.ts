@@ -79,7 +79,7 @@ export function searchWorkspace(
       id: notebook.id,
       kind: "notebook",
       title: notebook.name,
-      snippet: notebook.description ? snippetAround(notebook.description, tokens) : "Caderno",
+      snippet: notebook.description ? snippetAround(notebook.description, tokens) : "",
       score: score + 2,
       matchedIn: [...matchedIn],
       icon: notebook.emoji || undefined,
