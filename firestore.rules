@@ -219,6 +219,11 @@ service cloud.firestore {
         allow read: if isMember(workspaceId);
         allow write: if false;
       }
+
+      match /flashcards/{flashcardId} {
+        allow read: if isMember(workspaceId);
+        allow create, update, delete: if canWrite(workspaceId);
+      }
     }
 
     match /{document=**} {

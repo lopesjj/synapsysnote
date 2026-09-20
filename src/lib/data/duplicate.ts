@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
-import type { AppBlock, Notebook, Page } from "@/types/models";
-import type { CreatePageInput } from "./adapter";
+import type { AppBlock, Flashcard, Notebook, Page } from "@/types/models";
+import type { CreateFlashcardInput, CreatePageInput } from "./adapter";
+import { cardImage } from "@/lib/flashcards/card-images";
 import { childrenOf, parentIdOf } from "./notebook-tree";
 
 function mentionIds(blocks: AppBlock[]): string[] {
@@ -27,6 +28,37 @@ export interface DuplicateHost {
   updateNotebook(id: string, patch: Partial<Notebook>): Promise<void>;
   createPage(input: CreatePageInput): Promise<Page>;
   updatePage(id: string, patch: Partial<Page>): Promise<void>;
+  listPageFlashcards(pageId: string): Promise<Flashcard[]>;
+  createFlashcard(input: CreateFlashcardInput): Promise<Flashcard>;
+}
+
+/**
+ * Copia os flashcards de uma nota para a nota recem-criada.
+ *
+ * A copia referencia a mesma imagem pela URL, mas nao recebe o `storagePath`:
+ * ela nao e dona do arquivo. Sem isso, apagar a copia apagaria a imagem do card
+ * original no storage.
+ */
+async function duplicatePageFlashcards(
+  host: DuplicateHost,
+  sourcePageId: string,
+  target: Page
+): Promise<void> {
+  const cards = await host.listPageFlashcards(sourcePageId);
+  for (const card of cards) {
+    await host.createFlashcard({
+      pageId: target.id,
+      notebookId: target.notebookId,
+      pageTitle: target.title,
+      front: card.front,
+      back: card.back,
+      hint: card.hint,
+      frontImageUrl: cardImage(card, "front").url,
+      frontImageStoragePath: null,
+      backImageUrl: cardImage(card, "back").url,
+      backImageStoragePath: null,
+    });
+  }
 }
 
 export function copyTitle(name: string, fallback = "Sem título"): string {
@@ -93,6 +125,8 @@ export async function duplicatePageTree(
   if (outgoingLinks.length) {
     await host.updatePage(created.id, { outgoingLinks });
   }
+
+  await duplicatePageFlashcards(host, source.id, created);
 
   const children = livePages(pages)
     .filter((page) => page.parentPageId === source.id)

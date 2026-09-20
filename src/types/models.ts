@@ -148,6 +148,7 @@ export interface UserPreferences {
   screenReader?: boolean;
   speechRate?: number;
   libras?: boolean;
+  flashcardSettings?: FlashcardSettings;
 }
 
 export interface UserProfile {
@@ -423,3 +424,53 @@ export interface SearchHit {
   notebookId?: string | null;
   icon?: string | null;
 }
+
+export type FlashcardRating = "again" | "hard" | "good" | "easy";
+
+export interface FlashcardSettings {
+  dailyGoal: number;
+  intervalModifier: number;
+  enableNotifications: boolean;
+  notificationTime: string;
+}
+
+export interface Flashcard {
+  id: string;
+  workspaceId: string;
+  notebookId: string | null;
+  pageId: string;
+  pageTitle?: string;
+  front: string;
+  back: string;
+  hint?: string;
+  frontImageUrl?: string | null;
+  frontImageStoragePath?: string | null;
+  backImageUrl?: string | null;
+  backImageStoragePath?: string | null;
+  /** @deprecated Imagem única dos cards antigos; lida como imagem da frente. */
+  imageUrl?: string | null;
+  /** @deprecated Par legado de {@link imageUrl}. */
+  imageStoragePath?: string | null;
+  repetition: number;
+  interval: number;
+  easeFactor: number;
+  nextReviewDate: ISOTimestamp;
+  lastReviewedAt: ISOTimestamp | null;
+  createdAt: ISOTimestamp;
+  updatedAt: ISOTimestamp;
+  createdBy: string;
+}
+
+export interface CreateFlashcardInput {
+  pageId: string;
+  notebookId?: string | null;
+  pageTitle?: string;
+  front: string;
+  back: string;
+  hint?: string;
+  frontImageUrl?: string | null;
+  frontImageStoragePath?: string | null;
+  backImageUrl?: string | null;
+  backImageStoragePath?: string | null;
+}
+

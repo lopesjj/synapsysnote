@@ -85,6 +85,24 @@ async function deletePageStorageAndDoc(
     }
   }
 
+  const db = adminDb();
+  const flashcardsSnap = await db
+    .collection("workspaces")
+    .doc(workspaceId)
+    .collection("flashcards")
+    .where("pageId", "==", pageId)
+    .get();
+
+  // Coletado antes da limpeza do storage: imagens de flashcard podem ter sido
+  // gravadas fora do prefixo da nota (ex.: cards importados/migrados).
+  for (const fcDoc of flashcardsSnap.docs) {
+    const fcData = fcDoc.data();
+    for (const field of ["frontImageStoragePath", "backImageStoragePath", "imageStoragePath"]) {
+      const path = fcData[field];
+      if (typeof path === "string" && path.trim()) storagePaths.add(path);
+    }
+  }
+
   if (isAdminConfigured()) {
     const bucket = adminBucket();
 
@@ -100,7 +118,6 @@ async function deletePageStorageAndDoc(
     ]);
   }
 
-  const db = adminDb();
   const trashedMediaSnap = await db
     .collection("workspaces")
     .doc(workspaceId)
@@ -111,6 +128,7 @@ async function deletePageStorageAndDoc(
   const refsToDelete: FirebaseFirestore.DocumentReference[] = [
     ...versionsSnap.docs.map((v) => v.ref),
     ...trashedMediaSnap.docs.map((m) => m.ref),
+    ...flashcardsSnap.docs.map((f) => f.ref),
     pageDoc.ref,
   ];
 

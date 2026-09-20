@@ -1,6 +1,9 @@
 import type {
   AppDatabase,
+  CreateFlashcardInput,
   DatabaseRow,
+  Flashcard,
+  FlashcardRating,
   ImportJob,
   Notebook,
   NotionIntegration,
@@ -27,6 +30,14 @@ export interface CreateImportJobInput {
   targetNotebookId: string | null;
   options: ImportJob["options"];
   items: { notionId: string; title: string; type: "page" | "database" }[];
+}
+
+export type { CreateFlashcardInput };
+
+export interface FlashcardResetScope {
+  cardIds?: string[];
+  pageId?: string;
+  notebookId?: string | null;
 }
 
 export interface DataAdapter {
@@ -90,4 +101,15 @@ export interface DataAdapter {
   deleteMedia(storagePaths: string[], pageId?: string): Promise<void>;
   quarantineMedia(storagePaths: string[], pageId?: string): Promise<void>;
   unquarantineMedia(storagePaths: string[]): Promise<void>;
+
+  subscribeFlashcards(cb: (cards: Flashcard[]) => void): Unsubscribe;
+  listPageFlashcards(pageId: string): Promise<Flashcard[]>;
+  createFlashcard(input: CreateFlashcardInput): Promise<Flashcard>;
+  updateFlashcard(id: string, patch: Partial<Flashcard>): Promise<void>;
+  deleteFlashcard(id: string): Promise<void>;
+  /** Apaga todos os cards de uma nota e as imagens deles. Devolve quantos saíram. */
+  deleteFlashcardsByPage(pageId: string): Promise<number>;
+  reviewFlashcard(id: string, rating: FlashcardRating, modifier?: number): Promise<void>;
+  resetFlashcardsProgress(scope?: FlashcardResetScope): Promise<number>;
+  uploadFlashcardImage(pageId: string, cardId: string, file: File): Promise<{ url: string; storagePath?: string }>;
 }

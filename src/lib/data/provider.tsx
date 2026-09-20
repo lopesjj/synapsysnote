@@ -10,6 +10,7 @@ import {
 } from "react";
 import type {
   AppDatabase,
+  Flashcard,
   ImportJob,
   Notebook,
   NotionIntegration,
@@ -21,6 +22,7 @@ import type { DataAdapter } from "./adapter";
 import { FirestoreAdapter } from "./firestore-adapter";
 import { getLocalAdapter } from "./local-adapter";
 import { childrenOf, notebookAncestors } from "./notebook-tree";
+import { endOfDay, isCardDueForReview } from "@/lib/flashcards/srs";
 import { compareNatural } from "@/lib/utils";
 
 
@@ -44,6 +46,10 @@ interface WorkspaceContextValue {
   activeImportJob: ImportJob | null;
   integration: NotionIntegration | null;
   tags: { name: string; count: number }[];
+  flashcards: Flashcard[];
+  dueFlashcards: Flashcard[];
+  /** false enquanto a primeira carga nao chegou: evita mostrar 'nenhum card'. */
+  flashcardsReady: boolean;
   treeFor: (notebookId: string | null) => PageTreeNode[];
   pageById: (id: string) => Page | undefined;
   notebookById: (id: string) => Notebook | undefined;
@@ -91,6 +97,19 @@ function stripHeavyPageFields(pages: Page[]): Page[] {
   }));
 }
 
+function stripHeavyFlashcardFields(cards: Flashcard[]): Flashcard[] {
+  // No modo local as imagens sao data URLs de ate 1 MB; no cache elas
+  // estourariam a cota do localStorage. As URLs http do Firebase ficam.
+  const keepUrl = (url?: string | null) =>
+    typeof url === "string" && url.startsWith("data:") ? null : (url ?? null);
+  return cards.map((card) => ({
+    ...card,
+    imageUrl: keepUrl(card.imageUrl),
+    frontImageUrl: keepUrl(card.frontImageUrl),
+    backImageUrl: keepUrl(card.backImageUrl),
+  }));
+}
+
 export const TRASH_RETENTION_DAYS: number = 30;
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
@@ -103,9 +122,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     readLocalStore<Page[]>(`synapsys.cache.pages.${userKey}`, [])
   );
   const [databases, setDatabases] = useState<AppDatabase[]>([]);
+  const [flashcards, setFlashcards] = useState<Flashcard[]>(() =>
+    readLocalStore<Flashcard[]>(`synapsys.cache.flashcards.${userKey}`, [])
+  );
+  const [flashcardsAdapter, setFlashcardsAdapter] = useState<DataAdapter | null>(null);
   const [importJobs, setImportJobs] = useState<ImportJob[]>([]);
   const [integration, setIntegration] = useState<NotionIntegration | null>(null);
   const [loadedAdapter, setLoadedAdapter] = useState<DataAdapter | null>(null);
+  const [dayStamp, setDayStamp] = useState(() => endOfDay());
 
   const adapter = useMemo<DataAdapter>(() => {
     if (isFirebaseConfigured() && user && user.uid !== "demo-user") {
@@ -114,14 +138,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return getLocalAdapter();
   }, [user]);
 
-  useEffect(() => {
+  // No primeiro render a autenticacao ainda pode nao ter resolvido, entao o
+  // initializer acima leu o cache da chave "default". Quando a identidade chega,
+  // relemos o cache do usuario certo. Ajustar o estado durante o render (e nao
+  // em um efeito) faz o React descartar esta saida e re-renderizar na hora, sem
+  // pintar a tela vazia no meio do caminho.
+  const [cachedForKey, setCachedForKey] = useState(userKey);
+  if (cachedForKey !== userKey) {
+    setCachedForKey(userKey);
     if (user?.uid) {
       const cachedNbs = readLocalStore<Notebook[]>(`synapsys.cache.notebooks.${user.uid}`, []);
       const cachedPgs = readLocalStore<Page[]>(`synapsys.cache.pages.${user.uid}`, []);
+      const cachedFcs = readLocalStore<Flashcard[]>(`synapsys.cache.flashcards.${user.uid}`, []);
+      // Cache vazio nao apaga o que ja esta em tela.
       if (cachedNbs.length > 0) setNotebooks(cachedNbs);
       if (cachedPgs.length > 0) setPages(cachedPgs);
+      if (cachedFcs.length > 0) setFlashcards(cachedFcs);
     }
-  }, [user?.uid]);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -149,6 +183,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           if (cancelled) return;
           setDatabases(next);
         }),
+        adapter.subscribeFlashcards((next) => {
+          if (cancelled) return;
+          setFlashcards(next);
+          setFlashcardsAdapter(adapter);
+          writeLocalStore(`synapsys.cache.flashcards.${userKey}`, stripHeavyFlashcardFields(next));
+        }),
         adapter.subscribeImportJobs((next) => {
           if (cancelled) return;
           setImportJobs(next);
@@ -168,13 +208,35 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     };
   }, [adapter, userKey]);
 
+  // Sem isto o contador de cards vencidos ficaria congelado no dia em que a aba
+  // foi aberta, ate que algum dado do workspace mudasse.
+  useEffect(() => {
+    const delay = Math.max(1000, dayStamp - Date.now() + 1000);
+    const timer = window.setTimeout(() => setDayStamp(endOfDay()), delay);
+    return () => window.clearTimeout(timer);
+  }, [dayStamp]);
+
   const ready = loadedAdapter === adapter || notebooks.length > 0 || pages.length > 0;
+  // Com cache em maos ja da para desenhar: so esperamos quando nao ha nada.
+  const flashcardsReady = flashcardsAdapter === adapter || flashcards.length > 0;
 
   const value = useMemo<WorkspaceContextValue>(() => {
     const livePages = pages.filter((p) => !p.deletedAt);
     const trashedPages = pages
       .filter((p) => p.deletedAt)
       .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
+
+    const livePageById = new Map(livePages.map((p) => [p.id, p]));
+    // pageTitle/notebookId sao gravados no card na criacao; renomear ou mover a
+    // nota depois nao reescreve os cards, entao o valor vivo manda.
+    const liveFlashcards = flashcards.flatMap((card) => {
+      const page = livePageById.get(card.pageId);
+      if (!page) return [];
+      const title = page.title || card.pageTitle;
+      const notebookId = page.notebookId ?? null;
+      if (title === card.pageTitle && notebookId === card.notebookId) return [card];
+      return [{ ...card, pageTitle: title, notebookId }];
+    });
 
     const tagCounts = new Map<string, number>();
     for (const page of livePages) {
@@ -218,6 +280,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       importJobs,
       activeImportJob,
       integration,
+      flashcards: liveFlashcards,
+      dueFlashcards: liveFlashcards.filter((card) => isCardDueForReview(card, dayStamp)),
+      flashcardsReady,
       tags: [...tagCounts.entries()]
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count),
@@ -228,7 +293,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       notebookPath: (notebookId: string) => notebookAncestors(notebooks, notebookId),
       rootNotebooks: childrenOf(notebooks, null),
     };
-  }, [adapter, databases, importJobs, integration, notebooks, pages, ready]);
+  }, [
+    adapter,
+    databases,
+    dayStamp,
+    flashcards,
+    flashcardsReady,
+    importJobs,
+    integration,
+    notebooks,
+    pages,
+    ready,
+  ]);
 
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

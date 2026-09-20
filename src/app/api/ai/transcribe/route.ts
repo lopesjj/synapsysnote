@@ -110,7 +110,7 @@ async function transcribeWithGemini(buffer: Buffer, mimeType: string, targetLang
   if (!apiKey) return "";
   const model = process.env.GEMINI_MODEL || "gemini-3.6-flash";
   const langName = LANGUAGE_NAMES[targetLang] || targetLang || "Portuguese";
-  const prompt = `Transcribe the speech in this audio. The transcription output must be strictly in ${langName} (${targetLang}). If the speech in the audio is in any language other than ${langName}, you must accurately translate the spoken content into ${langName}. Return only the final transcribed text in ${langName}, without commentary, quotes, markdown code fences, or explanations.`;
+  const prompt = `Transcribe all spoken content in this audio or video file. The transcription output must be strictly in ${langName} (${targetLang}). If the speech in the audio is in any language other than ${langName}, you must accurately translate the spoken content into ${langName}. Return only the final transcribed text in ${langName}, without commentary, quotes, markdown code fences, or explanations.`;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const res = await fetch(url, {
     method: "POST",

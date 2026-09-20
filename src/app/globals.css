@@ -41,6 +41,17 @@
   --danger: #dc2626;
   --success: #059669;
   --warning: #d97706;
+
+  /* Avaliacoes dos flashcards. O tom *-text e escolhido para contraste AA
+     sobre --surface; o tom base fica reservado a marcadores e barras. */
+  --rating-again: #dc2626;
+  --rating-again-text: #b91c1c;
+  --rating-hard: #d97706;
+  --rating-hard-text: #a1560a;
+  --rating-good: #0891b2;
+  --rating-good-text: #0e6e86;
+  --rating-easy: #059669;
+  --rating-easy-text: #047857;
   --shadow-panel: 0 1px 2px rgba(15, 44, 76, 0.04), 0 8px 24px -12px rgba(15, 44, 76, 0.14);
   --shadow-float: 0 12px 48px -12px rgba(15, 44, 76, 0.22);
   --selection: rgba(14, 116, 144, 0.22);
@@ -80,6 +91,15 @@
   --danger: #f87171;
   --success: #34d399;
   --warning: #fbbf24;
+
+  --rating-again: #f87171;
+  --rating-again-text: #fca5a5;
+  --rating-hard: #fbbf24;
+  --rating-hard-text: #fcd34d;
+  --rating-good: #38bdf8;
+  --rating-good-text: #7dd3fc;
+  --rating-easy: #34d399;
+  --rating-easy-text: #6ee7b7;
   --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 24px 48px -24px rgba(0, 0, 0, 0.8);
   --shadow-float: 0 24px 64px -16px rgba(0, 0, 0, 0.85);
   --selection: rgba(58, 166, 184, 0.32);

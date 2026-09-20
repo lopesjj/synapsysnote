@@ -65,6 +65,8 @@ import { IconPickerMenu } from "@/components/ui/icon-picker";
 import { CoverPicker } from "./cover-picker";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
 import { useLibrasStore } from "@/lib/store/libras-store";
+import { FlashcardsIcon } from "@/lib/icons/flashcard-icon";
+import { NoteFlashcardsModal } from "@/components/flashcards/note-flashcards-modal";
 
 function isAudioBlockElement(el: Element): boolean {
   if (el.tagName === "AUDIO") return true;
@@ -232,8 +234,13 @@ function extractPageText(
 export function PageView({ pageId }: { pageId: string }) {
   const router = useRouter();
   const { t, language } = useTranslation();
-  const { adapter, pages, livePages, notebooks, databases, pageById, ready } = useWorkspace();
+  const { adapter, pages, livePages, notebooks, databases, pageById, ready, flashcards } = useWorkspace();
   const page = pageById(pageId);
+  const [flashcardsModalOpen, setFlashcardsModalOpen] = useState(false);
+  const noteFlashcardsCount = useMemo(
+    () => flashcards.filter((c) => c.pageId === pageId).length,
+    [flashcards, pageId]
+  );
 
   const [titleDraft, setTitleDraft] = useState<{ id: string; value: string } | null>(null);
   const title = titleDraft?.id === pageId ? titleDraft.value : (page?.title ?? "");
@@ -589,6 +596,29 @@ export function PageView({ pageId }: { pageId: string }) {
           </Button>
         </Tooltip>
 
+        <Tooltip label={t("flashcards")}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "relative flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium rounded-lg transition-all",
+              hasCover
+                ? "text-white hover:bg-white/15"
+                : "text-muted hover:text-ink hover:bg-[var(--surface-hover)]"
+            )}
+            onClick={() => setFlashcardsModalOpen(true)}
+            aria-label={t("flashcards")}
+          >
+            <FlashcardsIcon className="size-3.5 text-[var(--accent)]" />
+            <span className="hidden sm:inline">{t("flashcards")}</span>
+            {noteFlashcardsCount > 0 ? (
+              <span className="flex items-center justify-center min-w-[1.25rem] h-4.5 px-1 rounded-full text-[10px] font-bold font-mono bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/25">
+                {noteFlashcardsCount}
+              </span>
+            ) : null}
+          </Button>
+        </Tooltip>
+
         {libras ? (
           <Tooltip label={t("interpret_in_libras")} shortcut="Alt L">
             <Button
@@ -692,6 +722,13 @@ export function PageView({ pageId }: { pageId: string }) {
             ) : null}
             <MenuItem onSelect={() => fileInput.current?.click()}>
               <Paperclip /> {t("attach_file")}
+            </MenuItem>
+            <MenuItem
+              onSelect={() => {
+                setFlashcardsModalOpen(true);
+              }}
+            >
+              <FlashcardsIcon /> {t("flashcards")}
             </MenuItem>
             <MenuItem
               onSelect={(event) => {
@@ -1136,6 +1173,13 @@ export function PageView({ pageId }: { pageId: string }) {
           }
         }}
       />
+
+      {flashcardsModalOpen && page ? (
+        <NoteFlashcardsModal
+          page={page}
+          onClose={() => setFlashcardsModalOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

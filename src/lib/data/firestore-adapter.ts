@@ -4,6 +4,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -25,6 +26,8 @@ import { nanoid } from "nanoid";
 import type {
   AppDatabase,
   DatabaseRow,
+  Flashcard,
+  FlashcardRating,
   ImportJob,
   Notebook,
   NotionIntegration,
@@ -48,7 +51,11 @@ import {
 } from "./media-enrichment";
 import { canonicalizePagePatch, pagePatchIsNoop } from "./page-write";
 import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
+import { calculateNextReview } from "@/lib/flashcards/srs";
+import { cardStoragePaths } from "@/lib/flashcards/card-images";
 import type {
+  CreateFlashcardInput,
+  FlashcardResetScope,
   CreateImportJobInput,
   CreatePageInput,
   DataAdapter,
@@ -136,6 +143,18 @@ function mapPage(snap: QueryDocumentSnapshot<DocumentData>): Page {
     plainText: data.plainText ?? "",
     extractedOCRText: data.extractedOCRText ?? "",
     transcriptText: data.transcriptText ?? "",
+  };
+}
+
+function mapFlashcard(snap: QueryDocumentSnapshot<DocumentData>): Flashcard {
+  const data = snap.data();
+  return {
+    ...(data as Flashcard),
+    id: snap.id,
+    createdAt: ms(data.createdAt) || ms(data.updatedAt) || Date.now(),
+    updatedAt: ms(data.updatedAt) || Date.now(),
+    lastReviewedAt: data.lastReviewedAt ? ms(data.lastReviewedAt) : null,
+    nextReviewDate: typeof data.nextReviewDate === "number" ? data.nextReviewDate : ms(data.nextReviewDate),
   };
 }
 
@@ -975,14 +994,26 @@ export class FirestoreAdapter implements DataAdapter {
       } catch {
         const refs = await this.pageSubtreeRefs(id);
         const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
+        const orphanMedia = new Set<string>();
         for (const ref of refs) {
           const versionsSnap = await getDocs(collection(ref, "versions"));
           for (const v of versionsSnap.docs) {
             ops.push((batch) => batch.delete(v.ref));
           }
+          const cardsSnap = await getDocs(
+            query(this.col("flashcards"), where("pageId", "==", ref.id))
+          );
+          for (const card of cardsSnap.docs) {
+            // Apagar so o documento deixaria a imagem do card no storage.
+            for (const path of cardStoragePaths(card.data() as Flashcard)) {
+              orphanMedia.add(path);
+            }
+            ops.push((batch) => batch.delete(card.ref));
+          }
           ops.push((batch) => batch.delete(ref));
         }
         await commitWrites(ops);
+        if (orphanMedia.size > 0) await this.deleteMedia([...orphanMedia]);
       }
     }
   }
@@ -1529,5 +1560,180 @@ export class FirestoreAdapter implements DataAdapter {
     } catch (err) {
       console.error("Falha ao desmarcar mídia da quarentena:", err);
     }
+  }
+
+  subscribeFlashcards(cb: (cards: Flashcard[]) => void): Unsubscribe {
+    const q = query(this.col("flashcards"), orderBy("createdAt", "desc"));
+    return onSnapshot(
+      q,
+      (snap) => {
+        cb(snap.docs.map(mapFlashcard).sort((a, b) => b.createdAt - a.createdAt));
+      },
+      (err) => {
+        console.error("Falha ao escutar flashcards:", err);
+        cb([]);
+      }
+    );
+  }
+
+  async listPageFlashcards(pageId: string): Promise<Flashcard[]> {
+    const snap = await getDocs(query(this.col("flashcards"), where("pageId", "==", pageId)));
+    return snap.docs.map(mapFlashcard);
+  }
+
+  async createFlashcard(input: CreateFlashcardInput): Promise<Flashcard> {
+    const now = Date.now();
+    const docRef = doc(this.col("flashcards"));
+    const card: Flashcard = {
+      id: docRef.id,
+      workspaceId: this.workspaceId,
+      pageId: input.pageId,
+      notebookId: input.notebookId ?? null,
+      pageTitle: input.pageTitle,
+      front: input.front,
+      back: input.back,
+      hint: input.hint,
+      frontImageUrl: input.frontImageUrl ?? null,
+      frontImageStoragePath: input.frontImageStoragePath ?? null,
+      backImageUrl: input.backImageUrl ?? null,
+      backImageStoragePath: input.backImageStoragePath ?? null,
+      repetition: 0,
+      interval: 1,
+      easeFactor: 2.5,
+      nextReviewDate: now,
+      lastReviewedAt: null,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: this.userId,
+    };
+    await setDoc(docRef, {
+      ...card,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return card;
+  }
+
+  async updateFlashcard(id: string, patch: Partial<Flashcard>): Promise<void> {
+    const cleanPatch: Record<string, unknown> = { ...patch };
+    delete cleanPatch.id;
+    delete cleanPatch.createdAt;
+    delete cleanPatch.workspaceId;
+    // `ignoreUndefinedProperties` descarta chaves undefined, entao limpar um
+    // campo opcional (ex.: a dica) exige deleteField() explicito.
+    for (const [key, value] of Object.entries(cleanPatch)) {
+      if (value === undefined) cleanPatch[key] = deleteField();
+    }
+    await updateDoc(this.docRef("flashcards", id), {
+      ...cleanPatch,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  async deleteFlashcard(id: string): Promise<void> {
+    const targetRef = this.docRef("flashcards", id);
+    const snap = await getDoc(targetRef);
+    if (snap.exists()) {
+      // Frente, verso e o campo legado: qualquer um esquecido vira orfao no storage.
+      const paths = cardStoragePaths(snap.data() as Flashcard);
+      if (paths.length > 0) await this.deleteMedia(paths);
+    }
+    await deleteDoc(targetRef);
+  }
+
+  async deleteFlashcardsByPage(pageId: string): Promise<number> {
+    const snap = await getDocs(query(this.col("flashcards"), where("pageId", "==", pageId)));
+    if (snap.empty) return 0;
+
+    // Junta as imagens de todos os cards numa unica limpeza, em vez de uma
+    // chamada por card.
+    const paths = new Set<string>();
+    for (const docSnap of snap.docs) {
+      for (const path of cardStoragePaths(docSnap.data() as Flashcard)) paths.add(path);
+    }
+
+    await commitWrites(
+      snap.docs.map((docSnap) => (batch: ReturnType<typeof writeBatch>) =>
+        batch.delete(docSnap.ref)
+      )
+    );
+    if (paths.size > 0) await this.deleteMedia([...paths]);
+
+    return snap.size;
+  }
+
+  async reviewFlashcard(id: string, rating: FlashcardRating, modifier = 1.0): Promise<void> {
+    const targetRef = this.docRef("flashcards", id);
+    const snap = await getDoc(targetRef);
+    if (!snap.exists()) return;
+    const current = snap.data() as Flashcard;
+    const result = calculateNextReview(current, rating, modifier);
+    await updateDoc(targetRef, {
+      repetition: result.repetition,
+      interval: result.interval,
+      easeFactor: result.easeFactor,
+      nextReviewDate: result.nextReviewDate,
+      lastReviewedAt: Date.now(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  async resetFlashcardsProgress(scope?: FlashcardResetScope): Promise<number> {
+    const now = Date.now();
+    const resetPayload = {
+      repetition: 0,
+      interval: 1,
+      easeFactor: 2.5,
+      nextReviewDate: now,
+      lastReviewedAt: null,
+    };
+
+    if (scope?.cardIds) {
+      const ids = Array.from(new Set(scope.cardIds.filter(Boolean)));
+      if (ids.length === 0) return 0;
+      await commitWrites(
+        ids.map((id) => (batch: ReturnType<typeof writeBatch>) =>
+          batch.update(this.docRef("flashcards", id), {
+            ...resetPayload,
+            updatedAt: serverTimestamp(),
+          })
+        )
+      );
+      return ids.length;
+    }
+
+    const base = this.col("flashcards");
+    let target = query(base);
+    if (scope?.pageId) {
+      target = query(base, where("pageId", "==", scope.pageId));
+    } else if (scope && "notebookId" in scope) {
+      target = query(base, where("notebookId", "==", scope.notebookId ?? null));
+    }
+
+    const snap = await getDocs(target);
+    if (snap.empty) return 0;
+
+    await commitWrites(
+      snap.docs.map((docSnap) => (batch: ReturnType<typeof writeBatch>) =>
+        batch.update(docSnap.ref, { ...resetPayload, updatedAt: serverTimestamp() })
+      )
+    );
+
+    return snap.size;
+  }
+
+  async uploadFlashcardImage(pageId: string, cardId: string, file: File): Promise<{ url: string; storagePath?: string }> {
+    // Mesmo preparo das imagens do editor: lado maior limitado a 2048px,
+    // reencode em JPEG e compressao ate caber no limite de 1 MB.
+    const prepared = await prepareEditorAttachment(file);
+    const ext = (prepared.name.split(".").pop() || "jpg").toLowerCase();
+    const storagePath = `workspaces/${this.workspaceId}/uploads/${pageId}/fc_${cardId}_${Date.now()}.${ext}`;
+    const storage = getFirebaseStorage();
+    const fileRef = ref(storage, storagePath);
+    const snap = await uploadBytes(fileRef, prepared, {
+      contentType: prepared.type || "image/jpeg",
+    });
+    const url = await getDownloadURL(snap.ref);
+    return { url, storagePath };
   }
 }

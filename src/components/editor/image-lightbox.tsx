@@ -26,10 +26,22 @@ export function ImageLightbox() {
     setMounted(true);
   }, []);
 
-  const zoomRef = useRef(zoom);
-  zoomRef.current = zoom;
-  const panRef = useRef(pan);
-  panRef.current = pan;
+  // Os refs sao a fonte de verdade durante um gesto. Eventos de toque chegam
+  // mais rapido do que o React confirma o estado, entao ler o valor renderizado
+  // fazia o gesto trabalhar com dados de um frame atras: ao soltar um dedo do
+  // pinca a imagem voltava para uma posicao antiga e so entao seguia o dedo.
+  const zoomRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
+
+  const applyZoom = useCallback((value: number) => {
+    zoomRef.current = value;
+    setZoom(value);
+  }, []);
+
+  const applyPan = useCallback((value: { x: number; y: number }) => {
+    panRef.current = value;
+    setPan(value);
+  }, []);
 
   const touchDataRef = useRef<{
     mode: "pinch" | "pan";
@@ -45,9 +57,9 @@ export function ImageLightbox() {
   const lastTapRef = useRef<number>(0);
 
   const resetTransform = useCallback(() => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  }, []);
+    applyZoom(1);
+    applyPan({ x: 0, y: 0 });
+  }, [applyPan, applyZoom]);
 
   useEffect(() => {
     if (isOpen) {
@@ -85,16 +97,16 @@ export function ImageLightbox() {
       }
       if (event.key === "+" || event.key === "=") {
         event.preventDefault();
-        setZoom((z) => Math.min(MAX_ZOOM, Number((z + ZOOM_STEP).toFixed(2))));
+        applyZoom(Math.min(MAX_ZOOM, Number((zoomRef.current + ZOOM_STEP).toFixed(2))));
         return;
       }
       if (event.key === "-") {
         event.preventDefault();
-        setZoom((z) => {
-          const next = Math.max(MIN_ZOOM, Number((z - ZOOM_STEP).toFixed(2)));
-          if (next <= 1) setPan({ x: 0, y: 0 });
-          return next;
-        });
+        {
+          const next = Math.max(MIN_ZOOM, Number((zoomRef.current - ZOOM_STEP).toFixed(2)));
+          if (next <= 1) applyPan({ x: 0, y: 0 });
+          applyZoom(next);
+        }
         return;
       }
       if (event.key === "0") {
@@ -109,7 +121,7 @@ export function ImageLightbox() {
       document.body.style.overflow = originalOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen, closeLightbox, nextImage, prevImage, resetTransform]);
+  }, [isOpen, applyPan, applyZoom, closeLightbox, nextImage, prevImage, resetTransform]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -119,11 +131,12 @@ export function ImageLightbox() {
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault();
       const delta = event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
-      setZoom((currentZoom) => {
-        const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number((currentZoom + delta).toFixed(2))));
-        if (next <= 1) setPan({ x: 0, y: 0 });
-        return next;
-      });
+      const next = Math.min(
+        MAX_ZOOM,
+        Math.max(MIN_ZOOM, Number((zoomRef.current + delta).toFixed(2)))
+      );
+      if (next <= 1) applyPan({ x: 0, y: 0 });
+      applyZoom(next);
     };
 
     const handleTouchStart = (event: TouchEvent) => {
@@ -155,8 +168,8 @@ export function ImageLightbox() {
           if (zoomRef.current > 1) {
             resetTransform();
           } else {
-            setZoom(2.5);
-            setPan({ x: 0, y: 0 });
+            applyZoom(2.5);
+            applyPan({ x: 0, y: 0 });
           }
           lastTapRef.current = 0;
           touchDataRef.current = null;
@@ -195,7 +208,7 @@ export function ImageLightbox() {
             MAX_ZOOM,
             Math.max(MIN_ZOOM, Number((touchDataRef.current.initialZoom * factor).toFixed(2)))
           );
-          setZoom(nextZoom);
+          applyZoom(nextZoom);
 
           const currentCenterX = (t1.clientX + t2.clientX) / 2;
           const currentCenterY = (t1.clientY + t2.clientY) / 2;
@@ -203,9 +216,9 @@ export function ImageLightbox() {
           const deltaY = currentCenterY - touchDataRef.current.startCenterY;
 
           if (nextZoom <= 1) {
-            setPan({ x: 0, y: 0 });
+            applyPan({ x: 0, y: 0 });
           } else {
-            setPan({
+            applyPan({
               x: touchDataRef.current.initialPan.x + deltaX,
               y: touchDataRef.current.initialPan.y + deltaY,
             });
@@ -220,7 +233,7 @@ export function ImageLightbox() {
           const touch = event.touches[0];
           const deltaX = touch.clientX - touchDataRef.current.startTouchX;
           const deltaY = touch.clientY - touchDataRef.current.startTouchY;
-          setPan({
+          applyPan({
             x: touchDataRef.current.initialPan.x + deltaX,
             y: touchDataRef.current.initialPan.y + deltaY,
           });
@@ -253,8 +266,8 @@ export function ImageLightbox() {
         touchDataRef.current = null;
         setIsDragging(false);
         if (zoomRef.current < 1) {
-          setZoom(1);
-          setPan({ x: 0, y: 0 });
+          applyZoom(1);
+          applyPan({ x: 0, y: 0 });
         }
       }
     };
@@ -272,18 +285,18 @@ export function ImageLightbox() {
       container.removeEventListener("touchend", handleTouchEnd);
       container.removeEventListener("touchcancel", handleTouchEnd);
     };
-  }, [isOpen, resetTransform]);
+  }, [isOpen, applyPan, applyZoom, resetTransform]);
 
   const handlePointerDown = (event: React.PointerEvent) => {
-    if (zoom <= 1) return;
+    if (zoomRef.current <= 1) return;
     if (event.button !== 0) return;
     event.preventDefault();
     setIsDragging(true);
     dragStartRef.current = {
       x: event.clientX,
       y: event.clientY,
-      panX: pan.x,
-      panY: pan.y,
+      panX: panRef.current.x,
+      panY: panRef.current.y,
     };
   };
 
@@ -292,7 +305,7 @@ export function ImageLightbox() {
     event.preventDefault();
     const deltaX = event.clientX - dragStartRef.current.x;
     const deltaY = event.clientY - dragStartRef.current.y;
-    setPan({
+    applyPan({
       x: dragStartRef.current.panX + deltaX,
       y: dragStartRef.current.panY + deltaY,
     });
@@ -304,15 +317,13 @@ export function ImageLightbox() {
   };
 
   const zoomIn = () => {
-    setZoom((z) => Math.min(MAX_ZOOM, Number((z + ZOOM_STEP).toFixed(2))));
+    applyZoom(Math.min(MAX_ZOOM, Number((zoomRef.current + ZOOM_STEP).toFixed(2))));
   };
 
   const zoomOut = () => {
-    setZoom((z) => {
-      const next = Math.max(MIN_ZOOM, Number((z - ZOOM_STEP).toFixed(2)));
-      if (next <= 1) setPan({ x: 0, y: 0 });
-      return next;
-    });
+    const next = Math.max(MIN_ZOOM, Number((zoomRef.current - ZOOM_STEP).toFixed(2)));
+    if (next <= 1) applyPan({ x: 0, y: 0 });
+    applyZoom(next);
   };
 
   if (!mounted || !isOpen || images.length === 0) return null;

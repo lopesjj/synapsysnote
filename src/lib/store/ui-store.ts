@@ -18,7 +18,7 @@ export type NotesSortKey = NotesSortPreference;
 export type NotesDensity = NotesDensityPreference;
 export type EditorWidth = EditorWidthPreference;
 
-export type UiPreferences = Required<Omit<UserPreferences, "theme">>;
+export type UiPreferences = Required<Omit<UserPreferences, "theme" | "flashcardSettings">>;
 
 interface UiState extends UiPreferences {
   zenMode: boolean;

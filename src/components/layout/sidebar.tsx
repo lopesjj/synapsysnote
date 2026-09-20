@@ -27,6 +27,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { WorkspaceIcon, isIconUrl } from "@/lib/icons/workspace-icon";
 import { TrashCanIcon } from "@/lib/icons/trash-icon";
+import { FlashcardsIcon } from "@/lib/icons/flashcard-icon";
 import {
   ChevronRight,
   Copy,
@@ -184,6 +185,18 @@ export function SidebarRail() {
             </Link>
           </Button>
         </Tooltip>
+        <Tooltip label={t("flashcards")} side="right">
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            className={cn(pathname === "/home/flashcards" && "bg-[var(--surface-active)] text-ink")}
+          >
+            <Link href="/home/flashcards" aria-label={t("flashcards")}>
+              <FlashcardsIcon />
+            </Link>
+          </Button>
+        </Tooltip>
         <Tooltip label={t("trash")} side="right">
           <Button
             variant="ghost"
@@ -228,7 +241,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
-  const { notebooks, livePages, databases, tags, trashedPages, treeFor, adapter, rootNotebooks } =
+  const { notebooks, livePages, databases, tags, trashedPages, treeFor, adapter, rootNotebooks, flashcards, dueFlashcards } =
     useWorkspace();
 
   const [openNotebooks, setOpenNotebooks] = useState<Record<string, boolean>>(() =>
@@ -697,6 +710,20 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         >
           {t("all_notes")}
           <span className="ml-auto text-[10.5px] text-faint">{livePages.length}</span>
+        </NavLink>
+        <NavLink
+          href="/home/flashcards"
+          active={pathname === "/home/flashcards"}
+          icon={<FlashcardsIcon className="size-3.5" />}
+        >
+          {t("flashcards")}
+          {dueFlashcards.length ? (
+            <span className="ml-auto rounded-full bg-amber-500/15 px-1.5 py-0.2 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+              {dueFlashcards.length}
+            </span>
+          ) : flashcards.length ? (
+            <span className="ml-auto text-[10.5px] text-faint">{flashcards.length}</span>
+          ) : null}
         </NavLink>
         <NavLink href="/home/trash" active={pathname === "/home/trash"} icon={<TrashCanIcon className="size-3.5" />}>
           {t("trash")}

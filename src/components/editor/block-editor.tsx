@@ -37,7 +37,6 @@ import {
 import { BubbleToolbar } from "./bubble-toolbar";
 import { EditorToolbar, useEditorTick } from "./editor-toolbar";
 import { NoteOutline } from "./note-outline";
-import { ImageLightbox } from "./image-lightbox";
 import { blocksToDoc, collectMentionIds, docToBlocks } from "./serializer";
 import { indexMedia, isRicherMedia, mediaIdentity } from "@/lib/data/media-enrichment";
 import { cn } from "@/lib/utils";
@@ -774,7 +773,6 @@ export function BlockEditor({
           </>
         ) : null}
       </div>
-      <ImageLightbox />
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { nanoid } from "nanoid";
 import type {
   AppDatabase,
   DatabaseRow,
+  Flashcard,
+  FlashcardRating,
   ImportJob,
   ImportJobItem,
   Notebook,
@@ -20,6 +22,8 @@ import {
   parentMap,
 } from "@/lib/notion/mock-workspace";
 import type {
+  CreateFlashcardInput,
+  FlashcardResetScope,
   CreateImportJobInput,
   CreatePageInput,
   DataAdapter,
@@ -32,6 +36,7 @@ import { buildSeed, plainTextOf } from "./seed";
 import { extractAggregatedTranscripts, mergeMediaEnrichment } from "./media-enrichment";
 import { pagePatchIsNoop } from "./page-write";
 import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
+import { calculateNextReview } from "@/lib/flashcards/srs";
 import {
   resolveImportPlacement,
   resolveNotebookParentId,
@@ -49,6 +54,7 @@ interface LocalState {
   jobs: ImportJob[];
   versions: PageVersion[];
   integration: NotionIntegration | null;
+  flashcards?: Flashcard[];
 }
 
 type Listener = () => void;
@@ -114,13 +120,14 @@ export class LocalAdapter implements DataAdapter {
               versions: parsed.versions ?? [],
               jobs: parsed.jobs ?? [],
               integration: parsed.integration ?? null,
+              flashcards: parsed.flashcards ?? [],
             });
           }
         } catch {}
       }
     }
     const seed = buildSeed();
-    return { ...seed, jobs: [], versions: [], integration: null };
+    return { ...seed, jobs: [], versions: [], integration: null, flashcards: [] };
   }
 
   private persist() {
@@ -145,7 +152,7 @@ export class LocalAdapter implements DataAdapter {
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
     const seed = buildSeed();
-    this.state = { ...seed, jobs: [], versions: [], integration: null };
+    this.state = { ...seed, jobs: [], versions: [], integration: null, flashcards: [] };
     this.emit();
   }
 
@@ -418,6 +425,7 @@ export class LocalAdapter implements DataAdapter {
     const ids = new Set(pageSubtree(this.state.pages, id).map((page) => page.id));
     this.state.pages = this.state.pages.filter((page) => !ids.has(page.id));
     this.state.versions = this.state.versions.filter((v) => !ids.has(v.pageId));
+    this.state.flashcards = (this.state.flashcards ?? []).filter((c) => !ids.has(c.pageId));
     this.emit();
   }
 
@@ -426,6 +434,7 @@ export class LocalAdapter implements DataAdapter {
     this.state.pages = this.state.pages.filter((page) => !page.deletedAt);
     this.state.versions = this.state.versions.filter((v) => !trashedPageIds.has(v.pageId));
     this.state.databases = this.state.databases.filter((database) => !database.deletedAt);
+    this.state.flashcards = (this.state.flashcards ?? []).filter((c) => !trashedPageIds.has(c.pageId));
     this.emit();
   }
 
@@ -917,6 +926,126 @@ export class LocalAdapter implements DataAdapter {
 
   async unquarantineMedia(storagePaths: string[]): Promise<void> {
     void storagePaths;
+  }
+
+  subscribeFlashcards(cb: (cards: Flashcard[]) => void): Unsubscribe {
+    return this.subscribe(() => cb(this.state.flashcards ?? []));
+  }
+
+  async listPageFlashcards(pageId: string): Promise<Flashcard[]> {
+    return (this.state.flashcards ?? []).filter((card) => card.pageId === pageId);
+  }
+
+  async createFlashcard(input: CreateFlashcardInput): Promise<Flashcard> {
+    const now = nowMs();
+    const card: Flashcard = {
+      id: `fc_${nanoid()}`,
+      workspaceId: this.workspaceId,
+      pageId: input.pageId,
+      notebookId: input.notebookId ?? null,
+      pageTitle: input.pageTitle,
+      front: input.front,
+      back: input.back,
+      hint: input.hint,
+      frontImageUrl: input.frontImageUrl ?? null,
+      frontImageStoragePath: input.frontImageStoragePath ?? null,
+      backImageUrl: input.backImageUrl ?? null,
+      backImageStoragePath: input.backImageStoragePath ?? null,
+      repetition: 0,
+      interval: 1,
+      easeFactor: 2.5,
+      nextReviewDate: now,
+      lastReviewedAt: null,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: "demo-user",
+    };
+    this.state.flashcards = [card, ...(this.state.flashcards ?? [])];
+    this.emit();
+    return card;
+  }
+
+  async updateFlashcard(id: string, patch: Partial<Flashcard>): Promise<void> {
+    this.state.flashcards = (this.state.flashcards ?? []).map((c) => {
+      if (c.id !== id) return c;
+      const next = { ...c, ...patch, id: c.id, createdAt: c.createdAt, updatedAt: nowMs() };
+      // Espelha o deleteField() do Firestore: undefined limpa o campo opcional.
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === undefined) delete (next as Record<string, unknown>)[key];
+      }
+      return next;
+    });
+    this.emit();
+  }
+
+  async deleteFlashcard(id: string): Promise<void> {
+    this.state.flashcards = (this.state.flashcards ?? []).filter((c) => c.id !== id);
+    this.emit();
+  }
+
+  async deleteFlashcardsByPage(pageId: string): Promise<number> {
+    const before = (this.state.flashcards ?? []).length;
+    this.state.flashcards = (this.state.flashcards ?? []).filter(
+      (card) => card.pageId !== pageId
+    );
+    const removed = before - this.state.flashcards.length;
+    if (removed > 0) this.emit();
+    return removed;
+  }
+
+  async reviewFlashcard(id: string, rating: FlashcardRating, modifier = 1.0): Promise<void> {
+    const card = (this.state.flashcards ?? []).find((c) => c.id === id);
+    if (!card) return;
+    const res = calculateNextReview(card, rating, modifier);
+    this.state.flashcards = (this.state.flashcards ?? []).map((c) =>
+      c.id === id
+        ? {
+            ...c,
+            repetition: res.repetition,
+            interval: res.interval,
+            easeFactor: res.easeFactor,
+            nextReviewDate: res.nextReviewDate,
+            lastReviewedAt: nowMs(),
+            updatedAt: nowMs(),
+          }
+        : c
+    );
+    this.emit();
+  }
+
+  async resetFlashcardsProgress(scope?: FlashcardResetScope): Promise<number> {
+    const now = nowMs();
+    const allowed = scope?.cardIds ? new Set(scope.cardIds) : null;
+    let count = 0;
+    this.state.flashcards = (this.state.flashcards ?? []).map((card) => {
+      if (allowed && !allowed.has(card.id)) return card;
+      if (scope?.pageId && card.pageId !== scope.pageId) return card;
+      if (scope && "notebookId" in scope && card.notebookId !== (scope.notebookId ?? null)) {
+        return card;
+      }
+      count += 1;
+      return {
+        ...card,
+        repetition: 0,
+        interval: 1,
+        easeFactor: 2.5,
+        nextReviewDate: now,
+        lastReviewedAt: null,
+        updatedAt: now,
+      };
+    });
+    if (count > 0) this.emit();
+    return count;
+  }
+
+  async uploadFlashcardImage(pageId: string, cardId: string, file: File): Promise<{ url: string; storagePath?: string }> {
+    // Mesmo preparo do editor. Aqui e ainda mais critico: o modo local guarda a
+    // imagem embutida no localStorage, que estoura rapido sem compressao.
+    const prepared = await prepareEditorAttachment(file);
+    const url = await toPersistableUrl(prepared);
+    const ext = prepared.name.split(".").pop() || "jpg";
+    const storagePath = `workspaces/${this.workspaceId}/uploads/${pageId}/fc_${cardId}_${nowMs()}.${ext}`;
+    return { url, storagePath };
   }
 }
 
