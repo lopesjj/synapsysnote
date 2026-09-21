@@ -881,9 +881,14 @@ export class LocalAdapter implements DataAdapter {
     void storagePath;
   }
 
-  async uploadAttachment(pageId: string, file: File): Promise<{ url: string; storagePath?: string }> {
+  async uploadAttachment(
+    pageId: string,
+    file: File,
+    onProgress?: (percent: number) => void
+  ): Promise<{ url: string; storagePath?: string }> {
     file = await prepareEditorAttachment(file);
     const url = await toPersistableUrl(file);
+    onProgress?.(100);
     return { url };
   }
 

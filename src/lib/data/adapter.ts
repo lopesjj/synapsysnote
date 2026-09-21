@@ -95,7 +95,11 @@ export interface DataAdapter {
   uploadAudioNote(pageId: string, blob: Blob, durationSeconds: number): Promise<{ url: string; storagePath?: string }>;
   retryMediaProcessing(pageId: string, storagePath: string): Promise<void>;
   saveAttachment(pageId: string, file: File): Promise<void>;
-  uploadAttachment(pageId: string, file: File): Promise<{ url: string; storagePath?: string }>;
+  uploadAttachment(
+    pageId: string,
+    file: File,
+    onProgress?: (percent: number) => void
+  ): Promise<{ url: string; storagePath?: string }>;
 
   uploadWorkspaceIcon(file: File): Promise<string>;
   deleteMedia(storagePaths: string[], pageId?: string): Promise<void>;

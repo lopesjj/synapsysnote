@@ -54,7 +54,10 @@ export function pendingAudioPaths(blocks: AppBlock[]): string[] {
 export function extractAggregatedTranscripts(blocks: AppBlock[]): string {
   const parts: string[] = [];
   walkBlocks(blocks, (block) => {
-    if (block.type === "audio" && typeof block.media?.transcript === "string") {
+    if (
+      (block.type === "audio" || block.type === "video") &&
+      typeof block.media?.transcript === "string"
+    ) {
       const text = block.media.transcript.trim();
       if (text) parts.push(text);
     }

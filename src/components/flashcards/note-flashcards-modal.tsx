@@ -27,7 +27,10 @@ import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/data/provider";
 import { useTranslation } from "@/lib/i18n/translations";
 import { SUPPORTED_LANGUAGES, getLanguageDefinition } from "@/lib/i18n/languages";
-import { extractComprehensiveNoteContent } from "@/lib/flashcards/extract-note-content";
+import {
+  extractComprehensiveNoteContent,
+  resolveMediaUrl,
+} from "@/lib/flashcards/extract-note-content";
 import {
   cardImage,
   cardImagePatch,
@@ -364,6 +367,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
     try {
       const comprehensive = await extractComprehensiveNoteContent(page);
       const pending = comprehensive.pendingMedia;
+      let mediaFailures = 0;
 
       if (pending.length > 0) {
         setProgressStatus(t("ai_progress_transcribing"));
@@ -378,13 +382,22 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
               name: item.name || fallbackName,
             })
           );
-          if (!item.url) continue;
+          let mediaUrl = item.url;
+          if (!mediaUrl && item.storagePath) {
+            mediaUrl = await resolveMediaUrl(item.url, item.storagePath);
+          }
+          if (!mediaUrl) continue;
           try {
             const transcript = await transcribeAudioSource(
-              item.url,
+              mediaUrl,
               null,
-              undefined,
-              language || "pt"
+              (_partial, percent) => {
+                const base = 18 + (index / pending.length) * 30;
+                const span = 30 / pending.length;
+                setProgress(Math.round(base + (percent / 100) * span));
+              },
+              targetLanguage || language || "pt",
+              { reuseCache: true }
             );
             if (transcript?.trim()) {
               const bucket =
@@ -393,8 +406,36 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                   : comprehensive.audioTranscripts;
               bucket.push({ name: item.name || fallbackName, text: transcript.trim() });
             }
-          } catch {}
+          } catch (err) {
+            mediaFailures += 1;
+            if (err instanceof Error && err.message === "SERVICE_BUSY") {
+              toast.error(t("transcription_service_busy"));
+            } else if (err instanceof Error && err.message === "QUOTA_EXCEEDED") {
+              toast.error(t("transcription_quota_exceeded"));
+            } else if (err instanceof Error && err.message === "TRANSCRIBE_FAILED") {
+              toast.error(t("audio_transcribe_error"));
+            }
+          }
         }
+      }
+
+      const hasStudyMaterial =
+        Boolean(comprehensive.textContent.trim()) ||
+        Boolean(comprehensive.ocrText.trim()) ||
+        comprehensive.tablesContent.length > 0 ||
+        comprehensive.audioTranscripts.length > 0 ||
+        comprehensive.videoTranscripts.length > 0 ||
+        comprehensive.pdfTexts.length > 0 ||
+        comprehensive.pdfDocuments.some((doc) => Boolean(doc.base64) || Boolean(doc.text?.trim())) ||
+        comprehensive.images.some((img) => Boolean(img.base64) || Boolean(img.caption?.trim()));
+
+      // Com o vídeo sem transcrever e nada mais na nota, o modelo recebia só o
+      // título e devolvia cards sobre as próprias instruções do prompt.
+      if (!hasStudyMaterial) {
+        toast.error(
+          t(mediaFailures > 0 ? "ai_no_content_after_media_error" : "ai_no_content_for_cards")
+        );
+        return;
       }
 
       setProgress(52);
@@ -433,6 +474,9 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
 
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
+        if (payload?.reason === "NO_CONTENT") {
+          throw new Error(t("ai_no_content_for_cards"));
+        }
         throw new Error(payload?.error || t("ai_generation_error"));
       }
 
@@ -966,27 +1010,27 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                   <DetectedChip
                     icon={<FileText className="size-3.5" />}
                     value={detected.words}
-                    label={t("ai_words_count")}
+                    label={t("ai_words_count", { count: detected.words })}
                   />
                   <DetectedChip
                     icon={<Table2 className="size-3.5" />}
                     value={detected.tables}
-                    label={t("ai_tables_count")}
+                    label={t("ai_tables_count", { count: detected.tables })}
                   />
                   <DetectedChip
                     icon={<ImageIcon className="size-3.5" />}
                     value={detected.images}
-                    label={t("ai_images_count")}
+                    label={t("ai_images_count", { count: detected.images })}
                   />
                   <DetectedChip
                     icon={<Mic className="size-3.5" />}
                     value={detected.media}
-                    label={t("ai_audio_video_count")}
+                    label={t("ai_audio_video_count", { count: detected.media })}
                   />
                   <DetectedChip
                     icon={<Paperclip className="size-3.5" />}
                     value={detected.pdfs}
-                    label={t("ai_pdf_count")}
+                    label={t("ai_pdf_count", { count: detected.pdfs })}
                   />
                 </div>
               ) : null}

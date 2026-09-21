@@ -15,7 +15,14 @@ import CharacterCount from "@tiptap/extension-character-count";
 import type { AppBlock, BlockMedia, Page } from "@/types/models";
 import { useWorkspace } from "@/lib/data/provider";
 import { toast } from "sonner";
-import { isAudioFile, prepareAudioAttachment, prepareEditorAttachment } from "@/lib/media/compress-attachment";
+import {
+  VIDEO_UPLOAD_TARGET,
+  isAudioFile,
+  isVideoFile,
+  prepareAudioAttachment,
+  prepareEditorAttachment,
+} from "@/lib/media/compress-attachment";
+import { useMediaProgressStore } from "@/lib/store/media-progress-store";
 import { Callout } from "./extensions/callout";
 import { ToggleBlock } from "./extensions/toggle-block";
 import { EquationBlock } from "./extensions/equation-block";
@@ -83,6 +90,7 @@ function filesFromDataTransfer(data: DataTransfer | null): File[] {
         if (
           file &&
           (isAudioFile(file) ||
+            isVideoFile(file) ||
             file.type.startsWith("image/") ||
             file.type === "application/pdf" ||
             /\.pdf$/i.test(file.name) ||
@@ -100,6 +108,7 @@ function filesFromDataTransfer(data: DataTransfer | null): File[] {
       if (
         file &&
         (isAudioFile(file) ||
+          isVideoFile(file) ||
           file.type.startsWith("image/") ||
           file.type === "application/pdf" ||
           /\.pdf$/i.test(file.name) ||
@@ -205,12 +214,18 @@ export function BlockEditor({
     };
   }, []);
 
-  const getAudioFileDuration = (file: File | Blob): Promise<number> => {
+  const getMediaFileDuration = (file: File | Blob, video = false): Promise<number> => {
     return new Promise((resolve) => {
       if (typeof window === "undefined") return resolve(0);
       try {
         const url = URL.createObjectURL(file);
-        const audio = new Audio();
+        const element: HTMLMediaElement = video
+          ? document.createElement("video")
+          : new Audio();
+        if (video) {
+          (element as HTMLVideoElement).playsInline = true;
+        }
+        element.preload = "metadata";
         let done = false;
         const cleanup = () => {
           if (!done) {
@@ -220,22 +235,32 @@ export function BlockEditor({
             } catch {}
           }
         };
-        audio.onloadedmetadata = () => {
-          const dur = Math.round(audio.duration) || 0;
+        const settle = () => {
+          const value = element.duration;
+          const dur = Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
           cleanup();
           resolve(dur);
         };
-        audio.onerror = () => {
+        element.onloadedmetadata = () => {
+          // WebM/Ogg gravados em fluxo não guardam a duração no cabeçalho: o
+          // navegador chuta um valor (inflado no celular) até alguém procurar o
+          // fim do arquivo. O seek abaixo obriga a leitura da duração real.
+          element.ondurationchange = settle;
+          element.onseeked = settle;
+          try {
+            element.currentTime = 1e7;
+          } catch {
+            settle();
+          }
+        };
+        element.onerror = () => {
           cleanup();
           resolve(0);
         };
-        audio.src = url;
+        element.src = url;
         setTimeout(() => {
-          if (!done) {
-            cleanup();
-            resolve(0);
-          }
-        }, 4000);
+          if (!done) settle();
+        }, 8000);
       } catch {
         resolve(0);
       }
@@ -250,6 +275,7 @@ export function BlockEditor({
       const supportedFiles = files.filter((f) => {
         return (
           isAudioFile(f) ||
+          isVideoFile(f) ||
           f.type.startsWith("image/") ||
           f.type === "application/pdf" ||
           /\.pdf$/i.test(f.name) ||
@@ -261,14 +287,15 @@ export function BlockEditor({
 
       for (const file of supportedFiles) {
         const isAudio = isAudioFile(file);
-        const isImage = !isAudio && file.type.startsWith("image/");
-        const isVideo = !isAudio && file.type.startsWith("video/");
+        const isVideo = !isAudio && (isVideoFile(file) || file.type.startsWith("video/"));
+        const isImage = !isAudio && !isVideo && file.type.startsWith("image/");
         const mediaType = isAudio ? "audio" : isImage ? "image" : isVideo ? "video" : "file";
         const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
         const previewUrl = URL.createObjectURL(file);
         activePreviewUrlsRef.current.add(previewUrl);
-        const durationSeconds = isAudio ? await getAudioFileDuration(file) : undefined;
+        const durationSeconds =
+          isAudio || isVideo ? await getMediaFileDuration(file, isVideo) : undefined;
 
         let targetPos: number;
         if (typeof customPos === "number") {
@@ -304,12 +331,38 @@ export function BlockEditor({
 
         void (async () => {
           let uploadSuccess = false;
+          const progress = useMediaProgressStore.getState();
           try {
-            const prepared = await prepareEditorAttachment(file);
+            const heavyVideo = isVideo && file.size > VIDEO_UPLOAD_TARGET;
+            if (heavyVideo) {
+              progress.setProgress(tempId, { stage: "compress", percent: 0, round: 1 });
+            }
+            const prepared = await prepareEditorAttachment(
+              file,
+              isVideo
+                ? {
+                    onVideoProgress: (percent, round) =>
+                      useMediaProgressStore
+                        .getState()
+                        .setProgress(tempId, { stage: "compress", percent, round }),
+                  }
+                : undefined
+            );
+            if (heavyVideo) {
+              useMediaProgressStore
+                .getState()
+                .setProgress(tempId, { stage: "upload", percent: 0 });
+            }
+            const reportUpload = isVideo
+              ? (percent: number) =>
+                  useMediaProgressStore
+                    .getState()
+                    .setProgress(tempId, { stage: "upload", percent })
+              : undefined;
             const { url: permanentUrl, storagePath } =
               isAudio && typeof adapter.uploadAudioNote === "function"
                 ? await adapter.uploadAudioNote(page.id, prepared, durationSeconds ?? 0)
-                : await adapter.uploadAttachment(page.id, prepared);
+                : await adapter.uploadAttachment(page.id, prepared, reportUpload);
 
             const { tr } = instance.state;
             let found = false;
@@ -345,11 +398,13 @@ export function BlockEditor({
               toast.success(
                 isAudio
                   ? tRef.current("audio_attached")
-                  : isImage
-                    ? tRef.current("image_attached")
-                    : prepared.type === "application/pdf"
-                      ? tRef.current("pdf_attached")
-                      : tRef.current("file_attached")
+                  : isVideo
+                    ? tRef.current("video_attached")
+                    : isImage
+                      ? tRef.current("image_attached")
+                      : prepared.type === "application/pdf"
+                        ? tRef.current("pdf_attached")
+                        : tRef.current("file_attached")
               );
             } else if (storagePath) {
               void adapter.deleteMedia([storagePath], page.id);
@@ -380,6 +435,7 @@ export function BlockEditor({
                 tRef.current("file_attach_error")
             );
           } finally {
+            useMediaProgressStore.getState().clearProgress(tempId);
             if (uploadSuccess) {
               setTimeout(() => {
                 try {
@@ -831,7 +887,8 @@ function EditorStatusBar({ editor }: { editor: Editor }) {
   return (
     <div className="mt-2 flex items-center justify-between border-t border-[var(--border)] pt-2 text-[11px] text-faint">
       <span>
-        {words} {words === 1 ? t("editor_word_singular") : t("editor_word_plural")} · {characters} {t("editor_characters")}
+        {words} {t("editor_words_count", { count: words })} · {characters}{" "}
+        {t("editor_characters", { count: characters })}
       </span>
       <span className="hidden sm:inline">{t("editor_shortcuts_hint")}</span>
     </div>

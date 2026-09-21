@@ -51,7 +51,7 @@ import { Badge, Input, Tooltip } from "@/components/ui/primitives";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { WorkspaceCrumbs } from "./workspace-crumbs";
 import { cn, formatRelative } from "@/lib/utils";
-import { isAudioFile, prepareEditorAttachment } from "@/lib/media/compress-attachment";
+import { isAudioFile, isVideoFile, prepareEditorAttachment } from "@/lib/media/compress-attachment";
 import { useTranslation, localizeErrorMessage } from "@/lib/i18n/translations";
 
 import { PAGE_ICONS } from "@/lib/icons/catalog";
@@ -68,30 +68,39 @@ import { useLibrasStore } from "@/lib/store/libras-store";
 import { FlashcardsIcon } from "@/lib/icons/flashcard-icon";
 import { NoteFlashcardsModal } from "@/components/flashcards/note-flashcards-modal";
 
-function isAudioBlockElement(el: Element): boolean {
-  if (el.tagName === "AUDIO") return true;
-  if (el.getAttribute("data-audio-block") === "true") return true;
-  if (el.getAttribute("data-media-type") === "audio") return true;
-  if (el.getAttribute("data-media") === "audio") return true;
+type MediaBlockKind = "audio" | "video";
 
-  const audioName = el.getAttribute("data-audio-name");
-  if (audioName && isAudioFile({ name: audioName })) return true;
+function mediaBlockKind(el: Element): MediaBlockKind | null {
+  if (el.tagName === "AUDIO") return "audio";
+  if (el.tagName === "VIDEO") return "video";
+  if (el.getAttribute("data-audio-block") === "true") return "audio";
+  if (el.getAttribute("data-media-type") === "audio") return "audio";
+  if (el.getAttribute("data-media") === "audio") return "audio";
+  if (el.getAttribute("data-media-type") === "video") return "video";
+  if (el.getAttribute("data-media") === "video") return "video";
+
+  const mediaName = el.getAttribute("data-audio-name");
+  if (mediaName && isVideoFile({ name: mediaName })) return "video";
+  if (mediaName && isAudioFile({ name: mediaName })) return "audio";
 
   if (el.hasAttribute("data-media") || el.hasAttribute("data-node-view-wrapper") || el.classList.contains("my-3")) {
     if (el.querySelector('audio, [data-media-type="audio"], [data-audio-block="true"], [data-media="audio"]')) {
-      return true;
+      return "audio";
+    }
+    if (el.querySelector('video, [data-media-type="video"], [data-media="video"]')) {
+      return "video";
     }
     const innerName = el.querySelector("[data-audio-name]")?.getAttribute("data-audio-name");
-    if (innerName && isAudioFile({ name: innerName })) {
-      return true;
-    }
+    if (innerName && isVideoFile({ name: innerName })) return "video";
+    if (innerName && isAudioFile({ name: innerName })) return "audio";
   }
-  return false;
+  return null;
 }
 
 function extractEditorDomText(
   editorEl: HTMLElement,
   audioFileLabel: string,
+  videoFileLabel: string,
   forLibras = false
 ): string {
   const parts: string[] = [];
@@ -108,14 +117,15 @@ function extractEditorDomText(
     if (node.nodeType !== Node.ELEMENT_NODE) return;
     const el = node as HTMLElement;
 
-    if (isAudioBlockElement(el)) {
+    const mediaKind = mediaBlockKind(el);
+    if (mediaKind) {
       if (forLibras) {
         const transcript = el.getAttribute("data-transcript")?.trim();
         if (transcript) {
           parts.push(transcript);
         }
       } else {
-        parts.push(audioFileLabel);
+        parts.push(mediaKind === "video" ? videoFileLabel : audioFileLabel);
       }
       return;
     }
@@ -129,12 +139,12 @@ function extractEditorDomText(
       return;
     }
 
-    const containsAudio =
+    const containsMedia =
       el.querySelector(
-        'audio, [data-media-type="audio"], [data-audio-block="true"], [data-media="audio"], [data-audio-name]'
+        'audio, video, [data-media-type="audio"], [data-media-type="video"], [data-audio-block="true"], [data-media="audio"], [data-media="video"], [data-audio-name]'
       ) !== null;
 
-    if (containsAudio) {
+    if (containsMedia) {
       for (const child of Array.from(el.childNodes)) {
         walk(child);
       }
@@ -168,6 +178,7 @@ function extractPageText(
   currentTitle?: string,
   fallbackUntitled?: string,
   audioFileLabel = "Arquivo de Áudio",
+  videoFileLabel = "Arquivo de vídeo",
   forLibras = false
 ): string {
   if (!page) return "";
@@ -189,7 +200,7 @@ function extractPageText(
       ".synapsys-editor .ProseMirror, #synapsys-note-editor, [data-note-editor]"
     );
     if (editorEl) {
-      editorText = extractEditorDomText(editorEl, audioFileLabel, forLibras);
+      editorText = extractEditorDomText(editorEl, audioFileLabel, videoFileLabel, forLibras);
     }
   }
 
@@ -314,7 +325,14 @@ export function PageView({ pageId }: { pageId: string }) {
     lastNarrationLangRef.current = language;
 
     const currentTitleText = title?.trim() || page.title?.trim() || "";
-    const fullText = extractPageText(page, true, currentTitleText, t("untitled"), t("audio_file"));
+    const fullText = extractPageText(
+      page,
+      true,
+      currentTitleText,
+      t("untitled"),
+      t("audio_file"),
+      t("video_file")
+    );
     if (!fullText.trim()) {
       toast.error(t("empty_note"));
       setNarrating(false);
@@ -370,7 +388,15 @@ export function PageView({ pageId }: { pageId: string }) {
     if (!page) return;
     if (!useUiStore.getState().libras) return;
     const currentTitleText = title?.trim() || page.title?.trim() || "";
-    const fullText = extractPageText(page, true, currentTitleText, t("untitled"), t("audio_file"), true);
+    const fullText = extractPageText(
+      page,
+      true,
+      currentTitleText,
+      t("untitled"),
+      t("audio_file"),
+      t("video_file"),
+      true
+    );
     if (!fullText.trim()) {
       toast.error(t("empty_note"));
       return;
@@ -518,6 +544,7 @@ export function PageView({ pageId }: { pageId: string }) {
     for (const file of files) {
       try {
         const isAudio = isAudioFile(file);
+        const isVideo = !isAudio && isVideoFile(file);
         const prepared = await prepareEditorAttachment(file);
         if (isAudio && typeof adapter.uploadAudioNote === "function") {
           await adapter.uploadAudioNote(pageId, prepared, 0);
@@ -527,11 +554,13 @@ export function PageView({ pageId }: { pageId: string }) {
         toast.success(
           isAudio
             ? t("audio_attached")
-            : prepared.type.startsWith("image/")
-              ? t("image_attached")
-              : prepared.type === "application/pdf"
-                ? t("pdf_attached")
-                : t("file_attached")
+            : isVideo
+              ? t("video_attached")
+              : prepared.type.startsWith("image/")
+                ? t("image_attached")
+                : prepared.type === "application/pdf"
+                  ? t("pdf_attached")
+                  : t("file_attached")
         );
       } catch (error) {
         toast.error(
@@ -1147,7 +1176,7 @@ export function PageView({ pageId }: { pageId: string }) {
       <input
         ref={fileInput}
         type="file"
-        accept="image/*,application/pdf,audio/*,.mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,.opus,.wma,.webm,.weba,.mp4"
+        accept="image/*,application/pdf,audio/*,video/*,.mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,.opus,.wma,.webm,.weba,.mp4,.m4v,.mov,.mkv,.avi,.3gp,.ogv"
         multiple
         hidden
         onChange={async (event) => {

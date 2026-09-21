@@ -178,20 +178,25 @@ function isPdfResource(
   return false;
 }
 
-async function resolveMediaUrl(url?: string, storagePath?: string): Promise<string> {
-  if (url && typeof url === "string" && url.trim().length > 0) {
-    return url;
+export async function resolveMediaUrl(url?: string, storagePath?: string): Promise<string> {
+  const cleanUrl = typeof url === "string" ? url.trim() : "";
+  const cleanPath = typeof storagePath === "string" ? storagePath.trim() : "";
+
+  if (cleanUrl && !cleanUrl.startsWith("gs://")) {
+    return cleanUrl;
   }
-  if (storagePath && typeof window !== "undefined") {
+
+  const targetPath = cleanPath || (cleanUrl.startsWith("gs://") ? cleanUrl : "");
+  if (targetPath && typeof window !== "undefined") {
     try {
       const { getFirebaseStorage } = await import("@/lib/firebase/client");
       const { ref, getDownloadURL } = await import("firebase/storage");
       const storage = getFirebaseStorage();
-      const storageRef = ref(storage, storagePath);
+      const storageRef = ref(storage, targetPath);
       return await getDownloadURL(storageRef);
     } catch {}
   }
-  return "";
+  return cleanUrl;
 }
 
 function approximateBytes(base64: string): number {
@@ -244,8 +249,10 @@ export async function extractComprehensiveNoteContent(
     const mediaUrl = String(
       block.media?.url || block.props?.url || loose.url || attrs.url || loose.src || attrs.src || ""
     );
+    const looseProps = (block.props || {}) as Record<string, unknown>;
     const mediaStoragePath =
       block.media?.storagePath ||
+      (looseProps.storagePath as string | undefined) ||
       (loose.storagePath as string | undefined) ||
       (attrs.storagePath as string | undefined) ||
       undefined;
@@ -454,6 +461,18 @@ export async function extractComprehensiveNoteContent(
     });
   }
 
+  const resolvedPendingMedia: ExtractedPendingMedia[] = [];
+  for (const item of pendingMedia) {
+    let effectiveUrl = item.url;
+    if (includeAttachments && !effectiveUrl && item.storagePath) {
+      effectiveUrl = await resolveMediaUrl(item.url, item.storagePath);
+    }
+    resolvedPendingMedia.push({
+      ...item,
+      url: effectiveUrl,
+    });
+  }
+
   return {
     title: page.title || "",
     textContent,
@@ -464,7 +483,7 @@ export async function extractComprehensiveNoteContent(
     pdfTexts,
     pdfDocuments,
     images,
-    pendingMedia,
+    pendingMedia: resolvedPendingMedia,
     detectedPdfsCount: rawPdfs.length,
     detectedImagesCount: rawImages.length,
     detectedMediaCount: detectedAudioCount + detectedVideoCount,

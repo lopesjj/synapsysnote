@@ -23,6 +23,8 @@ import {
   Pencil,
   Play,
   Sparkles,
+  Trash2,
+  Video,
   Volume,
   Volume1,
   Volume2,
@@ -48,7 +50,13 @@ import { useUiStore } from "@/lib/store/ui-store";
 import { transcribeAudioSource } from "@/lib/accessibility/audio-transcriber";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
 import { SUPPORTED_LANGUAGES } from "@/lib/i18n/languages";
-import { AUDIO_SIZE_LIMIT, compressAudioUntilFits, isAudioFile } from "@/lib/media/compress-attachment";
+import {
+  AUDIO_SIZE_LIMIT,
+  compressAudioUntilFits,
+  isAudioFile,
+  isVideoFile,
+} from "@/lib/media/compress-attachment";
+import { useMediaProgressStore } from "@/lib/store/media-progress-store";
 
 function isPdf(mimeType: unknown, name: unknown) {
   if (typeof mimeType === "string" && mimeType.includes("pdf")) return true;
@@ -61,7 +69,9 @@ function formatMediaDisplayName(
   t: (key: TranslationKey) => string
 ): string {
   if (typeof rawName !== "string" || !rawName.trim()) {
-    return mediaType === "audio" ? `${t("voice_note")}.webm` : t("attachment");
+    if (mediaType === "audio") return `${t("voice_note")}.webm`;
+    if (mediaType === "video") return t("video_file");
+    return t("attachment");
   }
 
   const trimmed = rawName.trim();
@@ -531,6 +541,189 @@ function ResizablePdf({
   );
 }
 
+function ResizableVideo({
+  url,
+  name,
+  width,
+  editable,
+  selected,
+  busy,
+  busyLabel,
+  needsDurationProbe,
+  onDurationResolved,
+  onWidth,
+}: {
+  url: string;
+  name: string;
+  width: number | null;
+  editable: boolean;
+  selected: boolean;
+  busy: boolean;
+  busyLabel: string;
+  needsDurationProbe: boolean;
+  onDurationResolved: (seconds: number) => void;
+  onWidth: (percent: number) => void;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const proxyTriedRef = useRef(false);
+  const durationProbeRef = useRef<string>("");
+  const [hovered, setHovered] = useState(false);
+  const [resizing, setResizing] = useState<number | null>(null);
+
+  const percent = clamp(width ?? 100, 25, 100);
+  const activeWidth = resizing ?? percent;
+  const showHandles = editable && (hovered || selected || resizing != null);
+
+  /**
+   * Mesmo problema do áudio: contêiner sem duração no cabeçalho faz o navegador
+   * estimar (e errar) o total. Procurar o fim resolve a duração do próprio
+   * elemento, então os controles nativos também passam a mostrar o valor certo.
+   */
+  const probeDuration = () => {
+    const element = videoRef.current;
+    if (!element || durationProbeRef.current === url) return;
+    durationProbeRef.current = url;
+
+    const finish = () => {
+      element.removeEventListener("durationchange", finish);
+      element.removeEventListener("seeked", finish);
+      const value = element.duration;
+      if (Number.isFinite(value) && value > 0) {
+        onDurationResolved(Math.round(value));
+      }
+      try {
+        element.currentTime = 0;
+      } catch {}
+    };
+
+    element.addEventListener("durationchange", finish);
+    element.addEventListener("seeked", finish);
+    try {
+      element.currentTime = 1e7;
+    } catch {
+      finish();
+    }
+  };
+
+  const startResize = (edge: "left" | "right") => (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!editable) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const parent = boxRef.current?.parentElement;
+    if (!parent) return;
+    const parentWidth = parent.getBoundingClientRect().width;
+    const startX = event.clientX;
+    const startPercent = percent;
+
+    const move = (pointer: PointerEvent) => {
+      const delta = pointer.clientX - startX;
+      const signed = edge === "right" ? delta : -delta;
+      const next = snapWidth(clamp(Math.round(startPercent + (signed / parentWidth) * 100), 25, 100));
+      setResizing(next);
+      onWidth(next);
+    };
+    const up = () => {
+      setResizing(null);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  return (
+    <div
+      ref={boxRef}
+      contentEditable={false}
+      onPointerDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={cn(
+        "group/video relative mx-auto max-w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-black",
+        "max-sm:!w-full",
+        showHandles && "ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)]"
+      )}
+      style={{ width: `${activeWidth}%` }}
+    >
+      <video
+        ref={videoRef}
+        src={url}
+        controls
+        playsInline
+        preload="metadata"
+        className="block h-auto max-h-[min(70vh,620px)] w-full bg-black touch-manipulation"
+        aria-label={name}
+        onLoadedMetadata={() => {
+          const value = videoRef.current?.duration;
+          if (needsDurationProbe || !(typeof value === "number" && Number.isFinite(value) && value > 0)) {
+            probeDuration();
+          }
+        }}
+        onError={() => {
+          const element = videoRef.current;
+          if (!element || proxyTriedRef.current) return;
+          if (url.startsWith("blob:") || url.startsWith("/")) return;
+          proxyTriedRef.current = true;
+          element.src = `/api/media/proxy?url=${encodeURIComponent(url)}`;
+          element.load();
+        }}
+      />
+
+      {busy ? (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 bg-black/55 text-[12px] font-medium text-white backdrop-blur-[1px]">
+          <Loader2 className="size-4 animate-spin" />
+          <span>{busyLabel}</span>
+        </div>
+      ) : null}
+
+      {editable ? (
+        <>
+          <button
+            type="button"
+            aria-label="Redimensionar vídeo à esquerda"
+            draggable={false}
+            onPointerDown={startResize("left")}
+            className={cn(
+              "absolute left-1 top-1/2 z-20 hidden sm:flex h-16 w-4 -translate-y-1/2 items-center justify-center",
+              "cursor-ew-resize touch-none opacity-0 transition-opacity",
+              "group-hover/video:opacity-100 focus-visible:opacity-100",
+              showHandles && "opacity-100"
+            )}
+          >
+            <span className="h-10 w-1.5 rounded-full border border-white/80 bg-[var(--accent)] shadow-[0_1px_4px_rgba(15,44,76,0.35)]" />
+          </button>
+          <button
+            type="button"
+            aria-label="Redimensionar vídeo à direita"
+            draggable={false}
+            onPointerDown={startResize("right")}
+            className={cn(
+              "absolute right-1 top-1/2 z-20 hidden sm:flex h-16 w-4 -translate-y-1/2 items-center justify-center",
+              "cursor-ew-resize touch-none opacity-0 transition-opacity",
+              "group-hover/video:opacity-100 focus-visible:opacity-100",
+              showHandles && "opacity-100"
+            )}
+          >
+            <span className="h-10 w-1.5 rounded-full border border-white/80 bg-[var(--accent)] shadow-[0_1px_4px_rgba(15,44,76,0.35)]" />
+          </button>
+          <span
+            className={cn(
+              "pointer-events-none absolute right-2 top-2 hidden sm:block rounded-full bg-black/70 px-2 py-0.5 text-[10px] text-white",
+              "opacity-0 transition-opacity group-hover/video:opacity-100",
+              showHandles && "opacity-100"
+            )}
+          >
+            {activeWidth}%
+          </span>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeViewProps) {
   const { t, language } = useTranslation();
   const libras = useUiStore((state) => state.libras);
@@ -554,7 +747,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
   const [isCompressing, setIsCompressing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(Number(durationSeconds) || 0);
+  const [measuredDuration, setMeasuredDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -577,6 +770,12 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
   const syncedUrlRef = useRef<string>("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioProxyTriedRef = useRef(false);
+  const durationProbeRef = useRef<string>("");
+  const probingDurationRef = useRef(false);
+  const processing = useMediaProgressStore((state) =>
+    tempId ? state.items[String(tempId)] : undefined
+  );
+  const videoProgressPercent = processing ? processing.percent : null;
 
   useEffect(() => {
     if (typeof transcriptCollapsed === "boolean") {
@@ -696,12 +895,72 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
     }
   };
 
+  const storedDuration = Number(durationSeconds) || 0;
+  /**
+   * WebM/Ogg gravados em fluxo não trazem a duração no cabeçalho, e o
+   * navegador a estima pela taxa de bits — no celular a estimativa chega a
+   * inflar bastante (14 min viram 22 min). O valor salvo no bloco vem do
+   * cronômetro da gravação ou de uma medição com seek, então ele manda.
+   */
+  const totalDuration = storedDuration > 0 ? storedDuration : measuredDuration;
+
+  const probeRealDuration = useCallback(() => {
+    const element = audioRef.current;
+    if (!element) return;
+    const currentUrl = typeof url === "string" ? url : "";
+    if (!currentUrl || durationProbeRef.current === currentUrl) return;
+    durationProbeRef.current = currentUrl;
+
+    const finish = () => {
+      element.removeEventListener("durationchange", finish);
+      element.removeEventListener("seeked", finish);
+      const value = element.duration;
+      if (Number.isFinite(value) && value > 0) {
+        setMeasuredDuration(value);
+        persistMediaAttributes({ durationSeconds: Math.round(value) });
+      }
+      try {
+        element.currentTime = 0;
+      } catch {}
+      probingDurationRef.current = false;
+      setCurrentTime(0);
+    };
+
+    probingDurationRef.current = true;
+    element.addEventListener("durationchange", finish);
+    element.addEventListener("seeked", finish);
+    try {
+      // Empurrar o cursor além do fim obriga o navegador a apurar a duração real.
+      element.currentTime = 1e7;
+    } catch {
+      finish();
+    }
+    // Se o navegador não disser nada, não deixa o bloco preso na sondagem.
+    setTimeout(() => {
+      if (probingDurationRef.current) finish();
+    }, 6000);
+  }, [persistMediaAttributes, url]);
+
   const pdf = isPdf(mimeType, name);
+  const isVideo =
+    mediaType === "video" ||
+    isVideoFile({ name: name ? String(name) : undefined, type: mimeType ? String(mimeType) : undefined });
   const isAudio =
-    mediaType === "audio" ||
-    isAudioFile({ name: name ? String(name) : undefined, type: mimeType ? String(mimeType) : undefined });
-  const displayName = formatMediaDisplayName(name, isAudio ? "audio" : mediaType, t);
-  const audioTranscript = isAudio ? (ephemeralTranscript || (typeof transcript === "string" ? transcript : "")) : "";
+    !isVideo &&
+    (mediaType === "audio" ||
+      isAudioFile({
+        name: name ? String(name) : undefined,
+        type: mimeType ? String(mimeType) : undefined,
+      }));
+  const displayName = formatMediaDisplayName(
+    name,
+    isAudio ? "audio" : isVideo ? "video" : mediaType,
+    t
+  );
+  const mediaTranscript =
+    isAudio || isVideo
+      ? ephemeralTranscript || (typeof transcript === "string" ? transcript : "")
+      : "";
   const visualOnly = mediaType === "image" || pdf;
   const isPending = Boolean(
     pending ||
@@ -710,6 +969,21 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
       !url
   );
   const isBusy = isPending || isCompressing;
+
+  const handleRemoveMedia = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!editor.isEditable || typeof getPos !== "function") return;
+    const pos = getPos();
+    if (typeof pos !== "number") return;
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    // O arquivo no Storage sai junto: `updatePage` compara as mídias do
+    // documento antigo com as do novo e põe as que sumiram em quarentena.
+    editor.view.dispatch(editor.state.tr.delete(pos, pos + node.nodeSize));
+    toast.success(isVideo ? t("video_removed") : t("audio_removed"));
+  };
 
   const handleDirectDownload = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -772,6 +1046,9 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
 
     const syncMediaSize = async () => {
       try {
+        // Vídeo já chega com o tamanho do arquivo: baixar o blob inteiro só
+        // para medir custaria memória à toa, ainda mais no celular.
+        if (isVideo && sizeBytes) return;
         if (url.startsWith("blob:")) {
           const res = await fetch(url);
           const blob = await res.blob();
@@ -912,7 +1189,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
     return () => {
       active = false;
     };
-  }, [url, sizeBytes, mimeType, mediaType, durationSeconds, storagePath, persistMediaAttributes, editor]);
+  }, [url, sizeBytes, mimeType, mediaType, isVideo, durationSeconds, storagePath, persistMediaAttributes, editor]);
 
   const handleOpenLightbox = () => {
     editor.commands.blur();
@@ -943,10 +1220,10 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
   return (
     <NodeViewWrapper
       className="my-3 overflow-visible"
-      data-media={isAudio ? "audio" : (mediaType as string)}
-      data-media-type={isAudio ? "audio" : (mediaType as string)}
+      data-media={isAudio ? "audio" : isVideo ? "video" : (mediaType as string)}
+      data-media-type={isAudio ? "audio" : isVideo ? "video" : (mediaType as string)}
       data-audio-block={isAudio ? "true" : undefined}
-      data-transcript={audioTranscript}
+      data-transcript={mediaTranscript}
       contentEditable={false}
     >
       {mediaType === "image" && url ? (
@@ -972,16 +1249,12 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
         />
       ) : null}
 
-      {mediaType === "video" && url ? (
-        <video src={url as string} controls className="max-h-[440px] w-full rounded-[var(--radius-md)]" />
-      ) : null}
-
       {visualOnly ? null : (
         <div
           contentEditable={false}
-          data-media-type={isAudio ? "audio" : (mediaType as string)}
+          data-media-type={isAudio ? "audio" : isVideo ? "video" : (mediaType as string)}
           data-audio-block={isAudio ? "true" : undefined}
-          data-transcript={audioTranscript}
+          data-transcript={mediaTranscript}
           data-audio-name={displayName}
           aria-label={isAudio ? t("audio_file") : displayName}
           className={cn(
@@ -1005,7 +1278,13 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
               </div>
             ) : null}
             <div className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-[var(--accent-soft)] text-[var(--accent)]">
-              {isAudio ? <AudioLines className="size-4" /> : <FileText className="size-4" />}
+              {isAudio ? (
+                <AudioLines className="size-4" />
+              ) : isVideo ? (
+                <Video className="size-4" />
+              ) : (
+                <FileText className="size-4" />
+              )}
             </div>
 
             <div className="min-w-0 flex-1">
@@ -1014,7 +1293,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                 {isCompressing
                   ? t("compressing_audio")
                   : [
-                      isAudio ? null : (mimeType as string),
+                      isAudio || isVideo ? null : (mimeType as string),
                       sizeBytes ? formatBytes(Number(sizeBytes)) : null,
                       durationSeconds ? formatDuration(Number(durationSeconds)) : null,
                     ]
@@ -1023,7 +1302,14 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
               </p>
             </div>
 
-            {isCompressing ? (
+            {videoProgressPercent != null ? (
+              <Badge tone="accent">
+                <Loader2 className="size-3 animate-spin" />
+                <span dir="ltr" className="tabular-nums">
+                  {t("loading")} {videoProgressPercent}%
+                </span>
+              </Badge>
+            ) : isCompressing ? (
               <Badge tone="accent">
                 <Loader2 className="size-3 animate-spin" />
                 {t("compressing")}
@@ -1046,15 +1332,56 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                 <Download className="size-3.5" />
               </button>
             ) : null}
+
+            {(isAudio || isVideo) && editor.isEditable ? (
+              <button
+                type="button"
+                onClick={handleRemoveMedia}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                  if (document.activeElement instanceof HTMLElement) {
+                    document.activeElement.blur();
+                  }
+                }}
+                className="touch-manipulation rounded p-1.5 text-faint transition hover:bg-[var(--surface-hover)] hover:text-[var(--danger)] dark:hover:bg-red-500/15 dark:hover:text-red-400 active:scale-95 cursor-pointer"
+                aria-label={isVideo ? t("remove_video") : t("remove_audio")}
+                title={isVideo ? t("remove_video") : t("remove_audio")}
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            ) : null}
           </div>
 
-          {(isAudio || mediaType === "audio") && url ? (
+          {(isAudio || isVideo) && url ? (
             <div
               onPointerDown={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
               className="space-y-2.5 px-3 pb-3 select-none touch-manipulation"
             >
+              {isVideo ? (
+                <ResizableVideo
+                  url={url as string}
+                  name={displayName}
+                  width={typeof displayWidth === "number" ? displayWidth : null}
+                  editable={editor.isEditable}
+                  selected={selected}
+                  busy={videoProgressPercent != null}
+                  busyLabel={
+                    videoProgressPercent != null
+                      ? `${t("loading")} ${videoProgressPercent}%`
+                      : t("loading")
+                  }
+                  needsDurationProbe={storedDuration <= 0}
+                  onDurationResolved={(seconds) => {
+                    if (seconds > 0 && seconds !== storedDuration) {
+                      persistMediaAttributes({ durationSeconds: seconds });
+                    }
+                  }}
+                  onWidth={(nextPercent) => updateAttributes({ displayWidth: nextPercent })}
+                />
+              ) : null}
+              {isAudio ? (
               <div className="relative select-none">
                 <audio
                   ref={audioRef}
@@ -1073,18 +1400,24 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                     setCurrentTime(0);
                   }}
                   onTimeUpdate={() => {
-                    if (audioRef.current) {
+                    if (audioRef.current && !probingDurationRef.current) {
                       setCurrentTime(audioRef.current.currentTime);
                     }
                   }}
                   onLoadedMetadata={() => {
-                    if (audioRef.current && Number.isFinite(audioRef.current.duration) && audioRef.current.duration > 0) {
-                      setDuration(audioRef.current.duration);
+                    if (storedDuration > 0) return;
+                    const value = audioRef.current?.duration;
+                    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+                      // Valor provisório: some se a sondagem devolver o real.
+                      setMeasuredDuration(value);
                     }
+                    if (!isPlaying) probeRealDuration();
                   }}
                   onDurationChange={() => {
-                    if (audioRef.current && Number.isFinite(audioRef.current.duration) && audioRef.current.duration > 0) {
-                      setDuration(audioRef.current.duration);
+                    if (storedDuration > 0) return;
+                    const value = audioRef.current?.duration;
+                    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+                      setMeasuredDuration(value);
                     }
                   }}
                   onError={() => {
@@ -1142,7 +1475,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                   </button>
 
                   <span className="shrink-0 font-mono text-[10.5px] sm:text-[11px] text-muted select-none tabular-nums min-w-[64px] sm:min-w-[76px]">
-                    {formatDuration(currentTime)} / {formatDuration(duration || Number(durationSeconds) || 0)}
+                    {formatDuration(currentTime)} / {formatDuration(Math.max(totalDuration, currentTime))}
                   </span>
 
                   <div className="relative flex flex-1 items-center min-w-[45px] sm:min-w-[100px]">
@@ -1150,11 +1483,11 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                       type="range"
                       inputMode="none"
                       min={0}
-                      max={duration || Number(durationSeconds) || 100}
+                      max={Math.max(totalDuration, currentTime) || 100}
                       step={0.1}
                       value={currentTime}
                       readOnly={false}
-                      disabled={isBusy || !(duration || Number(durationSeconds))}
+                      disabled={isBusy || !totalDuration}
                       onTouchStart={(e) => {
                         e.stopPropagation();
                         if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement && document.activeElement !== e.currentTarget) {
@@ -1306,6 +1639,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                   </div>
                 ) : null}
               </div>
+              ) : null}
               <div className="flex items-center justify-between gap-2 pt-0.5">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {libras ? (
@@ -1315,7 +1649,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                       onClick={async (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        let transcriptText = audioTranscript;
+                        let transcriptText = mediaTranscript;
                         let quotaErr = false;
 
                         if (!transcriptText && url && typeof url === "string") {
@@ -1352,6 +1686,9 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                             if (err instanceof Error && err.message === "QUOTA_EXCEEDED") {
                               quotaErr = true;
                               toast.error(t("transcription_quota_exceeded"));
+                            } else if (err instanceof Error && err.message === "SERVICE_BUSY") {
+                              quotaErr = true;
+                              toast.error(t("transcription_service_busy"));
                             }
                           } finally {
                             setIsLibrasLoading(false);
@@ -1422,15 +1759,23 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                             transcriptLanguage: effectiveTranscribeLang,
                             transcriptCollapsed: false,
                           });
-                          toast.success(t("audio_transcribed_success"));
+                          toast.success(
+                            t(isVideo ? "video_transcribed_success" : "audio_transcribed_success")
+                          );
                         } else {
-                          toast.error(t("no_speech_detected"));
+                          toast.error(
+                            t(isVideo ? "no_speech_detected_video" : "no_speech_detected")
+                          );
                         }
                       } catch (err) {
                         if (err instanceof Error && err.message === "QUOTA_EXCEEDED") {
                           toast.error(t("transcription_quota_exceeded"));
+                        } else if (err instanceof Error && err.message === "SERVICE_BUSY") {
+                          toast.error(t("transcription_service_busy"));
                         } else {
-                          toast.error(t("audio_transcribe_error"));
+                          toast.error(
+                            t(isVideo ? "video_transcribe_error" : "audio_transcribe_error")
+                          );
                         }
                       } finally {
                         setIsTranscribing(false);
@@ -1438,7 +1783,15 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                       }
                     }}
                     className="touch-manipulation inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11.5px] font-medium text-ink shadow-2xs transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
-                    title={audioTranscript ? t("transcribe_again_title") : t("transcribing_speech_with_ai")}
+                    title={
+                      mediaTranscript
+                        ? t(isVideo ? "transcribe_video_again_title" : "transcribe_again_title")
+                        : t(
+                            isVideo
+                              ? "transcribe_video_speech_with_ai"
+                              : "transcribing_speech_with_ai"
+                          )
+                    }
                   >
                     {isTranscribing ? (
                       <Loader2 className="size-3.5 animate-spin text-[var(--accent)]" />
@@ -1454,7 +1807,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                           </span>
                           <span>...</span>
                         </>
-                      ) : audioTranscript ? (
+                      ) : mediaTranscript ? (
                         t("retranscribe_speech")
                       ) : (
                         t("transcribe_speech")
@@ -1532,7 +1885,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                 </div>
               </div>
 
-              {audioTranscript ? (
+              {mediaTranscript ? (
                 isTranscriptCollapsed ? (
                   <div contentEditable={false} className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border)]/80 bg-[var(--surface)] px-3.5 py-2.5 text-[12.5px] shadow-2xs transition-all">
                     <div className="flex items-center gap-2 min-w-0">
@@ -1620,7 +1973,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                     </div>
                     <div className="max-h-64 sm:max-h-80 overflow-y-auto pr-2 select-text overscroll-contain" contentEditable={false}>
                       <p className="text-ink leading-relaxed whitespace-pre-wrap font-normal select-text cursor-text" contentEditable={false}>
-                        {audioTranscript}
+                        {mediaTranscript}
                       </p>
                     </div>
                   </div>
@@ -1630,7 +1983,9 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                   <Loader2 className="size-3.5 animate-spin text-[var(--accent)] shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between text-[11.5px] font-medium text-ink mb-1">
-                      <span>{t("transcribing_audio_speech")}</span>
+                      <span>
+                        {t(isVideo ? "transcribing_video_speech" : "transcribing_audio_speech")}
+                      </span>
                       <span dir="ltr" className="inline-block text-[var(--accent)] font-semibold tabular-nums">
                         {transcribeProgress}%
                       </span>

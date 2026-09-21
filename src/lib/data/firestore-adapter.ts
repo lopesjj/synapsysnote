@@ -20,7 +20,7 @@ import {
   type QueryDocumentSnapshot,
   type Timestamp,
 } from "firebase/firestore";
-import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { deleteObject, getDownloadURL, ref, uploadBytes, uploadBytesResumable } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";
 import { nanoid } from "nanoid";
 import type {
@@ -1402,12 +1402,34 @@ export class FirestoreAdapter implements DataAdapter {
     });
   }
 
-  async uploadAttachment(pageId: string, file: File): Promise<{ url: string; storagePath: string }> {
+  async uploadAttachment(
+    pageId: string,
+    file: File,
+    onProgress?: (percent: number) => void
+  ): Promise<{ url: string; storagePath: string }> {
     file = await prepareEditorAttachment(file);
     const fileId = `${Date.now()}-${nanoid(6)}-${file.name}`;
     const path = `workspaces/${this.workspaceId}/uploads/${pageId}/${fileId}`;
     const storageRef = ref(getFirebaseStorage(), path);
-    await uploadBytes(storageRef, file, { contentType: file.type });
+    if (onProgress) {
+      // Vídeo chega a 150 MB: o envio resumível sobrevive a oscilação de rede e
+      // ainda diz quanto já subiu.
+      await new Promise<void>((resolve, reject) => {
+        const task = uploadBytesResumable(storageRef, file, { contentType: file.type });
+        task.on(
+          "state_changed",
+          (snapshot) => {
+            if (snapshot.totalBytes > 0) {
+              onProgress(Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100));
+            }
+          },
+          reject,
+          () => resolve()
+        );
+      });
+    } else {
+      await uploadBytes(storageRef, file, { contentType: file.type });
+    }
     const url = await getDownloadURL(storageRef);
 
     await addDoc(this.col("attachments"), {

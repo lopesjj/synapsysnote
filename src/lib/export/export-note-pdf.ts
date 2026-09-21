@@ -117,6 +117,70 @@ function isAudioAttachment(block: AppBlock): boolean {
   return mime.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|webm|aac)($|\?)/i.test(name);
 }
 
+function isVideoAttachment(block: AppBlock): boolean {
+  if (block.type === "video") return true;
+  const mime = block.media?.mimeType?.toLowerCase() || "";
+  const name = block.media?.name?.toLowerCase() || "";
+  return mime.startsWith("video/") || /\.(mp4|m4v|mov|mkv|avi|3gp|ogv)($|\?)/i.test(name);
+}
+
+function renderVideoCard(block: AppBlock): string {
+  const media = block.media;
+  const name = escapeHtml(media?.name || "Vídeo");
+  const duration = media?.durationSeconds ? formatDuration(media.durationSeconds) : null;
+  const size = media?.sizeBytes ? formatBytes(media.sizeBytes) : null;
+  const mime = media?.mimeType ? escapeHtml(media.mimeType) : "Vídeo";
+  const url = media?.url;
+  const transcript = media?.transcript?.trim();
+
+  const metaParts = [duration, size, mime].filter(Boolean);
+
+  return `
+    <div style="margin:14px 0;border:1px solid #ddd6fe;border-radius:10px;background:#f8fafc;padding:14px;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:8px;border-bottom:1px solid #e2e8f0;">
+        <tr>
+          <td style="width:34px;vertical-align:middle;line-height:0;padding:0 10px 8px 0;">
+            <div style="width:34px;height:34px;border-radius:8px;background:#ede9fe;color:#6d28d9;display:flex;align-items:center;justify-content:center;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6d28d9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+            </div>
+          </td>
+          <td style="vertical-align:middle;text-align:left;padding:0 0 8px 0;">
+            <div style="font-weight:600;font-size:13.5px;color:#0f172a;line-height:1.3;">${name}</div>
+            <div style="font-size:11px;color:#64748b;line-height:1.3;margin-top:2px;">${metaParts.join(" · ")}</div>
+          </td>
+          <td style="vertical-align:middle;text-align:right;white-space:nowrap;padding:0 0 8px 10px;">
+            <span style="background:#ede9fe;color:#5b21b6;font-size:11px;font-weight:600;padding:4px 10px;border-radius:9999px;display:inline-block;">
+              Vídeo
+            </span>
+          </td>
+        </tr>
+      </table>
+      ${
+        url
+          ? `
+        <div style="font-size:11px;">
+          <a href="${escapeHtml(url)}" style="color:#6d28d9;text-decoration:none;font-weight:500;display:inline-flex;align-items:center;gap:4px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6d28d9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex-shrink:0;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+            <span>Abrir vídeo anexado</span>
+          </a>
+        </div>
+      `
+          : ""
+      }
+      ${
+        transcript
+          ? `
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;">
+          <div style="font-size:10.5px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">Transcrição</div>
+          <div style="font-size:12px;color:#1e293b;line-height:1.6;white-space:pre-wrap;">${escapeHtml(transcript)}</div>
+        </div>
+      `
+          : ""
+      }
+    </div>
+  `;
+}
+
 function renderAudioCard(block: AppBlock): string {
   const media = block.media;
   const name = escapeHtml(media?.name || "Gravação de Áudio");
@@ -247,6 +311,10 @@ function renderTableHtml(block: AppBlock): string {
 }
 
 function renderBlockHtml(block: AppBlock, imageMap: Map<string, string>, depth = 0): string {
+  if (isVideoAttachment(block)) {
+    return renderVideoCard(block);
+  }
+
   if (isAudioAttachment(block)) {
     return renderAudioCard(block);
   }

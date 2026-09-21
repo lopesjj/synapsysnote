@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { SUPPORTED_LANGUAGES, getLanguageDefinition } from "../src/lib/i18n/languages";
-import { TRANSLATIONS, type TranslationKey } from "../src/lib/i18n/translations";
+import { TRANSLATIONS, formatTranslation, type TranslationKey } from "../src/lib/i18n/translations";
 import { formatRelative } from "../src/lib/utils";
 import type { SupportedLanguage, AppBlock, Page } from "../src/types/models";
 
@@ -85,7 +85,59 @@ for (const code of expectedCodes) {
   assert.ok(dict.libras_shortcut.length > 0);
   assert.ok(dict.focus_editor_shortcut.length > 0);
   assert.ok(dict.focus_title_shortcut.length > 0);
+  assert.ok(dict.video_file.length > 0);
+  assert.ok(dict.video_too_long.length > 0);
+  assert.ok(dict.remove_audio.length > 0);
+  assert.ok(dict.remove_video.length > 0);
+  assert.ok(dict.audio_removed.length > 0);
+  assert.ok(dict.video_removed.length > 0);
+  assert.ok(dict.video_attached.length > 0);
+  assert.ok(dict.video_too_large.length > 0);
+  assert.ok(dict.slash_attachment_desc.length > 0);
+  // O menu de anexo precisa citar vídeo em todos os idiomas.
+  assert.ok(/vídeo|video|vidéo|видео|動画|视频|فيديو/i.test(dict.slash_attachment_desc));
 }
+
+// Concordância dos contadores da nota: nenhuma forma pode sair com o marcador
+// de plural cru, e singular e plural precisam diferir onde o idioma flexiona.
+const COUNT_KEYS: TranslationKey[] = [
+  "editor_words_count",
+  "editor_characters",
+  "ai_words_count",
+  "ai_tables_count",
+  "ai_images_count",
+  "ai_audio_video_count",
+  "ai_pdf_count",
+];
+const INFLECTED = ["pt", "en", "es", "fr", "it", "de", "ru", "ar"];
+
+for (const code of expectedCodes) {
+  const dict = TRANSLATIONS[code] as Record<TranslationKey, string>;
+  for (const key of COUNT_KEYS) {
+    const one = formatTranslation(dict[key], code, { count: 1 });
+    const many = formatTranslation(dict[key], code, { count: 7 });
+    assert.ok(one.length > 0 && !one.includes("{"), `${code}.${key} singular: ${one}`);
+    assert.ok(many.length > 0 && !many.includes("{"), `${code}.${key} plural: ${many}`);
+    const uninflected = key === "ai_pdf_count" || (key === "editor_characters" && code === "de");
+    if (INFLECTED.includes(code) && !uninflected) {
+      assert.notEqual(one, many, `${code}.${key} deveria flexionar`);
+    }
+  }
+}
+
+// Russo usa uma terceira forma a partir de cinco.
+assert.equal(formatTranslation(TRANSLATIONS.ru.ai_words_count, "ru", { count: 1 }), "слово");
+assert.equal(formatTranslation(TRANSLATIONS.ru.ai_words_count, "ru", { count: 3 }), "слова");
+assert.equal(formatTranslation(TRANSLATIONS.ru.ai_words_count, "ru", { count: 7 }), "слов");
+// Árabe volta ao singular depois de dez.
+assert.equal(
+  formatTranslation(TRANSLATIONS.ar.ai_images_count, "ar", { count: 1 }),
+  formatTranslation(TRANSLATIONS.ar.ai_images_count, "ar", { count: 15 })
+);
+assert.equal(formatTranslation(TRANSLATIONS.pt.ai_audio_video_count, "pt", { count: 1 }), "áudio ou vídeo");
+assert.equal(formatTranslation(TRANSLATIONS.pt.ai_audio_video_count, "pt", { count: 2 }), "áudios e vídeos");
+assert.equal(formatTranslation(TRANSLATIONS.pt.editor_characters, "pt", { count: 1 }), "caractere");
+assert.equal(formatTranslation(TRANSLATIONS.pt.editor_characters, "pt", { count: 0 }), "caracteres");
 
 const sevenHoursAgo = Date.now() - 7 * 3600 * 1000;
 assert.equal(formatRelative(sevenHoursAgo, "pt"), "há 7 h");

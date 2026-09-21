@@ -8,7 +8,11 @@ import type { AppBlock } from "../types";
 
 
 const REGION = process.env.FUNCTIONS_REGION || "us-central1";
-const MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+// Áudio tem disponibilidade própria: a mesma chave que aceita texto no flash
+// mais novo devolve 429 de cota (ou 503) quando o pedido leva áudio. O padrão
+// aqui é o modelo medido como disponível para transcrever, e `GEMINI_MODEL`
+// deixa de decidir por ele.
+const MODEL = process.env.GEMINI_TRANSCRIBE_MODEL || "gemini-3.5-flash";
 const SECRETS = ["GEMINI_API_KEY"];
 
 const PROMPT = `Você recebe uma nota de voz em português.

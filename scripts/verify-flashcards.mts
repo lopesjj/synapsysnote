@@ -16,6 +16,10 @@ import {
   hasCardImage,
 } from "../src/lib/flashcards/card-images";
 import { buildDeckTree, flattenDecks, flattenNodes } from "../src/lib/flashcards/note-tree";
+import {
+  extractComprehensiveNoteContent,
+  resolveMediaUrl,
+} from "../src/lib/flashcards/extract-note-content";
 import type { Notebook, Page } from "../src/types/models";
 import type { Flashcard } from "../src/types/models";
 
@@ -210,6 +214,7 @@ async function runTests() {
   checkCardImages();
   checkReminderSlot();
   checkAgreement();
+  await checkExtractComprehensiveMedia();
 
   console.log("Flashcards verification passed successfully.");
 }
@@ -523,6 +528,71 @@ function checkAgreement() {
   }
 
   assert.ok((TRANSLATIONS.pt as Record<string, string>).card_hint_placeholder.includes("Mnemônico"));
+}
+
+async function checkExtractComprehensiveMedia() {
+  const testPage: Page = {
+    id: "page_media_test",
+    notebookId: "nb_1",
+    title: "Aula com Vídeo",
+    workspaceId: "ws_1",
+    plainText: "Anotações sobre a aula de Active Directory",
+    order: 0,
+    createdAt: 1000,
+    updatedAt: 1000,
+    blocks: [
+      {
+        id: "b_text",
+        type: "paragraph",
+        props: { textAlign: "left" },
+        content: [{ type: "text", text: "Introdução ao AD" }],
+      },
+      {
+        id: "b_vid",
+        type: "video",
+        props: {
+          title: "Aula AD",
+          url: "https://example.com/ad-lecture.mp4",
+        },
+        media: {
+          url: "https://example.com/ad-lecture.mp4",
+          name: "ad-lecture.mp4",
+          mimeType: "video/mp4",
+        },
+      },
+      {
+        id: "b_aud",
+        type: "audio",
+        props: {
+          title: "Áudio Explicativo",
+          url: "https://example.com/audio.mp3",
+        },
+        media: {
+          url: "https://example.com/audio.mp3",
+          name: "audio.mp3",
+          mimeType: "audio/mp3",
+          transcript: "Transcrição pré-existente do áudio",
+        },
+      },
+    ],
+  };
+
+  const snapshotBefore = JSON.stringify(testPage);
+  const result = await extractComprehensiveNoteContent(testPage, { includeAttachments: false });
+
+  assert.equal(result.pendingMedia.length, 1);
+  assert.equal(result.pendingMedia[0].blockId, "b_vid");
+  assert.equal(result.pendingMedia[0].kind, "video");
+  assert.equal(result.pendingMedia[0].url, "https://example.com/ad-lecture.mp4");
+
+  assert.equal(result.audioTranscripts.length, 1);
+  assert.equal(result.audioTranscripts[0].text, "Transcrição pré-existente do áudio");
+  assert.equal(result.videoTranscripts.length, 0);
+
+  assert.equal(JSON.stringify(testPage), snapshotBefore);
+
+  const resolved = await resolveMediaUrl("https://example.com/file.mp4");
+  assert.equal(resolved, "https://example.com/file.mp4");
 }
 
 runTests().catch((err) => {

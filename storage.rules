@@ -60,9 +60,13 @@ service firebase.storage {
 
     match /workspaces/{workspaceId}/uploads/{pageId}/{fileName} {
       allow read: if isMember(workspaceId);
+      // Vídeo tem folga maior: comprimir 1 h de aula no navegador custaria a
+      // duração inteira do vídeo. Os demais anexos continuam em 50 MB.
       allow create, update: if canWrite(workspaceId)
-        && withinSizeLimit(50)
-        && isAllowedUploadType();
+        && isAllowedUploadType()
+        && withinSizeLimit(
+             request.resource.contentType.matches('video/.*') ? 150 : 50
+           );
       allow delete: if canWrite(workspaceId);
     }
 

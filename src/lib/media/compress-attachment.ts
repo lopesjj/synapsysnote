@@ -1,15 +1,34 @@
 export const IMAGE_SIZE_LIMIT = 1 * 1024 * 1024;
 export const PDF_SIZE_LIMIT = 3 * 1024 * 1024;
 export const AUDIO_SIZE_LIMIT = 3 * 1024 * 1024;
+export const VIDEO_SIZE_LIMIT = 150 * 1024 * 1024;
+/**
+ * `storage.rules` exige `size < 150 MB` para vídeo, então a compressão mira um
+ * pouco abaixo do limite anunciado para o upload nunca bater na borda.
+ */
+export const VIDEO_UPLOAD_TARGET = VIDEO_SIZE_LIMIT - 512 * 1024;
 export const ATTACHMENT_SIZE_LIMIT = PDF_SIZE_LIMIT;
 const MAX_ROUNDS = 18;
 const MIN_EDGE = 320;
 
 export const AUDIO_EXTENSIONS_REGEX = /\.(mp3|wav|ogg|oga|m4a|aac|flac|opus|webm|weba|wma)$/i;
+export const VIDEO_EXTENSIONS_REGEX = /\.(mp4|m4v|mov|webm|mkv|avi|3gp|3g2|mpg|mpeg|ogv|wmv|flv|ts|hevc)$/i;
 
 export function isAudioFile(file: { name?: string; type?: string }): boolean {
   if (typeof file.type === "string" && file.type.startsWith("audio/")) return true;
+  if (typeof file.type === "string" && file.type.startsWith("video/")) return false;
   if (typeof file.name === "string" && AUDIO_EXTENSIONS_REGEX.test(file.name)) return true;
+  return false;
+}
+
+export function isVideoFile(file: { name?: string; type?: string }): boolean {
+  if (typeof file.type === "string" && file.type.startsWith("video/")) return true;
+  if (typeof file.type === "string" && file.type.startsWith("audio/")) return false;
+  // `.webm` serve aos dois formatos: sem MIME só tratamos como vídeo o que não
+  // é extensão típica de áudio.
+  if (typeof file.name === "string" && VIDEO_EXTENSIONS_REGEX.test(file.name)) {
+    return !/\.(webm|ogg)$/i.test(file.name);
+  }
   return false;
 }
 
@@ -19,6 +38,9 @@ export function needsCompression(file: File): boolean {
   }
   if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
     return file.size > PDF_SIZE_LIMIT;
+  }
+  if (isVideoFile(file)) {
+    return file.size > VIDEO_UPLOAD_TARGET;
   }
   if (isAudioFile(file)) {
     return file.size > AUDIO_SIZE_LIMIT;
@@ -73,7 +95,29 @@ export async function optimizeImageForFastLoad(file: File): Promise<File> {
   }
 }
 
-export async function prepareEditorAttachment(file: File): Promise<File> {
+export interface PrepareAttachmentOptions {
+  /** Progresso (0-100) da compressão de vídeo, que roda em várias rodadas. */
+  onVideoProgress?: (percent: number, round: number) => void;
+}
+
+export async function prepareEditorAttachment(
+  file: File,
+  options?: PrepareAttachmentOptions
+): Promise<File> {
+  if (isVideoFile(file)) {
+    if (!needsCompression(file)) return file;
+    const { compressVideoUntilFits } = await import("./compress-video");
+    const compressed = await compressVideoUntilFits(
+      file,
+      VIDEO_UPLOAD_TARGET,
+      options?.onVideoProgress
+    );
+    if (compressed.size > VIDEO_UPLOAD_TARGET) {
+      const { videoTooLargeError } = await import("./compress-video");
+      throw videoTooLargeError(Math.round(VIDEO_SIZE_LIMIT / (1024 * 1024)));
+    }
+    return compressed;
+  }
   if (file.type.startsWith("image/")) {
     const optimized = await optimizeImageForFastLoad(file);
     if (!needsCompression(optimized)) return optimized;
@@ -323,60 +367,56 @@ function makeOpusTags(): Uint8Array {
   return tags;
 }
 
-async function resampleAudioToMono48k(audioBuffer: AudioBuffer): Promise<Float32Array> {
-  const sampleRate = 48000;
-  const length = Math.max(1, Math.ceil(audioBuffer.duration * sampleRate));
-  const OfflineCtx =
-    window.OfflineAudioContext ||
-    (window as unknown as { webkitOfflineAudioContext?: typeof OfflineAudioContext }).webkitOfflineAudioContext;
-
-  if (OfflineCtx) {
-    try {
-      const offlineCtx = new OfflineCtx(1, length, sampleRate);
-      const source = offlineCtx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(offlineCtx.destination);
-      source.start(0);
-      const rendered = await offlineCtx.startRendering();
-      return rendered.getChannelData(0);
-    } catch {}
+/**
+ * Lê a trilha decodificada em quadros de 20 ms, misturando os canais e
+ * reamostrando na hora. Nada de cópia do áudio inteiro: uma gravação de uma
+ * hora ocuparia centenas de megabytes só nesse passo intermediário.
+ */
+export function createMonoFrameReader(audioBuffer: AudioBuffer, targetRate: number) {
+  const channels: Float32Array[] = [];
+  for (let c = 0; c < audioBuffer.numberOfChannels; c++) {
+    channels.push(audioBuffer.getChannelData(c));
   }
+  const sourceLength = channels[0]?.length ?? 0;
+  const ratio = audioBuffer.sampleRate / targetRate;
+  const totalSamples = Math.max(1, Math.ceil(audioBuffer.duration * targetRate));
 
-  const numChannels = audioBuffer.numberOfChannels;
-  const channelData = new Float32Array(length);
-  const origRate = audioBuffer.sampleRate;
-  const step = origRate / sampleRate;
-  const origChannels: Float32Array[] = [];
-  for (let c = 0; c < numChannels; c++) {
-    origChannels.push(audioBuffer.getChannelData(c));
-  }
-  const origLen = origChannels[0]?.length || 0;
-
-  for (let i = 0; i < length; i++) {
-    const srcIdx = i * step;
-    const s0 = Math.min(origLen - 1, Math.max(0, Math.floor(srcIdx)));
-    const s1 = Math.min(origLen - 1, s0 + 1);
-    const frac = Math.max(0, Math.min(1, srcIdx - s0));
-    let sum = 0;
-    for (let c = 0; c < numChannels; c++) {
-      const ch = origChannels[c];
-      sum += (ch[s0] || 0) * (1 - frac) + (ch[s1] || 0) * frac;
+  const read = (startSample: number, out: Float32Array) => {
+    out.fill(0);
+    const available = Math.min(out.length, totalSamples - startSample);
+    for (let i = 0; i < available; i++) {
+      const position = (startSample + i) * ratio;
+      const left = Math.min(sourceLength - 1, Math.max(0, Math.floor(position)));
+      const right = Math.min(sourceLength - 1, left + 1);
+      const frac = Math.max(0, Math.min(1, position - left));
+      let sum = 0;
+      for (let c = 0; c < channels.length; c++) {
+        const data = channels[c];
+        sum += (data[left] || 0) * (1 - frac) + (data[right] || 0) * frac;
+      }
+      const value = sum / Math.max(1, channels.length);
+      out[i] = Number.isFinite(value) ? Math.max(-1, Math.min(1, value)) : 0;
     }
-    const val = sum / Math.max(1, numChannels);
-    channelData[i] = Number.isFinite(val) ? Math.max(-1, Math.min(1, val)) : 0;
-  }
+    return Math.max(0, available);
+  };
 
-  return channelData;
+  return { totalSamples, read };
 }
 
-async function encodeAudioBufferToOpus(audioBuffer: AudioBuffer, targetBitrate: number): Promise<Blob> {
+async function encodeAudioBufferToOpus(
+  audioBuffer: AudioBuffer,
+  targetBitrate: number,
+  encodeSampleRate = 48000,
+  range?: { startSample: number; endSample: number },
+  onProgress?: (fraction: number) => void
+): Promise<Blob> {
   if (typeof AudioEncoder === "undefined" || typeof AudioData === "undefined") {
     throw new Error("O navegador não suporta codificação de áudio.");
   }
 
-  const sampleRate = 48000;
+  const sampleRate = encodeSampleRate;
   const numberOfChannels = 1;
-  const channelData = await resampleAudioToMono48k(audioBuffer);
+  const reader = createMonoFrameReader(audioBuffer, sampleRate);
 
   const serial = (Math.random() * 0x7fffffff) >>> 0;
   const pages: Uint8Array[] = [];
@@ -407,42 +447,67 @@ async function encodeAudioBufferToOpus(audioBuffer: AudioBuffer, targetBitrate: 
     bitrate: targetBitrate,
   });
 
-  const frameSize = 960;
-  for (let offset = 0; offset < channelData.length; offset += frameSize) {
+  // 20 ms por quadro, na taxa em que estamos codificando.
+  const frameSize = Math.round(sampleRate / 50);
+  const from = Math.max(0, range?.startSample ?? 0);
+  const to = Math.min(reader.totalSamples, range?.endSample ?? reader.totalSamples);
+
+  const span = Math.max(1, to - from);
+  let sinceReport = 0;
+
+  try {
+    for (let offset = from; offset < to; offset += frameSize) {
     if (encoderError) throw encoderError;
-    const remaining = channelData.length - offset;
-    const currentSize = Math.min(frameSize, remaining);
+    // Uma aula de 50 min leva um a dois minutos aqui. Sem avisar o avanço, a
+    // barra fica em 0% esse tempo todo e parece travada.
+    if (onProgress && ++sinceReport >= 100) {
+      sinceReport = 0;
+      onProgress((offset - from) / span);
+    }
     const frame = new Float32Array(frameSize);
-    frame.set(channelData.subarray(offset, offset + currentSize));
+    reader.read(offset, frame);
     const audioData = new AudioData({
       format: "f32-planar",
       sampleRate,
       numberOfFrames: frameSize,
       numberOfChannels,
-      timestamp: Math.round((offset / sampleRate) * 1_000_000),
+      timestamp: Math.round(((offset - from) / sampleRate) * 1_000_000),
       data: frame,
     });
     encoder.encode(audioData);
     audioData.close();
 
     if (encoder.encodeQueueSize > 25) {
+      // Com deadline: se a fila travar, a espera vira um loop infinito que
+      // congela a aba sem nunca reportar erro.
+      const until = Date.now() + 15_000;
       await new Promise<void>((resolve, reject) => {
         const check = () => {
           if (encoderError) return reject(encoderError);
           if (encoder.encodeQueueSize <= 10) return resolve();
+          if (Date.now() > until) return reject(new Error("AUDIO_ENCODER_STALLED"));
           setTimeout(check, 10);
         };
         check();
       });
     }
+    }
+
+    if (encoderError) throw encoderError;
+    await encoder.flush();
+  } finally {
+    // Qualquer saida por erro deixava o encoder aberto, segurando memoria e um
+    // worker de codificacao ate a aba fechar.
+    try {
+      if (encoder.state !== "closed") encoder.close();
+    } catch {}
   }
 
-  if (encoderError) throw encoderError;
-  await encoder.flush();
-  encoder.close();
-
+  // A posição de granule do Ogg Opus é sempre contada em 48 kHz, qualquer que
+  // seja a taxa de entrada — senão a duração sai errada no player.
+  const granuleStep = BigInt(Math.round((frameSize * 48000) / sampleRate));
   for (let i = 0; i < packets.length; i++) {
-    totalGranule += BigInt(frameSize);
+    totalGranule += granuleStep;
     const isLast = i === packets.length - 1;
     pages.push(makeOggPage(isLast ? 4 : 0, totalGranule, serial, seq++, [packets[i]]));
   }
@@ -450,16 +515,15 @@ async function encodeAudioBufferToOpus(audioBuffer: AudioBuffer, targetBitrate: 
   return new Blob(pages as BlobPart[], { type: "audio/ogg; codecs=opus" });
 }
 
-export async function compressAudioUntilFits(blob: Blob): Promise<Blob> {
-  if (blob.size <= AUDIO_SIZE_LIMIT) return blob;
-
-  if (typeof window === "undefined") {
-    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
-  }
-
-  if (blob.size > 80 * 1024 * 1024) {
-    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
-  }
+/**
+ * Decodifica a trilha de áudio de um arquivo (inclusive de vídeo, quando o
+ * navegador consegue), devolvendo `null` em vez de lançar erro.
+ */
+export async function decodeAudioBlob(
+  blob: Blob,
+  targetSampleRate = 48000
+): Promise<AudioBuffer | null> {
+  if (typeof window === "undefined") return null;
 
   const OfflineCtx =
     window.OfflineAudioContext ||
@@ -468,16 +532,16 @@ export async function compressAudioUntilFits(blob: Blob): Promise<Blob> {
     window.AudioContext ||
     (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
 
-  if (!OfflineCtx && !AudioCtx) {
-    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
-  }
+  if (!OfflineCtx && !AudioCtx) return null;
 
   let audioBuffer: AudioBuffer | null = null;
   const arrayBuffer = await blob.arrayBuffer();
 
   if (OfflineCtx) {
     try {
-      const offCtx = new OfflineCtx(1, 48000, 48000);
+      // Decodificar direto na taxa de destino evita guardar a trilha em 48 kHz
+      // só para reamostrar depois.
+      const offCtx = new OfflineCtx(1, targetSampleRate, targetSampleRate);
       audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
         const promise = offCtx.decodeAudioData(arrayBuffer.slice(0), resolve, reject);
         if (promise && typeof promise.then === "function") {
@@ -502,6 +566,145 @@ export async function compressAudioUntilFits(blob: Blob): Promise<Blob> {
       }
     } catch {}
   }
+
+  return audioBuffer;
+}
+
+/**
+ * Extrai só a fala de um arquivo grande (vídeo ou áudio) em um Opus enxuto,
+ * para caber no limite de upload inline da transcrição.
+ */
+/** Fala cabe folgado em 16 kHz, e a decodificação ocupa um terço da memória. */
+export const TRANSCRIPTION_SAMPLE_RATE = 16000;
+
+async function opusEncodeRate(bitrate: number): Promise<number> {
+  if (typeof AudioEncoder === "undefined") return 48000;
+  try {
+    const support = await AudioEncoder.isConfigSupported({
+      codec: "opus",
+      sampleRate: TRANSCRIPTION_SAMPLE_RATE,
+      numberOfChannels: 1,
+      bitrate,
+    });
+    if (support.supported) return TRANSCRIPTION_SAMPLE_RATE;
+  } catch {}
+  return 48000;
+}
+
+export interface AudioSegments {
+  segments: Blob[];
+  durationSeconds: number;
+}
+
+/**
+ * Fatia a fala em trechos curtos, cada um em seu próprio arquivo Opus.
+ *
+ * Mandar uma aula inteira numa única chamada é o pior caso: o arquivo fica
+ * pesado, a API demora minutos e, se recusar, perde-se tudo. Em pedaços, cada
+ * chamada é leve, o progresso é real e uma falha isolada custa só aquele trecho.
+ * A sobreposição evita cortar palavra no meio da emenda.
+ */
+export async function extractAudioSegments(
+  blob: Blob,
+  {
+    segmentSeconds = 480,
+    overlapSeconds = 5,
+    maxBytesPerSegment = 2 * 1024 * 1024,
+    onProgress,
+  }: {
+    segmentSeconds?: number;
+    overlapSeconds?: number;
+    maxBytesPerSegment?: number;
+    onProgress?: (done: number, total: number) => void;
+  } = {}
+): Promise<AudioSegments | null> {
+  if (typeof window === "undefined") return null;
+
+  const audioBuffer = await decodeAudioBlob(blob, TRANSCRIPTION_SAMPLE_RATE);
+  if (!audioBuffer || !audioBuffer.duration) return null;
+
+  const duration = audioBuffer.duration;
+  const bitrate = Math.max(
+    12000,
+    Math.min(24000, Math.floor(((maxBytesPerSegment * 0.9) * 8) / Math.min(segmentSeconds, duration)))
+  );
+  const encodeRate = await opusEncodeRate(bitrate);
+  const totalSamples = Math.ceil(duration * encodeRate);
+  const step = Math.round((segmentSeconds - overlapSeconds) * encodeRate);
+  const span = Math.round(segmentSeconds * encodeRate);
+
+  const ranges: { startSample: number; endSample: number }[] = [];
+  for (let start = 0; start < totalSamples; start += step) {
+    const end = Math.min(totalSamples, start + span);
+    ranges.push({ startSample: start, endSample: end });
+    if (end >= totalSamples) break;
+  }
+
+  const segments: Blob[] = [];
+  for (let i = 0; i < ranges.length; i++) {
+    try {
+      const encoded = await encodeAudioBufferToOpus(audioBuffer, bitrate, encodeRate, ranges[i]);
+      if (encoded && encoded.size > 0) segments.push(encoded);
+    } catch {
+      return null;
+    }
+    onProgress?.(i + 1, ranges.length);
+  }
+
+  if (!segments.length) return null;
+  return { segments, durationSeconds: duration };
+}
+
+export async function extractAudioForTranscription(
+  blob: Blob,
+  maxBytes = 8 * 1024 * 1024,
+  onProgress?: (fraction: number) => void
+): Promise<Blob | null> {
+  if (typeof window === "undefined") return null;
+
+  const audioBuffer = await decodeAudioBlob(blob, TRANSCRIPTION_SAMPLE_RATE);
+  if (!audioBuffer || !audioBuffer.duration) return null;
+
+  const duration = Math.max(1, audioBuffer.duration);
+  // Fala em Opus mono 16 kHz fica clara bem abaixo disso, e um arquivo menor
+  // sobe mais rápido e tem menos chance de esbarrar no limite da API.
+  const bitrate = Math.max(
+    12000,
+    Math.min(24000, Math.floor(((maxBytes * 0.9) * 8) / duration))
+  );
+
+  try {
+    const rate = await opusEncodeRate(bitrate);
+    const encoded = await encodeAudioBufferToOpus(audioBuffer, bitrate, rate, undefined, onProgress);
+    if (encoded && encoded.size > 0 && encoded.size <= maxBytes) return encoded;
+
+    // Estourou o teto (o cabecalho de cada pagina Ogg pesa mais do que a conta
+    // previa): reencoda mirando o tamanho medido.
+    if (encoded && encoded.size > maxBytes) {
+      const corrected = Math.max(
+        8000,
+        Math.floor(bitrate * (maxBytes / encoded.size) * 0.9)
+      );
+      const retry = await encodeAudioBufferToOpus(audioBuffer, corrected, rate);
+      if (retry && retry.size > 0 && retry.size <= maxBytes) return retry;
+    }
+  } catch {}
+
+  return null;
+}
+
+export async function compressAudioUntilFits(blob: Blob): Promise<Blob> {
+  if (blob.size <= AUDIO_SIZE_LIMIT) return blob;
+
+  if (typeof window === "undefined") {
+    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+  }
+
+  if (blob.size > 80 * 1024 * 1024) {
+    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+  }
+
+  const audioBuffer = await decodeAudioBlob(blob);
 
   if (!audioBuffer) {
     throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");

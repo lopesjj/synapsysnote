@@ -226,13 +226,14 @@ ${scope}
   const scope =
     segmentTotal > 1
       ? `This is segment ${segmentIndex} of ${segmentTotal}. Produce about ${requestedCount} cards for THIS SEGMENT.`
-      : `Produce exactly ${requestedCount} cards.`;
+      : `CRITICAL: You MUST produce EXACTLY ${requestedCount} flashcards. Do not produce fewer than ${requestedCount} cards.`;
 
   return `TASK — PRIORITY SELECTION
 ${scope}
 - Map the whole material first, then select only the highest-yield points: what a student must master to understand the subject.
 - Order them strictly from most vital to least: card 1 is the single most indispensable idea, card 2 the second, and so on.
-- Discard secondary detail rather than diluting the selection.`;
+- Discard secondary detail rather than diluting the selection.
+- Ensure the final JSON array contains exactly ${requestedCount} items.`;
 }
 
 async function callGemini(
@@ -358,15 +359,15 @@ function parseFlashcards(raw: string): FlashcardItem[] {
 }
 
 function tokens(value: string): Set<string> {
-  return new Set(value.split(" ").filter((word) => word.length > 3));
+  return new Set(value.split(/\s+/).filter((word) => word.length >= 2));
 }
 
 function isWeakHint(hint: string, front: string, back: string): boolean {
-  const h = fingerprint(hint);
-  const f = fingerprint(front);
-  const b = fingerprint(back);
+  const h = fingerprint(hint) || hint.trim().toLowerCase();
+  const f = fingerprint(front) || front.trim().toLowerCase();
+  const b = fingerprint(back) || back.trim().toLowerCase();
 
-  if (!h || h.length < 6) return true;
+  if (!h || h.length < 2) return true;
   if (hint.length > 110) return true;
   if (f.includes(h) || h.includes(f)) return true;
   if (b.includes(h) || h.includes(b)) return true;
@@ -397,8 +398,8 @@ function fingerprint(value: string): string {
   return value
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 }
 
@@ -534,9 +535,18 @@ export async function POST(req: NextRequest) {
 
     const consolidated = sections.join("\n\n").trim();
 
-    if (!consolidated && inlineParts.length === 0) {
+    // O título sozinho não é material de estudo. Sem este corte, uma nota cujo
+    // único conteúdo é um vídeo que falhou na transcrição chegava aqui só com o
+    // nome, e o modelo devolvia as próprias instruções transformadas em cards.
+    const hasStudyMaterial = sections.some((section) => !section.startsWith("### NOTE TITLE"));
+
+    if (!hasStudyMaterial && inlineParts.length === 0) {
       return NextResponse.json(
-        { error: "No content found in this note to generate flashcards from", flashcards: [] },
+        {
+          error: "No content found in this note to generate flashcards from",
+          reason: "NO_CONTENT",
+          flashcards: [],
+        },
         { status: 400 }
       );
     }
@@ -550,6 +560,7 @@ export async function POST(req: NextRequest) {
           "gemini-3.6-flash",
           "gemini-3.5-flash",
           "gemini-3.5-flash-lite",
+          "gemini-2.5-flash",
         ].filter(Boolean) as string[]
       )
     );
@@ -568,7 +579,7 @@ export async function POST(req: NextRequest) {
     const pushCards = (cards: FlashcardItem[]) => {
       for (const card of cards) {
         if (collected.length >= MAX_TOTAL_CARDS) return;
-        const key = fingerprint(card.front);
+        const key = fingerprint(card.front) || card.front.trim().toLowerCase();
         if (!key || seen.has(key)) continue;
         seen.add(key);
         collected.push(card);
@@ -641,6 +652,30 @@ ${title || "(untitled)"}`;
         32_768
       );
       if (error) lastError = error;
+      if (text) pushCards(parseFlashcards(text));
+    }
+
+    if (
+      requestedCount !== null &&
+      collected.length < requestedCount &&
+      !timedOut &&
+      Date.now() - startedAt <= TIME_BUDGET_MS
+    ) {
+      const remainingNeeded = requestedCount - collected.length;
+      const backfillPrompt = `${systemPrompt}
+
+TASK — ADDITIONAL CARDS
+You previously produced ${collected.length} flashcards, but the user requested ${requestedCount}.
+Generate ${remainingNeeded} MORE unique, high-yield flashcards from the material that do NOT duplicate any of the following questions:
+${collected.map((c, i) => `${i + 1}. ${c.front}`).join("\n")}
+
+RESPONSE FORMAT
+Return only a JSON object shaped as {"flashcards":[{"front":"...","back":"...","hint":"..."}]}. No prose, no markdown fences, nothing outside the JSON.
+
+--- MATERIAL ---
+${effectiveSegments[0] || consolidated}`;
+
+      const { text } = await callGemini(apiKey, models, [{ text: backfillPrompt }], 8192);
       if (text) pushCards(parseFlashcards(text));
     }
 
