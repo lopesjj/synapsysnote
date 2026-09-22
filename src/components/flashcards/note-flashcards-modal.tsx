@@ -12,6 +12,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  Search,
   Table2,
   Trash2,
   UploadCloud,
@@ -36,6 +37,7 @@ import {
   cardImagePatch,
   type CardSide,
 } from "@/lib/flashcards/card-images";
+import { fingerprint } from "@/lib/flashcards/duplicate-cards";
 import { transcribeAudioSource } from "@/lib/accessibility/audio-transcriber";
 import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
 import { useFlashcardSettings } from "@/lib/flashcards/use-flashcard-settings";
@@ -132,6 +134,35 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
     [flashcards, page.id]
   );
 
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [cardQuery, setCardQuery] = useState("");
+
+  const normalizedQuery = useMemo(() => fingerprint(cardQuery), [cardQuery]);
+
+  const visibleCards = useMemo(() => {
+    if (!normalizedQuery) return noteCards;
+    return noteCards.filter((card) =>
+      fingerprint(`${card.front} ${card.back} ${card.hint ?? ""}`).includes(normalizedQuery)
+    );
+  }, [noteCards, normalizedQuery]);
+
+  const cardPositions = useMemo(() => {
+    const map = new Map<string, number>();
+    noteCards.forEach((card, index) => map.set(card.id, index + 1));
+    return map;
+  }, [noteCards]);
+
+  const toggleSearch = () => {
+    const next = !searchOpen;
+    setSearchOpen(next);
+    if (!next) setCardQuery("");
+  };
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setCardQuery("");
+  };
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -177,7 +208,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
     });
   };
 
-  const allRevealed = noteCards.length > 0 && noteCards.every((c) => revealed.has(c.id));
+  const allRevealed = visibleCards.length > 0 && visibleCards.every((c) => revealed.has(c.id));
 
   const resetEditor = () => {
     setEditingId(null);
@@ -319,6 +350,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
       }
 
       resetEditor();
+      closeSearch();
       setTab("list");
     } catch {
       // A gravacao falhou: o que ja subiu nao pertence a card nenhum.
@@ -461,6 +493,10 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
           targetLanguage,
           count: aiCount,
           focus: aiFocus,
+          existingCards: noteCards.map((card) => ({
+            front: card.front.slice(0, 400),
+            back: (card.back || "").slice(0, 400),
+          })),
         }),
       });
 
@@ -487,11 +523,22 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
             selected: true,
           }))
         : [];
+      const skippedExisting = Number(data?.meta?.skippedExisting) || 0;
 
       setProgress(100);
 
-      if (list.length === 0) toast.error(t("ai_no_cards_generated"));
-      else setGenerated(list);
+      if (list.length === 0) {
+        if (data?.reason === "ALL_DUPLICATES" || skippedExisting > 0) {
+          toast.info(t("ai_all_duplicates"));
+        } else {
+          toast.error(t("ai_no_cards_generated"));
+        }
+      } else {
+        if (skippedExisting > 0) {
+          toast.info(t("ai_duplicates_skipped", { count: skippedExisting }));
+        }
+        setGenerated(list);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("ai_generation_error"));
     } finally {
@@ -522,6 +569,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
       }
       toast.success(t("cards_added_count", { count: persisted.size }));
       setGenerated([]);
+      closeSearch();
       setTab("list");
     } catch {
       if (persisted.size > 0) toast.warning(t("cards_partially_added", { count: persisted.size }));
@@ -648,16 +696,38 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <button
                   type="button"
+                  disabled={visibleCards.length === 0}
                   onClick={() =>
-                    setRevealed(allRevealed ? new Set() : new Set(noteCards.map((c) => c.id)))
+                    setRevealed((prev) => {
+                      const next = new Set(prev);
+                      for (const card of visibleCards) {
+                        if (allRevealed) next.delete(card.id);
+                        else next.add(card.id);
+                      }
+                      return next;
+                    })
                   }
-                  className="inline-flex items-center gap-1.5 text-[12px] font-medium text-muted transition-colors hover:text-ink"
+                  className="inline-flex items-center gap-1.5 text-[12px] font-medium text-muted transition-colors hover:text-ink disabled:opacity-45 disabled:hover:text-muted"
                 >
                   <RevealIcon className="size-3.5" />
                   {allRevealed ? t("hide_all_answers") : t("show_all_answers")}
                 </button>
 
                 <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className={cn(
+                      "text-faint hover:text-ink",
+                      searchOpen && "bg-[var(--surface-2)] text-ink"
+                    )}
+                    onClick={toggleSearch}
+                    aria-label={t("search_cards")}
+                    title={t("search_cards")}
+                    aria-pressed={searchOpen}
+                  >
+                    <Search className="size-3.5" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -678,6 +748,44 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                   </Button>
                 </div>
               </div>
+
+              {searchOpen ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative min-w-[12rem] flex-1">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
+                    <input
+                      type="text"
+                      autoFocus
+                      value={cardQuery}
+                      onChange={(event) => setCardQuery(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Escape") return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        closeSearch();
+                      }}
+                      placeholder={t("search_cards_placeholder")}
+                      aria-label={t("search_cards")}
+                      className="h-8 w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] pl-8 pr-7 text-[12.5px] text-ink placeholder:text-faint transition focus:border-[var(--accent)] focus:bg-[var(--surface)] focus:outline-none"
+                    />
+                    {cardQuery ? (
+                      <button
+                        type="button"
+                        onClick={() => setCardQuery("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-faint hover:text-ink"
+                        aria-label={t("clear_search")}
+                      >
+                        <X className="size-3" />
+                      </button>
+                    ) : null}
+                  </div>
+                  {normalizedQuery ? (
+                    <span className="text-[11.5px] tabular-nums text-faint">
+                      {t("cards_found_count", { count: visibleCards.length })}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
 
               {confirmDeleteAll ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_oklab,var(--danger)_25%,transparent)] bg-[color-mix(in_oklab,var(--danger)_8%,transparent)] px-3 py-2">
@@ -707,114 +815,127 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                 </div>
               ) : null}
 
-              <ul className="space-y-1.5">
-                {noteCards.map((card, position) => {
-                  const isOpen = revealed.has(card.id);
-                  return (
-                    <li
-                      key={card.id}
-                      className="overflow-hidden rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] transition-colors hover:border-[var(--border-strong)]"
-                    >
-                      <div className="flex items-start gap-3 p-3">
-                        <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded-[5px] bg-[var(--surface-2)] text-[10.5px] font-semibold text-faint tabular-nums">
-                          {position + 1}
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={() => toggleRevealed(card.id)}
-                          aria-expanded={isOpen}
-                          className="min-w-0 flex-1 text-left"
-                        >
-                          <span className="block text-[13px] font-medium leading-snug text-ink">
-                            {card.front.trim() || t("untitled")}
+              {visibleCards.length === 0 ? (
+                <div className="rounded-[var(--radius-sm)] border border-dashed border-[var(--border)] px-3 py-8 text-center">
+                  <p className="text-[12.5px] text-muted">{t("no_cards_found")}</p>
+                  <button
+                    type="button"
+                    onClick={() => setCardQuery("")}
+                    className="mt-1.5 text-[11.5px] font-medium text-[var(--accent)] transition hover:underline"
+                  >
+                    {t("clear_search")}
+                  </button>
+                </div>
+              ) : (
+                <ul className="space-y-1.5">
+                  {visibleCards.map((card) => {
+                    const isOpen = revealed.has(card.id);
+                    return (
+                      <li
+                        key={card.id}
+                        className="overflow-hidden rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] transition-colors hover:border-[var(--border-strong)]"
+                      >
+                        <div className="flex items-start gap-3 p-3">
+                          <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded-[5px] bg-[var(--surface-2)] text-[10.5px] font-semibold text-faint tabular-nums">
+                            {cardPositions.get(card.id) ?? 1}
                           </span>
-                          <span
-                            className={cn(
-                              "mt-1.5 inline-flex items-center gap-1 text-[11.5px] font-medium transition-colors",
-                              isOpen ? "text-muted" : "text-[var(--accent)]"
-                            )}
-                          >
-                            <ChevronDown
-                              className={cn(
-                                "size-3 transition-transform duration-200",
-                                isOpen && "rotate-180"
-                              )}
-                            />
-                            {isOpen ? t("hide_answer") : t("reveal_answer")}
-                          </span>
-                        </button>
 
-                        {(cardImage(card, "front").url ?? cardImage(card, "back").url) ? (
-                          <img
-                            src={(cardImage(card, "front").url ?? cardImage(card, "back").url) as string}
-                            alt=""
-                            className="size-10 shrink-0 rounded-[var(--radius-xs)] border border-[var(--border)] object-cover"
-                          />
-                        ) : null}
-
-                        <div className="flex shrink-0 items-center gap-0.5">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-faint hover:text-ink"
-                            onClick={() => startEdit(card)}
-                            aria-label={t("edit_card")}
-                            title={t("edit_card")}
+                          <button
+                            type="button"
+                            onClick={() => toggleRevealed(card.id)}
+                            aria-expanded={isOpen}
+                            className="min-w-0 flex-1 text-left"
                           >
-                            <Pencil className="size-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-faint hover:text-[var(--danger)]"
-                            onClick={() => setConfirmDeleteId(card.id)}
-                            aria-label={t("delete_card")}
-                            title={t("delete_card")}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      {isOpen ? (
-                        <div className="border-t border-[var(--border)] bg-[var(--surface-2)]/50 px-3 py-2.5 pl-11">
-                          <p className="text-[12.5px] leading-relaxed text-ink">{card.back}</p>
-                          {card.hint ? (
-                            <span className="mt-1.5 inline-flex items-center gap-1.5 text-[11.5px] text-muted">
-                              <HintIcon className="size-3 text-[var(--warning)]" />
-                              {card.hint}
+                            <span className="block text-[13px] font-medium leading-snug text-ink">
+                              {card.front.trim() || t("untitled")}
                             </span>
-                          ) : null}
-                        </div>
-                      ) : null}
+                            <span
+                              className={cn(
+                                "mt-1.5 inline-flex items-center gap-1 text-[11.5px] font-medium transition-colors",
+                                isOpen ? "text-muted" : "text-[var(--accent)]"
+                              )}
+                            >
+                              <ChevronDown
+                                className={cn(
+                                  "size-3 transition-transform duration-200",
+                                  isOpen && "rotate-180"
+                                )}
+                              />
+                              {isOpen ? t("hide_answer") : t("reveal_answer")}
+                            </span>
+                          </button>
 
-                      {confirmDeleteId === card.id ? (
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[color-mix(in_oklab,var(--danger)_25%,transparent)] bg-[color-mix(in_oklab,var(--danger)_8%,transparent)] px-3 py-2">
-                          <span className="text-[12px] text-ink">{t("confirm_delete_card")}</span>
-                          <div className="flex items-center gap-1.5">
+                          {(cardImage(card, "front").url ?? cardImage(card, "back").url) ? (
+                            <img
+                              src={(cardImage(card, "front").url ?? cardImage(card, "back").url) as string}
+                              alt=""
+                              className="size-10 shrink-0 rounded-[var(--radius-xs)] border border-[var(--border)] object-cover"
+                            />
+                          ) : null}
+
+                          <div className="flex shrink-0 items-center gap-0.5">
                             <Button
                               variant="ghost"
-                              size="sm"
-                              onClick={() => setConfirmDeleteId(null)}
+                              size="icon-sm"
+                              className="text-faint hover:text-ink"
+                              onClick={() => startEdit(card)}
+                              aria-label={t("edit_card")}
+                              title={t("edit_card")}
                             >
-                              {t("cancel")}
+                              <Pencil className="size-3.5" />
                             </Button>
                             <Button
-                              variant="danger"
-                              size="sm"
-                              className="font-semibold"
-                              onClick={() => void handleDelete(card.id)}
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-faint hover:text-[var(--danger)]"
+                              onClick={() => setConfirmDeleteId(card.id)}
+                              aria-label={t("delete_card")}
+                              title={t("delete_card")}
                             >
-                              {t("delete_card")}
+                              <Trash2 className="size-3.5" />
                             </Button>
                           </div>
                         </div>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
+
+                        {isOpen ? (
+                          <div className="border-t border-[var(--border)] bg-[var(--surface-2)]/50 px-3 py-2.5 pl-11">
+                            <p className="text-[12.5px] leading-relaxed text-ink">{card.back}</p>
+                            {card.hint ? (
+                              <span className="mt-1.5 inline-flex items-center gap-1.5 text-[11.5px] text-muted">
+                                <HintIcon className="size-3 text-[var(--warning)]" />
+                                {card.hint}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {confirmDeleteId === card.id ? (
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[color-mix(in_oklab,var(--danger)_25%,transparent)] bg-[color-mix(in_oklab,var(--danger)_8%,transparent)] px-3 py-2">
+                            <span className="text-[12px] text-ink">{t("confirm_delete_card")}</span>
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setConfirmDeleteId(null)}
+                              >
+                                {t("cancel")}
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                className="font-semibold"
+                                onClick={() => void handleDelete(card.id)}
+                              >
+                                {t("delete_card")}
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           )
         ) : null}
@@ -1004,6 +1125,12 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                   </p>
                 </div>
               </div>
+
+              {noteCards.length > 0 ? (
+                <p className="mt-3 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[11.5px] leading-relaxed text-muted">
+                  {t("ai_avoid_duplicates_notice", { count: noteCards.length })}
+                </p>
+              ) : null}
 
               {detected ? (
                 <div className="mt-3.5 flex flex-wrap gap-1.5">

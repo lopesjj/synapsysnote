@@ -1,4 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  cardSignature,
+  fingerprint,
+  hasDuplicate,
+  type CardSignature,
+} from "@/lib/flashcards/duplicate-cards";
+import { filterSemanticDuplicates } from "@/lib/flashcards/semantic-duplicates";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -22,6 +29,11 @@ const MAX_TOTAL_CARDS = 400;
 const MAX_INLINE_IMAGES = 16;
 const MAX_INLINE_PDFS = 8;
 const TIME_BUDGET_MS = 230_000;
+const MAX_EXISTING_CARDS = 2_000;
+const MAX_EXISTING_CARDS_IN_PROMPT = 220;
+const EXISTING_CARDS_CHAR_BUDGET = 9_000;
+const SEMANTIC_PASS_MIN_BUDGET_MS = 15_000;
+const SEMANTIC_PASS_MAX_BUDGET_MS = 45_000;
 
 interface FlashcardItem {
   front: string;
@@ -36,6 +48,11 @@ interface InlinePart {
 interface TranscriptInput {
   name?: string;
   text?: string;
+}
+
+interface ExistingCard {
+  front: string;
+  back: string;
 }
 
 const RESPONSE_SCHEMA = {
@@ -76,6 +93,54 @@ function asTranscripts(value: unknown): TranscriptInput[] {
       return { text: "" };
     })
     .filter((item) => Boolean(item.text && item.text.trim()));
+}
+
+function asExistingCards(value: unknown): ExistingCard[] {
+  if (!Array.isArray(value)) return [];
+  const cards: ExistingCard[] = [];
+  for (const item of value) {
+    if (cards.length >= MAX_EXISTING_CARDS) break;
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const front = typeof record.front === "string" ? record.front.trim() : "";
+    if (!front) continue;
+    const back = typeof record.back === "string" ? record.back.trim() : "";
+    cards.push({ front, back });
+  }
+  return cards;
+}
+
+function buildExistingCardsBlock(cards: ExistingCard[]): string {
+  if (cards.length === 0) return "";
+
+  const lines: string[] = [];
+  let used = 0;
+  for (const card of cards.slice(0, MAX_EXISTING_CARDS_IN_PROMPT)) {
+    const front = card.front.replace(/\s+/g, " ").slice(0, 200);
+    const back = card.back.replace(/\s+/g, " ").slice(0, 140);
+    const line = `- Q: ${front}${back ? ` | A: ${back}` : ""}`;
+    if (used + line.length > EXISTING_CARDS_CHAR_BUDGET) break;
+    lines.push(line);
+    used += line.length + 1;
+  }
+  if (lines.length === 0) return "";
+
+  const omitted = cards.length - lines.length;
+  const tail =
+    omitted > 0
+      ? `\n- (+${omitted} further existing cards are not listed here; stay conservative around every topic above.)`
+      : "";
+
+  return [
+    "CARDS THAT ALREADY EXIST FOR THIS NOTE — NEVER REPEAT THEM",
+    "The learner already owns the flashcards listed below for this exact note. Treat every one of them as ground already covered.",
+    "- Never produce a card that asks the same thing as one of them, not even reworded, split differently, translated, generalised, narrowed, or with question and answer swapped.",
+    "- Never produce a card whose answer is the same fact as the answer of one of them.",
+    "- Mine only what these cards do NOT cover yet. When a point is already covered, skip it and move on to the next uncovered point instead of paraphrasing what exists.",
+    "- Producing fewer cards is correct and expected. If the material is already fully covered, return an empty \"flashcards\" array rather than inventing near-duplicates.",
+    "",
+    lines.join("\n") + tail,
+  ].join("\n");
 }
 
 function labelled(entries: TranscriptInput[], fallbackLabel: string): string {
@@ -119,7 +184,7 @@ function splitIntoSegments(text: string): string[] {
   return segments.slice(0, MAX_SEGMENTS);
 }
 
-function buildSystemPrompt(langName: string, focus: string): string {
+function buildSystemPrompt(langName: string, focus: string, existingBlock: string): string {
   return `You are a specialist in the cognitive science of learning, active recall and flashcard engineering, working in the tradition of Anki, SuperMemo and Piotr Wozniak.
 
 OUTPUT LANGUAGE — ABSOLUTE RULE
@@ -192,7 +257,9 @@ ACCEPTED with no hint at all: a bare number has no honest retrieval cue, so the 
 
 9. USER FOCUS — HIGHEST PRIORITY. The user asked to concentrate on: "${focus}". Prioritise this aspect above all others when selecting and ordering the cards, while still respecting every rule above.`
       : ""
-  }`;
+  }${existingBlock ? `
+
+${existingBlock}` : ""}`;
 }
 
 function buildModeInstruction(
@@ -394,15 +461,6 @@ function isWeakHint(hint: string, front: string, back: string): boolean {
   return false;
 }
 
-function fingerprint(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
-}
-
 export async function POST(req: NextRequest) {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -442,6 +500,7 @@ export async function POST(req: NextRequest) {
     const targetLang = String(body.targetLanguage || "pt").trim().toLowerCase().split("-")[0];
     const langName = LANGUAGE_NAMES[targetLang] || LANGUAGE_NAMES.pt;
     const focus = String(body.focus || "").trim().slice(0, 400);
+    const existingCards = asExistingCards(body.existingCards);
 
     const isMax = String(body.count).toLowerCase() === "max";
     const requestedCount = isMax
@@ -565,23 +624,30 @@ export async function POST(req: NextRequest) {
       )
     );
 
-    const systemPrompt = buildSystemPrompt(langName, focus);
+    const systemPrompt = buildSystemPrompt(langName, focus, buildExistingCardsBlock(existingCards));
+    const existingSignatures = existingCards.map((card) => cardSignature(card.front, card.back));
     const segments = isMax ? splitIntoSegments(consolidated) : [consolidated];
     const effectiveSegments = segments.length > 0 ? segments : [""];
     const runAttachmentPass = isMax && inlineParts.length > 0 && effectiveSegments.length > 1;
 
     const startedAt = Date.now();
     const collected: FlashcardItem[] = [];
-    const seen = new Set<string>();
+    const acceptedSignatures: CardSignature[] = [];
     let lastError = "";
     let timedOut = false;
+    let skippedExisting = 0;
 
     const pushCards = (cards: FlashcardItem[]) => {
       for (const card of cards) {
         if (collected.length >= MAX_TOTAL_CARDS) return;
-        const key = fingerprint(card.front) || card.front.trim().toLowerCase();
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
+        const signature = cardSignature(card.front, card.back);
+        if (!signature.front) continue;
+        if (hasDuplicate(existingSignatures, signature)) {
+          skippedExisting += 1;
+          continue;
+        }
+        if (hasDuplicate(acceptedSignatures, signature)) continue;
+        acceptedSignatures.push(signature);
         collected.push(card);
       }
     };
@@ -655,6 +721,37 @@ ${title || "(untitled)"}`;
       if (text) pushCards(parseFlashcards(text));
     }
 
+    let skippedSemantic = 0;
+    let semanticApplied = false;
+    let semanticError = "";
+
+    const runSemanticPass = async () => {
+      if (collected.length === 0 || timedOut) return;
+      const remaining = TIME_BUDGET_MS - (Date.now() - startedAt);
+      if (remaining < SEMANTIC_PASS_MIN_BUDGET_MS) return;
+
+      const semantic = await filterSemanticDuplicates({
+        apiKey,
+        existing: existingCards,
+        candidates: collected.map((card) => ({ front: card.front, back: card.back })),
+        timeBudgetMs: Math.min(remaining, SEMANTIC_PASS_MAX_BUDGET_MS),
+      });
+
+      if (semantic.applied) semanticApplied = true;
+      if (semantic.error) semanticError = semantic.error;
+      if (!semantic.applied || semantic.duplicates === 0) return;
+
+      const survivors: FlashcardItem[] = [];
+      collected.forEach((card, index) => {
+        if (semantic.keep[index]) survivors.push(card);
+      });
+      skippedSemantic += collected.length - survivors.length;
+      collected.length = 0;
+      collected.push(...survivors);
+    };
+
+    await runSemanticPass();
+
     if (
       requestedCount !== null &&
       collected.length < requestedCount &&
@@ -676,10 +773,36 @@ Return only a JSON object shaped as {"flashcards":[{"front":"...","back":"...","
 ${effectiveSegments[0] || consolidated}`;
 
       const { text } = await callGemini(apiKey, models, [{ text: backfillPrompt }], 8192);
-      if (text) pushCards(parseFlashcards(text));
+      if (text) {
+        const before = collected.length;
+        pushCards(parseFlashcards(text));
+        if (collected.length > before) await runSemanticPass();
+      }
     }
 
+    const skippedDuplicates = skippedExisting + skippedSemantic;
+
     if (collected.length === 0) {
+      if (skippedDuplicates > 0) {
+        return NextResponse.json({
+          flashcards: [],
+          reason: "ALL_DUPLICATES",
+          meta: {
+            segments: effectiveSegments.length,
+            attachmentPass: runAttachmentPass,
+            inlineImages: inlineImageCount,
+            inlinePdfs: inlinePdfCount,
+            generated: 0,
+            partial: timedOut,
+            existingConsidered: existingCards.length,
+            skippedExisting: skippedDuplicates,
+            skippedLexical: skippedExisting,
+            skippedSemantic,
+            semanticApplied,
+            ...(semanticError ? { semanticError } : {}),
+          },
+        });
+      }
       return NextResponse.json(
         {
           error: lastError || "Could not generate flashcards right now. Please try again.",
@@ -701,6 +824,12 @@ ${effectiveSegments[0] || consolidated}`;
         inlinePdfs: inlinePdfCount,
         generated: collected.length,
         partial: timedOut,
+        existingConsidered: existingCards.length,
+        skippedExisting: skippedDuplicates,
+        skippedLexical: skippedExisting,
+        skippedSemantic,
+        semanticApplied,
+        ...(semanticError ? { semanticError } : {}),
       },
     });
   } catch (error) {

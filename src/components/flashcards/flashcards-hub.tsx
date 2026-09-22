@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Search, SlidersHorizontal, X } from "lucide-react";
+import { ChevronRight, Loader2, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Flashcard } from "@/types/models";
 import { Button } from "@/components/ui/button";
@@ -435,6 +435,8 @@ export function FlashcardsHub() {
   const [filterMode, setFilterMode] = useState<"all" | "due">("all");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
+  const [confirmDeleteSelection, setConfirmDeleteSelection] = useState(false);
+  const [deletingSelection, setDeletingSelection] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [session, setSession] = useState<{ title: string; cards: Flashcard[] } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -566,6 +568,27 @@ export function FlashcardsHub() {
   const exitSelection = () => {
     setSelectionMode(false);
     setSelectedPageIds(new Set());
+    setConfirmDeleteSelection(false);
+  };
+
+  const handleDeleteSelection = async () => {
+    const pageIds = [...activeSelection];
+    if (pageIds.length === 0) return;
+    setDeletingSelection(true);
+    let removed = 0;
+    try {
+      for (const pageId of pageIds) {
+        removed += await adapter.deleteFlashcardsByPage(pageId);
+      }
+      toast.success(t("cards_deleted_count", { count: removed }));
+      exitSelection();
+    } catch {
+      if (removed > 0) toast.warning(t("cards_deleted_count", { count: removed }));
+      else toast.error(t("saving_indicator_hint"));
+      setConfirmDeleteSelection(false);
+    } finally {
+      setDeletingSelection(false);
+    }
   };
 
   const startSession = (title: string, cards: Flashcard[]) => {
@@ -880,39 +903,85 @@ export function FlashcardsHub() {
         {selectionMode && visibleNoteIds.length > 0 ? (
           <div className="sticky bottom-4 z-40 mt-4 flex justify-center pb-safe">
             <div className="flex w-full max-w-lg items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--border-strong)] bg-[var(--surface)] p-2.5 pl-4 shadow-[var(--shadow-float)]">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-[var(--accent)] text-[12px] font-semibold text-[var(--accent-contrast)] tabular-nums">
-                  {selectedCards.length}
-                </span>
-                <span className="truncate text-[12.5px] font-medium text-ink">
-                  {t("selected_notes", { count: activeSelection.size })}
-                </span>
-              </div>
+              {confirmDeleteSelection && selectedCards.length > 0 ? (
+                <>
+                  <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink">
+                    {t("confirm_delete_selected_cards", { count: selectedCards.length })}
+                  </span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8"
+                      disabled={deletingSelection}
+                      onClick={() => setConfirmDeleteSelection(false)}
+                    >
+                      {t("cancel")}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      className="h-8 gap-1.5 font-semibold"
+                      disabled={deletingSelection}
+                      onClick={() => void handleDeleteSelection()}
+                    >
+                      {deletingSelection ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-3.5" />
+                      )}
+                      <span>{t("delete_all_cards")}</span>
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-[var(--accent)] text-[12px] font-semibold text-[var(--accent-contrast)] tabular-nums">
+                      {selectedCards.length}
+                    </span>
+                    <span className="truncate text-[12.5px] font-medium text-ink">
+                      {t("selected_notes", { count: activeSelection.size })}
+                    </span>
+                  </div>
 
-              <div className="flex shrink-0 items-center gap-1.5">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8"
-                  onClick={() =>
-                    setSelectedPageIds(
-                      allVisibleSelected ? new Set() : new Set(visibleNoteIds)
-                    )
-                  }
-                >
-                  {allVisibleSelected ? t("deselect_all") : t("select_all")}
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="h-8 gap-1.5 font-semibold"
-                  disabled={selectedCards.length === 0}
-                  onClick={() => startSession(t("study_selected"), selectedCards)}
-                >
-                  <StudyIcon className="size-3" />
-                  <span>{t("study")}</span>
-                </Button>
-              </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8"
+                      onClick={() =>
+                        setSelectedPageIds(
+                          allVisibleSelected ? new Set() : new Set(visibleNoteIds)
+                        )
+                      }
+                    >
+                      {allVisibleSelected ? t("deselect_all") : t("select_all")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-faint hover:text-[var(--danger)]"
+                      disabled={selectedCards.length === 0}
+                      onClick={() => setConfirmDeleteSelection(true)}
+                      aria-label={t("delete_selected_cards")}
+                      title={t("delete_selected_cards")}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      className="h-8 gap-1.5 font-semibold"
+                      disabled={selectedCards.length === 0}
+                      onClick={() => startSession(t("study_selected"), selectedCards)}
+                    >
+                      <StudyIcon className="size-3" />
+                      <span>{t("study")}</span>
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         ) : null}

@@ -16,6 +16,13 @@ import {
   hasCardImage,
 } from "../src/lib/flashcards/card-images";
 import { buildDeckTree, flattenDecks, flattenNodes } from "../src/lib/flashcards/note-tree";
+import { cardSignature, hasDuplicate, isSameCard } from "../src/lib/flashcards/duplicate-cards";
+import {
+  cardText,
+  cosineSimilarity,
+  filterSemanticDuplicates,
+  relatedExisting,
+} from "../src/lib/flashcards/semantic-duplicates";
 import {
   extractComprehensiveNoteContent,
   resolveMediaUrl,
@@ -214,6 +221,8 @@ async function runTests() {
   checkCardImages();
   checkReminderSlot();
   checkAgreement();
+  checkDuplicateCards();
+  await checkSemanticDuplicates();
   await checkExtractComprehensiveMedia();
 
   console.log("Flashcards verification passed successfully.");
@@ -593,6 +602,209 @@ async function checkExtractComprehensiveMedia() {
 
   const resolved = await resolveMediaUrl("https://example.com/file.mp4");
   assert.equal(resolved, "https://example.com/file.mp4");
+}
+
+function checkDuplicateCards() {
+  const sig = (front: string, back: string) => cardSignature(front, back);
+
+  assert.equal(
+    isSameCard(sig("Qual e a funcao da ALU?", "Executar operacoes"), sig("Qual é a FUNÇÃO da ALU?", "Executar operações")),
+    true
+  );
+
+  assert.equal(
+    isSameCard(
+      sig("Qual é a função principal da unidade lógica aritmética?", "Executar operações aritméticas e lógicas."),
+      sig("Qual a função principal da unidade lógica aritmética em um processador?", "Realiza cálculos e comparações.")
+    ),
+    true
+  );
+
+  assert.equal(
+    isSameCard(
+      sig("O que é memória cache?", "Memória rápida entre CPU e RAM."),
+      sig("O que é memória cache em um processador?", "Uma camada rápida de memória.")
+    ),
+    true
+  );
+
+  assert.equal(
+    isSameCard(
+      sig("Quantos bits tem um byte?", "Um byte tem oito bits."),
+      sig("Um byte corresponde a quantos bits?", "Um byte tem oito bits.")
+    ),
+    true
+  );
+
+  assert.equal(
+    isSameCard(
+      sig("Qual é a função da ALU?", "Executar operações aritméticas e lógicas."),
+      sig("Qual é a função do barramento de dados?", "Transportar dados entre a CPU e a memória.")
+    ),
+    false
+  );
+
+  assert.equal(
+    isSameCard(
+      sig("Qual é a capital da França?", "Paris."),
+      sig("Qual é a capital da Itália?", "Roma.")
+    ),
+    false
+  );
+
+  assert.equal(
+    isSameCard(
+      sig("Quais são as camadas do modelo OSI?", "Sete camadas, da física à aplicação."),
+      sig("Quantas camadas tem o modelo TCP/IP?", "Quatro camadas.")
+    ),
+    false
+  );
+
+  assert.equal(
+    isSameCard(
+      sig("O que faz o registrador PC?", "Guarda o endereço da próxima instrução."),
+      sig("O que faz o registrador de instrução?", "Guarda a instrução em execução.")
+    ),
+    false
+  );
+
+  const existing = [
+    sig("O que é paginação de memória?", "Divisão da memória em páginas de tamanho fixo."),
+    sig("Qual a diferença entre RISC e CISC?", "RISC usa instruções simples; CISC, instruções complexas."),
+  ];
+
+  assert.equal(
+    hasDuplicate(existing, sig("O que é a paginação de memória?", "Dividir a memória em páginas fixas.")),
+    true
+  );
+  assert.equal(
+    hasDuplicate(existing, sig("O que é segmentação de memória?", "Divisão da memória em segmentos lógicos.")),
+    false
+  );
+  assert.equal(hasDuplicate([], sig("Qualquer pergunta nova?", "Qualquer resposta.")), false);
+}
+
+function topicVector(text: string): number[] {
+  const lower = text.toLowerCase();
+  const topic = lower.includes("linux") ? 0 : lower.includes("capital") ? 1 : 2;
+  const vector = [0.05, 0.05, 0.05];
+  vector[topic] = 1;
+  return vector;
+}
+
+function installEmbeddingStub(mode: "ok" | "fail"): () => void {
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (async (_input: unknown, init?: { body?: string }) => {
+    calls += 1;
+    if (mode === "fail") throw new Error("network down");
+    const body = JSON.parse(String(init?.body ?? "{}")) as {
+      requests?: { content?: { parts?: { text?: string }[] } }[];
+    };
+    const requests = body.requests ?? [];
+    return {
+      ok: true,
+      json: async () => ({
+        embeddings: requests.map((request) => ({
+          values: topicVector(request.content?.parts?.[0]?.text ?? ""),
+        })),
+      }),
+    };
+  }) as unknown as typeof globalThis.fetch;
+  return () => {
+    globalThis.fetch = original;
+    return calls;
+  };
+}
+
+async function checkSemanticDuplicates() {
+  assert.equal(cardText({ front: "  Pergunta  ", back: " Resposta " }), `Pergunta\nResposta`);
+  assert.ok(cosineSimilarity([1, 0], [1, 0]) > 0.999);
+  assert.ok(Math.abs(cosineSimilarity([1, 0], [0, 1])) < 0.001);
+  assert.equal(cosineSimilarity([], [1, 0]), 0);
+  assert.equal(cosineSimilarity([0, 0], [1, 0]), 0);
+
+  const manyExisting = [
+    { front: "O que e paginacao de memoria virtual", back: "Divisao em paginas" },
+    { front: "O que e segmentacao de memoria", back: "Divisao em segmentos" },
+    { front: "Qual a capital da Franca", back: "Paris" },
+    { front: "Qual a capital da Italia", back: "Roma" },
+  ];
+  const narrowed = relatedExisting(
+    manyExisting,
+    [{ front: "O que e paginacao de memoria", back: "Paginas de tamanho fixo" }],
+    2
+  );
+  assert.equal(narrowed.length, 2);
+  assert.ok(narrowed[0].front.includes("paginacao"));
+  assert.ok(narrowed[1].front.includes("segmentacao"));
+  assert.equal(relatedExisting(manyExisting, [], 10).length, 4);
+
+  const restore = installEmbeddingStub("ok");
+  try {
+    const againstExisting = await filterSemanticDuplicates({
+      apiKey: "test-key",
+      existing: [{ front: "Quem criou o Linux", back: "Linus Torvalds" }],
+      candidates: [
+        { front: "Qual a origem do kernel Linux", back: "Foi criado por Linus Torvalds" },
+        { front: "Qual a capital da Franca", back: "Paris" },
+      ],
+      timeBudgetMs: 30_000,
+    });
+    assert.equal(againstExisting.applied, true);
+    assert.equal(againstExisting.duplicates, 1);
+    assert.deepEqual(againstExisting.keep, [false, true]);
+    assert.equal(againstExisting.comparedExisting, 1);
+
+    const amongCandidates = await filterSemanticDuplicates({
+      apiKey: "test-key",
+      existing: [],
+      candidates: [
+        { front: "O que faz o kernel Linux", back: "Gerencia recursos" },
+        { front: "Para que serve o nucleo Linux", back: "Controla o hardware" },
+        { front: "Qual a capital da Italia", back: "Roma" },
+      ],
+      timeBudgetMs: 30_000,
+    });
+    assert.equal(amongCandidates.duplicates, 1);
+    assert.deepEqual(amongCandidates.keep, [true, false, true]);
+
+    const tooLittleTime = await filterSemanticDuplicates({
+      apiKey: "test-key",
+      existing: [{ front: "Quem criou o Linux", back: "Linus Torvalds" }],
+      candidates: [{ front: "Qual a origem do Linux", back: "Linus Torvalds" }],
+      timeBudgetMs: 500,
+    });
+    assert.equal(tooLittleTime.applied, false);
+    assert.deepEqual(tooLittleTime.keep, [true]);
+
+    const noKey = await filterSemanticDuplicates({
+      apiKey: "",
+      existing: [{ front: "Quem criou o Linux", back: "Linus Torvalds" }],
+      candidates: [{ front: "Qual a origem do Linux", back: "Linus Torvalds" }],
+      timeBudgetMs: 30_000,
+    });
+    assert.equal(noKey.applied, false);
+    assert.deepEqual(noKey.keep, [true]);
+  } finally {
+    restore();
+  }
+
+  const restoreFailing = installEmbeddingStub("fail");
+  try {
+    const degraded = await filterSemanticDuplicates({
+      apiKey: "test-key",
+      existing: [{ front: "Como funciona o escalonador do Linux", back: "Distribui tempo de CPU" }],
+      candidates: [{ front: "Como o Linux escalona processos", back: "Reparte o tempo de CPU" }],
+      timeBudgetMs: 30_000,
+    });
+    assert.equal(degraded.applied, false);
+    assert.equal(degraded.duplicates, 0);
+    assert.deepEqual(degraded.keep, [true]);
+    assert.ok(degraded.error);
+  } finally {
+    restoreFailing();
+  }
 }
 
 runTests().catch((err) => {

@@ -49,6 +49,12 @@ for (const code of expectedCodes) {
   assert.ok(dict.sort_name.length > 0);
   assert.ok(dict.sort_order_label.length > 0);
   assert.ok(dict.sort_manual_only_hint.length > 0);
+  assert.ok(dict.search_cards.length > 0);
+  assert.ok(dict.search_cards_placeholder.length > 0);
+  assert.ok(dict.no_cards_found.length > 0);
+  assert.ok(dict.cards_found_count.length > 0);
+  assert.ok(dict.delete_selected_cards.length > 0);
+  assert.ok(dict.confirm_delete_selected_cards.length > 0);
   assert.ok(dict.filter_placeholder.length > 0);
   assert.ok(dict.note_duplicated.length > 0);
   assert.ok(dict.account.length > 0);
@@ -112,6 +118,10 @@ const COUNT_KEYS: TranslationKey[] = [
   "ai_images_count",
   "ai_audio_video_count",
   "ai_pdf_count",
+  "ai_avoid_duplicates_notice",
+  "ai_duplicates_skipped",
+  "cards_found_count",
+  "confirm_delete_selected_cards",
 ];
 const INFLECTED = ["pt", "en", "es", "fr", "it", "de", "ru", "ar"];
 
@@ -140,6 +150,72 @@ assert.equal(
 );
 assert.equal(formatTranslation(TRANSLATIONS.pt.ai_audio_video_count, "pt", { count: 1 }), "áudio ou vídeo");
 assert.equal(formatTranslation(TRANSLATIONS.pt.ai_audio_video_count, "pt", { count: 2 }), "áudios e vídeos");
+assert.equal(
+  formatTranslation(TRANSLATIONS.pt.ai_avoid_duplicates_notice, "pt", { count: 1 }),
+  "A IA vai analisar 1 card já existente nesta nota e gerar apenas conteúdo novo."
+);
+assert.equal(
+  formatTranslation(TRANSLATIONS.pt.ai_avoid_duplicates_notice, "pt", { count: 3 }),
+  "A IA vai analisar 3 cards já existentes nesta nota e gerar apenas conteúdo novo."
+);
+assert.equal(
+  formatTranslation(TRANSLATIONS.es.ai_avoid_duplicates_notice, "es", { count: 1 }),
+  "La IA analizará 1 tarjeta ya existente en esta nota y generará solo contenido nuevo."
+);
+assert.equal(
+  formatTranslation(TRANSLATIONS.fr.ai_avoid_duplicates_notice, "fr", { count: 1 }),
+  "L'IA analysera 1 carte déjà présente dans cette note et ne générera que du contenu nouveau."
+);
+assert.equal(
+  formatTranslation(TRANSLATIONS.it.ai_avoid_duplicates_notice, "it", { count: 1 }),
+  "L'IA analizzerà 1 scheda già presente in questa nota e genererà solo contenuti nuovi."
+);
+assert.equal(
+  formatTranslation(TRANSLATIONS.de.ai_avoid_duplicates_notice, "de", { count: 1 }),
+  "Die KI prüft 1 bereits vorhandene Karte in dieser Notiz und erzeugt nur neue Inhalte."
+);
+assert.equal(
+  formatTranslation(TRANSLATIONS.de.ai_avoid_duplicates_notice, "de", { count: 4 }),
+  "Die KI prüft 4 bereits vorhandene Karten in dieser Notiz und erzeugt nur neue Inhalte."
+);
+for (const [count, form] of [
+  [1, "карточку"],
+  [2, "карточки"],
+  [5, "карточек"],
+  [11, "карточек"],
+  [21, "карточку"],
+] as const) {
+  assert.ok(
+    formatTranslation(TRANSLATIONS.ru.ai_avoid_duplicates_notice, "ru", { count }).includes(
+      `${count} ${form}`
+    ),
+    `ru.ai_avoid_duplicates_notice com ${count} deveria usar "${form}"`
+  );
+}
+
+assert.equal(
+  formatTranslation(TRANSLATIONS.pt.confirm_delete_selected_cards, "pt", { count: 1 }),
+  "Apagar 1 card selecionado? Esta ação não pode ser desfeita."
+);
+assert.equal(
+  formatTranslation(TRANSLATIONS.pt.confirm_delete_selected_cards, "pt", { count: 6 }),
+  "Apagar 6 cards selecionados? Esta ação não pode ser desfeita."
+);
+assert.equal(
+  formatTranslation(TRANSLATIONS.de.confirm_delete_selected_cards, "de", { count: 1 }),
+  "1 ausgewählte Karte löschen? Das lässt sich nicht rückgängig machen."
+);
+assert.ok(
+  formatTranslation(TRANSLATIONS.ru.confirm_delete_selected_cards, "ru", { count: 2 }).includes(
+    "2 выбранные карточки"
+  )
+);
+assert.ok(
+  formatTranslation(TRANSLATIONS.ru.confirm_delete_selected_cards, "ru", { count: 7 }).includes(
+    "7 выбранных карточек"
+  )
+);
+
 assert.equal(formatTranslation(TRANSLATIONS.pt.editor_characters, "pt", { count: 1 }), "caractere");
 assert.equal(formatTranslation(TRANSLATIONS.pt.editor_characters, "pt", { count: 0 }), "caracteres");
 
