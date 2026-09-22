@@ -45,6 +45,7 @@ import {
   Search,
   Star,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, isMac } from "@/lib/utils";
@@ -731,29 +732,13 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
             <span className="ml-auto text-[10.5px] text-faint">{trashedPages.length}</span>
           ) : null}
         </NavLink>
-        <button
-          onPointerDown={(e) => {
-            if (e.button === 0) {
-              if (useUiStore.getState().mobileSidebarOpen) {
-                useUiStore.setState({ mobileSidebarOpen: false, importOpen: true });
-              } else {
-                useUiStore.getState().setImportOpen(true);
-              }
-            }
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            if (useUiStore.getState().mobileSidebarOpen) {
-              useUiStore.setState({ mobileSidebarOpen: false, importOpen: true });
-            } else {
-              useUiStore.getState().setImportOpen(true);
-            }
-          }}
-          className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
+        <NavLink
+          href="/home/integrations"
+          active={pathname === "/home/integrations"}
+          icon={<Import className="size-3.5" />}
         >
-          <Import className="size-3.5" />
-          {t("import_notion")}
-        </button>
+          {t("integrations_nav")}
+        </NavLink>
       </div>
 
       <DndContext

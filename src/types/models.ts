@@ -230,7 +230,7 @@ export interface Page {
   notionPageId?: string | null;
   notionUrl?: string | null;
   importJobId?: string | null;
-  importSource?: "notion-zip" | null;
+  importSource?: "notion-zip" | "evernote" | "docx" | "google-docs" | "html" | null;
   createdBy: string;
   updatedBy: string;
   createdAt: ISOTimestamp;
@@ -351,6 +351,62 @@ export interface NotionIntegration {
   notionBacklinksIndexed?: boolean;
 }
 
+export interface GoogleDocsIntegration {
+  id: "google-docs";
+  provider: "google-docs";
+  connected: boolean;
+  accountEmail: string;
+  accountName?: string;
+  avatarUrl?: string | null;
+  tokenPreview?: string;
+  scopes?: string[];
+  connectedBy: string;
+  connectedAt: ISOTimestamp;
+  lastSyncAt?: ISOTimestamp | null;
+  revokedAt?: ISOTimestamp | null;
+}
+
+export interface EvernoteIntegration {
+  id: "evernote";
+  provider: "evernote";
+  connected: boolean;
+  username: string;
+  displayName?: string;
+  accountEmail?: string | null;
+  avatarUrl?: string | null;
+  scopes?: string[];
+  tokenPreview?: string;
+  connectedBy: string;
+  connectedAt: ISOTimestamp;
+  lastSyncAt?: ISOTimestamp | null;
+  revokedAt?: ISOTimestamp | null;
+}
+
+export type CloudIntegration = NotionIntegration | GoogleDocsIntegration | EvernoteIntegration;
+
+export type ImportTreeKind = "container" | "document";
+
+export interface ImportTreeNode {
+  id: string;
+  title: string;
+  kind: ImportTreeKind;
+  icon?: string | null;
+  modifiedTime?: string;
+  subtitle?: string;
+  children?: ImportTreeNode[];
+}
+
+export interface ExternalDocumentItem {
+  id: string;
+  title: string;
+  modifiedTime?: string;
+  mimeType?: string;
+  iconUrl?: string | null;
+  thumbnailUrl?: string | null;
+  sizeBytes?: number;
+  notebookName?: string;
+}
+
 export type ImportJobStatus =
   | "pending"
   | "discovering"
@@ -380,6 +436,7 @@ export interface ImportJobItem {
 
 export interface ImportJob {
   id: string;
+  provider?: "notion" | "google_docs" | "evernote" | "docx" | "enex" | string;
   status: ImportJobStatus;
   currentStep: string;
   totalPages: number;

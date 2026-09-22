@@ -60,7 +60,7 @@ service cloud.firestore {
     function validImportSource() {
       return !('importSource' in incoming())
         || incoming().importSource == null
-        || incoming().importSource == 'notion-zip';
+        || incoming().importSource in ['notion-zip', 'evernote', 'docx', 'google-docs', 'html'];
     }
 
     // Workspace pessoal do usuário (fallback se o Admin não estiver configurado).
@@ -224,6 +224,10 @@ service cloud.firestore {
         allow read: if isMember(workspaceId);
         allow create, update, delete: if canWrite(workspaceId);
       }
+    }
+
+    match /oauthClients/{clientId} {
+      allow read, write: if false;
     }
 
     match /{document=**} {

@@ -31,6 +31,9 @@ import type {
   ImportJob,
   Notebook,
   NotionIntegration,
+  GoogleDocsIntegration,
+  EvernoteIntegration,
+  CloudIntegration,
   NotionTreeNode,
   Page,
   PageVersion,
@@ -57,6 +60,7 @@ import type {
   CreateFlashcardInput,
   FlashcardResetScope,
   CreateImportJobInput,
+  RecordImportJobInput,
   CreatePageInput,
   DataAdapter,
   Unsubscribe,
@@ -446,6 +450,26 @@ export class FirestoreAdapter implements DataAdapter {
     );
   }
 
+  subscribeCloudIntegration(
+    provider: "notion" | "google-docs" | "evernote",
+    cb: (integration: CloudIntegration | null) => void
+  ): Unsubscribe {
+    return onSnapshot(
+      this.docRef("integrations", provider),
+      (snap) => {
+        if (!snap.exists()) return cb(null);
+        const data = snap.data();
+        cb({
+          ...(data as any),
+          id: provider,
+          connectedAt: ms(data.connectedAt),
+          lastSyncAt: data.lastSyncAt ? ms(data.lastSyncAt) : null,
+        } as CloudIntegration);
+      },
+      () => {}
+    );
+  }
+
 
   async createNotebook(input: {
     name: string;
@@ -655,6 +679,7 @@ export class FirestoreAdapter implements DataAdapter {
       notionPageId: null,
       notionUrl: null,
       importJobId: null,
+      importSource: input.importSource ?? null,
       createdBy: this.userId,
       updatedBy: this.userId,
       createdAt: Date.now(),
@@ -1201,6 +1226,14 @@ export class FirestoreAdapter implements DataAdapter {
     return result.jobId;
   }
 
+  async recordCompletedImportJob(input: RecordImportJobInput): Promise<string> {
+    const result = await firebaseJson<{ jobId: string }>("/api/import/record", {
+      method: "POST",
+      body: JSON.stringify({ ...input, workspaceId: this.workspaceId }),
+    });
+    return result.jobId;
+  }
+
   private activeWorkers = new Set<string>();
 
   async resumeImportJob(jobId: string) {
@@ -1264,6 +1297,53 @@ export class FirestoreAdapter implements DataAdapter {
 
   async disconnectNotion() {
     await firebaseJson("/api/notion/disconnect", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId: this.workspaceId }),
+    });
+  }
+
+  async connectGoogleDocs(input?: {
+    accessToken?: string;
+    accountEmail?: string;
+    accountName?: string;
+    avatarUrl?: string;
+  }) {
+    const result = await firebaseJson<{ redirectUrl?: string; connected?: GoogleDocsIntegration }>(
+      "/api/google-docs/authorize",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          workspaceId: this.workspaceId,
+          accessToken: input?.accessToken,
+          accountEmail: input?.accountEmail,
+          accountName: input?.accountName,
+          avatarUrl: input?.avatarUrl,
+        }),
+      }
+    );
+    return result;
+  }
+
+  async disconnectGoogleDocs() {
+    await firebaseJson("/api/google-docs/disconnect", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId: this.workspaceId }),
+    });
+  }
+
+  async connectEvernote() {
+    const result = await firebaseJson<{ redirectUrl?: string; connected?: EvernoteIntegration }>(
+      "/api/evernote/authorize",
+      {
+        method: "POST",
+        body: JSON.stringify({ workspaceId: this.workspaceId }),
+      }
+    );
+    return result;
+  }
+
+  async disconnectEvernote() {
+    await firebaseJson("/api/evernote/disconnect", {
       method: "POST",
       body: JSON.stringify({ workspaceId: this.workspaceId }),
     });

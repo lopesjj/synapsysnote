@@ -384,12 +384,12 @@ export function CommandPalette({
                         <Kbd>{isMac() ? "⌘⇧F" : "Ctrl ⇧ F"}</Kbd>
                       </Command.Item>
                       <Command.Item
-                        value="import-notion-api"
+                        value="integrations"
                         className={itemClass}
-                        onSelect={() => run(() => useUiStore.getState().setImportOpen(true))}
+                        onSelect={() => run(() => router.push("/home/integrations"))}
                       >
                         <span className="flex-1 text-[13px] text-ink">
-                          {t("import_notion")}
+                          {t("integrations_nav")}
                         </span>
                       </Command.Item>
                       <Command.Item

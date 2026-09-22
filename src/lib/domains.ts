@@ -22,6 +22,7 @@ export function isSplitHosts(): boolean {
 }
 
 export function cookieParentDomain(): string | undefined {
+  if (process.env.NODE_ENV !== "production") return undefined;
   if (!isSplitHosts()) return undefined;
   try {
     const loginHost = new URL(LOGIN_ORIGIN).hostname.replace(/^www\./, "");

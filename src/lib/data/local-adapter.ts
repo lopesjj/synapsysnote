@@ -10,6 +10,9 @@ import type {
   ImportJobItem,
   Notebook,
   NotionIntegration,
+  GoogleDocsIntegration,
+  EvernoteIntegration,
+  CloudIntegration,
   NotionTreeNode,
   Page,
   PageVersion,
@@ -25,6 +28,7 @@ import type {
   CreateFlashcardInput,
   FlashcardResetScope,
   CreateImportJobInput,
+  RecordImportJobInput,
   CreatePageInput,
   DataAdapter,
   Unsubscribe,
@@ -54,6 +58,8 @@ interface LocalState {
   jobs: ImportJob[];
   versions: PageVersion[];
   integration: NotionIntegration | null;
+  googleDocsIntegration?: GoogleDocsIntegration | null;
+  evernoteIntegration?: EvernoteIntegration | null;
   flashcards?: Flashcard[];
 }
 
@@ -181,6 +187,18 @@ export class LocalAdapter implements DataAdapter {
     return this.subscribe(() => cb(this.state.integration));
   }
 
+  subscribeCloudIntegration(
+    provider: "notion" | "google-docs" | "evernote",
+    cb: (integration: CloudIntegration | null) => void
+  ) {
+    return this.subscribe(() => {
+      if (provider === "notion") cb(this.state.integration);
+      else if (provider === "google-docs") cb(this.state.googleDocsIntegration ?? null);
+      else if (provider === "evernote") cb(this.state.evernoteIntegration ?? null);
+      else cb(null);
+    });
+  }
+
 
   async createNotebook(input: {
     name: string;
@@ -294,6 +312,7 @@ export class LocalAdapter implements DataAdapter {
       notionPageId: null,
       notionUrl: null,
       importJobId: null,
+      importSource: input.importSource ?? null,
       createdBy: "demo-user",
       updatedBy: "demo-user",
       createdAt: nowMs(),
@@ -572,6 +591,29 @@ export class LocalAdapter implements DataAdapter {
     this.emit();
   }
 
+  async connectGoogleDocs(_input?: {
+    accessToken?: string;
+    accountEmail?: string;
+    accountName?: string;
+    avatarUrl?: string;
+  }): Promise<{ redirectUrl?: string } | { connected: GoogleDocsIntegration }> {
+    throw new Error("guest_account_required");
+  }
+
+  async disconnectGoogleDocs() {
+    this.state.googleDocsIntegration = null;
+    this.emit();
+  }
+
+  async connectEvernote(): Promise<{ redirectUrl?: string } | { connected: EvernoteIntegration }> {
+    throw new Error("guest_account_required");
+  }
+
+  async disconnectEvernote() {
+    this.state.evernoteIntegration = null;
+    this.emit();
+  }
+
   async createImportJob(input: CreateImportJobInput): Promise<string> {
     const jobId = `job_${nanoid(8)}`;
     const items: ImportJobItem[] = input.items.map((item) => ({
@@ -583,6 +625,7 @@ export class LocalAdapter implements DataAdapter {
     }));
     const job: ImportJob = {
       id: jobId,
+      provider: "notion",
       status: "pending",
       currentStep: "Job enfileirado",
       totalPages: items.length,
@@ -605,6 +648,45 @@ export class LocalAdapter implements DataAdapter {
     this.emit();
     this.runSimulatedWorker(jobId);
     return jobId;
+  }
+
+  async recordCompletedImportJob(input: RecordImportJobInput): Promise<string> {
+    const id = `job_${nanoid(8)}`;
+    const items: ImportJobItem[] =
+      input.items && input.items.length
+        ? input.items
+        : [
+            {
+              notionId: "import_item",
+              title: input.title || "Importação",
+              type: "page",
+              status: "done",
+            },
+          ];
+    const newJob: ImportJob = {
+      id,
+      provider: input.provider,
+      status: input.status,
+      currentStep: "Concluído",
+      totalPages: input.totalPages,
+      processedPages: input.processedPages,
+      totalFiles: input.totalFiles,
+      processedFiles: input.processedFiles,
+      totalBytes: 0,
+      errors: [],
+      items,
+      selection: { notionIds: [], importAll: false },
+      targetNotebookId: null,
+      options: { downloadMedia: true, preserveHierarchy: true, createBacklinks: false },
+      requestedBy: "demo-user",
+      startedAt: nowMs(),
+      finishedAt: nowMs(),
+      createdAt: nowMs(),
+      updatedAt: nowMs(),
+    };
+    this.state.jobs.unshift(newJob);
+    this.emit();
+    return id;
   }
 
   async cancelImportJob(jobId: string) {

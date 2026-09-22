@@ -5,8 +5,13 @@ import type {
   Flashcard,
   FlashcardRating,
   ImportJob,
+  ImportJobItem,
+  ImportJobStatus,
   Notebook,
   NotionIntegration,
+  GoogleDocsIntegration,
+  EvernoteIntegration,
+  CloudIntegration,
   NotionTreeNode,
   Page,
   PageVersion,
@@ -23,6 +28,7 @@ export interface CreatePageInput {
   parentPageId?: string | null;
   blocks?: Page["blocks"];
   tags?: string[];
+  importSource?: Page["importSource"];
 }
 
 export interface CreateImportJobInput {
@@ -30,6 +36,17 @@ export interface CreateImportJobInput {
   targetNotebookId: string | null;
   options: ImportJob["options"];
   items: { notionId: string; title: string; type: "page" | "database" }[];
+}
+
+export interface RecordImportJobInput {
+  provider: string;
+  title: string;
+  totalPages: number;
+  processedPages: number;
+  totalFiles: number;
+  processedFiles: number;
+  status: ImportJobStatus;
+  items?: ImportJobItem[];
 }
 
 export type { CreateFlashcardInput };
@@ -51,6 +68,7 @@ export interface DataAdapter {
   subscribeDatabases(cb: (databases: AppDatabase[]) => void): Unsubscribe;
   subscribeImportJobs(cb: (jobs: ImportJob[]) => void): Unsubscribe;
   subscribeIntegration(cb: (integration: NotionIntegration | null) => void): Unsubscribe;
+  subscribeCloudIntegration?(provider: "notion" | "google-docs" | "evernote", cb: (integration: CloudIntegration | null) => void): Unsubscribe;
 
   duplicateNotebook(id: string): Promise<Notebook>;
   createNotebook(input: {
@@ -85,11 +103,21 @@ export interface DataAdapter {
 
   fetchNotionTree(): Promise<NotionTreeNode[]>;
   createImportJob(input: CreateImportJobInput): Promise<string>;
+  recordCompletedImportJob?(input: RecordImportJobInput): Promise<string>;
   resumeImportJob?(jobId: string): Promise<void>;
   cancelImportJob(jobId: string): Promise<void>;
 
   connectNotion(): Promise<{ redirectUrl: string } | { connected: NotionIntegration }>;
   disconnectNotion(): Promise<void>;
+  connectGoogleDocs?(input?: {
+    accessToken?: string;
+    accountEmail?: string;
+    accountName?: string;
+    avatarUrl?: string;
+  }): Promise<{ redirectUrl?: string } | { connected: GoogleDocsIntegration }>;
+  disconnectGoogleDocs?(): Promise<void>;
+  connectEvernote?(): Promise<{ redirectUrl?: string } | { connected: EvernoteIntegration }>;
+  disconnectEvernote?(): Promise<void>;
 
   saveAudioNote(pageId: string, blob: Blob, durationSeconds: number): Promise<void>;
   uploadAudioNote(pageId: string, blob: Blob, durationSeconds: number): Promise<{ url: string; storagePath?: string }>;

@@ -14,6 +14,8 @@ import type {
   ImportJob,
   Notebook,
   NotionIntegration,
+  GoogleDocsIntegration,
+  EvernoteIntegration,
   Page,
 } from "@/types/models";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
@@ -45,6 +47,8 @@ interface WorkspaceContextValue {
   importJobs: ImportJob[];
   activeImportJob: ImportJob | null;
   integration: NotionIntegration | null;
+  googleDocsIntegration: GoogleDocsIntegration | null;
+  evernoteIntegration: EvernoteIntegration | null;
   tags: { name: string; count: number }[];
   flashcards: Flashcard[];
   dueFlashcards: Flashcard[];
@@ -128,6 +132,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [flashcardsAdapter, setFlashcardsAdapter] = useState<DataAdapter | null>(null);
   const [importJobs, setImportJobs] = useState<ImportJob[]>([]);
   const [integration, setIntegration] = useState<NotionIntegration | null>(null);
+  const [googleDocsIntegration, setGoogleDocsIntegration] = useState<GoogleDocsIntegration | null>(null);
+  const [evernoteIntegration, setEvernoteIntegration] = useState<EvernoteIntegration | null>(null);
   const [loadedAdapter, setLoadedAdapter] = useState<DataAdapter | null>(null);
   const [dayStamp, setDayStamp] = useState(() => endOfDay());
 
@@ -196,7 +202,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         adapter.subscribeIntegration((next) => {
           if (cancelled) return;
           setIntegration(next);
-        })
+        }),
+        ...(adapter.subscribeCloudIntegration
+          ? [
+              adapter.subscribeCloudIntegration("google-docs", (next) => {
+                if (cancelled) return;
+                setGoogleDocsIntegration(next as GoogleDocsIntegration | null);
+              }),
+              adapter.subscribeCloudIntegration("evernote", (next) => {
+                if (cancelled) return;
+                setEvernoteIntegration(next as EvernoteIntegration | null);
+              }),
+            ]
+          : [])
       );
     };
 
@@ -280,6 +298,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       importJobs,
       activeImportJob,
       integration,
+      googleDocsIntegration,
+      evernoteIntegration,
       flashcards: liveFlashcards,
       dueFlashcards: liveFlashcards.filter((card) => isCardDueForReview(card, dayStamp)),
       flashcardsReady,
@@ -301,6 +321,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     flashcardsReady,
     importJobs,
     integration,
+    googleDocsIntegration,
+    evernoteIntegration,
     notebooks,
     pages,
     ready,

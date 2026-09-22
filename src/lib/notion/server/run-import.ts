@@ -662,6 +662,7 @@ export async function enqueueNotionImport(input: CreateImportInput): Promise<str
   const ref = importJobRef(input.workspaceId, jobId);
   await ref.set({
     id: jobId,
+    provider: "notion",
     status: "pending",
     currentStep: "Job enfileirado",
     totalPages: input.selection.notionIds.length,
