@@ -84,6 +84,8 @@ const CONCEPT_MAP: Record<string, string> = {
   som: "AUDIO",
   gravacao: "AUDIO",
   voz: "AUDIO",
+  video: "VIDEO",
+  filme: "VIDEO",
   nota: "NOTA",
   notas: "NOTA",
   anotacao: "NOTA",

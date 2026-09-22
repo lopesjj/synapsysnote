@@ -45,7 +45,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/menu";
 import { useImageLightboxStore } from "@/lib/store/image-lightbox-store";
-import { useLibrasStore } from "@/lib/store/libras-store";
+import { getCachedLibrasTranscript, setCachedLibrasTranscript, useLibrasStore } from "@/lib/store/libras-store";
 import { useUiStore } from "@/lib/store/ui-store";
 import { transcribeAudioSource } from "@/lib/accessibility/audio-transcriber";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
@@ -752,6 +752,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
   const [volume, setVolume] = useState(1);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isLibrasLoading, setIsLibrasLoading] = useState(false);
+  const [librasProgress, setLibrasProgress] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcribeProgress, setTranscribeProgress] = useState(0);
   const [ephemeralTranscript, setEphemeralTranscript] = useState<string>("");
@@ -1223,6 +1224,8 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
       data-media={isAudio ? "audio" : isVideo ? "video" : (mediaType as string)}
       data-media-type={isAudio ? "audio" : isVideo ? "video" : (mediaType as string)}
       data-audio-block={isAudio ? "true" : undefined}
+      data-video-block={isVideo ? "true" : undefined}
+      data-media-name={displayName}
       data-transcript={mediaTranscript}
       contentEditable={false}
     >
@@ -1252,11 +1255,14 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
       {visualOnly ? null : (
         <div
           contentEditable={false}
+          data-media={isAudio ? "audio" : isVideo ? "video" : (mediaType as string)}
           data-media-type={isAudio ? "audio" : isVideo ? "video" : (mediaType as string)}
           data-audio-block={isAudio ? "true" : undefined}
+          data-video-block={isVideo ? "true" : undefined}
           data-transcript={mediaTranscript}
+          data-media-name={displayName}
           data-audio-name={displayName}
-          aria-label={isAudio ? t("audio_file") : displayName}
+          aria-label={isVideo ? t("video_file") : isAudio ? t("audio_file") : displayName}
           className={cn(
             "select-none overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] transition-shadow",
             selected && "ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)]"
@@ -1649,25 +1655,32 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                       onClick={async (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        let transcriptText = mediaTranscript;
+                        if (document.activeElement instanceof HTMLElement) {
+                          document.activeElement.blur();
+                        }
+                        const cacheKey = String(storagePath || url || tempId || "");
+                        const formalTranscript = typeof transcript === "string" && transcript.trim() ? transcript.trim() : "";
+                        const cachedTranscript = cacheKey ? getCachedLibrasTranscript(cacheKey) : undefined;
+                        let transcriptText = formalTranscript || cachedTranscript || "";
                         let quotaErr = false;
 
                         if (!transcriptText && url && typeof url === "string") {
                           setIsLibrasLoading(true);
-                          setTranscribeProgress(0);
+                          setLibrasProgress(0);
                           try {
                             let opened = false;
-                            transcriptText = await transcribeAudioSource(
+                            const result = await transcribeAudioSource(
                               url,
                               null,
                               (partialText, percent, isInitialReady) => {
-                                setEphemeralTranscript(partialText);
-                                setTranscribeProgress(percent);
+                                if (typeof percent === "number") {
+                                  setLibrasProgress(percent);
+                                }
                                 if (isInitialReady && !opened && partialText) {
                                   opened = true;
                                   setIsLibrasLoading(false);
                                   useLibrasStore.getState().openWithText(partialText, {
-                                    title: displayName || t("audio_file"),
+                                    title: displayName || (isVideo ? t("video_file") : t("audio_file")),
                                     audioUrl: String(url),
                                   });
                                 } else if (opened && partialText) {
@@ -1676,11 +1689,19 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                               },
                               effectiveTranscribeLang
                             );
-                            if (!opened && transcriptText) {
-                              useLibrasStore.getState().openWithText(transcriptText, {
-                                title: displayName || t("audio_file"),
-                                audioUrl: String(url),
-                              });
+                            if (result) {
+                              transcriptText = result;
+                              if (cacheKey) {
+                                setCachedLibrasTranscript(cacheKey, result);
+                              }
+                              if (!opened) {
+                                useLibrasStore.getState().openWithText(result, {
+                                  title: displayName || (isVideo ? t("video_file") : t("audio_file")),
+                                  audioUrl: String(url),
+                                });
+                              } else {
+                                useLibrasStore.getState().updateText(result);
+                              }
                             }
                           } catch (err) {
                             if (err instanceof Error && err.message === "QUOTA_EXCEEDED") {
@@ -1692,10 +1713,11 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                             }
                           } finally {
                             setIsLibrasLoading(false);
+                            setLibrasProgress(0);
                           }
                         } else if (transcriptText) {
                           useLibrasStore.getState().openWithText(transcriptText, {
-                            title: displayName || t("audio_file"),
+                            title: displayName || (isVideo ? t("video_file") : t("audio_file")),
                             audioUrl: String(url),
                           });
                           return;
@@ -1706,7 +1728,11 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                         }
                       }}
                       className="touch-manipulation inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11.5px] font-medium text-ink shadow-2xs transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
-                      aria-label={isLibrasLoading ? t("preparing_libras") : t("see_in_libras")}
+                      aria-label={
+                        isLibrasLoading
+                          ? `${t("preparing_libras")} ${librasProgress}%`
+                          : t("see_in_libras")
+                      }
                       onTouchStart={(e) => {
                         e.stopPropagation();
                         if (document.activeElement instanceof HTMLElement) {
@@ -1719,7 +1745,14 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                       ) : (
                         <Hand className="size-3.5 text-[var(--accent)]" />
                       )}
-                      <span>{isLibrasLoading ? t("preparing_libras") : t("see_in_libras")}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <span>{isLibrasLoading ? t("preparing_libras") : t("see_in_libras")}</span>
+                        {isLibrasLoading ? (
+                          <span dir="ltr" className="inline-block tabular-nums font-semibold text-[var(--accent)]">
+                            ({librasProgress}%)
+                          </span>
+                        ) : null}
+                      </span>
                     </button>
                   ) : null}
 
@@ -1978,7 +2011,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                     </div>
                   </div>
                 )
-              ) : (isTranscribing || isLibrasLoading) ? (
+              ) : isTranscribing ? (
                 <div className="flex items-center gap-2 rounded-xl border border-[var(--border)]/70 bg-[var(--surface)]/70 p-3 text-[12px] text-muted shadow-2xs">
                   <Loader2 className="size-3.5 animate-spin text-[var(--accent)] shrink-0" />
                   <div className="flex-1 min-w-0">

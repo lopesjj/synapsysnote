@@ -176,3 +176,15 @@ export const useLibrasStore = create<LibrasState>((set, get) => ({
     }
   },
 }));
+
+const librasMediaTranscriptionCache = new Map<string, string>();
+
+export function getCachedLibrasTranscript(key: string): string | undefined {
+  if (!key) return undefined;
+  return librasMediaTranscriptionCache.get(key);
+}
+
+export function setCachedLibrasTranscript(key: string, transcript: string): void {
+  if (!key || !transcript) return;
+  librasMediaTranscriptionCache.set(key, transcript);
+}

@@ -71,26 +71,29 @@ import { NoteFlashcardsModal } from "@/components/flashcards/note-flashcards-mod
 type MediaBlockKind = "audio" | "video";
 
 function mediaBlockKind(el: Element): MediaBlockKind | null {
-  if (el.tagName === "AUDIO") return "audio";
   if (el.tagName === "VIDEO") return "video";
+  if (el.tagName === "AUDIO") return "audio";
+  if (el.getAttribute("data-video-block") === "true") return "video";
+  if (el.getAttribute("data-media-type") === "video") return "video";
+  if (el.getAttribute("data-media") === "video") return "video";
   if (el.getAttribute("data-audio-block") === "true") return "audio";
   if (el.getAttribute("data-media-type") === "audio") return "audio";
   if (el.getAttribute("data-media") === "audio") return "audio";
-  if (el.getAttribute("data-media-type") === "video") return "video";
-  if (el.getAttribute("data-media") === "video") return "video";
 
-  const mediaName = el.getAttribute("data-audio-name");
+  const mediaName = el.getAttribute("data-media-name") || el.getAttribute("data-audio-name");
   if (mediaName && isVideoFile({ name: mediaName })) return "video";
   if (mediaName && isAudioFile({ name: mediaName })) return "audio";
 
   if (el.hasAttribute("data-media") || el.hasAttribute("data-node-view-wrapper") || el.classList.contains("my-3")) {
+    if (el.querySelector('video, [data-media-type="video"], [data-media="video"], [data-video-block="true"]')) {
+      return "video";
+    }
     if (el.querySelector('audio, [data-media-type="audio"], [data-audio-block="true"], [data-media="audio"]')) {
       return "audio";
     }
-    if (el.querySelector('video, [data-media-type="video"], [data-media="video"]')) {
-      return "video";
-    }
-    const innerName = el.querySelector("[data-audio-name]")?.getAttribute("data-audio-name");
+    const innerName =
+      el.querySelector("[data-media-name]")?.getAttribute("data-media-name") ||
+      el.querySelector("[data-audio-name]")?.getAttribute("data-audio-name");
     if (innerName && isVideoFile({ name: innerName })) return "video";
     if (innerName && isAudioFile({ name: innerName })) return "audio";
   }
@@ -123,6 +126,8 @@ function extractEditorDomText(
         const transcript = el.getAttribute("data-transcript")?.trim();
         if (transcript) {
           parts.push(transcript);
+        } else {
+          parts.push(mediaKind === "video" ? videoFileLabel : audioFileLabel);
         }
       } else {
         parts.push(mediaKind === "video" ? videoFileLabel : audioFileLabel);
@@ -141,7 +146,7 @@ function extractEditorDomText(
 
     const containsMedia =
       el.querySelector(
-        'audio, video, [data-media-type="audio"], [data-media-type="video"], [data-audio-block="true"], [data-media="audio"], [data-media="video"], [data-audio-name]'
+        'audio, video, [data-media-type="audio"], [data-media-type="video"], [data-audio-block="true"], [data-video-block="true"], [data-media="audio"], [data-media="video"], [data-media-name], [data-audio-name]'
       ) !== null;
 
     if (containsMedia) {
@@ -205,7 +210,7 @@ function extractPageText(
   }
 
   if (!editorText && Array.isArray(page.blocks) && page.blocks.length > 0) {
-    editorText = blocksToPlainText(page.blocks, audioFileLabel).trim();
+    editorText = blocksToPlainText(page.blocks, audioFileLabel, videoFileLabel).trim();
   }
 
   if (!editorText && page.plainText?.trim()) {
