@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Badge, Input, Progress, Switch } from "@/components/ui/primitives";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { cn } from "@/lib/utils";
-import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
+import { localizeErrorMessage, useTranslation, type TranslationKey } from "@/lib/i18n/translations";
 import { useFileImport } from "@/hooks/use-file-import";
 import { PROVIDER_ACCEPT, type ImportProvider } from "@/lib/import/parse-file";
 import type { ImportWarningCode } from "@/lib/import/types";
@@ -102,15 +102,19 @@ export function FileImportWizard({
       toast.error(t("fimp_nothing_to_import"));
       return;
     }
-    const finished = await importer.start({ targetNotebookId, ...options });
-    if (!finished) return;
-    const imported = finished.filter((result) => result.status === "done").length;
-    if (imported) toast.success(t("fimp_done_summary", { count: imported }));
+    try {
+      await importer.start({ targetNotebookId, ...options });
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? localizeErrorMessage(error.message, t) : t("import_start_failed")
+      );
+    }
   };
 
   const close = (next: boolean) => {
     if (!next && importer.running) {
-      toast.info(t("fimp_importing"));
+      toast.info(t("wizard_continue_background"));
+      onOpenChange(false);
       return;
     }
     if (!next) {
@@ -342,6 +346,10 @@ export function FileImportWizard({
 
             <Progress value={importer.percent} />
 
+            {importer.running ? (
+              <p className="text-[11.5px] leading-relaxed text-muted">{t("import_background_hint")}</p>
+            ) : null}
+
             <div className="max-h-[260px] overflow-y-auto rounded-[var(--radius-md)] border border-[var(--border)]">
               {(importer.results ?? []).map((result) => (
                 <div
@@ -453,9 +461,14 @@ export function FileImportWizard({
                 </Button>
               </>
             ) : (
-              <Button variant="danger" onClick={importer.cancel}>
-                <X /> {t("wizard_cancel_import")}
-              </Button>
+              <>
+                <Button variant="ghost" onClick={() => close(false)}>
+                  {t("wizard_continue_background")}
+                </Button>
+                <Button variant="danger" onClick={importer.cancel}>
+                  <X /> {t("wizard_cancel_import")}
+                </Button>
+              </>
             )
           ) : null}
         </div>

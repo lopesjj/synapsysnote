@@ -53,6 +53,9 @@ import { WorkspaceCrumbs } from "./workspace-crumbs";
 import { cn, formatRelative } from "@/lib/utils";
 import { isAudioFile, isVideoFile, prepareEditorAttachment } from "@/lib/media/compress-attachment";
 import { useTranslation, localizeErrorMessage } from "@/lib/i18n/translations";
+import { IMPORT_ORIGIN_BADGE_KEY, pageImportOrigin } from "@/lib/import/source-label";
+import { ListSortControl } from "@/components/ui/list-sort-control";
+import { sortPages } from "@/lib/data/list-sort";
 
 import { PAGE_ICONS } from "@/lib/icons/catalog";
 import {
@@ -252,6 +255,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const { t, language } = useTranslation();
   const { adapter, pages, livePages, notebooks, databases, pageById, ready, flashcards } = useWorkspace();
   const page = pageById(pageId);
+  const importOrigin = page ? pageImportOrigin(page) : null;
   const [flashcardsModalOpen, setFlashcardsModalOpen] = useState(false);
   const noteFlashcardsCount = useMemo(
     () => flashcards.filter((c) => c.pageId === pageId).length,
@@ -283,12 +287,17 @@ export function PageView({ pageId }: { pageId: string }) {
   const [pausedNarration, setPausedNarration] = useState(false);
   const lastNarrationLangRef = useRef<string>(language);
 
+  const subnotesSort = useUiStore((state) => state.subnotesSort);
+  const subnotesSortDirection = useUiStore((state) => state.subnotesSortDirection);
+
   const subnotes = useMemo(
     () =>
-      pages
-        .filter((p) => p.parentPageId === pageId && !p.deletedAt)
-        .sort((a, b) => a.order - b.order || (a.title || "").localeCompare(b.title || "", language)),
-    [pages, pageId, language]
+      sortPages(
+        pages.filter((p) => p.parentPageId === pageId && !p.deletedAt),
+        subnotesSort,
+        subnotesSortDirection
+      ),
+    [pages, pageId, language, subnotesSort, subnotesSortDirection]
   );
 
   const createSubnote = useCallback(async () => {
@@ -966,10 +975,8 @@ export function PageView({ pageId }: { pageId: string }) {
               {t("add_tag")}
             </button>
           )}
-          {page.notionPageId ? (
-            <Badge tone="accent">{t("imported_from_notion")}</Badge>
-          ) : page.importSource === "notion-zip" ? (
-            <Badge tone="accent">{t("imported_from_notion_zip")}</Badge>
+          {importOrigin ? (
+            <Badge tone="accent">{t(IMPORT_ORIGIN_BADGE_KEY[importOrigin])}</Badge>
           ) : null}
           <span className="ml-auto text-[11px] text-faint">
             {t("updated")} {formatRelative(page.updatedAt, language)}
@@ -1015,15 +1022,24 @@ export function PageView({ pageId }: { pageId: string }) {
                 </span>
               ) : null}
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void createSubnote()}
-              className="h-7 gap-1 px-2 text-[11.5px] text-muted hover:text-ink"
-            >
-              <Plus className="size-3.5" />
-              {t("new_subpage")}
-            </Button>
+            <div className="flex items-center gap-1.5">
+              {subnotes.length > 1 ? (
+                <ListSortControl
+                  scope="subnotes"
+                  sort={subnotesSort}
+                  direction={subnotesSortDirection}
+                />
+              ) : null}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void createSubnote()}
+                className="h-7 gap-1 px-2 text-[11.5px] text-muted hover:text-ink"
+              >
+                <Plus className="size-3.5" />
+                {t("new_subpage")}
+              </Button>
+            </div>
           </div>
 
           {subnotes.length ? (

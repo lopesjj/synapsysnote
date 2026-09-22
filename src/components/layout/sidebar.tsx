@@ -59,6 +59,7 @@ import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/compo
 import { UserMenu } from "./user-menu";
 import type { Notebook } from "@/types/models";
 import { childrenOf, isNestedNotebook, parentIdOf } from "@/lib/data/notebook-tree";
+import { sortNotebooks, sortPageTree } from "@/lib/data/list-sort";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
 import { MoveItemDialog, type MoveItemTarget } from "./move-dialog";
 import {
@@ -245,6 +246,17 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   const { notebooks, livePages, databases, tags, trashedPages, treeFor, adapter, rootNotebooks, flashcards, dueFlashcards } =
     useWorkspace();
 
+  const notebooksSort = useUiStore((state) => state.notebooksSort);
+  const notebooksSortDirection = useUiStore((state) => state.notebooksSortDirection);
+  const notesSort = useUiStore((state) => state.notebookNotesSort);
+  const notesSortDirection = useUiStore((state) => state.notebookNotesSortDirection);
+  const subnotesSort = useUiStore((state) => state.subnotesSort);
+  const subnotesSortDirection = useUiStore((state) => state.subnotesSortDirection);
+
+  const notebooksReorderable = notebooksSort === "manual";
+  const notesReorderable = notesSort === "manual";
+  const subnotesReorderable = subnotesSort === "manual";
+
   const [openNotebooks, setOpenNotebooks] = useState<Record<string, boolean>>(() =>
     getSessionState<Record<string, boolean>>(SESSION_OPEN_NOTEBOOKS_KEY, {})
   );
@@ -291,20 +303,46 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
 
   const favorites = useMemo(() => livePages.filter((page) => page.favorite), [livePages]);
   const orphanPages = useMemo(
-    () => treeFor(null).filter((node) => !node.page.notebookId),
-    [treeFor]
+    () =>
+      sortPageTree(
+        treeFor(null).filter((node) => !node.page.notebookId),
+        notesSort,
+        notesSortDirection,
+        subnotesSort,
+        subnotesSortDirection
+      ),
+    [treeFor, notesSort, notesSortDirection, subnotesSort, subnotesSortDirection]
+  );
+
+  const sortedRootNotebooks = useMemo(
+    () => sortNotebooks(rootNotebooks, notebooksSort, notebooksSortDirection),
+    [rootNotebooks, notebooksSort, notebooksSortDirection]
   );
 
   const contents = useMemo(() => {
     const map = new Map<string, { tree: PageTreeNode[]; databases: typeof databases }>();
     for (const notebook of notebooks) {
       map.set(notebook.id, {
-        tree: treeFor(notebook.id),
+        tree: sortPageTree(
+          treeFor(notebook.id),
+          notesSort,
+          notesSortDirection,
+          subnotesSort,
+          subnotesSortDirection
+        ),
         databases: databases.filter((db) => db.notebookId === notebook.id && !db.deletedAt),
       });
     }
     return map;
-  }, [databases, notebooks, treeFor]);
+  }, [
+    databases,
+    notebooks,
+    treeFor,
+    notesSort,
+    notesSortDirection,
+    subnotesSort,
+    subnotesSortDirection,
+  ]);
 
   const createPage = async (notebookId: string | null) => {
     const page = await adapter.createPage({ notebookId, title: t("untitled") });
@@ -363,7 +401,11 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
       if (overDecoded.kind === "notebook") {
         mode = "inside";
       } else {
-        if (relativeY < 0.28) {
+        const overPage = livePages.find((page) => page.id === overDecoded.id);
+        const canReorder = overPage?.parentPageId ? subnotesReorderable : notesReorderable;
+        if (!canReorder) {
+          mode = "inside";
+        } else if (relativeY < 0.28) {
           mode = "before";
         } else if (relativeY > 0.72) {
           mode = "after";
@@ -382,12 +424,14 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         const isOverRoot = overNotebook && !overNotebook.parentId;
 
         if (isDraggedRoot) {
-          if (!isOverRoot) {
+          if (!isOverRoot || !notebooksReorderable) {
             sidebarDropIntentRef.current = null;
             setSidebarDropIntent(null);
             return;
           }
           mode = relativeY < 0.5 ? "before" : "after";
+        } else if (!notebooksReorderable) {
+          mode = "inside";
         } else {
           if (relativeX < 0.55) {
             mode = relativeY < 0.5 ? "before" : "after";
@@ -402,7 +446,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           }
         }
       } else {
-        if (isDraggedRoot) {
+        if (isDraggedRoot || !notebooksReorderable) {
           sidebarDropIntentRef.current = null;
           setSidebarDropIntent(null);
           return;
@@ -498,7 +542,11 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
       {branch.map((notebook) => {
         const { tree, databases: notebookDatabases } =
           contents.get(notebook.id) ?? { tree: [], databases: [] };
-        const nested = childrenOf(notebooks, notebook.id);
+        const nested = sortNotebooks(
+          childrenOf(notebooks, notebook.id),
+          notebooksSort,
+          notebooksSortDirection
+        );
         const open = openNotebooks[notebook.id] ?? false;
         const active = pathname === `/home/n/${notebook.id}`;
         const empty = !tree.length && !notebookDatabases.length && !nested.length;
@@ -799,7 +847,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               </Tooltip>
             }
           >
-            {renderNotebooks(rootNotebooks, 0)}
+            {renderNotebooks(sortedRootNotebooks, 0)}
           </Section>
 
           {orphanPages.length ? (

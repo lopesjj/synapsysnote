@@ -31,6 +31,8 @@ import { childrenOf, isNotebookDescendant, notebookSubtreeIds, parentIdOf } from
 
 import { Button } from "@/components/ui/button";
 import { EmptyState, Tooltip } from "@/components/ui/primitives";
+import { ListSortControl } from "@/components/ui/list-sort-control";
+import { sortNotebooks, sortPageTree } from "@/lib/data/list-sort";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { WorkspaceCrumbs } from "./workspace-crumbs";
 import { cn, compareNatural, formatRelative } from "@/lib/utils";
@@ -104,6 +106,17 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
 
+  const notebooksSort = useUiStore((state) => state.notebooksSort);
+  const notebooksSortDirection = useUiStore((state) => state.notebooksSortDirection);
+  const notesSort = useUiStore((state) => state.notebookNotesSort);
+  const notesSortDirection = useUiStore((state) => state.notebookNotesSortDirection);
+  const subnotesSort = useUiStore((state) => state.subnotesSort);
+  const subnotesSortDirection = useUiStore((state) => state.subnotesSortDirection);
+
+  const notebooksReorderable = notebooksSort === "manual";
+  const notesReorderable = notesSort === "manual";
+  const subnotesReorderable = subnotesSort === "manual";
+
   const toggleNoteExpanded = (noteId: string) => {
     setExpandedNotes((prev) => ({ ...prev, [noteId]: !prev[noteId] }));
   };
@@ -132,8 +145,15 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
 
   const filteredNoteTree = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return filterTree(noteTree, q);
-  }, [noteTree, searchQuery]);
+    const filtered = filterTree(noteTree, q);
+    return sortPageTree(
+      filtered,
+      notesSort,
+      notesSortDirection,
+      subnotesSort,
+      subnotesSortDirection
+    );
+  }, [noteTree, searchQuery, notesSort, notesSortDirection, subnotesSort, subnotesSortDirection]);
 
   const visibleNoteIds = useMemo(() => {
     const ids: string[] = [];
@@ -184,11 +204,15 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
 
   const filteredChildNotebooks = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return childNotebooks;
-    return childNotebooks.filter(
-      (nb) => nb.name.toLowerCase().includes(q) || (nb.description ?? "").toLowerCase().includes(q)
-    );
-  }, [childNotebooks, searchQuery]);
+    const filtered = q
+      ? childNotebooks.filter(
+          (nb) =>
+            nb.name.toLowerCase().includes(q) ||
+            (nb.description ?? "").toLowerCase().includes(q)
+        )
+      : childNotebooks;
+    return sortNotebooks(filtered, notebooksSort, notebooksSortDirection);
+  }, [childNotebooks, searchQuery, notebooksSort, notebooksSortDirection]);
 
   const filteredNotes = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -290,16 +314,18 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     if (activeDecoded.kind === "notebook") {
       if (overDecoded.kind === "notebook") {
         let mode: DropMode = "inside";
-        const isIndented = relativeX > 0.05 || (cursorX - overRect.left) > 30;
-        const topBound = isIndented ? 0.15 : 0.25;
-        const bottomBound = isIndented ? 0.85 : 0.75;
+        if (notebooksReorderable) {
+          const isIndented = relativeX > 0.05 || (cursorX - overRect.left) > 30;
+          const topBound = isIndented ? 0.15 : 0.25;
+          const bottomBound = isIndented ? 0.85 : 0.75;
 
-        if (relativeY < topBound) {
-          mode = "before";
-        } else if (relativeY > bottomBound) {
-          mode = "after";
-        } else {
-          mode = "inside";
+          if (relativeY < topBound) {
+            mode = "before";
+          } else if (relativeY > bottomBound) {
+            mode = "after";
+          } else {
+            mode = "inside";
+          }
         }
         dropTargetRef.current = { id: overDecoded.id, kind: "notebook", mode };
         setDropTarget({ id: overDecoded.id, kind: "notebook", mode });
@@ -322,11 +348,18 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
         }
         const overPage = livePages.find((p) => p.id === overDecoded.id);
         const isDescendant = overPage ? isPageDescendant(livePages, overPage, activeDecoded.id) : false;
+        const canReorder = overPage?.parentPageId ? subnotesReorderable : notesReorderable;
+
+        if (isDescendant && !canReorder) {
+          dropTargetRef.current = null;
+          setDropTarget(null);
+          return;
+        }
 
         let mode: DropMode = "inside";
         if (isDescendant) {
           mode = relativeY < 0.5 ? "before" : "after";
-        } else {
+        } else if (canReorder) {
           const isIndented = relativeX > 0.05 || (cursorX - overRect.left) > 30;
           const topBound = isIndented ? 0.15 : 0.25;
           const bottomBound = isIndented ? 0.85 : 0.75;
@@ -798,16 +831,29 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                     <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
                       {t("notebooks")}
                     </h2>
-                    {!searchQuery ? (
-                      <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                        <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-0.5 font-medium text-muted shadow-2xs">
-                          <span>↕</span> {t("dnd_borders_reorder")}
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                      {searchQuery ? null : notebooksReorderable ? (
+                        <>
+                          <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-0.5 font-medium text-muted shadow-2xs">
+                            <span>↕</span> {t("dnd_borders_reorder")}
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-2.5 py-0.5 font-semibold text-[var(--accent)] shadow-2xs">
+                            <FolderPlus className="size-3.5" /> {t("dnd_center_move")}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-[10.5px] text-faint">
+                          {t("sort_manual_only_hint")}
                         </span>
-                        <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-2.5 py-0.5 font-semibold text-[var(--accent)] shadow-2xs">
-                          <FolderPlus className="size-3.5" /> {t("dnd_center_move")}
-                        </span>
-                      </div>
-                    ) : null}
+                      )}
+                      {filteredChildNotebooks.length > 1 ? (
+                        <ListSortControl
+                          scope="notebooks"
+                          sort={notebooksSort}
+                          direction={notebooksSortDirection}
+                        />
+                      ) : null}
+                    </div>
                   </div>
                   <SortableContext
                     items={filteredChildNotebooks.map((c) => encodeId("notebook", c.id))}
@@ -834,13 +880,24 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                     <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
                       {t("notes_plural")}
                     </h2>
-                    {!searchQuery && (notes.length > 1 || childNotebooks.length > 0) ? (
-                      <span className="text-[10.5px] text-faint">
-                        {childNotebooks.length > 0
-                          ? t("dnd_drag_reorder_or_move")
-                          : t("dnd_drag_reorder")}
-                      </span>
-                    ) : null}
+                    <div className="flex flex-wrap items-center justify-end gap-1.5">
+                      {searchQuery || (notes.length < 2 && !childNotebooks.length) ? null : (
+                        <span className="text-[10.5px] text-faint">
+                          {notesReorderable
+                            ? childNotebooks.length > 0
+                              ? t("dnd_drag_reorder_or_move")
+                              : t("dnd_drag_reorder")
+                            : t("sort_manual_only_hint")}
+                        </span>
+                      )}
+                      {visibleNoteIds.length > 1 ? (
+                        <ListSortControl
+                          scope="notebookNotes"
+                          sort={notesSort}
+                          direction={notesSortDirection}
+                        />
+                      ) : null}
+                    </div>
                   </div>
                   <SortableContext
                     items={visibleNoteIds}
@@ -888,7 +945,11 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                     </span>
                   ) : (
                     <span className="ml-auto text-[11px] font-medium text-faint">
-                      {childNotebooks.length > 0 ? t("dnd_drag_reorder_or_move") : t("reorder")}
+                      {!notesReorderable
+                        ? t("dnd_center_move")
+                        : childNotebooks.length > 0
+                          ? t("dnd_drag_reorder_or_move")
+                          : t("reorder")}
                     </span>
                   )}
                 </div>
@@ -916,7 +977,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                     </span>
                   ) : (
                     <span className="ml-auto text-[11px] font-medium text-faint">
-                      {t("dnd_drag_to_position")}
+                      {notebooksReorderable ? t("dnd_drag_to_position") : t("dnd_center_move")}
                     </span>
                   )}
                 </div>

@@ -23,6 +23,7 @@ export interface TreeImportOptions {
   existingNotebooks?: Notebook[];
   fetchNote: (node: ImportTreeNode) => Promise<ImportedNoteTree | null>;
   isCanceled?: () => boolean;
+  onFileUploaded?: () => void;
   onNodeStart?: (processed: number, total: number, node: ImportTreeNode) => void;
   onNodeFinish?: (result: ImportedNoteResult, processed: number, total: number) => void;
 }
@@ -185,6 +186,7 @@ export async function runTreeImport(options: TreeImportOptions): Promise<Importe
       uploadMedia,
       keepTags,
       isCanceled: options.isCanceled,
+      onFileUploaded: options.onFileUploaded,
     });
 
     const out = [result];
@@ -284,8 +286,9 @@ export async function runTreeImport(options: TreeImportOptions): Promise<Importe
         processedPages: doneCount,
         totalFiles: filesCount,
         processedFiles: filesCount,
-        status:
-          doneCount === results.length
+        status: options.isCanceled?.()
+          ? "canceled"
+          : doneCount === results.length
             ? "completed"
             : doneCount > 0
               ? "completed_with_errors"

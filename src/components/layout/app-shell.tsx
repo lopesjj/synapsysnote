@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, usePathname } from "next/navigation";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { FilePlus, Home, Loader2, Minimize2, Search } from "lucide-react";
@@ -21,6 +22,12 @@ import { CommandPalette } from "./command-palette";
 import { PreferencesDialog } from "./preferences-dialog";
 import { ChangePasswordDialog } from "@/components/auth/change-password-dialog";
 import { ImportWizard } from "@/components/notion/import-wizard";
+import {
+  EVERNOTE_IMPORT_KEY,
+  GOOGLE_DOCS_IMPORT_KEY,
+  firstRunningBackgroundImport,
+  useBackgroundImportStore,
+} from "@/lib/import/background-import-store";
 import { ScreenReaderLiveRegion } from "@/components/accessibility/screen-reader";
 import { LibrasPlayer } from "@/components/accessibility/libras-player";
 import { SynapsysWordmark } from "@/components/brand/logo";
@@ -30,6 +37,21 @@ import { useTranslation } from "@/lib/i18n/translations";
 import { Tooltip } from "@/components/ui/primitives";
 import { cn, isMac } from "@/lib/utils";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
+
+const EvernoteImportWizard = dynamic(
+  () => import("@/components/import/evernote-import-wizard").then((mod) => mod.EvernoteImportWizard),
+  { ssr: false }
+);
+
+const GoogleDocsImportWizard = dynamic(
+  () => import("@/components/import/google-docs-import-wizard").then((mod) => mod.GoogleDocsImportWizard),
+  { ssr: false }
+);
+
+const FileImportWizard = dynamic(
+  () => import("@/components/import/file-import-wizard").then((mod) => mod.FileImportWizard),
+  { ssr: false }
+);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
@@ -46,6 +68,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const mobileSidebarOpen = useUiStore((state) => state.mobileSidebarOpen);
   const paletteOpen = useUiStore((state) => state.paletteOpen);
   const importOpen = useUiStore((state) => state.importOpen);
+  const evernoteImportOpen = useUiStore((state) => state.evernoteImportOpen);
+  const evernoteImportStep = useUiStore((state) => state.evernoteImportStep);
+  const googleDocsImportOpen = useUiStore((state) => state.googleDocsImportOpen);
+  const fileImportProvider = useUiStore((state) => state.fileImportProvider);
+  const backgroundRuns = useBackgroundImportStore((state) => state.runs);
+  const backgroundImport = firstRunningBackgroundImport(backgroundRuns);
   const preferencesOpen = useUiStore((state) => state.preferencesOpen);
   const changePasswordOpen = useUiStore((state) => state.changePasswordOpen);
   const editorFontId = useUiStore((state) => state.editorFontId);
@@ -99,10 +127,77 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [uiZoom]);
 
   useEffect(() => {
-    if (preferencesOpen || importOpen || paletteOpen || changePasswordOpen) {
+    if (
+      preferencesOpen ||
+      importOpen ||
+      evernoteImportOpen ||
+      googleDocsImportOpen ||
+      fileImportProvider ||
+      paletteOpen ||
+      changePasswordOpen
+    ) {
       useUiStore.getState().setMobileSidebarOpen(false);
     }
-  }, [preferencesOpen, importOpen, paletteOpen, changePasswordOpen]);
+  }, [
+    preferencesOpen,
+    importOpen,
+    evernoteImportOpen,
+    googleDocsImportOpen,
+    fileImportProvider,
+    paletteOpen,
+    changePasswordOpen,
+  ]);
+
+  const notifiedImportsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    for (const run of Object.values(backgroundRuns)) {
+      if (run.status === "running") {
+        notifiedImportsRef.current.delete(run.key);
+        continue;
+      }
+
+      const wizardVisible =
+        run.wizard === "evernote"
+          ? evernoteImportOpen
+          : run.wizard === "google-docs"
+            ? googleDocsImportOpen
+            : fileImportProvider === run.fileProvider;
+
+      if (!notifiedImportsRef.current.has(run.key)) {
+        notifiedImportsRef.current.add(run.key);
+        if (run.status === "canceled") {
+          toast.info(t("import_canceled_toast"));
+        } else {
+          const imported = run.results?.filter((item) => item.status === "done").length ?? 0;
+          if (imported) toast.success(t("fimp_done_summary", { count: imported }));
+        }
+      }
+
+      if (!wizardVisible) useBackgroundImportStore.getState().clear(run.key);
+    }
+  }, [backgroundRuns, evernoteImportOpen, googleDocsImportOpen, fileImportProvider, t]);
+
+  const hasBackgroundImport = Boolean(backgroundImport);
+
+  useEffect(() => {
+    if (!hasBackgroundImport) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [hasBackgroundImport]);
+
+  const openBackgroundImportWizard = useCallback(() => {
+    const run = firstRunningBackgroundImport(useBackgroundImportStore.getState().runs);
+    if (!run) return;
+    const store = useUiStore.getState();
+    if (run.wizard === "evernote") store.setEvernoteImportOpen(true);
+    else if (run.wizard === "google-docs") store.setGoogleDocsImportOpen(true);
+    else if (run.fileProvider) store.setFileImportProvider(run.fileProvider);
+  }, []);
 
   useEffect(() => {
     if (isSplitHosts() && isLoginHost()) {
@@ -319,6 +414,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               })}
             </span>
           </button>
+        ) : backgroundImport ? (
+          <button
+            onClick={openBackgroundImportWizard}
+            className={cn(
+              "fixed bottom-4 right-4 z-40 flex items-center gap-2.5 rounded-full border border-[var(--border)]",
+              "bg-[var(--surface)] py-2 pl-3 pr-4 text-[12px] shadow-[var(--shadow-float)] transition hover:border-[var(--accent)]"
+            )}
+          >
+            <Loader2 className="size-3.5 animate-spin text-[var(--accent)]" />
+            <span className="text-ink">
+              {t("importing_progress", {
+                current: backgroundImport.processedNotes,
+                total: backgroundImport.totalNotes,
+              })}
+            </span>
+          </button>
         ) : null}
       </main>
 
@@ -333,6 +444,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         open={importOpen}
         onOpenChange={(open) => useUiStore.getState().setImportOpen(open)}
       />
+      {googleDocsImportOpen || backgroundRuns[GOOGLE_DOCS_IMPORT_KEY] ? (
+        <GoogleDocsImportWizard
+          open={googleDocsImportOpen}
+          onOpenChange={(open) => useUiStore.getState().setGoogleDocsImportOpen(open)}
+        />
+      ) : null}
+      {evernoteImportOpen || backgroundRuns[EVERNOTE_IMPORT_KEY] ? (
+        <EvernoteImportWizard
+          open={evernoteImportOpen}
+          initialStep={evernoteImportStep ?? undefined}
+          onOpenChange={(open) => useUiStore.getState().setEvernoteImportOpen(open)}
+          onSwitchToFileImport={() => useUiStore.getState().setFileImportProvider("evernote")}
+        />
+      ) : null}
+      {fileImportProvider ? (
+        <FileImportWizard
+          key={fileImportProvider}
+          provider={fileImportProvider}
+          open
+          onOpenChange={(open) => {
+            if (!open) useUiStore.getState().setFileImportProvider(null);
+          }}
+        />
+      ) : null}
       <PreferencesDialog
         open={preferencesOpen}
         onOpenChange={(open) => useUiStore.getState().setPreferencesOpen(open)}

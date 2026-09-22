@@ -4,9 +4,16 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useWorkspace } from "@/lib/data/provider";
 import { importGoogleDocFromUrl } from "@/lib/import/google-docs";
 import { isSupportedImportFile, parseImportFile, type ImportProvider } from "@/lib/import/parse-file";
-import { runFileImport, countAssetReferences, type ImportedNoteResult } from "@/lib/import/run-import";
+import { runFileImport, countAssetReferences } from "@/lib/import/run-import";
 import { buildTreeFromNotes, collectDocumentIds, runTreeImport } from "@/lib/import/run-tree-import";
 import { ImportError, type ImportedNote } from "@/lib/import/types";
+import {
+  backgroundImportPercent,
+  fileImportKey,
+  isBackgroundImportCanceled,
+  useBackgroundImportStore,
+  type BackgroundImportRun,
+} from "@/lib/import/background-import-store";
 
 export interface FileImportIssue {
   id: string;
@@ -29,14 +36,6 @@ export interface FileImportOptions {
   preserveStructure: boolean;
 }
 
-const EMPTY_PROGRESS: FileImportProgress = {
-  processedNotes: 0,
-  totalNotes: 0,
-  processedFiles: 0,
-  totalFiles: 0,
-  currentTitle: "",
-};
-
 function issueCodeOf(error: unknown): string {
   if (error instanceof ImportError) return error.code;
   return "generic";
@@ -44,15 +43,30 @@ function issueCodeOf(error: unknown): string {
 
 export function useFileImport(provider: ImportProvider, fallbackTitle: string) {
   const { adapter, notebooks } = useWorkspace();
+  const runKey = fileImportKey(provider);
+  const run = useBackgroundImportStore((state) => state.runs[runKey]);
 
   const [notes, setNotes] = useState<ImportedNote[]>([]);
   const [issues, setIssues] = useState<FileImportIssue[]>([]);
   const [parsing, setParsing] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [results, setResults] = useState<ImportedNoteResult[] | null>(null);
-  const [progress, setProgress] = useState<FileImportProgress>(EMPTY_PROGRESS);
-  const canceledRef = useRef(false);
   const counterRef = useRef(0);
+
+  const running = run?.status === "running";
+  const results = run?.results ?? null;
+  const canceled = Boolean(run?.canceled);
+
+  const progress = useMemo<FileImportProgress>(
+    () => ({
+      processedNotes: run?.processedNotes ?? 0,
+      totalNotes: run?.totalNotes ?? 0,
+      processedFiles: run?.processedFiles ?? 0,
+      totalFiles: run?.totalFiles ?? 0,
+      currentTitle: run?.currentTitle ?? "",
+    }),
+    [run]
+  );
+
+  const percent = backgroundImportPercent(run);
 
   const addIssue = useCallback((fileName: string, code: string) => {
     counterRef.current += 1;
@@ -120,10 +134,8 @@ export function useFileImport(provider: ImportProvider, fallbackTitle: string) {
   const reset = useCallback(() => {
     setNotes([]);
     setIssues([]);
-    setResults(null);
-    setProgress(EMPTY_PROGRESS);
-    canceledRef.current = false;
-  }, []);
+    useBackgroundImportStore.getState().clear(runKey);
+  }, [runKey]);
 
   const totalFiles = useMemo(
     () => notes.reduce((sum, note) => sum + countAssetReferences(note.blocks), 0),
@@ -132,27 +144,33 @@ export function useFileImport(provider: ImportProvider, fallbackTitle: string) {
 
   const start = useCallback(
     async (options: FileImportOptions) => {
-      if (!notes.length || running) return null;
-      canceledRef.current = false;
-      setRunning(true);
-      setResults(null);
-      setProgress({
-        processedNotes: 0,
-        totalNotes: notes.length,
-        processedFiles: 0,
-        totalFiles: options.uploadMedia ? totalFiles : 0,
-        currentTitle: notes[0]?.title ?? "",
-      });
+      const store = useBackgroundImportStore.getState();
+      if (!notes.length || store.runs[runKey]?.status === "running") return null;
 
       const jobProvider =
         provider === "word" ? "docx" : provider === "evernote" ? "enex" : "google_docs";
 
+      store.begin(runKey, {
+        provider: jobProvider,
+        wizard: "file",
+        fileProvider: provider,
+        totalNotes: notes.length,
+        totalFiles: options.uploadMedia ? totalFiles : 0,
+        currentTitle: notes[0]?.title ?? "",
+      });
+
+      const patch = (value: Partial<BackgroundImportRun>) =>
+        useBackgroundImportStore.getState().patch(runKey, value);
+      const isCanceled = () => isBackgroundImportCanceled(runKey);
+
       try {
-        const structured = options.preserveStructure && notes.some((note) => note.containerPath?.length);
+        const structured =
+          options.preserveStructure && notes.some((note) => note.containerPath?.length);
 
         const finished = structured
           ? await (async () => {
               const { roots, notesById } = buildTreeFromNotes(notes);
+              let uploadedFiles = 0;
               return runTreeImport({
                 adapter,
                 roots,
@@ -165,20 +183,20 @@ export function useFileImport(provider: ImportProvider, fallbackTitle: string) {
                 provider: jobProvider,
                 containerEmoji: "📓",
                 existingNotebooks: notebooks,
-                isCanceled: () => canceledRef.current,
+                isCanceled,
                 fetchNote: async (node) => {
                   const note = notesById.get(node.id);
                   return note ? { note } : null;
                 },
+                onFileUploaded: () => {
+                  uploadedFiles += 1;
+                  patch({ processedFiles: uploadedFiles });
+                },
                 onNodeStart: (processed, _total, node) => {
-                  setProgress((prev) => ({
-                    ...prev,
-                    processedNotes: processed - 1,
-                    currentTitle: node.title,
-                  }));
+                  patch({ processedNotes: processed - 1, currentTitle: node.title });
                 },
                 onNodeFinish: (_result, processed) => {
-                  setProgress((prev) => ({ ...prev, processedNotes: processed }));
+                  patch({ processedNotes: processed });
                 },
               });
             })()
@@ -190,38 +208,31 @@ export function useFileImport(provider: ImportProvider, fallbackTitle: string) {
               keepTags: options.keepTags,
               fallbackTitle,
               provider: jobProvider,
-              isCanceled: () => canceledRef.current,
+              isCanceled,
               onNoteStart: (index, note) => {
-                setProgress((prev) => ({ ...prev, processedNotes: index, currentTitle: note.title }));
+                patch({ processedNotes: index, currentTitle: note.title });
               },
               onNoteFinish: (_result, index) => {
-                setProgress((prev) => ({ ...prev, processedNotes: index + 1 }));
+                patch({ processedNotes: index + 1 });
               },
               onFileUploaded: (uploaded, total) => {
-                setProgress((prev) => ({ ...prev, processedFiles: uploaded, totalFiles: total }));
+                patch({ processedFiles: uploaded, totalFiles: total });
               },
             });
 
-        setResults(finished);
+        useBackgroundImportStore.getState().finish(runKey, finished);
         return finished;
-      } finally {
-        setRunning(false);
+      } catch (error) {
+        useBackgroundImportStore.getState().finish(runKey, []);
+        throw error;
       }
     },
-    [adapter, fallbackTitle, notebooks, notes, provider, running, totalFiles]
+    [adapter, fallbackTitle, notebooks, notes, provider, runKey, totalFiles]
   );
 
   const cancel = useCallback(() => {
-    canceledRef.current = true;
-  }, []);
-
-  const percent = useMemo(() => {
-    const units = progress.totalNotes + progress.totalFiles;
-    if (!units) return 0;
-    const done = progress.processedNotes + progress.processedFiles;
-    if (results) return 100;
-    return Math.min(99, Math.max(1, Math.round((done / units) * 100)));
-  }, [progress, results]);
+    useBackgroundImportStore.getState().cancel(runKey);
+  }, [runKey]);
 
   return {
     notebooks,
@@ -230,6 +241,7 @@ export function useFileImport(provider: ImportProvider, fallbackTitle: string) {
     parsing,
     running,
     results,
+    canceled,
     progress,
     percent,
     totalFiles,
@@ -241,6 +253,5 @@ export function useFileImport(provider: ImportProvider, fallbackTitle: string) {
     reset,
     start,
     cancel,
-    canceled: canceledRef,
   };
 }

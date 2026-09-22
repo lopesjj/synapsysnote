@@ -3,11 +3,14 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import type { ImportProvider } from "@/lib/import/parse-file";
 import type {
   EditorWidthPreference,
+  ListSortPreference,
   NotesDensityPreference,
   NotesLayoutPreference,
   NotesSortPreference,
+  SortDirectionPreference,
   SupportedLanguage,
   UserPreferences,
 } from "@/types/models";
@@ -17,6 +20,8 @@ export type NotesLayout = NotesLayoutPreference;
 export type NotesSortKey = NotesSortPreference;
 export type NotesDensity = NotesDensityPreference;
 export type EditorWidth = EditorWidthPreference;
+export type ListSortKey = ListSortPreference;
+export type ListSortScope = "notebooks" | "notebookNotes" | "subnotes";
 
 export type UiPreferences = Required<Omit<UserPreferences, "theme" | "flashcardSettings">>;
 
@@ -25,6 +30,10 @@ interface UiState extends UiPreferences {
   mobileSidebarOpen: boolean;
   paletteOpen: boolean;
   importOpen: boolean;
+  evernoteImportOpen: boolean;
+  evernoteImportStep: "connect" | "select" | null;
+  googleDocsImportOpen: boolean;
+  fileImportProvider: ImportProvider | null;
   preferencesOpen: boolean;
   changePasswordOpen: boolean;
 
@@ -39,11 +48,16 @@ interface UiState extends UiPreferences {
   setMobileSidebarOpen: (value: boolean) => void;
   setPaletteOpen: (value: boolean) => void;
   setImportOpen: (value: boolean) => void;
+  setEvernoteImportOpen: (value: boolean, step?: "connect" | "select" | null) => void;
+  setGoogleDocsImportOpen: (value: boolean) => void;
+  setFileImportProvider: (value: ImportProvider | null) => void;
   setPreferencesOpen: (value: boolean) => void;
   setChangePasswordOpen: (value: boolean) => void;
   setNotesLayout: (value: NotesLayout) => void;
   setNotesSort: (value: NotesSortKey) => void;
   toggleNotesSortDirection: () => void;
+  setListSort: (scope: ListSortScope, value: ListSortKey) => void;
+  toggleListSortDirection: (scope: ListSortScope) => void;
   setNotesDensity: (value: NotesDensity) => void;
   setEditorFontId: (value: string) => void;
   setEditorFontSize: (value: number) => void;
@@ -79,6 +93,12 @@ const DEFAULT_PREFERENCES: UiPreferences = {
   notesLayout: "split",
   notesSort: "updated",
   notesSortDirection: "desc",
+  notebooksSort: "manual",
+  notebooksSortDirection: "asc",
+  notebookNotesSort: "manual",
+  notebookNotesSortDirection: "asc",
+  subnotesSort: "manual",
+  subnotesSortDirection: "asc",
   notesDensity: "comfortable",
   editorFontId: "geist",
   editorFontSize: 16,
@@ -121,6 +141,10 @@ export const useUiStore = create<UiState>()(
       mobileSidebarOpen: false,
       paletteOpen: false,
       importOpen: false,
+      evernoteImportOpen: false,
+      evernoteImportStep: null,
+      googleDocsImportOpen: false,
+      fileImportProvider: null,
       preferencesOpen: false,
       changePasswordOpen: false,
 
@@ -142,12 +166,43 @@ export const useUiStore = create<UiState>()(
       setMobileSidebarOpen: (value) => set({ mobileSidebarOpen: value }),
       setPaletteOpen: (value) => set({ paletteOpen: value }),
       setImportOpen: (value) => set({ importOpen: value }),
+      setEvernoteImportOpen: (value, step) =>
+        set({ evernoteImportOpen: value, evernoteImportStep: value ? (step ?? null) : null }),
+      setGoogleDocsImportOpen: (value) => set({ googleDocsImportOpen: value }),
+      setFileImportProvider: (value) => set({ fileImportProvider: value }),
       setPreferencesOpen: (value) => set({ preferencesOpen: value }),
       setChangePasswordOpen: (value) => set({ changePasswordOpen: value }),
       setNotesLayout: (value) => set({ notesLayout: value }),
       setNotesSort: (value) => set({ notesSort: value }),
       toggleNotesSortDirection: () =>
         set({ notesSortDirection: get().notesSortDirection === "asc" ? "desc" : "asc" }),
+      setListSort: (scope, value) => {
+        const direction: SortDirectionPreference =
+          value === "updated" || value === "created" ? "desc" : "asc";
+        if (scope === "notebooks") {
+          set({ notebooksSort: value, notebooksSortDirection: direction });
+          return;
+        }
+        if (scope === "notebookNotes") {
+          set({ notebookNotesSort: value, notebookNotesSortDirection: direction });
+          return;
+        }
+        set({ subnotesSort: value, subnotesSortDirection: direction });
+      },
+      toggleListSortDirection: (scope) => {
+        const flip = (value: SortDirectionPreference): SortDirectionPreference =>
+          value === "asc" ? "desc" : "asc";
+        const state = get();
+        if (scope === "notebooks") {
+          set({ notebooksSortDirection: flip(state.notebooksSortDirection) });
+          return;
+        }
+        if (scope === "notebookNotes") {
+          set({ notebookNotesSortDirection: flip(state.notebookNotesSortDirection) });
+          return;
+        }
+        set({ subnotesSortDirection: flip(state.subnotesSortDirection) });
+      },
       setNotesDensity: (value) => set({ notesDensity: value }),
       setEditorFontId: (value) => set({ editorFontId: value }),
       setEditorFontSize: (value) =>
@@ -173,12 +228,18 @@ export const useUiStore = create<UiState>()(
     }),
     {
       name: "synapsys.ui.v1",
-      version: 9,
+      version: 10,
       migrate: (persisted) => {
         const state = (persisted ?? {}) as Partial<UiPreferences>;
         return {
           ...state,
           sidebarCollapsed: state.sidebarCollapsed ?? false,
+          notebooksSort: state.notebooksSort ?? "manual",
+          notebooksSortDirection: state.notebooksSortDirection ?? "asc",
+          notebookNotesSort: state.notebookNotesSort ?? "manual",
+          notebookNotesSortDirection: state.notebookNotesSortDirection ?? "asc",
+          subnotesSort: state.subnotesSort ?? "manual",
+          subnotesSortDirection: state.subnotesSortDirection ?? "asc",
           sidebarWidth: state.sidebarWidth ?? SIDEBAR_MIN_WIDTH,
           uiZoom: state.uiZoom ?? 1.0,
           autoCollapseSidebar: state.autoCollapseSidebar ?? false,

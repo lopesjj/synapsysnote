@@ -13,8 +13,15 @@ import { cn, formatRelative, truncate } from "@/lib/utils";
 import { WorkspaceIcon, isIconUrl } from "@/lib/icons/workspace-icon";
 import { coverPresetById } from "@/lib/covers/presets";
 import { notebookSubtreeIds } from "@/lib/data/notebook-tree";
+import { sortNotebooks } from "@/lib/data/list-sort";
 import { useUiStore } from "@/lib/store/ui-store";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
+import {
+  IMPORT_ORIGIN_SHORT_KEY,
+  importedPagesLabelKey,
+  pageImportOrigin,
+  summarizeImportedPages,
+} from "@/lib/import/source-label";
 import { isPlanningName } from "@/components/database/database-view";
 import type { Notebook, Page } from "@/types/models";
 
@@ -123,9 +130,14 @@ export default function WorkspaceHome() {
     [livePages]
   );
 
-  const importedCount = useMemo(
-    () => livePages.filter((page) => page.notionPageId || page.importSource).length,
-    [livePages]
+  const importedSummary = useMemo(() => summarizeImportedPages(livePages), [livePages]);
+
+  const notebooksSort = useUiStore((state) => state.notebooksSort);
+  const notebooksSortDirection = useUiStore((state) => state.notebooksSortDirection);
+
+  const sortedRootNotebooks = useMemo(
+    () => sortNotebooks(rootNotebooks, notebooksSort, notebooksSortDirection),
+    [rootNotebooks, notebooksSort, notebooksSortDirection]
   );
 
   const firstName = user?.displayName?.split(" ")[0] ?? "";
@@ -180,10 +192,12 @@ export default function WorkspaceHome() {
               <span>{noteCountLabel(livePages.length, t)}</span>
               <span className="text-faint">·</span>
               <span>{pageCountLabel(rootNotebooks.length, t)}</span>
-              {importedCount ? (
+              {importedSummary.total ? (
                 <>
                   <span className="text-faint">·</span>
-                  <span>{importedCount} {t("from_notion")}</span>
+                  <span>
+                    {importedSummary.total} {t(importedPagesLabelKey(importedSummary))}
+                  </span>
                 </>
               ) : null}
             </p>
@@ -213,7 +227,7 @@ export default function WorkspaceHome() {
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5">
-            {rootNotebooks.map((notebook, index) => (
+            {sortedRootNotebooks.map((notebook, index) => (
               <motion.div
                 key={notebook.id}
                 initial={{ opacity: 0, y: 10 }}
@@ -374,6 +388,7 @@ function PageCard({
 function NoteCard({ page, notebook }: { page: Page; notebook?: Notebook }) {
   const router = useRouter();
   const { t, language } = useTranslation();
+  const origin = pageImportOrigin(page);
   return (
     <Link
       href={`/home/p/${page.id}`}
@@ -410,7 +425,7 @@ function NoteCard({ page, notebook }: { page: Page; notebook?: Notebook }) {
             </>
           ) : null}
           <span className="shrink-0 text-[11px] text-faint">{formatRelative(page.updatedAt, language)}</span>
-          {page.notionPageId || page.importSource ? <Badge tone="accent">Notion</Badge> : null}
+          {origin ? <Badge tone="accent">{t(IMPORT_ORIGIN_SHORT_KEY[origin])}</Badge> : null}
         </div>
       </div>
     </Link>

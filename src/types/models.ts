@@ -112,6 +112,8 @@ export type ThemePreference = "dark" | "light";
 export type NotesLayoutPreference = "list" | "cards" | "split";
 export type NotesSortPreference = "updated" | "created" | "title";
 export type NotesDensityPreference = "comfortable" | "compact";
+export type ListSortPreference = "manual" | "name" | "updated" | "created";
+export type SortDirectionPreference = "asc" | "desc";
 export type EditorWidthPreference = "narrow" | "normal" | "wide";
 export type SupportedLanguage =
   | "pt"
@@ -133,6 +135,12 @@ export interface UserPreferences {
   notesLayout?: NotesLayoutPreference;
   notesSort?: NotesSortPreference;
   notesSortDirection?: "asc" | "desc";
+  notebooksSort?: ListSortPreference;
+  notebooksSortDirection?: SortDirectionPreference;
+  notebookNotesSort?: ListSortPreference;
+  notebookNotesSortDirection?: SortDirectionPreference;
+  subnotesSort?: ListSortPreference;
+  subnotesSortDirection?: SortDirectionPreference;
   notesDensity?: NotesDensityPreference;
   editorFontId?: string;
   editorFontSize?: number;

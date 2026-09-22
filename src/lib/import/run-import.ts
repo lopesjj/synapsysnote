@@ -258,7 +258,9 @@ export async function runFileImport(options: RunImportOptions): Promise<Imported
           ? "google_docs"
           : notes[0]?.source === "docx"
             ? "docx"
-            : "evernote");
+            : notes[0]?.source === "evernote"
+              ? "enex"
+              : "file");
 
       await adapter.recordCompletedImportJob({
         provider: detectedProvider,
@@ -267,8 +269,9 @@ export async function runFileImport(options: RunImportOptions): Promise<Imported
         processedPages: doneCount,
         totalFiles: filesCount,
         processedFiles: filesCount,
-        status:
-          doneCount === results.length
+        status: options.isCanceled?.()
+          ? "canceled"
+          : doneCount === results.length
             ? "completed"
             : doneCount > 0
               ? "completed_with_errors"

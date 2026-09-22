@@ -45,6 +45,10 @@ for (const code of expectedCodes) {
   assert.ok(dict.heading_3.length > 0);
   assert.ok(dict.text_paragraph.length > 0);
   assert.ok(dict.imported_from_notion.length > 0);
+  assert.ok(dict.sort_manual.length > 0);
+  assert.ok(dict.sort_name.length > 0);
+  assert.ok(dict.sort_order_label.length > 0);
+  assert.ok(dict.sort_manual_only_hint.length > 0);
   assert.ok(dict.filter_placeholder.length > 0);
   assert.ok(dict.note_duplicated.length > 0);
   assert.ok(dict.account.length > 0);

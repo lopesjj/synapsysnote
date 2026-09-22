@@ -61,6 +61,7 @@ export function EvernoteImportWizard({
     running,
     progress,
     results,
+    cancel,
     reset,
     notebooks,
   } = useEvernoteImport({ active: open });
@@ -97,11 +98,7 @@ export function EvernoteImportWizard({
 
   const handleStart = async () => {
     try {
-      const res = await start({ targetNotebookId, keepTags, preserveStructure });
-      if (res) {
-        const doneCount = res.filter((item) => item.status === "done").length;
-        if (doneCount) toast.success(t("fimp_done_summary", { count: doneCount }));
-      }
+      await start({ targetNotebookId, keepTags, preserveStructure });
     } catch (err) {
       toast.error(
         err instanceof Error ? localizeErrorMessage(err.message, t) : t("import_start_failed")
@@ -111,7 +108,8 @@ export function EvernoteImportWizard({
 
   const close = (next: boolean) => {
     if (!next && running) {
-      toast.info(t("fimp_importing"));
+      toast.info(t("wizard_continue_background"));
+      onOpenChange(false);
       return;
     }
     if (!next) {
@@ -313,6 +311,11 @@ export function EvernoteImportWizard({
               {progress.currentTitle ? (
                 <div className="truncate text-[11.5px] text-muted">{progress.currentTitle}</div>
               ) : null}
+              {running ? (
+                <p className="text-[11.5px] leading-relaxed text-muted">
+                  {t("import_background_hint")}
+                </p>
+              ) : null}
             </div>
 
             {results ? (
@@ -372,20 +375,31 @@ export function EvernoteImportWizard({
             </>
           ) : null}
 
-          {step === "progress" && results ? (
+          {step === "progress" && running ? (
+            <>
+              <Button variant="ghost" onClick={() => close(false)}>
+                {t("wizard_continue_background")}
+              </Button>
+              <Button variant="danger" onClick={cancel}>
+                {t("wizard_cancel_import")}
+              </Button>
+            </>
+          ) : null}
+
+          {step === "progress" && !running && results ? (
             <>
               {firstCreatedId ? (
                 <Button
                   variant="primary"
                   onClick={() => {
-                    onOpenChange(false);
+                    close(false);
                     router.push(`/home/p/${firstCreatedId}`);
                   }}
                 >
                   {t("open_imported_page")}
                 </Button>
               ) : null}
-              <Button variant="secondary" onClick={() => onOpenChange(false)}>
+              <Button variant="secondary" onClick={() => close(false)}>
                 {t("close")}
               </Button>
             </>

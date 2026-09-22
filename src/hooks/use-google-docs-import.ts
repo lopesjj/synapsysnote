@@ -1,12 +1,16 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useWorkspace } from "@/lib/data/provider";
 import { firebaseJson } from "@/lib/firebase/auth-headers";
 import { parseHtmlDocument } from "@/lib/import/html-import";
 import { runTreeImport, type ImportedNoteTree } from "@/lib/import/run-tree-import";
-import type { ImportedNoteResult } from "@/lib/import/run-import";
 import type { GoogleDocsIntegration, ImportTreeNode } from "@/types/models";
+import {
+  GOOGLE_DOCS_IMPORT_KEY,
+  isBackgroundImportCanceled,
+  useBackgroundImportStore,
+} from "@/lib/import/background-import-store";
 import { useImportTree } from "./use-import-tree";
 
 export interface GoogleDocsImportProgress {
@@ -32,13 +36,17 @@ export function useGoogleDocsImport(options?: { active?: boolean }) {
     enabled: connected && (options?.active ?? true),
   });
 
-  const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState<GoogleDocsImportProgress>({
-    processed: 0,
-    total: 0,
-    currentTitle: "",
-  });
-  const [results, setResults] = useState<ImportedNoteResult[] | null>(null);
+  const run = useBackgroundImportStore((state) => state.runs[GOOGLE_DOCS_IMPORT_KEY]);
+  const running = run?.status === "running";
+  const results = run?.results ?? null;
+  const progress = useMemo<GoogleDocsImportProgress>(
+    () => ({
+      processed: run?.processedNotes ?? 0,
+      total: run?.totalNotes ?? 0,
+      currentTitle: run?.currentTitle ?? "",
+    }),
+    [run]
+  );
 
   const connect = useCallback(
     async (input?: {
@@ -129,11 +137,19 @@ export function useGoogleDocsImport(options?: { active?: boolean }) {
       uploadMedia?: boolean;
       preserveStructure?: boolean;
     }) => {
+      const store = useBackgroundImportStore.getState();
       if (!treeState.selectedIds.size) return null;
-      setRunning(true);
-      setResults(null);
+      if (store.runs[GOOGLE_DOCS_IMPORT_KEY]?.status === "running") return null;
+
       tabsErrorRef.current = null;
-      setProgress({ processed: 0, total: treeState.selectedIds.size, currentTitle: "" });
+      store.begin(GOOGLE_DOCS_IMPORT_KEY, {
+        provider: "google_docs",
+        wizard: "google-docs",
+        totalNotes: treeState.selectedIds.size,
+      });
+
+      const patch = (value: Parameters<typeof store.patch>[1]) =>
+        useBackgroundImportStore.getState().patch(GOOGLE_DOCS_IMPORT_KEY, value);
 
       try {
         const importResults = await runTreeImport({
@@ -149,27 +165,32 @@ export function useGoogleDocsImport(options?: { active?: boolean }) {
           containerEmoji: "📁",
           existingNotebooks: notebooks,
           fetchNote,
+          isCanceled: () => isBackgroundImportCanceled(GOOGLE_DOCS_IMPORT_KEY),
           onNodeStart: (processed, total, node) => {
-            setProgress({ processed: processed - 1, total, currentTitle: node.title });
+            patch({ processedNotes: processed - 1, totalNotes: total, currentTitle: node.title });
           },
           onNodeFinish: (_result, processed, total) => {
-            setProgress({ processed, total, currentTitle: "" });
+            patch({ processedNotes: processed, totalNotes: total, currentTitle: "" });
           },
         });
 
-        setResults(importResults);
+        useBackgroundImportStore.getState().finish(GOOGLE_DOCS_IMPORT_KEY, importResults);
         return importResults;
-      } finally {
-        setRunning(false);
+      } catch (error) {
+        useBackgroundImportStore.getState().finish(GOOGLE_DOCS_IMPORT_KEY, []);
+        throw error;
       }
     },
     [adapter, fetchNote, notebooks, treeState.selectedIds, treeState.tree]
   );
 
+  const cancel = useCallback(() => {
+    useBackgroundImportStore.getState().cancel(GOOGLE_DOCS_IMPORT_KEY);
+  }, []);
+
   const reset = useCallback(() => {
     treeState.clearSelection();
-    setResults(null);
-    setProgress({ processed: 0, total: 0, currentTitle: "" });
+    useBackgroundImportStore.getState().clear(GOOGLE_DOCS_IMPORT_KEY);
   }, [treeState]);
 
   return {
@@ -184,6 +205,7 @@ export function useGoogleDocsImport(options?: { active?: boolean }) {
     running,
     progress,
     results,
+    cancel,
     reset,
     ...treeState,
   };

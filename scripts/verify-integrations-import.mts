@@ -27,6 +27,13 @@ import {
   type ImportRole,
 } from "../src/lib/notion/classify-import";
 import { htmlToBlocks, spansPlainText } from "../src/lib/import/html-blocks";
+import {
+  IMPORT_ORIGIN_BADGE_KEY,
+  IMPORT_ORIGIN_SHORT_KEY,
+  importedPagesLabelKey,
+  pageImportOrigin,
+  summarizeImportedPages,
+} from "../src/lib/import/source-label";
 import { parseMarkup } from "../src/lib/import/dom";
 import { TRANSLATIONS, type TranslationKey } from "../src/lib/i18n/translations";
 import type { DataAdapter } from "../src/lib/data/adapter";
@@ -723,6 +730,44 @@ async function main() {
     assert.equal(extractContent({ nada: 1 }), "");
   });
 
+  await run("cada nota importada mostra a origem real", () => {
+    type OriginPage = Parameters<typeof pageImportOrigin>[0];
+    const notionApi: OriginPage = { notionPageId: "abc", importSource: null };
+    const notionZip: OriginPage = { notionPageId: null, importSource: "notion-zip" };
+    const evernote: OriginPage = { notionPageId: null, importSource: "evernote" };
+    const googleDocs: OriginPage = { notionPageId: null, importSource: "google-docs" };
+    const word: OriginPage = { notionPageId: null, importSource: "docx" };
+    const html: OriginPage = { notionPageId: null, importSource: "html" };
+    const manual: OriginPage = { notionPageId: null, importSource: null };
+
+    assert.equal(pageImportOrigin(notionApi), "notion");
+    assert.equal(pageImportOrigin(notionZip), "notion_zip");
+    assert.equal(pageImportOrigin(evernote), "evernote");
+    assert.equal(pageImportOrigin(googleDocs), "google_docs");
+    assert.equal(pageImportOrigin(word), "docx");
+    assert.equal(pageImportOrigin(html), "file");
+    assert.equal(pageImportOrigin(manual), null);
+
+    assert.equal(IMPORT_ORIGIN_SHORT_KEY.evernote, "provider_evernote");
+    assert.equal(IMPORT_ORIGIN_SHORT_KEY.google_docs, "provider_google_docs");
+    assert.equal(IMPORT_ORIGIN_SHORT_KEY.docx, "provider_docx");
+    assert.equal(IMPORT_ORIGIN_BADGE_KEY.evernote, "imported_from_evernote");
+    assert.equal(IMPORT_ORIGIN_BADGE_KEY.google_docs, "imported_from_google_docs");
+    assert.equal(IMPORT_ORIGIN_BADGE_KEY.docx, "imported_from_word");
+
+    const onlyEvernote = summarizeImportedPages([evernote, evernote, manual]);
+    assert.equal(onlyEvernote.total, 2);
+    assert.equal(importedPagesLabelKey(onlyEvernote), "from_evernote");
+
+    const onlyNotion = summarizeImportedPages([notionApi, notionZip]);
+    assert.equal(onlyNotion.total, 2);
+    assert.equal(importedPagesLabelKey(onlyNotion), "from_notion");
+
+    const mixed = summarizeImportedPages([notionApi, evernote, word, googleDocs]);
+    assert.equal(mixed.total, 4);
+    assert.equal(importedPagesLabelKey(mixed), "from_imports");
+  });
+
   await run("every language ships the integration strings", () => {
     const languages: SupportedLanguage[] = ["pt", "en", "es", "fr", "it", "de", "ru", "ja", "zh", "ar"];
     const keys: TranslationKey[] = [
@@ -732,6 +777,24 @@ async function main() {
       "provider_evernote",
       "provider_docx",
       "provider_enex",
+      "provider_file",
+      "notes_unit",
+      "from_notion",
+      "from_evernote",
+      "from_google_docs",
+      "from_word",
+      "from_file",
+      "from_imports",
+      "imported_from_notion",
+      "imported_from_notion_zip",
+      "imported_from_evernote",
+      "imported_from_google_docs",
+      "imported_from_word",
+      "imported_from_file",
+      "import_background_hint",
+      "import_canceled_toast",
+      "wizard_continue_background",
+      "wizard_cancel_import",
       "preserve_structure",
       "preserve_structure_gdoc_desc",
       "preserve_structure_evernote_desc",

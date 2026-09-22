@@ -25,6 +25,7 @@ import { getMentionCandidates } from "@/components/editor/extensions/mention-sug
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { cn, compareNatural, formatRelative } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/translations";
+import { IMPORT_ORIGIN_SHORT_KEY, pageImportOrigin } from "@/lib/import/source-label";
 import type { Page } from "@/types/models";
 import { expandContainerInSession } from "@/lib/data/page-tree";
 
@@ -427,6 +428,7 @@ function NoteMeta({ page, className }: { page: Page; className?: string }) {
   const { t, language } = useTranslation();
   const { notebooks } = useWorkspace();
   const notebook = notebooks.find((candidate) => candidate.id === page.notebookId);
+  const origin = pageImportOrigin(page);
 
   return (
     <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-faint", className)}>
@@ -446,9 +448,9 @@ function NoteMeta({ page, className }: { page: Page; className?: string }) {
           {tag}
         </span>
       ))}
-      {page.importSource === "notion-zip" ? (
+      {origin && origin !== "notion" ? (
         <span className="rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--accent)]">
-          Notion
+          {t(IMPORT_ORIGIN_SHORT_KEY[origin])}
         </span>
       ) : null}
     </div>

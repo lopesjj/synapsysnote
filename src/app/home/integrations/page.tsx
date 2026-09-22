@@ -5,15 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { Cloud, FileText, Layers, NotebookPen, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/lib/data/provider";
-import { ImportWizard } from "@/components/notion/import-wizard";
-import { GoogleDocsImportWizard } from "@/components/import/google-docs-import-wizard";
-import { EvernoteImportWizard } from "@/components/import/evernote-import-wizard";
-import { FileImportWizard } from "@/components/import/file-import-wizard";
+import { useUiStore } from "@/lib/store/ui-store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/primitives";
 import { formatRelative } from "@/lib/utils";
 import { useTranslation, localizeErrorMessage, type TranslationKey } from "@/lib/i18n/translations";
-import type { ImportProvider } from "@/lib/import/parse-file";
 import { connectGoogleDocsAccount } from "@/lib/import/google-connect";
 
 export default function IntegrationsPage() {
@@ -35,11 +31,6 @@ function IntegrationsBody() {
     adapter,
   } = useWorkspace();
 
-  const [notionWizardOpen, setNotionWizardOpen] = useState(false);
-  const [googleWizardOpen, setGoogleWizardOpen] = useState(false);
-  const [evernoteWizardOpen, setEvernoteWizardOpen] = useState(false);
-  const [evernoteInitialStep, setEvernoteInitialStep] = useState<"connect" | "select" | undefined>(undefined);
-  const [fileProvider, setFileProvider] = useState<ImportProvider | null>(null);
   const [busyService, setBusyService] = useState<string | null>(null);
 
   const oauthError = params.get("error");
@@ -70,7 +61,7 @@ function IntegrationsBody() {
       });
       if (result.redirected) return;
       toast.success(t("connected_to", { name: result.accountName || "Google Docs" }));
-      setGoogleWizardOpen(true);
+      useUiStore.getState().setGoogleDocsImportOpen(true);
     } catch (error) {
       toast.error(
         error instanceof Error ? localizeErrorMessage(error.message, t) : t("connection_failed")
@@ -81,8 +72,7 @@ function IntegrationsBody() {
   };
 
   const connectEvernote = () => {
-    setEvernoteInitialStep("connect");
-    setEvernoteWizardOpen(true);
+    useUiStore.getState().setEvernoteImportOpen(true, "connect");
   };
 
   const getStatusLabel = (status: string) => {
@@ -93,6 +83,14 @@ function IntegrationsBody() {
         return t("status_failed");
       case "completed_with_errors":
         return t("status_completed_with_errors");
+      case "canceled":
+        return t("status_canceled");
+      case "pending":
+        return t("wizard_status_queued");
+      case "discovering":
+        return t("wizard_status_discovering");
+      case "running":
+        return t("wizard_status_importing");
       default:
         return status;
     }
@@ -167,7 +165,7 @@ function IntegrationsBody() {
                   <Button
                     variant="primary"
                     className="w-full"
-                    onClick={() => setNotionWizardOpen(true)}
+                    onClick={() => useUiStore.getState().setImportOpen(true)}
                   >
                     {t("import_pages")}
                   </Button>
@@ -236,7 +234,7 @@ function IntegrationsBody() {
                   <Button
                     variant="primary"
                     className="w-full"
-                    onClick={() => setGoogleWizardOpen(true)}
+                    onClick={() => useUiStore.getState().setGoogleDocsImportOpen(true)}
                   >
                     {t("import_google_docs")}
                   </Button>
@@ -305,10 +303,7 @@ function IntegrationsBody() {
                   <Button
                     variant="primary"
                     className="w-full"
-                    onClick={() => {
-                      setEvernoteInitialStep(undefined);
-                      setEvernoteWizardOpen(true);
-                    }}
+                    onClick={() => useUiStore.getState().setEvernoteImportOpen(true)}
                   >
                     {t("import_evernote_notes")}
                   </Button>
@@ -374,7 +369,7 @@ function IntegrationsBody() {
             <Button
               variant="secondary"
               className="mt-4 w-full"
-              onClick={() => setFileProvider("word")}
+              onClick={() => useUiStore.getState().setFileImportProvider("word")}
             >
               {t("word_file_import_button")}
             </Button>
@@ -395,7 +390,7 @@ function IntegrationsBody() {
             <Button
               variant="secondary"
               className="mt-4 w-full"
-              onClick={() => setFileProvider("evernote")}
+              onClick={() => useUiStore.getState().setFileImportProvider("evernote")}
             >
               {t("evernote_file_import_button")}
             </Button>
@@ -424,7 +419,7 @@ function IntegrationsBody() {
                     </Badge>
                   </div>
                   <span className="shrink-0 text-[12px] text-muted tabular-nums">
-                    {job.processedPages}/{Math.max(job.totalPages, job.processedPages)} {t("pages_unit")} · {job.processedFiles}/{Math.max(job.totalFiles, job.processedFiles)} {t("files_unit")}
+                    {job.processedPages}/{Math.max(job.totalPages, job.processedPages)} {t("notes_unit")} · {job.processedFiles}/{Math.max(job.totalFiles, job.processedFiles)} {t("files_unit")}
                   </span>
                   <span className="ml-auto flex shrink-0 items-center gap-2">
                     <Badge
@@ -435,7 +430,9 @@ function IntegrationsBody() {
                             ? "danger"
                             : job.status === "completed_with_errors"
                               ? "warning"
-                              : "accent"
+                              : job.status === "canceled"
+                                ? "neutral"
+                                : "accent"
                       }
                     >
                       {getStatusLabel(job.status)}
@@ -451,26 +448,6 @@ function IntegrationsBody() {
         </div>
       ) : null}
 
-      <ImportWizard open={notionWizardOpen} onOpenChange={setNotionWizardOpen} />
-      <GoogleDocsImportWizard open={googleWizardOpen} onOpenChange={setGoogleWizardOpen} />
-      <EvernoteImportWizard
-        open={evernoteWizardOpen}
-        onOpenChange={(open) => {
-          setEvernoteWizardOpen(open);
-          if (!open) setEvernoteInitialStep(undefined);
-        }}
-        initialStep={evernoteInitialStep}
-        onSwitchToFileImport={() => setFileProvider("evernote")}
-      />
-      {fileProvider ? (
-        <FileImportWizard
-          provider={fileProvider}
-          open
-          onOpenChange={(open) => {
-            if (!open) setFileProvider(null);
-          }}
-        />
-      ) : null}
     </div>
   );
 }
@@ -510,6 +487,14 @@ function resolveJobProvider(
       label: t("provider_enex"),
       icon: <FileText className="size-3 text-emerald-400 shrink-0" />,
       tone: "success",
+    };
+  }
+  if (p === "file" || p === "html") {
+    return {
+      id: "file",
+      label: t("provider_file"),
+      icon: <FileText className="size-3 text-muted shrink-0" />,
+      tone: "neutral",
     };
   }
   return {
