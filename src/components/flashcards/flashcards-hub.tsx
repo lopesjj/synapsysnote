@@ -1,8 +1,8 @@
 "use client";
 
 import { Link } from "@/lib/i18n/navigation";
-import { useMemo, useState } from "react";
-import { ChevronRight, Loader2, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { useMemo, useState, type CSSProperties } from "react";
+import { Check, ChevronRight, Layers, Loader2, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Flashcard } from "@/types/models";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { useWorkspace } from "@/lib/data/provider";
 import { useTranslation } from "@/lib/i18n/translations";
-import { startOfDay, summarizeCards } from "@/lib/flashcards/srs";
+import { cardStage, endOfDay, startOfDay, summarizeCards } from "@/lib/flashcards/srs";
 import {
   buildDeckTree,
   deckKey,
@@ -22,129 +22,165 @@ import {
   type DeckNode,
 } from "@/lib/flashcards/note-tree";
 import { useFlashcardSettings } from "@/lib/flashcards/use-flashcard-settings";
-import {
-  DeckIcon,
-  DueIcon,
-  FlashcardsIcon,
-  GoalIcon,
-  LearningIcon,
-  MasteredIcon,
-  ReplayIcon,
-  StudyIcon,
-} from "@/lib/icons/flashcard-icon";
+import { DeckIcon, FlashcardsIcon, StudyIcon } from "@/lib/icons/flashcard-icon";
 import { FlashcardStudySession } from "./flashcard-study-session";
 import { FlashcardsSettingsModal } from "./flashcards-settings-modal";
 
-function ProgressRing({
-  value,
-  total,
-  size = 104,
+/* ------------------------------------------------------------------ */
+/* Dados derivados                                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A fila de hoje mistura dois tipos de card: os que já foram estudados e
+ * venceram (revisões) e os que nunca foram vistos (novos). Os novos entram na
+ * fila no dia em que nascem, mas não são "revisão" — por isso a contagem
+ * aparece separada em toda a página.
+ */
+function splitQueue(cards: Flashcard[], reference = Date.now()) {
+  const limit = endOfDay(reference);
+  let reviews = 0;
+  let fresh = 0;
+  for (const card of cards) {
+    if ((Number(card.nextReviewDate) || 0) > limit) continue;
+    if (cardStage(card) === "new") fresh += 1;
+    else reviews += 1;
+  }
+  return { reviews, fresh, total: reviews + fresh };
+}
+
+/** ~8 s por card, arredondado para cima em minutos. */
+function sessionMinutes(count: number) {
+  return Math.max(1, Math.ceil((count * 8) / 60));
+}
+
+function DailyCover({
+  count,
+  done,
+  empty,
+  label,
+  className,
 }: {
-  value: number;
-  total: number;
-  size?: number;
+  count: number;
+  done: boolean;
+  empty: boolean;
+  label: string;
+  className?: string;
 }) {
-  const stroke = 7;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const ratio = total > 0 ? Math.min(1, value / total) : 0;
+  return (
+    <div
+      className={cn(
+        "@container relative isolate aspect-square shrink-0 overflow-hidden rounded-[14px] shadow-[0_28px_60px_-24px_rgba(0,0,0,0.85)]",
+        className
+      )}
+      style={{
+        background:
+          "linear-gradient(150deg, #5eead4 0%, #14b8a6 26%, #0e7490 58%, #1e1b4b 100%)",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        className="absolute inset-0 bg-[radial-gradient(70%_60%_at_85%_10%,rgba(255,255,255,0.35),transparent_60%)]"
+      />
+      <span
+        aria-hidden="true"
+        className="absolute right-[9%] top-[9%] h-[30%] w-[24%] rotate-[10deg] rounded-[14%] border border-white/35 bg-white/10"
+      />
+      <span
+        aria-hidden="true"
+        className="absolute right-[15%] top-[12%] h-[30%] w-[24%] rotate-[-6deg] rounded-[14%] border border-white/45 bg-white/15 backdrop-blur-sm"
+      />
+      <span className="absolute left-[9%] top-[9%] text-[8cqw] font-bold uppercase tracking-[0.14em] text-white/90">
+        {label}
+      </span>
+      <span className="absolute bottom-[8%] left-[9%] right-[9%] text-white">
+        {done ? (
+          <span className="flex size-[34cqw] items-center justify-center rounded-full bg-white/20 ring-1 ring-white/40 backdrop-blur-sm">
+            <Check className="size-[55%]" strokeWidth={2.75} />
+          </span>
+        ) : empty ? (
+          <FlashcardsIcon className="size-[30cqw] text-white/85" />
+        ) : (
+          <span className="block text-[46cqw] font-black leading-[0.8] tracking-[-0.06em] tabular-nums">
+            {count}
+          </span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Cartões de progresso                                                */
+/* ------------------------------------------------------------------ */
+
+function Rings({ rings, size = 132 }: { rings: { value: number; color: string }[]; size?: number }) {
+  const stroke = 13;
+  const gap = 4;
+  const center = size / 2;
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke="var(--surface-2)"
-        strokeWidth={stroke}
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke="var(--accent)"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={circumference}
-        strokeDashoffset={circumference * (1 - ratio)}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        style={{ transition: "stroke-dashoffset 600ms cubic-bezier(0.16,1,0.3,1)" }}
-      />
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" className="shrink-0">
+      {rings.map((ring, index) => {
+        const radius = (size - stroke) / 2 - index * (stroke + gap);
+        const circumference = 2 * Math.PI * radius;
+        const ratio = Math.max(0, Math.min(1, ring.value));
+        return (
+          <g key={index}>
+            <circle
+              cx={center}
+              cy={center}
+              r={radius}
+              fill="none"
+              stroke={`color-mix(in oklab, ${ring.color} 20%, transparent)`}
+              strokeWidth={stroke}
+            />
+            {ratio > 0 ? (
+              <circle
+                cx={center}
+                cy={center}
+                r={radius}
+                fill="none"
+                stroke={ring.color}
+                strokeWidth={stroke}
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={circumference * (1 - ratio)}
+                transform={`rotate(-90 ${center} ${center})`}
+                style={{ transition: "stroke-dashoffset 900ms cubic-bezier(0.16,1,0.3,1)" }}
+              />
+            ) : null}
+          </g>
+        );
+      })}
     </svg>
   );
 }
 
-function MasteryBar({
-  mastered,
-  learning,
-  fresh,
-  className,
-}: {
-  mastered: number;
-  learning: number;
-  fresh: number;
-  className?: string;
-}) {
-  const total = mastered + learning + fresh;
-  if (total === 0) return null;
-  const pct = (value: number) => `${(value / total) * 100}%`;
-
+function Card({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div
+    <section
       className={cn(
-        "flex h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-2)]",
+        "rounded-[22px] border border-[var(--border)] bg-[var(--surface)] p-5 @[40rem]/fc:p-6",
         className
       )}
-      aria-hidden="true"
     >
-      {mastered > 0 ? (
-        <span style={{ width: pct(mastered) }} className="h-full bg-[var(--success)]" />
-      ) : null}
-      {learning > 0 ? (
-        <span style={{ width: pct(learning) }} className="h-full bg-[var(--accent)]" />
-      ) : null}
-      {fresh > 0 ? (
-        <span style={{ width: pct(fresh) }} className="h-full bg-[var(--border-strong)]" />
-      ) : null}
-    </div>
+      {children}
+    </section>
   );
 }
 
-function StatCell({
-  icon,
-  label,
-  value,
-  caption,
-  tone,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number | string;
-  caption?: string;
-  tone?: "accent" | "warning" | "success";
-}) {
-  const toneClass =
-    tone === "warning"
-      ? "text-[var(--warning)]"
-      : tone === "success"
-        ? "text-[var(--success)]"
-        : "text-[var(--accent)]";
-
+function CardTitle({ title, aside }: { title: string; aside?: React.ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col justify-center gap-1.5 px-5 py-4">
-      <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.07em] text-faint">
-        <span className={cn("shrink-0", toneClass)}>{icon}</span>
-        <span className="truncate">{label}</span>
-      </span>
-      <span className="text-[26px] font-semibold leading-none tracking-[-0.03em] text-ink tabular-nums">
-        {value}
-      </span>
-      {caption ? <span className="truncate text-[11.5px] text-muted">{caption}</span> : null}
+    <div className="flex items-baseline justify-between gap-3">
+      <h3 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</h3>
+      {aside}
     </div>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Lista de cadernos                                                   */
+/* ------------------------------------------------------------------ */
 
 function DeckRow({
   deck,
@@ -425,10 +461,14 @@ function DeckListSkeleton() {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Página                                                              */
+/* ------------------------------------------------------------------ */
+
 export function FlashcardsHub() {
   const { adapter, notebooks, pages, flashcards, dueFlashcards, flashcardsReady } =
     useWorkspace();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { settings, saveSettings } = useFlashcardSettings();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -442,6 +482,7 @@ export function FlashcardsHub() {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const globalStats = useMemo(() => summarizeCards(flashcards), [flashcards]);
+  const queue = useMemo(() => splitQueue(flashcards), [flashcards]);
 
   const reviewedToday = useMemo(() => {
     const from = startOfDay();
@@ -451,8 +492,31 @@ export function FlashcardsHub() {
   const goal = Math.max(1, settings.dailyGoal);
   const goalReached = reviewedToday >= goal;
 
-  const masteryPercentage =
-    globalStats.total > 0 ? Math.round((globalStats.mastered / globalStats.total) * 100) : 0;
+  // Quantos cards vencem em cada um dos próximos 7 dias (hoje inclui os atrasados).
+  const forecast = useMemo(() => {
+    const weekday = new Intl.DateTimeFormat(language, { weekday: "short" });
+    const base = new Date();
+    base.setHours(0, 0, 0, 0);
+    const days = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(base);
+      date.setDate(base.getDate() + index);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      return {
+        end: end.getTime(),
+        label: index === 0 ? t("today_short") : weekday.format(date).replace(".", ""),
+        count: 0,
+      };
+    });
+    for (const card of flashcards) {
+      const next = Number(card.nextReviewDate) || 0;
+      const slot = days.find((day) => next <= day.end);
+      if (slot) slot.count += 1;
+    }
+    const upcoming = days.slice(1).reduce((sum, day) => sum + day.count, 0);
+    const max = Math.max(1, ...days.map((day) => day.count));
+    return { days, upcoming, max };
+  }, [flashcards, language, t]);
 
   const cardsByPage = useMemo(() => {
     const map = new Map<string, Flashcard[]>();
@@ -464,6 +528,8 @@ export function FlashcardsHub() {
     return map;
   }, [flashcards]);
 
+  const term = searchQuery.trim().toLowerCase();
+
   const decks = useMemo(
     () =>
       buildDeckTree({
@@ -471,10 +537,10 @@ export function FlashcardsHub() {
         notebooks,
         cardsByPage,
         filterMode,
-        term: searchQuery.trim().toLowerCase(),
+        term,
         unfiledLabel: t("unfiled"),
       }),
-    [cardsByPage, filterMode, notebooks, pages, searchQuery, t]
+    [cardsByPage, filterMode, notebooks, pages, term, t]
   );
 
   const flatDecks = useMemo(() => flattenDecks(decks), [decks]);
@@ -517,8 +583,7 @@ export function FlashcardsHub() {
     expandableIds.length > 0 && expandableIds.every((id) => expanded.has(id));
 
   // Buscando, abrir tudo: o resultado costuma estar dentro de uma subnota.
-  const searching = searchQuery.trim().length > 0;
-  const isExpanded = (pageId: string) => searching || expanded.has(pageId);
+  const isExpanded = (pageId: string) => term.length > 0 || expanded.has(pageId);
 
   const toggleExpand = (key: string) => {
     setExpanded((prev) => {
@@ -601,7 +666,7 @@ export function FlashcardsHub() {
       toast.success(t("all_caught_up"), { description: t("all_caught_up_desc") });
       return;
     }
-    startSession(t("due_today"), dueFlashcards);
+    startSession(t("today_queue"), dueFlashcards);
   };
 
   const handleStudyAll = () => {
@@ -627,155 +692,269 @@ export function FlashcardsHub() {
   }
 
   const hasAnyCard = flashcards.length > 0;
-  const filtersActive = searchQuery.trim().length > 0 || filterMode === "due";
+  const hasQueue = dueFlashcards.length > 0;
+  const filtersActive = term.length > 0 || filterMode === "due";
+  const caughtUp = flashcardsReady && hasAnyCard && !hasQueue;
+  const total = globalStats.total;
+  const pct = (value: number) => (total > 0 ? Math.round((value / total) * 100) : 0);
+
+  const distribution = [
+    { key: "mastered", label: t("stage_mastered"), value: globalStats.mastered, color: "var(--success)" },
+    { key: "learning", label: t("stage_learning"), value: globalStats.learning, color: "var(--fc-teal)" },
+    {
+      key: "new",
+      label: t("stage_new"),
+      value: globalStats.fresh,
+      color: "color-mix(in oklab, var(--text) 32%, transparent)",
+    },
+  ];
+
+  const rootStyle = {
+    "--fc-play": "#2dd4bf",
+    "--fc-play-hover": "#5eead4",
+    "--fc-teal": "color-mix(in oklab, #2dd4bf 72%, var(--accent))",
+  } as CSSProperties;
+
+  const heroTitle = !flashcardsReady
+    ? t("hero_title")
+    : !hasAnyCard
+      ? t("no_flashcards")
+      : caughtUp
+        ? t("all_caught_up")
+        : t("hero_title");
+
+  const heroDesc = !flashcardsReady
+    ? t("flashcards_desc")
+    : !hasAnyCard
+      ? t("no_flashcards_desc")
+      : caughtUp
+        ? t("all_caught_up_desc")
+        : queue.reviews > 0
+          ? t("hero_desc_reviews")
+          : t("hero_desc_new");
 
   return (
-    <div className="relative flex-1 w-full overflow-x-hidden">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[22rem]"
-        style={{
-          backgroundImage:
-            "radial-gradient(75% 70% at 50% -10%, color-mix(in oklab, var(--accent) 16%, transparent) 0%, transparent 70%)",
-        }}
-      />
-
-      <div className="relative mx-auto w-full max-w-5xl px-4 pb-32 pt-8 pb-safe sm:px-6 sm:pt-10 lg:px-8">
-        <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0 space-y-2">
-            <h1 className="text-[28px] font-semibold leading-[1.1] tracking-[-0.03em] text-ink sm:text-[34px]">
-              {t("flashcards_title")}
-            </h1>
-            <p className="max-w-lg text-[13.5px] leading-relaxed text-muted">
-              {t("flashcards_desc")}
-            </p>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => setSettingsOpen(true)}
-              className="h-10 gap-2 px-3.5"
-            >
-              <SlidersHorizontal className="size-4" />
-              <span className="hidden sm:inline">{t("configure_reviews")}</span>
-            </Button>
-
-            {dueFlashcards.length > 0 ? (
-              <Button
-                variant="primary"
-                size="md"
-                onClick={handleReviewDue}
-                className="h-10 gap-2 px-4 font-semibold"
-              >
-                <ReplayIcon className="size-4" />
-                <span>{t("review_now")}</span>
-                <span className="rounded-full bg-white/20 px-1.5 py-px text-[11px] font-semibold tabular-nums">
-                  {dueFlashcards.length}
-                </span>
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                size="md"
-                onClick={handleStudyAll}
-                disabled={!hasAnyCard}
-                className="h-10 gap-2 px-4 font-semibold"
-              >
-                <StudyIcon className="size-4" />
-                <span>{t("study_all")}</span>
-              </Button>
-            )}
-          </div>
-        </header>
-
-        <section className="mt-8 overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-panel)]">
-          <div className="grid grid-cols-1 md:grid-cols-[minmax(0,17rem)_1fr]">
-            <div className="flex items-center gap-4 border-b border-[var(--border)] px-5 py-5 md:border-b-0 md:border-r">
-              <div className="relative shrink-0">
-                <ProgressRing value={reviewedToday} total={goal} />
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-[22px] font-semibold leading-none tracking-[-0.03em] text-ink tabular-nums">
-                    {reviewedToday}
+    <div style={rootStyle} className="@container/fc relative w-full flex-1 overflow-x-hidden">
+      <div className="mx-auto w-full max-w-[110rem] px-3 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-3 @[40rem]/fc:px-6 @[40rem]/fc:pt-6 @[80rem]/fc:px-10">
+        {/* ---------------- Destaque do dia ---------------- */}
+        <section
+          className="relative overflow-hidden rounded-[28px] text-white"
+          style={{
+            background:
+              "linear-gradient(165deg, color-mix(in oklab, #14b8a6 58%, #0b1a2c) 0%, color-mix(in oklab, #0e7490 34%, #08111e) 58%, #060c16 100%)",
+          }}
+        >
+          <div className="flex flex-col gap-6 p-5 @[40rem]/fc:flex-row @[40rem]/fc:items-end @[40rem]/fc:gap-8 @[40rem]/fc:p-8 @[80rem]/fc:p-10">
+            <DailyCover
+              count={queue.total}
+              done={caughtUp}
+              empty={!flashcardsReady || !hasAnyCard}
+              label={t("today_short")}
+              className="w-40 self-center @[40rem]/fc:w-52 @[40rem]/fc:self-auto @[80rem]/fc:w-60"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] font-semibold text-white/85">{t("flashcards_title")}</p>
+              <h1 className="mt-1.5 text-[40px] font-black leading-[0.92] tracking-[-0.05em] @[40rem]/fc:text-[60px] @[80rem]/fc:text-[84px]">
+                {heroTitle}
+              </h1>
+              <p className="mt-4 max-w-xl text-[13.5px] leading-relaxed text-white/70">{heroDesc}</p>
+              {hasQueue ? (
+                <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] font-medium text-white/90">
+                  <span className="font-bold text-white">
+                    {t("hero_queue_title", { count: queue.total })}
                   </span>
-                  <span className="mt-0.5 text-[10.5px] font-medium uppercase tracking-[0.06em] text-faint">
-                    {t("of_goal", { goal })}
+                  <span className="text-white/40">•</span>
+                  <span>
+                    {[
+                      queue.fresh > 0 ? t("new_badge", { count: queue.fresh }) : null,
+                      queue.reviews > 0 ? t("reviews_badge", { count: queue.reviews }) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
-                </div>
-              </div>
-
-              <div className="min-w-0 space-y-1.5">
-                <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.07em] text-faint">
-                  <GoalIcon className="size-3.5 text-[var(--accent)]" />
-                  {t("daily_goal_label")}
-                </span>
-                <p className="text-[13px] font-medium leading-snug text-ink">
-                  {goalReached ? t("daily_goal_done") : t("daily_goal_remaining", { count: goal - reviewedToday })}
+                  <span className="text-white/40">•</span>
+                  <span>{t("about_minutes", { count: sessionMinutes(queue.total) })}</span>
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setSettingsOpen(true)}
-                  className="text-[12px] font-medium text-[var(--accent)] transition hover:underline"
-                >
-                  {t("adjust_goal")}
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 divide-x divide-[var(--border)] sm:grid-cols-3 [&>*:nth-child(3)]:border-t [&>*:nth-child(3)]:border-[var(--border)] sm:[&>*:nth-child(3)]:border-t-0">
-              <StatCell
-                icon={<DueIcon className="size-3.5" />}
-                label={t("due_today")}
-                value={globalStats.due}
-                caption={
-                  globalStats.due > 0
-                    ? t("cards_waiting", { count: globalStats.due })
-                    : t("all_caught_up")
-                }
-                tone="warning"
-              />
-              <StatCell
-                icon={<MasteredIcon className="size-3.5" />}
-                label={t("mastered_cards")}
-                value={globalStats.mastered}
-                caption={t("of_total_cards", { percent: masteryPercentage, total: globalStats.total })}
-                tone="success"
-              />
-              <StatCell
-                icon={<LearningIcon className="size-3.5" />}
-                label={t("learning_cards")}
-                value={globalStats.learning + globalStats.fresh}
-                caption={t("new_cards_count", { count: globalStats.fresh })}
-                tone="accent"
-              />
+              ) : null}
             </div>
           </div>
 
-          {globalStats.total > 0 ? (
-            <div className="border-t border-[var(--border)] px-5 py-3.5">
-              <MasteryBar
-                mastered={globalStats.mastered}
-                learning={globalStats.learning}
-                fresh={globalStats.fresh}
-              />
-              <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-muted">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-[var(--success)]" />
-                  {t("stage_mastered")}
+          {/* Uma ação principal só: estudar a fila de hoje. "Estudar todos" fica
+              à parte, junto das opções, com outro ícone, para não parecer o mesmo botão. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-3 bg-black/20 px-5 py-4 @[40rem]/fc:px-8 @[80rem]/fc:px-10">
+            {hasAnyCard ? (
+              <button
+                type="button"
+                onClick={hasQueue ? handleReviewDue : handleStudyAll}
+                className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-full bg-[var(--fc-play)] pl-2 pr-5 text-[14px] font-bold text-[#032027] shadow-[0_12px_28px_-10px_rgba(0,0,0,0.7)] outline-none transition hover:bg-[var(--fc-play-hover)] focus-visible:ring-2 focus-visible:ring-white/80 active:scale-[0.98] @[34rem]/fc:w-auto @[34rem]/fc:justify-start"
+              >
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#032027] text-[var(--fc-play)]">
+                  <StudyIcon className="size-4 translate-x-px" />
                 </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-[var(--accent)]" />
-                  {t("stage_learning")}
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-[var(--border-strong)]" />
-                  {t("stage_new")}
-                </span>
-              </div>
+                {hasQueue ? (queue.fresh > 0 ? t("study_now") : t("review_now")) : t("study_all")}
+                {hasQueue ? (
+                  <span className="rounded-full bg-[#032027]/15 px-2 py-0.5 text-[12px] font-bold tabular-nums">
+                    {queue.total}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
+
+            <div className="flex w-full items-center justify-center gap-1 @[34rem]/fc:ml-auto @[34rem]/fc:w-auto">
+              {hasQueue ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleStudyAll}
+                    className="inline-flex h-10 items-center gap-2 rounded-full px-3 text-[13px] font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
+                  >
+                    <Layers className="size-4" />
+                    {t("study_all")}
+                    <span className="text-white/45 tabular-nums">{total}</span>
+                  </button>
+                  <span aria-hidden="true" className="mx-1 h-5 w-px bg-white/15" />
+                </>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                aria-label={t("configure_reviews")}
+                title={t("configure_reviews")}
+                className="inline-flex h-10 items-center gap-2 rounded-full px-3 text-[13px] font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
+              >
+                <SlidersHorizontal className="size-4" />
+                <span className="hidden @[40rem]/fc:inline">{t("configure_reviews")}</span>
+              </button>
             </div>
-          ) : null}
+          </div>
         </section>
+
+        {/* ---------------- Progresso ---------------- */}
+        {hasAnyCard ? (
+          <div className="mt-4 grid grid-cols-1 gap-3 @[44rem]/fc:grid-cols-2 @[40rem]/fc:mt-5 @[40rem]/fc:gap-4 @[66rem]/fc:grid-cols-3">
+            <Card>
+              <CardTitle
+                title={t("daily_goal_label")}
+                aside={
+                  <button
+                    type="button"
+                    onClick={() => setSettingsOpen(true)}
+                    className="text-[12.5px] font-semibold text-muted transition hover:text-ink hover:underline"
+                  >
+                    {t("adjust_goal")}
+                  </button>
+                }
+              />
+              <div className="mt-5 flex items-center gap-6">
+                <Rings
+                  rings={[
+                    { value: reviewedToday / goal, color: "var(--fc-teal)" },
+                    { value: total > 0 ? globalStats.mastered / total : 0, color: "var(--success)" },
+                  ]}
+                />
+                <dl className="min-w-0 space-y-4">
+                  <div>
+                    <dt className="sr-only">{t("daily_goal_label")}</dt>
+                    <dd className="mt-0.5 text-[26px] font-bold leading-none tracking-[-0.03em] text-[var(--fc-teal)] tabular-nums">
+                      {reviewedToday}
+                      <span className="text-[15px] font-semibold text-muted">/{goal}</span>
+                    </dd>
+                    <dd
+                      className={cn(
+                        "mt-1 text-[12px]",
+                        goalReached ? "font-medium text-[var(--success)]" : "text-muted"
+                      )}
+                    >
+                      {goalReached
+                        ? t("daily_goal_done")
+                        : t("daily_goal_remaining", { count: goal - reviewedToday })}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[12.5px] font-medium text-muted">{t("mastery_heading")}</dt>
+                    <dd className="mt-0.5 text-[26px] font-bold leading-none tracking-[-0.03em] text-[var(--success)] tabular-nums">
+                      {pct(globalStats.mastered)}
+                      <span className="text-[15px] font-semibold text-muted">%</span>
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </Card>
+
+            <Card>
+              <CardTitle
+                title={t("cards_overview")}
+                aside={<span className="text-[12.5px] text-muted tabular-nums">{total}</span>}
+              />
+              <div className="mt-5 flex h-3 w-full gap-1" aria-hidden="true">
+                {distribution.map((item) =>
+                  item.value > 0 ? (
+                    <span
+                      key={item.key}
+                      className="h-full rounded-full transition-[flex-grow] duration-700"
+                      style={{ flexGrow: item.value, flexBasis: 0, backgroundColor: item.color }}
+                    />
+                  ) : null
+                )}
+              </div>
+              <dl className="mt-5 space-y-3">
+                {distribution.map((item) => (
+                  <div key={item.key} className="flex items-center gap-3">
+                    <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                    <dt className="flex-1 truncate text-[13.5px] text-ink">{item.label}</dt>
+                    <dd className="text-[13.5px] font-semibold text-ink tabular-nums">{item.value}</dd>
+                    <dd className="w-10 text-right text-[12px] text-muted tabular-nums">{pct(item.value)}%</dd>
+                  </div>
+                ))}
+              </dl>
+            </Card>
+
+            <Card className="@[44rem]/fc:col-span-2 @[66rem]/fc:col-span-1">
+              <CardTitle
+                title={t("upcoming_reviews")}
+                aside={
+                  <span className="text-[12.5px] text-muted tabular-nums">
+                    {t("upcoming_total", { count: forecast.upcoming })}
+                  </span>
+                }
+              />
+              <div className="mt-5 grid h-[128px] grid-cols-7 items-end gap-2">
+                {forecast.days.map((day, index) => (
+                  <div key={index} className="flex h-full min-w-0 flex-col items-center justify-end gap-2">
+                    <span
+                      className={cn(
+                        "text-[12px] font-semibold tabular-nums",
+                        day.count === 0 ? "text-faint" : index === 0 ? "text-ink" : "text-muted"
+                      )}
+                    >
+                      {day.count}
+                    </span>
+                    <span
+                      className={cn(
+                        "w-full max-w-9 rounded-full transition-[height] duration-700",
+                        index === 0
+                          ? "bg-[var(--fc-teal)]"
+                          : "bg-[color-mix(in_oklab,var(--fc-teal)_30%,var(--surface-2))]"
+                      )}
+                      style={{
+                        height: day.count > 0 ? `${Math.max(10, (day.count / forecast.max) * 76)}px` : "6px",
+                        opacity: day.count > 0 || index === 0 ? 1 : 0.6,
+                      }}
+                    />
+                    <span
+                      className={cn(
+                        "w-full truncate text-center text-[11.5px] capitalize",
+                        index === 0 ? "font-semibold text-ink" : "text-muted"
+                      )}
+                    >
+                      {day.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        ) : null}
 
         {hasAnyCard ? (
           <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -936,14 +1115,9 @@ export function FlashcardsHub() {
                 </>
               ) : (
                 <>
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-[var(--accent)] text-[12px] font-semibold text-[var(--accent-contrast)] tabular-nums">
-                      {selectedCards.length}
-                    </span>
-                    <span className="truncate text-[12.5px] font-medium text-ink">
-                      {t("selected_notes", { count: activeSelection.size })}
-                    </span>
-                  </div>
+                  <span className="min-w-0 truncate text-[13px] font-semibold text-ink tabular-nums">
+                    {t("selected_cards", { count: selectedCards.length })}
+                  </span>
 
                   <div className="flex shrink-0 items-center gap-1.5">
                     <Button

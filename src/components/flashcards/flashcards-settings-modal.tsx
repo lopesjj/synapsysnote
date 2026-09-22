@@ -1,18 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import {
-  Bell,
-  Calendar,
-  Check,
-  ChevronDown,
-  Minus,
-  Plus,
-  RotateCcw,
-  Settings,
-  Sparkles,
-  Zap,
-} from "lucide-react";
+import { Bell, Check, ChevronDown, Minus, Plus, RotateCcw, Settings } from "lucide-react";
 import { toast } from "sonner";
 import type { FlashcardSettings } from "@/types/models";
 import { Button } from "@/components/ui/button";
@@ -31,7 +20,6 @@ import { intervalLabels } from "@/lib/flashcards/labels";
 import {
   notificationPermission,
   requestNotificationPermission,
-  showFlashcardNotification,
   type NotificationPermissionState,
 } from "@/lib/flashcards/notifications";
 
@@ -49,19 +37,16 @@ const PACE_OPTIONS = [
     value: 0.8,
     labelKey: "settings_interval_frequent",
     descKey: "settings_pace_frequent_desc",
-    icon: Zap,
   },
   {
     value: 1.0,
     labelKey: "settings_interval_normal",
     descKey: "settings_pace_normal_desc",
-    icon: Sparkles,
   },
   {
     value: 1.3,
     labelKey: "settings_interval_spaced",
     descKey: "settings_pace_spaced_desc",
-    icon: Calendar,
   },
 ] as const;
 
@@ -189,35 +174,11 @@ function SettingsForm({
     const state = await requestNotificationPermission();
     setPermission(state);
 
-    // Sem suporte do navegador o lembrete ainda funciona como aviso dentro do
-    // app, entao a preferencia continua valendo.
-    if (state === "unsupported") {
-      setNotificationsOn(true);
-      return;
-    }
-    if (state !== "granted") {
-      toast.error(t("notifications_permission_denied"));
-      setNotificationsOn(false);
-      return;
-    }
-
-    toast.success(t("notifications_enabled_toast"));
+    // Sem permissão (ou sem suporte) do navegador o lembrete ainda chega como
+    // aviso dentro do app, então a preferência continua valendo; o bloqueio
+    // aparece explicado logo abaixo do horário.
     setNotificationsOn(true);
-  };
-
-  const sendTestNotification = async () => {
-    const state = await requestNotificationPermission();
-    setPermission(state);
-    if (state !== "granted") {
-      toast.error(t("notifications_permission_denied"));
-      return;
-    }
-    const delivered = showFlashcardNotification({
-      title: t("flashcards"),
-      body: t("due_cards_reminder", { count: 3 }),
-    });
-    if (delivered) toast.success(t("notifications_test_sent"));
-    else toast.error(t("notifications_permission_denied"));
+    if (state === "granted") toast.success(t("notifications_enabled_toast"));
   };
 
   const handleReset = async () => {
@@ -339,7 +300,6 @@ function SettingsForm({
 
           <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/50 p-1">
             {PACE_OPTIONS.map((option) => {
-              const Icon = option.icon;
               const isSelected = pace === option.value;
               return (
                 <button
@@ -348,19 +308,13 @@ function SettingsForm({
                   onClick={() => setPace(option.value)}
                   aria-pressed={isSelected}
                   className={cn(
-                    "flex items-center justify-center gap-1.5 rounded-lg py-2 text-[12px] font-medium transition-all",
+                    "rounded-lg py-2 text-[12px] font-medium transition-all",
                     isSelected
                       ? "border border-[var(--border-strong)]/50 bg-[var(--surface)] font-semibold text-ink shadow-xs"
                       : "text-muted hover:bg-[var(--surface-hover)] hover:text-ink"
                   )}
                 >
-                  <Icon
-                    className={cn(
-                      "size-3.5",
-                      isSelected ? "text-[var(--accent)]" : "text-faint"
-                    )}
-                  />
-                  <span>{t(option.labelKey)}</span>
+                  {t(option.labelKey)}
                 </button>
               );
             })}
@@ -428,23 +382,18 @@ function SettingsForm({
                   >
                     {t("settings_notification_time")}
                   </label>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8"
-                      onClick={() => void sendTestNotification()}
-                    >
-                      {t("notification_test")}
-                    </Button>
-                    <input
-                      id="flashcards-notification-time"
-                      type="time"
-                      value={notificationTime}
-                      onChange={(e) => setNotificationTime(e.target.value)}
-                      className="h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-[12.5px] font-medium text-ink shadow-2xs outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] tabular-nums"
-                    />
-                  </div>
+                  <input
+                    id="flashcards-notification-time"
+                    type="time"
+                    required
+                    value={notificationTime}
+                    onChange={(e) => {
+                      // O campo fica vazio enquanto o usuário apaga; guardar
+                      // "" desligaria o lembrete sem ninguém perceber.
+                      if (e.target.value) setNotificationTime(e.target.value);
+                    }}
+                    className="h-8 shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-[12.5px] font-medium text-ink shadow-2xs outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] tabular-nums"
+                  />
                 </div>
 
                 {permission === "denied" ? (
