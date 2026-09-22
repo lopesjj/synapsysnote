@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useLocale, useRouter } from "@/lib/i18n/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth, type OAuthProviderId } from "@/hooks/use-auth";
@@ -10,12 +10,13 @@ import { SynapsysLockup } from "@/components/brand/logo";
 import { AuthField } from "@/components/auth/auth-field";
 import { CompleteRegistrationForm } from "@/components/auth/complete-registration-form";
 import { PhoneField } from "@/components/auth/phone-field";
+import { SiteLanguageSwitcher } from "@/components/i18n/site-language-switcher";
 import { formatTabTitle } from "@/lib/document-title";
 import { loadUserProfile, profileNeedsCompletion } from "@/lib/data/user-profile";
 import { isValidPhoneBR } from "@/lib/phone";
 import { Button } from "@/components/ui/button";
 import { RecaptchaField } from "@/components/auth/recaptcha-field";
-import { verifyRecaptchaToken } from "@/lib/recaptcha";
+import { RecaptchaError, verifyRecaptchaToken } from "@/lib/recaptcha";
 import { Checkbox, Input } from "@/components/ui/primitives";
 import { appHref, isSplitHosts, navigateTo } from "@/lib/domains";
 import {
@@ -24,13 +25,28 @@ import {
   recordFailedLoginAttempt,
   clearFailedLoginAttempts,
 } from "@/lib/auth/login-attempts";
+import { authErrorText } from "@/lib/auth/error-message";
 import { useUiStore } from "@/lib/store/ui-store";
 import { useTranslation } from "@/lib/i18n/translations";
+import { rememberUserLanguage } from "@/lib/i18n/locale-cookies";
+import type { SupportedLanguage, UserProfile } from "@/types/models";
 
 const SIGNUP_ENABLED = false;
 
+type Router = ReturnType<typeof useRouter>;
+
+function workspaceLanguage(profile: UserProfile | null | undefined, fallback: SupportedLanguage) {
+  return profile?.preferences?.language ?? fallback;
+}
+
+function enterWorkspace(language: SupportedLanguage, router: Router, mode: "push" | "replace" = "push") {
+  rememberUserLanguage(language);
+  navigateTo(appHref("/home", language), router, mode);
+}
+
 export default function LandingPage() {
   const { t } = useTranslation();
+  const locale = useLocale();
   const router = useRouter();
   const {
     user,
@@ -81,9 +97,9 @@ export default function LandingPage() {
     }
     if (params.get("reset") === "ok") {
       toast.success(t("password_reset_success"));
-      window.history.replaceState({}, "", "/");
+      window.history.replaceState({}, "", `/${locale}`);
     }
-  }, [router]);
+  }, [locale, router, t]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -92,15 +108,22 @@ export default function LandingPage() {
     if (isSplitHosts() && sessionSyncFailed) return;
 
     if (!sessionSyncFailed && user && !profileLoading && !needsCompletion) {
-      navigateTo(appHref("/home"), router, "replace");
-      return;
+      enterWorkspace(workspaceLanguage(profile, locale), router, "replace");
     }
-
-  }, [needsCompletion, profileLoading, router, sessionSyncFailed, user]);
+  }, [locale, needsCompletion, profile, profileLoading, router, sessionSyncFailed, user]);
 
   const refreshCaptcha = () => {
     setCaptcha(null);
     setCaptchaKey((value) => value + 1);
+  };
+
+  const hydrateFromProfile = (existing: UserProfile | null) => {
+    if (!existing?.preferences) return;
+    const layout = { ...existing.preferences };
+    delete layout.theme;
+    if (Object.keys(layout).length > 0) {
+      useUiStore.getState().hydratePreferences(layout);
+    }
   };
 
   const submit = async (event: React.FormEvent) => {
@@ -115,30 +138,26 @@ export default function LandingPage() {
           toast.error(t("phone_invalid"));
           return;
         }
-        await signUpWithEmail((name.trim() || email.split("@")[0]).slice(0, 60), email, password, phone);
-        navigateTo(appHref("/home"), router);
+        await signUpWithEmail((name.trim() || email.split("@")[0]).slice(0, 60), email, password, phone, locale);
+        enterWorkspace(locale, router);
         return;
       }
       const signedIn = await signInWithEmail(email, password, remember);
       clearFailedLoginAttempts(email);
       setFailedAttempts(0);
       const existing = await loadUserProfile(signedIn.uid);
-      if (existing?.preferences) {
-        const { theme: storedTheme, ...layout } = existing.preferences;
-        if (Object.keys(layout).length > 0) {
-          useUiStore.getState().hydratePreferences(layout);
-        }
+      hydrateFromProfile(existing);
+      if (!profileNeedsCompletion(signedIn, existing)) {
+        enterWorkspace(workspaceLanguage(existing, locale), router);
       }
-      if (!profileNeedsCompletion(signedIn, existing)) navigateTo(appHref("/home"), router);
     } catch (error) {
-      const isMissingCaptchaError =
-        error instanceof Error && error.message.includes("não é um robô");
+      const isMissingCaptchaError = error instanceof RecaptchaError && error.reason === "missing";
       if (tab === "signin" && !isMissingCaptchaError) {
         const nextAttempts = recordFailedLoginAttempt(email);
         setFailedAttempts(nextAttempts);
       }
       refreshCaptcha();
-      toast.error(error instanceof Error ? error.message : t("login_failed"));
+      toast.error(authErrorText(error, t, "login_failed"));
     } finally {
       setBusy(false);
     }
@@ -151,15 +170,12 @@ export default function LandingPage() {
       clearFailedLoginAttempts(signedIn.email || undefined);
       setFailedAttempts(0);
       const existing = await loadUserProfile(signedIn.uid);
-      if (existing?.preferences) {
-        const { theme: storedTheme, ...layout } = existing.preferences;
-        if (Object.keys(layout).length > 0) {
-          useUiStore.getState().hydratePreferences(layout);
-        }
+      hydrateFromProfile(existing);
+      if (!profileNeedsCompletion(signedIn, existing)) {
+        enterWorkspace(workspaceLanguage(existing, locale), router);
       }
-      if (!profileNeedsCompletion(signedIn, existing)) navigateTo(appHref("/home"), router);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("auth_failed"), {
+      toast.error(authErrorText(error, t, "auth_failed"), {
         duration: 7000,
       });
       if (SIGNUP_ENABLED) setTab("signup");
@@ -173,12 +189,12 @@ export default function LandingPage() {
     setBusy(true);
     try {
       await verifyRecaptchaToken(captcha);
-      await resetPassword(email);
+      await resetPassword(email, locale);
       toast.success(t("reset_email_sent"));
       setTab("signin");
     } catch (error) {
       refreshCaptcha();
-      toast.error(error instanceof Error ? error.message : t("reset_email_failed"));
+      toast.error(authErrorText(error, t, "reset_email_failed"));
     } finally {
       setBusy(false);
     }
@@ -194,31 +210,27 @@ export default function LandingPage() {
         }}
       />
 
-      <div className="relative mx-auto grid min-h-dvh max-w-6xl grid-cols-1 gap-12 px-6 py-12 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:gap-16">
+      <div className="absolute end-4 top-4 z-10 sm:end-6 sm:top-6">
+        <SiteLanguageSwitcher />
+      </div>
+
+      <div className="relative mx-auto grid min-h-dvh max-w-6xl grid-cols-1 gap-12 px-6 pb-12 pt-20 sm:py-12 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:gap-16">
         <div className="max-w-xl">
           <div className="flex select-none justify-center sm:-translate-x-5 sm:-translate-y-7">
             <SynapsysLockup size={92} />
           </div>
 
-          <p className="mt-10 text-[13px] text-muted">
-            Pensado para quem faz concurso público, vestibular ou faculdade.
-          </p>
+          <p dir="auto" className="text-left mt-10 text-[13px] text-muted">{t("landing_audience")}</p>
 
-          <h1 className="mt-4 max-w-xl text-[40px] font-semibold leading-[1.08] tracking-[-0.03em] text-ink sm:text-[52px]">
-            Seu material de estudo,{" "}
+          <h1 dir="auto" className="text-left mt-4 max-w-xl text-[40px] font-semibold leading-[1.08] tracking-[-0.03em] text-ink sm:text-[52px]">
+            {t("landing_headline_lead")}
             <span className="bg-gradient-to-r from-[var(--accent)] to-[#0ea5e9] bg-clip-text text-transparent">
-              num só lugar
+              {t("landing_headline_accent")}
             </span>
-            .
+            {t("landing_headline_tail")}
           </h1>
 
-          <p className="mt-5 max-w-lg text-[15px] leading-relaxed text-muted">
-            Organize seus estudos com eficiência, transforme sua rotina em algo
-            mais produtivo. Utilize cadernos bem estruturados, mantenha suas
-            notas organizadas e crie um planejamento adequado para cada
-            disciplina. Defina metas claras, estabeleça prazos realistas e
-            acompanhe seu progresso ao longo do tempo.
-          </p>
+          <p dir="auto" className="text-left mt-5 max-w-lg text-[15px] leading-relaxed text-muted">{t("landing_description")}</p>
         </div>
 
         <div className="mx-auto w-full max-w-sm sm:max-w-none lux-gradient rounded-[var(--radius-xl)] border border-[var(--border)] p-6 shadow-[var(--shadow-float)]">
@@ -227,29 +239,29 @@ export default function LandingPage() {
           ) : user && !sessionSyncFailed && !needsCompletion ? (
             <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
               <Loader2 className="size-6 animate-spin text-[var(--accent)]" />
-              <p className="text-[13px] font-medium text-ink">{t("accessing_workspace")}</p>
-              <p className="text-[11.5px] text-muted">{t("redirecting_home")}</p>
+              <p dir="auto" className="text-[13px] font-medium text-ink">{t("accessing_workspace")}</p>
+              <p dir="auto" className="text-[11.5px] text-muted">{t("redirecting_home")}</p>
             </div>
           ) : tab === "reset" ? (
             <>
-              <p className="text-[15px] font-medium tracking-[-0.015em] text-ink">Esqueceu a senha</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-muted">
-                Escreva o e-mail de cadastro. Se tiver conta, o link chega aí.
-              </p>
+              <p dir="auto" className="text-left text-[15px] font-medium tracking-[-0.015em] text-ink">{t("reset_heading")}</p>
+              <p dir="auto" className="text-left mt-1 text-[13px] leading-relaxed text-muted">{t("reset_description")}</p>
               <form onSubmit={sendReset} className="mt-5 space-y-3.5">
-                <AuthField label="E-mail">
+                <AuthField label={t("field_email")}>
                   <Input
                     type="email"
+                    dir="ltr"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seu@email.com"
+                    placeholder={t("email_placeholder")}
+                    autoComplete="email"
                   />
                 </AuthField>
                 <RecaptchaField key={`reset-${captchaKey}`} onChange={setCaptcha} />
                 <Button type="submit" variant="primary" size="lg" className="w-full" disabled={busy}>
                   {busy ? <Loader2 className="animate-spin" /> : null}
-                  Enviar link
+                  {t("send_link")}
                 </Button>
                 <button
                   type="button"
@@ -259,14 +271,14 @@ export default function LandingPage() {
                   }}
                   className="w-full text-center text-[12.5px] text-muted transition hover:text-ink"
                 >
-                  Voltar ao login
+                  {t("back_to_login")}
                 </button>
               </form>
             </>
           ) : (
             <>
-          <p className="text-[15px] font-medium tracking-[-0.015em] text-ink">
-            {tab === "signin" ? "Entre na sua conta" : "Crie sua conta"}
+          <p dir="auto" className="text-left text-[15px] font-medium tracking-[-0.015em] text-ink">
+            {tab === "signin" ? t("signin_heading") : t("signup_heading")}
           </p>
 
           <div className="mt-4 flex gap-1 rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-0.5">
@@ -286,7 +298,7 @@ export default function LandingPage() {
                     tab === value ? "bg-[var(--surface)] text-ink shadow-sm" : "text-muted"
                   } ${blocked ? "cursor-not-allowed opacity-45" : ""}`}
                 >
-                  {value === "signin" ? "Entrar" : "Criar conta"}
+                  {value === "signin" ? t("signin_tab") : t("signup_tab")}
                 </button>
               );
             })}
@@ -294,27 +306,30 @@ export default function LandingPage() {
 
           <form onSubmit={submit} className="mt-5 space-y-3.5">
             {tab === "signup" ? (
-              <AuthField label="Nome">
+              <AuthField label={t("field_name")}>
                 <Input
                   required
                   maxLength={60}
                   value={name}
                   onChange={(e) => setName(e.target.value.slice(0, 60))}
-                  placeholder="Como te chamamos?"
+                  placeholder={t("display_name_placeholder")}
+                  autoComplete="name"
                 />
               </AuthField>
             ) : null}
-            <AuthField label="E-mail">
+            <AuthField label={t("field_email")}>
               <Input
                 type="email"
+                dir="ltr"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
+                placeholder={t("email_placeholder")}
+                autoComplete="email"
               />
             </AuthField>
             {tab === "signup" ? <PhoneField value={phone} onChange={setPhone} /> : null}
-            <AuthField label="Senha">
+            <AuthField label={t("field_password")}>
               <Input
                 type="password"
                 required
@@ -322,6 +337,7 @@ export default function LandingPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
+                autoComplete={tab === "signin" ? "current-password" : "new-password"}
               />
             </AuthField>
 
@@ -332,7 +348,7 @@ export default function LandingPage() {
                     checked={remember}
                     onCheckedChange={(value) => setRemember(value === true)}
                   />
-                  Mantenha-se conectado
+                  <span dir="auto" className="text-left">{t("stay_logged_in")}</span>
                 </label>
                 <button
                   type="button"
@@ -342,7 +358,7 @@ export default function LandingPage() {
                   }}
                   className="text-[12.5px] text-[var(--accent)] transition hover:underline"
                 >
-                  Esqueci a senha
+                  {t("forgot_password")}
                 </button>
               </div>
             ) : null}
@@ -353,13 +369,13 @@ export default function LandingPage() {
 
             <Button type="submit" variant="primary" size="lg" className="w-full" disabled={busy}>
               {busy ? <Loader2 className="animate-spin" /> : null}
-              {tab === "signin" ? "Entrar" : "Criar conta"}
+              {tab === "signin" ? t("signin_tab") : t("signup_tab")}
             </Button>
           </form>
 
           <div className="my-5 flex items-center gap-3">
             <span className="h-px flex-1 bg-[var(--border)]" />
-            <span className="text-[11px] text-faint">ou entre com</span>
+            <span className="text-[11px] text-faint">{t("or_sign_in_with")}</span>
             <span className="h-px flex-1 bg-[var(--border)]" />
           </div>
 
@@ -375,9 +391,7 @@ export default function LandingPage() {
           </Button>
 
           {mode === "demo" ? (
-            <p className="mt-3 text-[11px] leading-relaxed text-faint">
-              Modo demonstração: tudo fica apenas neste navegador.
-            </p>
+            <p dir="auto" className="text-left mt-3 text-[11px] leading-relaxed text-faint">{t("demo_mode_notice")}</p>
           ) : null}
             </>
           )}

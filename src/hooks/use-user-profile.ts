@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UserPreferences, UserProfile } from "@/types/models";
 import { queryKeys } from "@/lib/query/query-provider";
@@ -104,7 +104,7 @@ export function useUserProfile() {
   };
 }
 
-export function useUserPreferencesSync(): void {
+export function useUserPreferencesSync(): boolean {
   const { user, loggingOut } = useAuth();
   const { profile } = useUserProfile();
   const { theme, setTheme } = useTheme();
@@ -112,6 +112,7 @@ export function useUserPreferencesSync(): void {
   const hydratePreferences = useUiStore((state) => state.hydratePreferences);
 
   const hydratedFor = useRef<string | null>(null);
+  const [readyFor, setReadyFor] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastWritten = useRef<string | null>(null);
 
@@ -138,6 +139,7 @@ export function useUserPreferencesSync(): void {
       ...(storedTheme ? { theme: storedTheme } : { theme }),
     };
     lastWritten.current = JSON.stringify(currentActive);
+    setReadyFor(user.uid);
   }, [hydratePreferences, loggingOut, profile, setTheme, theme, user]);
 
   useEffect(() => {
@@ -154,17 +156,14 @@ export function useUserPreferencesSync(): void {
       const commit = () => {
         if (loggingOut) return;
         lastWritten.current = serialized;
-        void saveUserPreferences(user.uid, preferences)
-          .then(() => {
-            queryClient.setQueryData<UserProfile | null>(
-              queryKeys.userProfile(user.uid),
-              (previous) =>
-                previous
-                  ? { ...previous, preferences: { ...previous.preferences, ...preferences } }
-                  : previous
-            );
-          })
-          .catch(() => {});
+        queryClient.setQueryData<UserProfile | null>(
+          queryKeys.userProfile(user.uid),
+          (previous) =>
+            previous
+              ? { ...previous, preferences: { ...previous.preferences, ...preferences } }
+              : previous
+        );
+        void saveUserPreferences(user.uid, preferences).catch(() => {});
       };
 
       if (immediate) {
@@ -215,4 +214,6 @@ export function useUserPreferencesSync(): void {
       }
     };
   }, [loggingOut, profile, queryClient, theme, user]);
+
+  return Boolean(user && !loggingOut && readyFor === user.uid);
 }

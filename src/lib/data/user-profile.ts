@@ -1,4 +1,4 @@
-import type { UserPreferences, UserProfile } from "@/types/models";
+import type { SupportedLanguage, UserPreferences, UserProfile } from "@/types/models";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
 import { isValidPhoneBR } from "@/lib/phone";
 import { isCustomAvatar } from "./user-avatar";
@@ -13,6 +13,7 @@ export interface ProfileIdentity {
   phone?: string;
   photoURL?: string | null;
   providers?: string[];
+  language?: SupportedLanguage;
 }
 
 export function profileNeedsCompletion(
@@ -71,7 +72,7 @@ function buildProfile(
     providers: identity.providers ?? previous?.providers ?? [],
     registrationCompleted: completed,
     preferences: {
-      language: "pt",
+      language: identity.language ?? "pt",
       ...(previous?.preferences ?? {}),
     },
     createdAt: previous?.createdAt ?? now,

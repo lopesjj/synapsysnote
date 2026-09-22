@@ -1,7 +1,7 @@
 "use client";
 
 import { use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/i18n/navigation";
 import { useWorkspace } from "@/lib/data/provider";
 import { DatabaseView } from "@/components/database/database-view";
 import { Button } from "@/components/ui/button";

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useLocale, useRouter } from "@/lib/i18n/navigation";
+import { localizePath } from "@/lib/i18n/locale";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { mergeAttributes } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
@@ -160,8 +161,9 @@ export function BlockEditor({
   }, [mentionCandidates, page.id, page.notebookId, livePages, notebooks]);
 
   const candidatesRef = useRef(effectiveCandidates);
-  const mentionNavRef = useRef({ router, livePages, notebooks });
-  mentionNavRef.current = { router, livePages, notebooks };
+  const locale = useLocale();
+  const mentionNavRef = useRef({ router, livePages, notebooks, locale });
+  mentionNavRef.current = { router, livePages, notebooks, locale };
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
 
   const openMention = useCallback((event: React.MouseEvent | MouseEvent) => {
@@ -176,7 +178,7 @@ export function BlockEditor({
     event.preventDefault();
     event.stopPropagation();
     if (event.metaKey || event.ctrlKey) {
-      window.open(href, "_blank", "noopener,noreferrer");
+      window.open(localizePath(href, mentionNavRef.current.locale), "_blank", "noopener,noreferrer");
     } else {
       mentionNavRef.current.router.push(href);
     }

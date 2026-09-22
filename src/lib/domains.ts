@@ -1,3 +1,5 @@
+import type { SupportedLanguage } from "@/types/models";
+import { localizePath } from "@/lib/i18n/locale";
 
 function trimOrigin(value: string | undefined): string {
   return value?.trim().replace(/\/$/, "") ?? "";
@@ -34,14 +36,16 @@ export function cookieParentDomain(): string | undefined {
   return undefined;
 }
 
-export function loginHref(path = "/"): string {
+export function loginHref(path = "/", language?: SupportedLanguage): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  return isSplitHosts() ? `${LOGIN_ORIGIN}${normalized}` : normalized;
+  const localized = language ? localizePath(normalized, language) : normalized;
+  return isSplitHosts() ? `${LOGIN_ORIGIN}${localized}` : localized;
 }
 
-export function appHref(path = "/home"): string {
+export function appHref(path = "/home", language?: SupportedLanguage): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  return isSplitHosts() ? `${APP_ORIGIN}${normalized}` : normalized;
+  const localized = language ? localizePath(normalized, language) : normalized;
+  return isSplitHosts() ? `${APP_ORIGIN}${localized}` : localized;
 }
 
 export function resolveUrl(href: string, fallbackOrigin: string): string {

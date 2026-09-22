@@ -183,6 +183,7 @@ export interface Workspace {
   ownerId: string;
   memberIds: string[];
   plan: "free" | "pro" | "team";
+  language?: SupportedLanguage;
   createdAt: ISOTimestamp;
   updatedAt: ISOTimestamp;
 }

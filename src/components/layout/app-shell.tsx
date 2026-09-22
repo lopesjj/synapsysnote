@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { useRouter, usePathname } from "next/navigation";
+import { useLocale, usePathname, useRouter } from "@/lib/i18n/navigation";
+import { useLocaleUrlSync } from "@/hooks/use-locale-url-sync";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { FilePlus, Home, Loader2, Minimize2, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -62,7 +63,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useWorkspaceNavHistory();
 
   useRehydrateUiStore();
-  useUserPreferencesSync();
+  const preferencesReady = useUserPreferencesSync();
+  useLocaleUrlSync(preferencesReady);
+  const locale = useLocale();
 
   const zenMode = useUiStore((state) => state.zenMode);
   const mobileSidebarOpen = useUiStore((state) => state.mobileSidebarOpen);
@@ -202,16 +205,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isSplitHosts() && isLoginHost()) {
       if (user) {
-        navigateTo(appHref(pathname || "/home"), router, "replace");
+        navigateTo(appHref(pathname || "/home", locale), router, "replace");
       } else if (!loading && !loggingOut) {
-        navigateTo(loginHref("/"), router, "replace");
+        navigateTo(loginHref("/"), undefined, "replace");
       }
       return;
     }
     if (!loading && !user && !loggingOut) {
-      navigateTo(loginHref("/?session=sync_failed"), router, "replace");
+      navigateTo(loginHref("/?session=sync_failed"), undefined, "replace");
     }
-  }, [loading, loggingOut, pathname, router, user]);
+  }, [loading, locale, loggingOut, pathname, router, user]);
 
   const onKeyDown = useCallback(
     async (event: KeyboardEvent) => {

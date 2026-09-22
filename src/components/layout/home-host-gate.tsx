@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useLocale, usePathname, useRouter } from "@/lib/i18n/navigation";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { appHref, isLoginHost, isSplitHosts, loginHref, navigateTo } from "@/lib/domains";
@@ -9,17 +9,18 @@ import { appHref, isLoginHost, isSplitHosts, loginHref, navigateTo } from "@/lib
 export function HomeHostGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const locale = useLocale();
   const { user, loading } = useAuth();
   const shouldRedirect = isSplitHosts() && isLoginHost();
 
   useEffect(() => {
     if (!shouldRedirect) return;
     if (user) {
-      navigateTo(appHref(pathname || "/home"), router, "replace");
+      navigateTo(appHref(pathname || "/home", locale), router, "replace");
     } else if (!loading) {
-      navigateTo(loginHref("/"), router, "replace");
+      navigateTo(loginHref("/"), undefined, "replace");
     }
-  }, [loading, pathname, router, shouldRedirect, user]);
+  }, [loading, locale, pathname, router, shouldRedirect, user]);
 
   if (shouldRedirect) {
     return (

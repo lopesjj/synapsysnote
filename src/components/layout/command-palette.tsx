@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "@/lib/i18n/navigation";
 import { toast } from "sonner";
 import { Command } from "cmdk";
 import { AnimatePresence, motion } from "framer-motion";

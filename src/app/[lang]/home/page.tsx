@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/lib/i18n/navigation";
 import { motion } from "framer-motion";
 import { ArrowUpRight, FilePlus, FolderPlus, Star } from "lucide-react";
 import { useWorkspace } from "@/lib/data/provider";

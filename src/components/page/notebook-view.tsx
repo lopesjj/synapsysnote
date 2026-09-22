@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useLocale, useRouter } from "@/lib/i18n/navigation";
+import { localizePath } from "@/lib/i18n/locale";
 import {
   DndContext,
   DragOverlay,
@@ -1159,6 +1159,7 @@ function NoteRow({
   dropMode?: DropMode;
 }) {
   const router = useRouter();
+  const locale = useLocale();
   const { t, language } = useTranslation();
   const { adapter, livePages } = useWorkspace();
   const {
@@ -1200,7 +1201,7 @@ function NoteRow({
         if (target.closest("button") || target.closest("[role='tooltip']")) return;
         if (target.closest("a")) return;
         if (event.metaKey || event.ctrlKey) {
-          window.open(`/home/p/${page.id}`, "_blank");
+          window.open(localizePath(`/home/p/${page.id}`, locale), "_blank");
         } else {
           useUiStore.getState().closeMenu();
           router.push(`/home/p/${page.id}`);

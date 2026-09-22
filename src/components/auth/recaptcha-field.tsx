@@ -3,8 +3,23 @@
 import { useEffect, useId, useRef } from "react";
 import { getRecaptchaSiteKey, isRecaptchaEnabled } from "@/lib/recaptcha";
 import { useTheme } from "@/components/theme-provider";
+import { useTranslation } from "@/lib/i18n/translations";
+import type { SupportedLanguage } from "@/types/models";
 
-const SCRIPT_SRC = "https://www.google.com/recaptcha/enterprise.js?render=explicit&hl=pt";
+const SCRIPT_BASE = "https://www.google.com/recaptcha/enterprise.js?render=explicit";
+
+const RECAPTCHA_LANGUAGE: Record<SupportedLanguage, string> = {
+  pt: "pt-BR",
+  en: "en",
+  es: "es",
+  fr: "fr",
+  it: "it",
+  de: "de",
+  ru: "ru",
+  ja: "ja",
+  zh: "zh-CN",
+  ar: "ar",
+};
 
 type GrecaptchaApi = {
   ready: (callback: () => void) => void;
@@ -31,10 +46,10 @@ function recaptchaApi() {
   return window.grecaptcha?.enterprise ?? window.grecaptcha;
 }
 
-function loadScript() {
-  if (document.querySelector(`script[src="${SCRIPT_SRC}"]`)) return;
+function loadScript(hl: string) {
+  if (document.querySelector(`script[src^="${SCRIPT_BASE}"]`)) return;
   const script = document.createElement("script");
-  script.src = SCRIPT_SRC;
+  script.src = `${SCRIPT_BASE}&hl=${hl}`;
   script.async = true;
   script.defer = true;
   document.head.appendChild(script);
@@ -47,6 +62,9 @@ export function RecaptchaField({
 }) {
   const siteKey = getRecaptchaSiteKey();
   const { theme } = useTheme();
+  const { t, language } = useTranslation();
+  const hl = RECAPTCHA_LANGUAGE[language as SupportedLanguage] ?? "pt-BR";
+  const loadFailed = t("recaptcha_load_failed");
   const hostId = useId();
   const widgetId = useRef<number | null>(null);
   const onChangeRef = useRef(onChange);
@@ -54,7 +72,7 @@ export function RecaptchaField({
 
   useEffect(() => {
     if (!siteKey) return;
-    loadScript();
+    loadScript(hl);
 
     let cancelled = false;
     const host = document.getElementById(hostId);
@@ -68,13 +86,13 @@ export function RecaptchaField({
         widgetId.current = api.render(host, {
           sitekey: siteKey,
           theme: theme === "dark" ? "dark" : "light",
-          hl: "pt",
+          hl,
           callback: (token) => onChangeRef.current(token),
           "expired-callback": () => onChangeRef.current(null),
           "error-callback": () => onChangeRef.current(null),
         });
       } catch {
-        host.textContent = "Não foi possível carregar o reCAPTCHA.";
+        host.textContent = loadFailed;
       }
     };
 
@@ -87,7 +105,7 @@ export function RecaptchaField({
         return;
       }
       if (Date.now() - started > 8000) {
-        host.textContent = "Não foi possível carregar o reCAPTCHA.";
+        host.textContent = loadFailed;
         return;
       }
       window.setTimeout(wait, 80);
@@ -99,7 +117,7 @@ export function RecaptchaField({
       widgetId.current = null;
       onChangeRef.current(null);
     };
-  }, [hostId, siteKey, theme]);
+  }, [hl, hostId, loadFailed, siteKey, theme]);
 
   if (!isRecaptchaEnabled()) return null;
 

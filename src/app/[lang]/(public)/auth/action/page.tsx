@@ -1,16 +1,18 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { Link, useRouter } from "@/lib/i18n/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { SynapsysLockup } from "@/components/brand/logo";
+import { SiteLanguageSwitcher } from "@/components/i18n/site-language-switcher";
 import { AuthField } from "@/components/auth/auth-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/primitives";
 import { useTranslation } from "@/lib/i18n/translations";
+import { authErrorText } from "@/lib/auth/error-message";
 
 export default function AuthActionPage() {
   return (
@@ -83,7 +85,7 @@ function AuthActionForm() {
       toast.success(t("password_reset_success"));
       router.replace("/");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("password_reset_failed"));
+      toast.error(authErrorText(error, t, "password_reset_failed"));
     } finally {
       setBusy(false);
     }
@@ -99,6 +101,10 @@ function AuthActionForm() {
         }}
       />
 
+      <div className="absolute end-4 top-4 z-10 sm:end-6 sm:top-6">
+        <SiteLanguageSwitcher />
+      </div>
+
       <div className="relative mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-12">
         <div className="mb-8 flex select-none justify-center">
           <SynapsysLockup size={64} />
@@ -111,8 +117,8 @@ function AuthActionForm() {
             </div>
           ) : invalid ? (
             <>
-              <p className="text-[15px] font-medium tracking-[-0.015em] text-ink">{t("reset_link_invalid_title")}</p>
-              <p className="mt-2 text-[13px] leading-relaxed text-muted">
+              <p dir="auto" className="text-left text-[15px] font-medium tracking-[-0.015em] text-ink">{t("reset_link_invalid_title")}</p>
+              <p dir="auto" className="text-left mt-2 text-[13px] leading-relaxed text-muted">
                 {t("reset_link_invalid_desc")}
               </p>
               <Button asChild variant="primary" size="lg" className="mt-5 w-full">
@@ -121,8 +127,8 @@ function AuthActionForm() {
             </>
           ) : (
             <>
-              <p className="text-[15px] font-medium tracking-[-0.015em] text-ink">{t("reset_new_password_title")}</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-muted">
+              <p dir="auto" className="text-left text-[15px] font-medium tracking-[-0.015em] text-ink">{t("reset_new_password_title")}</p>
+              <p dir="auto" className="text-left mt-1 text-[13px] leading-relaxed text-muted">
                 {email ? t("resetting_for_email", { email }) : t("choose_new_password")}
               </p>
               <form onSubmit={submit} className="mt-5 space-y-3.5">

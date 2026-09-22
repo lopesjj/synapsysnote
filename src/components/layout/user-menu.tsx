@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/i18n/navigation";
 import {
   KeyRound,
   LogOut,
@@ -180,7 +180,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
                   await saveUserPreferences(user.uid, prefs).catch(() => {});
                 }
                 await signOut();
-                navigateTo(loginHref("/?logout=1"), router, "replace");
+                navigateTo(loginHref("/?logout=1"), undefined, "replace");
               } catch (error) {
                 toast.error(error instanceof Error ? error.message : t("logout"));
               }

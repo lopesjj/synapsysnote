@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "@/lib/i18n/navigation";
 import { useNavHistory } from "@/lib/store/nav-history";
 
 export function useWorkspaceNavHistory(): void {

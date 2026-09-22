@@ -1,26 +1,30 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { PublicLocaleProvider } from "@/components/i18n/public-locale-provider";
 import { LOCALES, isSupportedLanguage } from "@/lib/i18n/locale";
-import { SITE_DESCRIPTION } from "@/lib/i18n/site-metadata";
+import { LOGIN_ORIGIN } from "@/lib/domains";
 
 type LayoutParams = { params: Promise<{ lang: string }> };
-
-export function generateStaticParams() {
-  return LOCALES.map((lang) => ({ lang }));
-}
 
 export async function generateMetadata({ params }: LayoutParams): Promise<Metadata> {
   const { lang } = await params;
   return {
-    description: SITE_DESCRIPTION[isSupportedLanguage(lang) ? lang : "pt"],
+    metadataBase: new URL(LOGIN_ORIGIN),
+    alternates: {
+      canonical: `/${lang}`,
+      languages: {
+        ...Object.fromEntries(LOCALES.map((code) => [code, `/${code}`])),
+        "x-default": "/",
+      },
+    },
   };
 }
 
-export default async function LocaleLayout({
+export default async function PublicLayout({
   children,
   params,
 }: LayoutParams & { children: React.ReactNode }) {
   const { lang } = await params;
   if (!isSupportedLanguage(lang)) notFound();
-  return children;
+  return <PublicLocaleProvider language={lang}>{children}</PublicLocaleProvider>;
 }

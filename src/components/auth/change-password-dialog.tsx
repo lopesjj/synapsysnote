@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useTranslation } from "@/lib/i18n/translations";
+import { authErrorText } from "@/lib/auth/error-message";
 import { AuthField } from "@/components/auth/auth-field";
 import { Button } from "@/components/ui/button";
 import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
@@ -75,7 +76,7 @@ export function ChangePasswordDialog({
       toast.success(hasPassword ? t("password_changed_success") : t("password_added_success"));
       close(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("password_change_failed"));
+      toast.error(authErrorText(error, t, "password_change_failed"));
     } finally {
       setBusy(false);
     }

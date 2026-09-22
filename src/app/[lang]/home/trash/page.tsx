@@ -1,7 +1,7 @@
 "use client";
 
+import { Link } from "@/lib/i18n/navigation";
 import { useState } from "react";
-import Link from "next/link";
 import { RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace, TRASH_RETENTION_DAYS } from "@/lib/data/provider";

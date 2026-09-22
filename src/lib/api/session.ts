@@ -2,6 +2,8 @@ import "server-only";
 
 import { FieldValue, type DocumentReference } from "firebase-admin/firestore";
 import { adminAuth, adminDb, isAdminConfigured } from "@/lib/firebase/admin";
+import type { SupportedLanguage } from "@/types/models";
+import { defaultWorkspaceName } from "@/lib/i18n/site-metadata";
 import { ApiError } from "./errors";
 
 export interface AuthedUser {
@@ -37,7 +39,11 @@ export function workspaceIdFor(uid: string): string {
   return `ws_${uid}`;
 }
 
-export async function ensureWorkspace(user: AuthedUser, requestedId?: string): Promise<string> {
+export async function ensureWorkspace(
+  user: AuthedUser,
+  requestedId?: string,
+  language: SupportedLanguage = "pt"
+): Promise<string> {
   const workspaceId = requestedId || workspaceIdFor(user.uid);
   const db = adminDb();
   const wsRef = db.collection("workspaces").doc(workspaceId);
@@ -49,8 +55,9 @@ export async function ensureWorkspace(user: AuthedUser, requestedId?: string): P
     if (!ws.exists) {
       tx.set(wsRef, {
         id: workspaceId,
-        name: user.name ? `Workspace de ${user.name.split(" ")[0]}` : "Meu workspace",
+        name: defaultWorkspaceName(language, user.name),
         emoji: "🧠",
+        language,
         ownerId: user.uid,
         memberIds: [user.uid],
         plan: "free",

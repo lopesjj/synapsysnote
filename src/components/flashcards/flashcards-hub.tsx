@@ -1,7 +1,7 @@
 "use client";
 
+import { Link } from "@/lib/i18n/navigation";
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { ChevronRight, Loader2, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Flashcard } from "@/types/models";

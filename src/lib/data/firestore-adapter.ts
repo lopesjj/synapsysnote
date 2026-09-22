@@ -1,5 +1,7 @@
 "use client";
 
+import { useUiStore } from "@/lib/store/ui-store";
+import { defaultWorkspaceName } from "@/lib/i18n/site-metadata";
 import {
   addDoc,
   collection,
@@ -253,7 +255,7 @@ export class FirestoreAdapter implements DataAdapter {
       try {
         await firebaseJson("/api/workspace/bootstrap", {
           method: "POST",
-          body: JSON.stringify({ workspaceId: this.workspaceId }),
+          body: JSON.stringify({ workspaceId: this.workspaceId, language: useUiStore.getState().language }),
         });
         await this.purgeLegacyInbox();
         this.bootstrapped = true;
@@ -268,7 +270,7 @@ export class FirestoreAdapter implements DataAdapter {
         if (!ws.exists()) {
           await setDoc(wsRef, {
             id: this.workspaceId,
-            name: "Meu workspace",
+            name: defaultWorkspaceName(useUiStore.getState().language),
             emoji: "🧠",
             ownerId: this.userId,
             memberIds: [this.userId],

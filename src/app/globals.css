@@ -1547,3 +1547,11 @@ body {
 [data-radix-dropdown-menu-content] [role="menuitem"] * {
   touch-action: pan-y !important;
 }
+
+html:lang(ar) {
+  --font-sans: "IBM Plex Sans Arabic", var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+:where(html:lang(ar)) * {
+  letter-spacing: normal;
+}

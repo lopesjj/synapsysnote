@@ -1,7 +1,8 @@
 "use client";
 
 import { useLayoutEffect, useMemo, useRef } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { usePathname } from "@/lib/i18n/navigation";
 import { useWorkspace } from "@/lib/data/provider";
 import { formatTabTitle } from "@/lib/document-title";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";

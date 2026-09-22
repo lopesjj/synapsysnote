@@ -1,6 +1,6 @@
 {
   "name": "synapsys-note",
-  "version": "1.14.11",
+  "version": "1.15.11",
   "private": true,
   "description": "Plataforma de produtividade e gestão de conhecimento (PKM) com editor de blocos, bases de dados flexíveis, notas de voz e importação nativa do Notion sobre Firebase.",
   "scripts": {
@@ -9,7 +9,7 @@
     "start": "next start --port 43127",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run verify:file-import && npm run verify:integrations-import && npm run verify:sidebar-dnd && npm run verify:page-tree && npm run verify:notebook-tree && npm run verify:media-enrichment && npm run verify:attachment-compress && npm run verify:notion-database-notebook && npm run verify:toggle && npm run verify:image-lightbox && npm run verify:document-title && npm run verify:table-multi && npm run verify:login-attempts && npm run verify:mention-scope && npm run verify:search-scope && npm run verify:language && npm run verify:media-deletion && npm run verify:media-proxy && npm run verify:user-avatar && npm run verify:firebase-admin && npm run verify:flashcards && npm run verify:transcription",
+    "verify": "npm run verify:file-import && npm run verify:integrations-import && npm run verify:sidebar-dnd && npm run verify:page-tree && npm run verify:notebook-tree && npm run verify:media-enrichment && npm run verify:attachment-compress && npm run verify:notion-database-notebook && npm run verify:toggle && npm run verify:image-lightbox && npm run verify:document-title && npm run verify:table-multi && npm run verify:login-attempts && npm run verify:mention-scope && npm run verify:search-scope && npm run verify:language && npm run verify:locale-routing && npm run verify:media-deletion && npm run verify:media-proxy && npm run verify:user-avatar && npm run verify:firebase-admin && npm run verify:flashcards && npm run verify:transcription",
     "verify:file-import": "tsx scripts/verify-file-import.mts",
     "verify:integrations-import": "tsx scripts/verify-integrations-import.mts",
     "verify:flashcards": "tsx scripts/verify-flashcards.mts",
@@ -30,6 +30,7 @@
     "verify:search-scope": "tsx scripts/verify-search-scope.mts",
     "verify:pdf-export": "tsx scripts/verify-pdf-export.mts",
     "verify:language": "tsx scripts/verify-language-and-translation.mts",
+    "verify:locale-routing": "tsx scripts/verify-locale-routing.mts",
     "verify:media-deletion": "tsx scripts/verify-media-deletion.mts",
     "verify:media-proxy": "tsx scripts/verify-media-proxy.mts",
     "verify:user-avatar": "tsx scripts/verify-user-avatar.mts",
@@ -47,6 +48,7 @@
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@fontsource/ibm-plex-sans-arabic": "^5.3.0",
     "@huggingface/transformers": "^4.2.0",
     "@notionhq/client": "^5.26.0",
     "@radix-ui/react-avatar": "^1.2.6",

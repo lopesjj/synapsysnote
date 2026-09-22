@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/lib/i18n/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useWorkspace } from "@/lib/data/provider";
 import { notebookAncestors } from "@/lib/data/notebook-tree";

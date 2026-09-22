@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/i18n/navigation";
 import { toast } from "sonner";
 import { useWorkspace } from "@/lib/data/provider";
 import { useTranslation } from "@/lib/i18n/translations";

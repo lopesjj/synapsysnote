@@ -11,7 +11,7 @@ export async function changeFirebasePassword(currentPassword: string, nextPasswo
 
   const current = getFirebaseAuth().currentUser;
   if (!current?.email) {
-    throw new Error("Entre de novo para alterar a senha.");
+    throw createAuthError("recent-login");
   }
 
   try {

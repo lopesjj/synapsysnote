@@ -39,6 +39,8 @@ import {
 } from "@/lib/auth/cross-host-session";
 import { isSplitHosts, loginHref, resolveUrl } from "@/lib/domains";
 import { isCustomAvatar } from "@/lib/data/user-avatar";
+import { forgetUserLanguage } from "@/lib/i18n/locale-cookies";
+import type { SupportedLanguage } from "@/types/models";
 
 function toAppUser(fbUser: {
   uid: string;
@@ -78,9 +80,20 @@ interface AuthContextValue {
   mode: "firebase" | "demo";
   signInWithProvider: (provider: OAuthProviderId, remember?: boolean) => Promise<AppUser>;
   signInWithEmail: (email: string, password: string, remember?: boolean) => Promise<AppUser>;
-  signUpWithEmail: (name: string, email: string, password: string, phone: string) => Promise<AppUser>;
-  completeRegistration: (input: { name: string; email: string; phone: string }) => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
+  signUpWithEmail: (
+    name: string,
+    email: string,
+    password: string,
+    phone: string,
+    language: SupportedLanguage
+  ) => Promise<AppUser>;
+  completeRegistration: (input: {
+    name: string;
+    email: string;
+    phone: string;
+    language: SupportedLanguage;
+  }) => Promise<void>;
+  resetPassword: (email: string, language?: SupportedLanguage) => Promise<void>;
   verifyResetCode: (oobCode: string) => Promise<string>;
   confirmPasswordReset: (oobCode: string, password: string) => Promise<void>;
   changePassword: (currentPassword: string, nextPassword: string) => Promise<void>;
@@ -378,7 +391,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
 
-      async signUpWithEmail(name, email, password, phone) {
+      async signUpWithEmail(name, email, password, phone, language) {
         setLoggingOut(false);
         if (!configured) {
           const next = { ...DEMO_USER, email, displayName: name };
@@ -390,7 +403,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             displayName: name,
             phone,
             providers: next.providers,
+            language,
           });
+          useUiStore.getState().setLanguage(language);
           return next;
         }
         await applyAuthPersistence(true);
@@ -409,28 +424,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             phone,
             photoURL: next.photoURL,
             providers: next.providers,
+            language,
           });
           await persistCrossHostSession(true);
           writeCachedUser(next);
           setFirebaseUser(next);
-          useUiStore.getState().setLanguage("pt");
+          useUiStore.getState().setLanguage(language);
           return next;
         } catch (error) {
           throw toAuthError(error);
         }
       },
 
-      async completeRegistration({ name, email, phone }) {
+      async completeRegistration({ name, email, phone, language }) {
         if (!configured) {
           const next = { ...(firebaseUser ?? DEMO_USER), email, displayName: name };
           writeDemoUser(next);
-          await completeUserRegistration({
+          const profile = await completeUserRegistration({
             uid: next.uid,
             email,
             displayName: name,
             phone,
             providers: next.providers,
+            language,
           });
+          useUiStore.getState().setLanguage(profile.preferences?.language ?? language);
           return;
         }
 
@@ -449,20 +467,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const next = { ...toAppUser(current), email: email || current.email || "", displayName: name };
-        await completeUserRegistration({
+        const profile = await completeUserRegistration({
           uid: next.uid,
           email: next.email,
           displayName: name,
           phone,
           photoURL: next.photoURL,
           providers: next.providers,
+          language,
         });
         await persistCrossHostSession(true);
         setFirebaseUser(next);
-        useUiStore.getState().setLanguage("pt");
+        useUiStore.getState().setLanguage(profile.preferences?.language ?? language);
       },
 
-      async resetPassword(email) {
+      async resetPassword(email, language = "pt") {
         if (!configured) {
           throw new Error("A redefinição de senha precisa do Firebase.");
         }
@@ -470,9 +489,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           import("firebase/auth"),
           firebaseAuth(),
         ]);
-        auth.languageCode = "pt";
+        auth.languageCode = language;
         try {
-          const resetUrl = new URL(resolveUrl(loginHref("/"), window.location.origin));
+          const resetUrl = new URL(resolveUrl(loginHref("/", language), window.location.origin));
           resetUrl.searchParams.set("reset", "ok");
           await sendPasswordResetEmail(auth, email.trim(), {
             url: resetUrl.toString(),
@@ -564,7 +583,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setFirebaseUser(null);
           clearRemembered();
           queryClient.clear();
-          useUiStore.getState().setLanguage("pt");
+          forgetUserLanguage();
           if (typeof window !== "undefined") {
             try {
               sessionStorage.removeItem("synapsys.session.openNotebooks");
