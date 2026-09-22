@@ -78,10 +78,10 @@ function spansToHtml(spans: RichTextSpan[]): string {
       if (a.italic) out = `<em>${out}</em>`;
       if (a.underline) out = `<u>${out}</u>`;
       if (a.strikethrough) out = `<s>${out}</s>`;
-      if (a.color) out = `<span style="color:${a.color}">${out}</span>`;
+      if (a.color) out = `<span style="color: ${a.color}">${out}</span>`;
       if (a.highlight) {
         const bg = typeof a.highlight === "string" ? a.highlight : "#fef08a";
-        out = `<mark style="background-color:${bg};color:inherit">${out}</mark>`;
+        out = `<mark style="background-color: ${bg}; color: inherit">${out}</mark>`;
       }
       return out;
     })
@@ -96,6 +96,9 @@ function normalizeColor(color?: string | null): string | undefined {
     const g = Number(match[2]).toString(16).padStart(2, "0");
     const b = Number(match[3]).toString(16).padStart(2, "0");
     return `#${r}${g}${b}`.toUpperCase();
+  }
+  if (color.startsWith("#")) {
+    return color.toUpperCase();
   }
   return color;
 }
