@@ -12,12 +12,14 @@ import {
 } from "firebase/auth";
 import { isRememberActive } from "@/lib/auth/remember";
 import {
+  clearIndexedDbPersistence,
   connectFirestoreEmulator,
   initializeFirestore,
   memoryLocalCache,
   persistentLocalCache,
   persistentMultipleTabManager,
   setLogLevel,
+  terminate,
   type Firestore,
 } from "firebase/firestore";
 import { connectStorageEmulator, getStorage, type FirebaseStorage } from "firebase/storage";
@@ -68,6 +70,14 @@ export function getDb(): Firestore {
   }
   if (firebaseEmulatorsEnabled()) connectFirestoreEmulator(firestore, "127.0.0.1", 8080);
   return firestore;
+}
+
+export async function resetFirestoreCache(): Promise<void> {
+  const current = firestore;
+  if (!current) return;
+  firestore = null;
+  await terminate(current).catch(() => undefined);
+  await clearIndexedDbPersistence(current).catch(() => undefined);
 }
 
 export function getFirebaseAuth(): Auth {

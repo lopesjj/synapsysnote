@@ -172,7 +172,12 @@ function writeDemoUser(next: AppUser | null) {
 
 const CACHED_USER_KEY = "synapsys.auth_user";
 const AUTH_ACTIVE_KEY = "synapsys.auth_active";
-const OFFLINE_CACHE_PREFIX = "synapsys.cache.";
+const SIGNED_OUT_PREFIXES = [
+  "synapsys.cache.",
+  "synapsys.bootstrapped.",
+  "synapsys.trash_purge_cooldown.",
+  "synapsys.profile.v1.",
+];
 const SIGNED_OUT_SESSION_KEYS = [
   "synapsys.session.openNotebooks",
   "synapsys.session.expandedPages",
@@ -190,10 +195,13 @@ function clearSignedOutStorage(): void {
     const cacheKeys: string[] = [];
     for (let index = 0; index < storage.length; index += 1) {
       const key = storage.key(index);
-      if (key?.startsWith(OFFLINE_CACHE_PREFIX)) cacheKeys.push(key);
+      if (key && SIGNED_OUT_PREFIXES.some((prefix) => key.startsWith(prefix))) cacheKeys.push(key);
     }
     for (const key of cacheKeys) storage.removeItem(key);
   } catch {}
+  void import("@/lib/firebase/client")
+    .then(({ resetFirestoreCache }) => resetFirestoreCache())
+    .catch(() => undefined);
   try {
     if (window.indexedDB && typeof window.indexedDB.databases === "function") {
       void window.indexedDB.databases().then((dbs) => {
@@ -275,6 +283,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await signOut(auth).catch(() => {});
         clearRemembered();
         writeDemoUser(null);
+        writeCachedUser(null);
+        queryClient.clear();
+        clearSignedOutStorage();
         if (!cancelled) {
           setFirebaseUser(null);
           setFirebaseLoading(false);
@@ -288,6 +299,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await signOut(auth);
         clearRemembered();
         writeDemoUser(null);
+        clearSignedOutStorage();
       } else if (auth.currentUser && !isRememberActive()) {
         adoptLegacySession();
       }
@@ -307,6 +319,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         void hydrateFromSessionCookie()
           .then((ok) => {
             if (!ok && !cancelled) {
+              if (hasActiveSessionHint()) clearSignedOutStorage();
               writeCachedUser(null);
               setFirebaseUser(null);
               setFirebaseLoading(false);
@@ -328,7 +341,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       unsub();
     };
-  }, [configured]);
+  }, [configured, queryClient]);
 
   const user = configured ? firebaseUser ?? demoUser : demoUser;
   const loading = configured ? firebaseLoading && !demoUser : false;

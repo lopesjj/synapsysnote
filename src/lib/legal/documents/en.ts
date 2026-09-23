@@ -133,7 +133,7 @@ const en: LegalBundle = {
         id: "termination",
         title: "Termination",
         blocks: [
-          "You can stop using the service and request the deletion of your account whenever you want, by writing to {privacyEmail}. Deletion periods are set out in the [Privacy Policy](doc:privacy#retention).",
+          "You can stop using the service and delete your account whenever you want, under Preferences › Privacy & data or by writing to {privacyEmail}. Deletion periods are set out in the [Privacy Policy](doc:privacy#retention).",
           "We may suspend or terminate accounts that seriously or repeatedly violate these terms or that put other people at risk, or when the law requires it. Except in urgent cases or cases of unlawful conduct, we will notify you in advance and give you the opportunity to export your content.",
         ],
       },
@@ -225,7 +225,7 @@ const en: LegalBundle = {
             list: [
               "**Audio and video transcription:** Google Gemini API; as an alternative, an open-source model (Whisper) running on our own servers.",
               "**Flashcards and duplicate-card detection:** Google Gemini API.",
-              "**Translation:** Google's translation service.",
+              "**Translation:** Google Cloud Translation; while it is unavailable, the Google Gemini API itself.",
               "**Live transcription of voice notes:** your browser's speech recognition, which may send audio to the provider (Google, Microsoft, or Apple). Stays off until you turn it on during recording.",
             ],
           },
@@ -243,7 +243,7 @@ const en: LegalBundle = {
               rows: [
                 ["Google Cloud and Firebase", "Hosting, database, file storage, authentication and system emails"],
                 ["Google reCAPTCHA", "Protection against bots at sign-in and password reset"],
-                ["Google Gemini API and Google Translate", "AI and translation features you trigger"],
+                ["Google Gemini API and Google Cloud Translation", "AI and translation features you trigger"],
                 ["country.is (IP geolocation)", "Identifying your country to suggest a language, without storing your IP address"],
                 ["Notion, Evernote and Google Docs", "Only when you connect the integration, to import what you choose"],
                 ["Browser speech recognition and voices (Google, Microsoft, or Apple)", "Live transcription, if you enable it, and read-aloud when the browser uses online voices"],
@@ -277,7 +277,7 @@ const en: LegalBundle = {
             list: [
               "**Account and content:** for as long as your account is active.",
               "**Trash:** deleted items stay in the trash for {trashDays} days and are then permanently erased.",
-              "**Account deletion:** data is erased within 30 days, except what the law requires us to keep.",
+              "**Account deletion:** when done under Preferences › Privacy & data, data is erased immediately; when requested by email, within 30 days. Only what the law requires us to keep, such as access logs, remains.",
               "**Access logs:** {accessLogMonths} months, in accordance with article 15 of the Brazilian Civil Rights Framework for the Internet (Law No. 12,965/2014).",
               "**Integration tokens:** until you disconnect the integration or delete your account.",
             ],
@@ -291,7 +291,7 @@ const en: LegalBundle = {
           {
             list: [
               "connections that are always encrypted (HTTPS/TLS);",
-              "access rules that isolate each account's data in the database and in file storage;",
+              "access rules that isolate each account's data in the database and in file storage. Attached files open through private, unguessable links; anyone who receives one of these links can open the file, so share them with care;",
               "integration tokens encrypted with AES-256-GCM;",
               "a session kept in an HttpOnly cookie, inaccessible to scripts;",
               "a limit on sign-in attempts and reCAPTCHA verification against automated attacks;",
@@ -317,7 +317,7 @@ const en: LegalBundle = {
               "request the deletion of your account and data.",
             ],
           },
-          "To exercise any of them, write to {privacyEmail} from the email address on your account. We respond within {responseDays} days. You may also lodge a complaint with the ANPD.",
+          "You can download a full copy of your data and delete your account yourself under Preferences › Privacy & data. To exercise any right, you may also write to {privacyEmail} from the email address on your account. We respond within {responseDays} days. You may also lodge a complaint with the ANPD.",
           "If you are in the European Economic Area or the United Kingdom, you also have the rights provided for in the GDPR, including the right to lodge a complaint with the data protection authority in your country.",
         ],
       },
@@ -404,10 +404,10 @@ const en: LegalBundle = {
               "the Firebase authentication session, which keeps you signed in;",
               "a counter of sign-in attempts, used to show reCAPTCHA when needed;",
               "interface preferences, such as theme, sidebar, recent notebooks and the languages for transcriptions and flashcards;",
-              "a temporary copy of data so that the app opens faster.",
+              "a copy of your notes and notebooks, so the app opens faster and keeps working offline.",
             ],
           },
-          "This information stays only in your browser and is erased when you clear the site's data.",
+          "This information stays only in your browser and is erased when you sign out, when the session expires or when you clear the site's data.",
         ],
       },
       {

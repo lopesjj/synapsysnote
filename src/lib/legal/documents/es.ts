@@ -133,7 +133,7 @@ const es: LegalBundle = {
         id: "termination",
         title: "Terminación",
         blocks: [
-          "Puedes dejar de usar el servicio y pedir la eliminación de tu cuenta cuando quieras, escribiendo a {privacyEmail}. Los plazos de eliminación figuran en la [Política de Privacidad](doc:privacy#retention).",
+          "Puedes dejar de usar el servicio y eliminar tu cuenta cuando quieras, en Preferencias › Privacidad y datos o escribiendo a {privacyEmail}. Los plazos de eliminación figuran en la [Política de Privacidad](doc:privacy#retention).",
           "Podemos suspender o cerrar cuentas que incumplan estos términos de forma grave o reiterada, que pongan en riesgo a otras personas o cuando la ley lo exija. Salvo en casos urgentes o de ilegalidad, te avisaremos antes y te daremos la oportunidad de exportar tu contenido.",
         ],
       },
@@ -225,7 +225,7 @@ const es: LegalBundle = {
             list: [
               "**Transcripción de audio y vídeo:** Google Gemini API; como alternativa, un modelo de código abierto (Whisper) que se ejecuta en nuestros propios servidores.",
               "**Flashcards y detección de tarjetas repetidas:** Google Gemini API.",
-              "**Traducción:** servicio de traducción de Google.",
+              "**Traducción:** Google Cloud Translation; mientras no esté disponible, la propia Google Gemini API.",
               "**Transcripción en vivo de notas de voz:** el reconocimiento de voz de tu navegador, que puede enviar el audio al fabricante (Google, Microsoft o Apple). Permanece apagada hasta que la actives en la grabación.",
             ],
           },
@@ -243,7 +243,7 @@ const es: LegalBundle = {
               rows: [
                 ["Google Cloud y Firebase", "Alojamiento, base de datos, archivos, autenticación y correos del sistema"],
                 ["Google reCAPTCHA", "Protección contra bots al iniciar sesión y restablecer la contraseña"],
-                ["Google Gemini API y Google Traductor", "Funciones de IA y traducción que activas"],
+                ["Google Gemini API y Google Cloud Translation", "Funciones de IA y traducción que activas"],
                 ["country.is (geolocalización por IP)", "Identificar el país para sugerir el idioma, sin guardar la dirección IP"],
                 ["Notion, Evernote y Google Docs", "Solo cuando conectas la integración, para importar lo que elijas"],
                 ["Reconocimiento de voz y voces del navegador (Google, Microsoft o Apple)", "Transcripción en vivo, si la activas, y lectura en voz alta cuando el navegador usa voces en línea"],
@@ -277,7 +277,7 @@ const es: LegalBundle = {
             list: [
               "**Cuenta y contenido:** mientras tu cuenta esté activa.",
               "**Papelera:** los elementos eliminados permanecen {trashDays} días en la papelera y después se borran definitivamente.",
-              "**Eliminación de la cuenta:** los datos se borran en un máximo de 30 días, salvo lo que la ley nos obligue a conservar.",
+              "**Eliminación de la cuenta:** hecha en Preferencias › Privacidad y datos, los datos se borran al instante; pedida por correo, en un máximo de 30 días. Solo queda lo que la ley nos obliga a conservar, como los registros de acceso.",
               "**Registros de acceso:** {accessLogMonths} meses, según el art. 15 del Marco Civil de Internet de Brasil (Ley n.º 12.965/2014).",
               "**Tokens de integración:** hasta que desconectes la integración o elimines la cuenta.",
             ],
@@ -291,7 +291,7 @@ const es: LegalBundle = {
           {
             list: [
               "conexiones siempre cifradas (HTTPS/TLS);",
-              "reglas de acceso que aíslan los datos de cada cuenta en la base de datos y en el almacenamiento de archivos;",
+              "reglas de acceso que aíslan los datos de cada cuenta en la base de datos y en el almacenamiento de archivos. Los archivos adjuntos se abren mediante enlaces privados e imposibles de adivinar; quien reciba uno de esos enlaces puede abrir el archivo, así que compártelos con cuidado;",
               "tokens de integración cifrados con AES-256-GCM;",
               "sesión en una cookie HttpOnly, inaccesible para scripts;",
               "límite de intentos de inicio de sesión y verificación reCAPTCHA contra ataques automatizados;",
@@ -317,7 +317,7 @@ const es: LegalBundle = {
               "solicitar la eliminación de la cuenta y de los datos.",
             ],
           },
-          "Para ejercer cualquiera de ellos, escribe a {privacyEmail} desde el correo de tu cuenta. Respondemos en un máximo de {responseDays} días. También puedes presentar una reclamación ante la ANPD.",
+          "Puedes descargar una copia completa de tus datos y eliminar tu cuenta tú mismo en Preferencias › Privacidad y datos. Para ejercer cualquier derecho, también puedes escribir a {privacyEmail} desde el correo de tu cuenta. Respondemos en un máximo de {responseDays} días. También puedes presentar una reclamación ante la ANPD.",
           "Si te encuentras en el Espacio Económico Europeo o en el Reino Unido, también tienes los derechos previstos en el RGPD, incluido el de reclamar ante la autoridad de protección de datos de tu país.",
         ],
       },
@@ -404,10 +404,10 @@ const es: LegalBundle = {
               "la sesión de autenticación de Firebase, que mantiene tu sesión activa;",
               "un contador de intentos de inicio de sesión, usado para mostrar el reCAPTCHA cuando es necesario;",
               "preferencias de interfaz, como tema, barra lateral, cuadernos recientes e idiomas de transcripción y flashcards;",
-              "una copia temporal de datos para que la aplicación se abra más rápido.",
+              "una copia de tus notas y cuadernos, para que la aplicación se abra más rápido y siga funcionando sin internet.",
             ],
           },
-          "Esta información se queda solo en tu navegador y se borra cuando eliminas los datos del sitio.",
+          "Esta información se queda solo en tu navegador y se borra cuando cierras sesión, cuando la sesión expira o cuando eliminas los datos del sitio.",
         ],
       },
       {

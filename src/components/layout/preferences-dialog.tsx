@@ -12,6 +12,7 @@ import {
   Moon,
   Palette,
   Settings,
+  ShieldCheck,
   Sun,
   Trash2,
   Type,
@@ -48,8 +49,25 @@ import { cn, isMac } from "@/lib/utils";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
 import { SUPPORTED_LANGUAGES } from "@/lib/i18n/languages";
 import { announceToScreenReader, speakText } from "@/components/accessibility/screen-reader";
+import {
+  deleteMyAccount,
+  downloadAccountData,
+  reauthenticate,
+  revokeAllSessions,
+  usesPassword,
+} from "@/lib/account/account-client";
+import { authErrorText } from "@/lib/auth/error-message";
+import { AuthError } from "@/lib/auth/errors";
+import { loginHref, navigateTo } from "@/lib/domains";
 
-type PreferenceTab = "appearance" | "accessibility" | "language" | "typography" | "profile" | "shortcuts";
+type PreferenceTab =
+  | "appearance"
+  | "accessibility"
+  | "language"
+  | "typography"
+  | "profile"
+  | "privacy"
+  | "shortcuts";
 
 export function PreferencesDialog({
   open,
@@ -67,6 +85,7 @@ export function PreferencesDialog({
     { id: "language", label: t("language"), icon: <Globe className="size-4" /> },
     { id: "typography", label: t("typography"), icon: <Type className="size-4" /> },
     { id: "profile", label: t("profile"), icon: <User className="size-4" /> },
+    { id: "privacy", label: t("privacy_data"), icon: <ShieldCheck className="size-4" /> },
     { id: "shortcuts", label: t("shortcuts"), icon: <Keyboard className="size-4" /> },
   ];
 
@@ -82,6 +101,8 @@ export function PreferencesDialog({
         return t("typography");
       case "profile":
         return t("profile");
+      case "privacy":
+        return t("privacy_data");
       case "shortcuts":
         return t("shortcuts");
     }
@@ -95,6 +116,8 @@ export function PreferencesDialog({
         return t("accessibility_description");
       case "language":
         return t("language_description");
+      case "privacy":
+        return t("privacy_data_description");
       default:
         return "";
     }
@@ -191,6 +214,7 @@ export function PreferencesDialog({
             {activeTab === "language" && <LanguageSection />}
             {activeTab === "typography" && <TypographySection />}
             {activeTab === "profile" && <ProfileSection />}
+            {activeTab === "privacy" && <PrivacySection />}
             {activeTab === "shortcuts" && <ShortcutsSection />}
           </div>
         </div>
@@ -975,6 +999,163 @@ function Avatar({
           )}
         />
       ) : null}
+    </div>
+  );
+}
+
+function PrivacySection() {
+  const { t } = useTranslation();
+  const { mode, signOut } = useAuth();
+  const [busy, setBusy] = useState<"export" | "sessions" | "delete" | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [understood, setUnderstood] = useState(false);
+  const [password, setPassword] = useState("");
+  const [needsPassword, setNeedsPassword] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!confirming || mode !== "firebase") return;
+    let active = true;
+    void usesPassword()
+      .then((value) => {
+        if (active) setNeedsPassword(value);
+      })
+      .catch(() => {
+        if (active) setNeedsPassword(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [confirming, mode]);
+
+  if (mode !== "firebase") {
+    return <p className="text-[12.5px] text-muted">{t("demo_session_notice")}</p>;
+  }
+
+  const leave = async () => {
+    await signOut();
+    navigateTo(loginHref("/?logout=1"), undefined, "replace");
+  };
+
+  const exportData = async () => {
+    setBusy("export");
+    try {
+      await downloadAccountData();
+    } catch {
+      toast.error(t("account_export_failed"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const signOutEverywhere = async () => {
+    setBusy("sessions");
+    try {
+      await revokeAllSessions();
+      await leave();
+    } catch {
+      toast.error(t("account_sessions_failed"));
+      setBusy(null);
+    }
+  };
+
+  const removeAccount = async () => {
+    if (!understood) return;
+    setBusy("delete");
+    try {
+      await reauthenticate(needsPassword ? password : undefined);
+      await deleteMyAccount();
+      toast.success(t("account_deleted"));
+      await leave();
+    } catch (error) {
+      toast.error(
+        error instanceof AuthError ? authErrorText(error, t, "account_delete_failed") : t("account_delete_failed")
+      );
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <PreferenceCard>
+        <PreferenceRow label={t("account_export_title")} hint={t("account_export_hint")}>
+          <Button variant="secondary" size="sm" onClick={() => void exportData()} disabled={busy !== null}>
+            {busy === "export" ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            {busy === "export" ? t("account_export_running") : t("account_export_button")}
+          </Button>
+        </PreferenceRow>
+        <PreferenceRow label={t("account_sessions_title")} hint={t("account_sessions_hint")}>
+          <Button variant="secondary" size="sm" onClick={() => void signOutEverywhere()} disabled={busy !== null}>
+            {busy === "sessions" ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            {t("account_sessions_button")}
+          </Button>
+        </PreferenceRow>
+      </PreferenceCard>
+
+      <PreferenceCard className="border-[var(--danger)]/30">
+        <PreferenceRow label={t("account_delete_title")} hint={t("account_delete_hint")} layout="stacked">
+          {confirming ? (
+            <div className="space-y-3">
+              <label className="flex cursor-pointer items-start gap-2 text-[12px] leading-relaxed text-muted">
+                <input
+                  type="checkbox"
+                  checked={understood}
+                  onChange={(event) => setUnderstood(event.target.checked)}
+                  className="mt-[3px]"
+                />
+                <span>{t("account_delete_confirm_label")}</span>
+              </label>
+              {needsPassword ? (
+                <Input
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder={t("account_delete_password_label")}
+                  aria-label={t("account_delete_password_label")}
+                />
+              ) : needsPassword === false ? (
+                <p className="text-[11.5px] text-muted">{t("account_delete_google_hint")}</p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setConfirming(false);
+                    setUnderstood(false);
+                    setPassword("");
+                  }}
+                  disabled={busy !== null}
+                >
+                  {t("cancel")}
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => void removeAccount()}
+                  disabled={busy !== null || !understood || needsPassword === null || (needsPassword && !password)}
+                >
+                  {busy === "delete" ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                  {t("account_delete_confirm_button")}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="text-[var(--danger)]"
+                onClick={() => setConfirming(true)}
+                disabled={busy !== null}
+              >
+                <Trash2 className="size-3.5" />
+                {t("account_delete_button")}
+              </Button>
+            </div>
+          )}
+        </PreferenceRow>
+      </PreferenceCard>
     </div>
   );
 }

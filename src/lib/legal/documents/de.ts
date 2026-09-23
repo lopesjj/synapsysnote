@@ -133,7 +133,7 @@ const de: LegalBundle = {
         id: "termination",
         title: "Beendigung",
         blocks: [
-          "Du kannst die Nutzung des Dienstes jederzeit einstellen und die Löschung deines Kontos unter {privacyEmail} beantragen. Die Löschfristen sind in der [Datenschutzerklärung](doc:privacy#retention) beschrieben.",
+          "Du kannst die Nutzung des Dienstes jederzeit einstellen und dein Konto jederzeit unter Einstellungen › Datenschutz & Daten löschen oder die Löschung unter {privacyEmail} beantragen. Die Löschfristen sind in der [Datenschutzerklärung](doc:privacy#retention) beschrieben.",
           "Wir können Konten sperren oder schließen, wenn sie schwerwiegend oder wiederholt gegen diese Bedingungen verstoßen, andere Personen gefährden oder wenn das Gesetz dies verlangt. Außer in dringenden Fällen oder bei Rechtswidrigkeit werden wir dich vorher benachrichtigen und dir die Möglichkeit geben, deine Inhalte zu exportieren.",
         ],
       },
@@ -226,7 +226,7 @@ const de: LegalBundle = {
               "**Audio- und Videotranskription:** Google Gemini API; alternativ ein Open-Source-Modell (Whisper), das auf unseren eigenen Servern ausgeführt wird.",
               "**Live-Transkription von Sprachnotizen:** die Spracherkennung deines Browsers, die Audio an den Hersteller (Google, Microsoft oder Apple) senden kann. Bleibt deaktiviert, bis du sie bei der Aufnahme einschaltest.",
               "**Lernkarten und Erkennung doppelter Karten:** Google Gemini API.",
-              "**Übersetzung:** Googles Übersetzungsdienst.",
+              "**Übersetzung:** Google Cloud Translation; solange es nicht verfügbar ist, die Google Gemini API selbst.",
             ],
           },
           { note: "Wir verwenden deine Inhalte nicht zum Training von KI-Modellen, und keine KI-Funktion läuft ohne eine Aktion von dir." },
@@ -243,7 +243,7 @@ const de: LegalBundle = {
               rows: [
                 ["Google Cloud und Firebase", "Hosting, Datenbank, Dateispeicherung, Authentifizierung und System-E-Mails"],
                 ["Google reCAPTCHA", "Bot-Schutz bei Anmeldung und Passwortzurücksetzung"],
-                ["Google Gemini API und Google Translate", "Von dir ausgelöste KI- und Übersetzungsfunktionen"],
+                ["Google Gemini API und Google Cloud Translation", "Von dir ausgelöste KI- und Übersetzungsfunktionen"],
                 ["Spracherkennung und Stimmen des Browsers (Google, Microsoft oder Apple)", "Live-Transkription, sofern aktiviert, und Vorlesen, wenn der Browser Online-Stimmen verwendet"],
                 ["country.is (IP-Geolokalisierung)", "Dein Land ermitteln, um eine Sprache vorzuschlagen, ohne deine IP-Adresse zu speichern"],
                 ["jsDelivr, Unsplash und flagcdn", "Laden von Schnittstellenbibliotheken, Schriftarten und öffentlichen Bildern; erhalten nur technische Verbindungsdaten wie IP und Browser"],
@@ -277,7 +277,7 @@ const de: LegalBundle = {
             list: [
               "**Konto und Inhalte:** solange dein Konto aktiv ist.",
               "**Papierkorb:** Gelöschte Elemente verbleiben {trashDays} Tage im Papierkorb und werden dann dauerhaft gelöscht.",
-              "**Kontolöschung:** Die Daten werden innerhalb von 30 Tagen gelöscht, mit Ausnahme der Daten, die wir gesetzlich aufbewahren müssen.",
+              "**Kontolöschung:** Über Einstellungen › Datenschutz & Daten werden die Daten sofort gelöscht; auf Anfrage per E-Mail innerhalb von 30 Tagen. Es bleibt nur, was wir gesetzlich aufbewahren müssen, etwa die Zugriffsprotokolle.",
               "**Zugriffsprotokolle:** {accessLogMonths} Monate, gemäß Artikel 15 des brasilianischen Marco Civil da Internet (Gesetz Nr. 12.965/2014).",
               "**Integrations-Token:** bis du die Integration trennst oder dein Konto löschst.",
             ],
@@ -291,7 +291,7 @@ const de: LegalBundle = {
           {
             list: [
               "Verbindungen sind immer verschlüsselt (HTTPS/TLS);",
-              "Zugriffsregeln isolieren die Daten jedes Kontos in der Datenbank und im Dateispeicher;",
+              "Zugriffsregeln isolieren die Daten jedes Kontos in der Datenbank und im Dateispeicher. Angehängte Dateien öffnen sich über private, nicht erratbare Links; wer einen solchen Link erhält, kann die Datei öffnen – teile sie also mit Bedacht;",
               "Integrations-Token sind mit AES-256-GCM verschlüsselt;",
               "deine Sitzung wird in einem HttpOnly-Cookie gespeichert, auf den Skripte nicht zugreifen können;",
               "Anmeldeversuche sind begrenzt, und eine reCAPTCHA-Prüfung schützt vor automatisierten Angriffen;",
@@ -317,7 +317,7 @@ const de: LegalBundle = {
               "die Löschung deines Kontos und deiner Daten zu beantragen.",
             ],
           },
-          "Um eines dieser Rechte auszuüben, schreib von der E-Mail-Adresse deines Kontos an {privacyEmail}. Wir antworten innerhalb von {responseDays} Tagen. Du kannst auch eine Beschwerde bei der ANPD einreichen.",
+          "Unter Einstellungen › Datenschutz & Daten kannst du selbst eine vollständige Kopie deiner Daten herunterladen und dein Konto löschen. Um ein Recht auszuüben, kannst du auch von der E-Mail-Adresse deines Kontos an {privacyEmail} schreiben. Wir antworten innerhalb von {responseDays} Tagen. Du kannst auch eine Beschwerde bei der ANPD einreichen.",
           "Wenn du dich im Europäischen Wirtschaftsraum oder im Vereinigten Königreich befindest, hast du auch die in der DSGVO festgelegten Rechte, einschließlich des Rechts, eine Beschwerde bei der Datenschutzbehörde in deinem Land einzureichen.",
         ],
       },
@@ -404,10 +404,10 @@ const de: LegalBundle = {
               "die Firebase-Authentifizierungssitzung, die dich angemeldet hält;",
               "einen Zähler für Anmeldeversuche, mit dem reCAPTCHA bei Bedarf angezeigt wird;",
               "Einstellungen der Oberfläche wie Design, Seitenleiste, zuletzt verwendete Notizbücher und die für Transkripte und Lernkarten gewählten Sprachen;",
-              "eine temporäre Kopie von Daten, damit sich die App schneller öffnet.",
+              "eine Kopie deiner Notizen und Notizbücher, damit sich die App schneller öffnet und auch offline funktioniert.",
             ],
           },
-          "Diese Informationen verbleiben nur in deinem Browser und werden gelöscht, wenn du die Website-Daten löschst.",
+          "Diese Informationen verbleiben nur in deinem Browser und werden gelöscht, wenn du dich abmeldest, die Sitzung abläuft oder du die Website-Daten löschst.",
         ],
       },
       {

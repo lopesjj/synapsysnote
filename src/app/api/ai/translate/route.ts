@@ -3,6 +3,8 @@ import { appRequestUser, rateLimitKey } from "@/lib/api/app-session";
 import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { createRateLimiter } from "@/lib/api/rate-limit";
 import { clientIpOf } from "@/lib/api/client-ip";
+import { GoogleAuth } from "google-auth-library";
+import { resolveServiceAccountCredentials } from "@/lib/firebase/admin";
 
 export const runtime = "nodejs";
 
@@ -42,48 +44,146 @@ function splitTextIntoSafeChunks(text: string, maxChunkLength = 3000): string[] 
   return chunks.length > 0 ? chunks : [text];
 }
 
-async function translateSingleChunk(text: string, targetLang: string): Promise<string> {
-  const clean = text.trim();
-  if (!clean) return "";
+const CLOUD_TRANSLATE_COOLDOWN_MS = 10 * 60 * 1000;
+const CLOUD_REQUEST_CHARS = 25_000;
+let cloudTranslateDisabledUntil = 0;
+let translateAuth: GoogleAuth | null = null;
 
-  const cacheKey = `${targetLang}:${clean}`;
-  const cached = translationCache.get(cacheKey);
-  if (cached) return cached;
-
-  for (const client of ["gtx", "dict-chrome-ex"]) {
-    try {
-      const url = `https://translate.googleapis.com/translate_a/single?client=${client}&sl=auto&tl=${encodeURIComponent(
-        targetLang
-      )}&dt=t`;
-      const res = await fetch(url, {
-        method: "POST",
-        signal: AbortSignal.timeout(TRANSLATE_TIMEOUT_MS),
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        },
-        // No corpo, e nao na URL: o texto da nota nao vai parar em log de acesso.
-        body: new URLSearchParams({ q: clean }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && Array.isArray(data[0])) {
-          const translated = data[0]
-            .map((part: unknown) => (Array.isArray(part) && typeof part[0] === "string" ? part[0] : ""))
-            .join("");
-          if (translated.trim()) {
-            if (translationCache.size > 500) translationCache.clear();
-            translationCache.set(cacheKey, translated);
-            return translated;
-          }
+function googleAuth(): GoogleAuth {
+  if (translateAuth) return translateAuth;
+  const creds = resolveServiceAccountCredentials();
+  translateAuth = new GoogleAuth({
+    scopes: ["https://www.googleapis.com/auth/cloud-translation"],
+    ...(creds?.client_email && creds.private_key
+      ? {
+          credentials: {
+            client_email: creds.client_email,
+            private_key: creds.private_key.replace(/\\n/g, "\n"),
+          },
+          projectId: creds.project_id,
         }
-      }
+      : {}),
+  });
+  return translateAuth;
+}
+
+function projectId(): string {
+  return (
+    resolveServiceAccountCredentials()?.project_id ||
+    process.env.FIREBASE_PROJECT_ID ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+    "synapsysnote"
+  );
+}
+
+async function cloudTranslate(chunks: string[], targetLang: string): Promise<string[] | null> {
+  if (Date.now() < cloudTranslateDisabledUntil) return null;
+  try {
+    const client = await googleAuth().getClient();
+    const response = await client.request<{ translations?: { translatedText?: string }[] }>({
+      url: `https://translation.googleapis.com/v3/projects/${projectId()}/locations/global:translateText`,
+      method: "POST",
+      timeout: TRANSLATE_TIMEOUT_MS,
+      data: { contents: chunks, targetLanguageCode: targetLang, mimeType: "text/plain" },
+    });
+    const translated = response.data.translations?.map((item) => item.translatedText ?? "") ?? [];
+    return translated.length === chunks.length ? translated : null;
+  } catch (error) {
+    const status = (error as { response?: { status?: number } }).response?.status;
+    if (status === 403 || status === 401 || status === 404) {
+      cloudTranslateDisabledUntil = Date.now() + CLOUD_TRANSLATE_COOLDOWN_MS;
+      console.warn("[translate] Cloud Translation indisponível; usando a Gemini API");
+    }
+    return null;
+  }
+}
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  pt: "Brazilian Portuguese",
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  it: "Italian",
+  de: "German",
+  ru: "Russian",
+  ja: "Japanese",
+  zh: "Simplified Chinese",
+  ar: "Arabic",
+};
+
+async function geminiTranslate(text: string, targetLang: string): Promise<string | null> {
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  if (!apiKey) return null;
+  const models = [...new Set([process.env.GEMINI_MODEL, "gemini-3.5-flash-lite", "gemini-2.5-flash"].filter(Boolean))];
+  for (const model of models) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          signal: AbortSignal.timeout(TRANSLATE_TIMEOUT_MS * 2),
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify({
+            systemInstruction: {
+              parts: [
+                {
+                  text: `Translate the user's text into ${LANGUAGE_NAMES[targetLang] ?? targetLang}. Keep line breaks and meaning. Reply with the translation only.`,
+                },
+              ],
+            },
+            contents: [{ role: "user", parts: [{ text }] }],
+            generationConfig: { temperature: 0 },
+          }),
+        }
+      );
+      if (!response.ok) continue;
+      const data = (await response.json()) as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[];
+      };
+      const output = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim();
+      if (output) return output;
     } catch {}
   }
+  return null;
+}
 
-  return clean;
+async function translateChunks(chunks: string[], targetLang: string): Promise<string[]> {
+  const results = new Array<string>(chunks.length);
+  const missing: number[] = [];
+  chunks.forEach((chunk, index) => {
+    const cached = translationCache.get(`${targetLang}:${chunk}`);
+    if (cached !== undefined) results[index] = cached;
+    else missing.push(index);
+  });
+  if (!missing.length) return results;
+
+  const pending = missing.map((index) => chunks[index]);
+  const viaCloud: (string | undefined)[] = [];
+  let group: string[] = [];
+  let groupChars = 0;
+  const flush = async () => {
+    if (!group.length) return;
+    const translated = await cloudTranslate(group, targetLang);
+    viaCloud.push(...(translated ?? group.map(() => undefined)));
+    group = [];
+    groupChars = 0;
+  };
+  for (const chunk of pending) {
+    if (groupChars + chunk.length > CLOUD_REQUEST_CHARS) await flush();
+    group.push(chunk);
+    groupChars += chunk.length;
+  }
+  await flush();
+  for (let position = 0; position < missing.length; position += 1) {
+    const index = missing[position];
+    const translated = viaCloud?.[position] ?? (await geminiTranslate(chunks[index], targetLang)) ?? chunks[index];
+    results[index] = translated;
+    if (translated !== chunks[index]) {
+      if (translationCache.size > 500) translationCache.clear();
+      translationCache.set(`${targetLang}:${chunks[index]}`, translated);
+    }
+  }
+  return results;
 }
 
 export async function POST(req: NextRequest) {
@@ -116,10 +216,8 @@ export async function POST(req: NextRequest) {
     }
     bytes = text.length;
 
-    const translatedChunks: string[] = [];
-    for (const chunk of splitTextIntoSafeChunks(text)) {
-      translatedChunks.push(await translateSingleChunk(chunk, targetLang));
-    }
+    const chunks = splitTextIntoSafeChunks(text).map((chunk) => chunk.trim()).filter(Boolean);
+    const translatedChunks = await translateChunks(chunks, targetLang);
     return NextResponse.json({ translatedText: translatedChunks.join("\n\n") });
   } catch {
     return NextResponse.json({ translatedText: "" });

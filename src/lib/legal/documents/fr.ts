@@ -133,7 +133,7 @@ const fr: LegalBundle = {
         id: "termination",
         title: "Résiliation",
         blocks: [
-          "Vous pouvez cesser d'utiliser le service et nous demander de supprimer votre compte à tout moment en écrivant à {privacyEmail}. Les délais de suppression sont décrits dans la [Politique de confidentialité](doc:privacy#retention).",
+          "Vous pouvez cesser d'utiliser le service et supprimer votre compte à tout moment, dans Préférences › Confidentialité et données ou en écrivant à {privacyEmail}. Les délais de suppression sont décrits dans la [Politique de confidentialité](doc:privacy#retention).",
           "Nous pouvons suspendre ou fermer des comptes qui violent gravement ou à répétition ces conditions, mettent d'autres personnes en danger, ou lorsque la loi l'exige. Sauf en cas d'urgence ou de situation illégale, nous vous en informerons d'abord et vous donnerons la possibilité d'exporter votre contenu.",
         ],
       },
@@ -225,7 +225,7 @@ const fr: LegalBundle = {
             list: [
               "**Transcription audio et vidéo :** Google Gemini API ; à titre d'alternative, un modèle open source (Whisper) exécuté sur nos propres serveurs.",
               "**Flashcards et détection de flashcards en double :** Google Gemini API.",
-              "**Traduction :** service de traduction de Google.",
+              "**Traduction :** Google Cloud Translation ; tant qu'il est indisponible, la Google Gemini API elle-même.",
               "**Transcription en direct des notes vocales :** la reconnaissance vocale de votre navigateur, qui peut envoyer l'audio au fournisseur (Google, Microsoft ou Apple). Reste désactivée tant que vous ne l'activez pas lors de l'enregistrement.",
             ],
           },
@@ -243,7 +243,7 @@ const fr: LegalBundle = {
               rows: [
                 ["Google Cloud et Firebase", "Hébergement, base de données, stockage de fichiers, authentification et e-mails système"],
                 ["Google reCAPTCHA", "Protection contre les robots lors de la connexion et de la réinitialisation du mot de passe"],
-                ["Google Gemini API et Google Traduction", "Fonctionnalités d'IA et de traduction que vous activez"],
+                ["Google Gemini API et Google Cloud Translation", "Fonctionnalités d'IA et de traduction que vous activez"],
                 ["country.is (géolocalisation par IP)", "Identifier le pays pour suggérer la langue, sans conserver l'adresse IP"],
                 ["Notion, Evernote et Google Docs", "Uniquement lorsque vous connectez l'intégration, pour importer ce que vous choisissez"],
                 ["Reconnaissance vocale et voix du navigateur (Google, Microsoft ou Apple)", "Transcription en direct, si vous l'activez, et lecture à voix haute lorsque le navigateur utilise des voix en ligne"],
@@ -277,7 +277,7 @@ const fr: LegalBundle = {
             list: [
               "**Compte et contenu :** tant que votre compte est actif.",
               "**Corbeille :** les éléments supprimés restent dans la corbeille pendant {trashDays} jours, puis sont définitivement effacés.",
-              "**Suppression du compte :** les données sont effacées dans un délai maximal de 30 jours, sauf ce que la loi nous oblige à conserver.",
+              "**Suppression du compte :** faite dans Préférences › Confidentialité et données, les données sont effacées immédiatement ; demandée par e-mail, sous 30 jours maximum. Seul reste ce que la loi nous oblige à conserver, comme les journaux d'accès.",
               "**Journaux d'accès :** {accessLogMonths} mois, conformément à l'article 15 du Marco Civil da Internet (loi n° 12.965/2014).",
               "**Jetons d'intégration :** jusqu'à ce que vous déconnectiez l'intégration ou supprimiez votre compte.",
             ],
@@ -291,7 +291,7 @@ const fr: LegalBundle = {
           {
             list: [
               "les connexions sont toujours chiffrées (HTTPS/TLS) ;",
-              "les règles d'accès isolent les données de chaque compte dans la base de données et le stockage de fichiers ;",
+              "les règles d'accès isolent les données de chaque compte dans la base de données et le stockage de fichiers. Les fichiers joints s'ouvrent via des liens privés impossibles à deviner ; toute personne recevant l'un de ces liens peut ouvrir le fichier, partagez-les donc avec prudence ;",
               "les jetons d'intégration sont chiffrés avec AES-256-GCM ;",
               "la session est conservée dans un cookie HttpOnly, inaccessible aux scripts ;",
               "le nombre de tentatives de connexion est limité et une vérification reCAPTCHA protège contre les attaques automatisées ;",
@@ -317,7 +317,7 @@ const fr: LegalBundle = {
               "demander la suppression de votre compte et de vos données.",
             ],
           },
-          "Pour exercer l'un d'eux, écrivez à {privacyEmail} depuis l'adresse e-mail de votre compte. Nous répondons dans un délai maximal de {responseDays} jours. Vous pouvez également déposer une plainte auprès de l'ANPD.",
+          "Vous pouvez télécharger une copie complète de vos données et supprimer votre compte vous-même dans Préférences › Confidentialité et données. Pour exercer tout droit, vous pouvez aussi écrire à {privacyEmail} depuis l'adresse e-mail de votre compte. Nous répondons dans un délai maximal de {responseDays} jours. Vous pouvez également déposer une plainte auprès de l'ANPD.",
           "Si vous vous trouvez dans l'Espace économique européen ou au Royaume-Uni, vous disposez également des droits prévus par le RGPD, y compris le droit de déposer une plainte auprès de l'autorité de protection des données de votre pays.",
         ],
       },
@@ -404,10 +404,10 @@ const fr: LegalBundle = {
               "la session d'authentification Firebase, qui vous maintient connecté ;",
               "un compteur de tentatives de connexion, utilisé pour afficher le reCAPTCHA si nécessaire ;",
               "les préférences d'interface, comme le thème, la barre latérale, les carnets récents et les langues de transcription et des flashcards ;",
-              "une copie temporaire des données pour que l'application s'ouvre plus rapidement.",
+              "une copie de vos notes et carnets, pour que l'application s'ouvre plus vite et continue de fonctionner hors ligne.",
             ],
           },
-          "Ces informations restent uniquement dans votre navigateur et sont supprimées lorsque vous effacez les données du site.",
+          "Ces informations restent uniquement dans votre navigateur et sont supprimées lorsque vous vous déconnectez, lorsque la session expire ou lorsque vous effacez les données du site.",
         ],
       },
       {

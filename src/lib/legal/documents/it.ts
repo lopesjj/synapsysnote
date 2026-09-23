@@ -133,7 +133,7 @@ const it: LegalBundle = {
         id: "termination",
         title: "Cessazione",
         blocks: [
-          "Puoi smettere di utilizzare il servizio e chiederci di eliminare il tuo account in qualsiasi momento scrivendo a {privacyEmail}. I tempi di eliminazione sono indicati nell'[Informativa sulla privacy](doc:privacy#retention).",
+          "Puoi smettere di utilizzare il servizio e eliminare il tuo account in qualsiasi momento, in Preferenze › Privacy e dati o scrivendo a {privacyEmail}. I tempi di eliminazione sono indicati nell'[Informativa sulla privacy](doc:privacy#retention).",
           "Possiamo sospendere o chiudere gli account che violino questi termini in modo grave o ripetuto, che mettano a rischio altre persone, oppure quando la legge lo richiede. Salvo in casi urgenti o di illiceità, ti avviseremo in anticipo e ti daremo la possibilità di esportare i tuoi contenuti.",
         ],
       },
@@ -226,7 +226,7 @@ const it: LegalBundle = {
               "**Trascrizione audio e video:** Google Gemini API; in alternativa, un modello open source (Whisper) eseguito sui nostri server.",
               "**Trascrizione in tempo reale delle note vocali:** il riconoscimento vocale del browser, che potrebbe inviare l'audio al produttore (Google, Microsoft o Apple). Rimane disattivato finché non lo attivi durante la registrazione.",
               "**Flashcard e rilevamento di card duplicate:** Google Gemini API.",
-              "**Traduzione:** servizio di traduzione di Google.",
+              "**Traduzione:** Google Cloud Translation; finché non è disponibile, la stessa Google Gemini API.",
             ],
           },
           { note: "Non utilizziamo i tuoi contenuti per addestrare modelli di intelligenza artificiale, e nessuna funzionalità di AI viene eseguita senza una tua azione." },
@@ -243,7 +243,7 @@ const it: LegalBundle = {
               rows: [
                 ["Google Cloud e Firebase", "Hosting, database, archiviazione file, autenticazione ed email di sistema"],
                 ["Google reCAPTCHA", "Protezione contro i bot all'accesso e nella reimpostazione della password"],
-                ["Google Gemini API e Google Translate", "Funzionalità AI e di traduzione che attivi"],
+                ["Google Gemini API e Google Cloud Translation", "Funzionalità AI e di traduzione che attivi"],
                 ["Riconoscimento vocale e voci del browser (Google, Microsoft o Apple)", "Trascrizione in tempo reale, se attivata, e lettura ad alta voce quando il browser utilizza voci online"],
                 ["country.is (geolocalizzazione IP)", "Identificare il tuo paese per suggerire una lingua, senza memorizzare il tuo indirizzo IP"],
                 ["jsDelivr, Unsplash e flagcdn", "Caricamento di librerie, caratteri e immagini pubbliche dell'interfaccia; ricevono solo dati tecnici di connessione come IP e browser"],
@@ -277,7 +277,7 @@ const it: LegalBundle = {
             list: [
               "**Account e contenuti:** finché il tuo account è attivo.",
               "**Cestino:** gli elementi eliminati rimangono nel cestino per {trashDays} giorni e vengono poi cancellati definitivamente.",
-              "**Eliminazione dell'account:** i dati vengono cancellati entro 30 giorni, eccetto ciò che la legge ci impone di conservare.",
+              "**Eliminazione dell'account:** fatta in Preferenze › Privacy e dati, i dati vengono cancellati subito; richiesta via email, entro 30 giorni. Resta solo ciò che la legge ci impone di conservare, come i registri di accesso.",
               "**Log di accesso:** {accessLogMonths} mesi, ai sensi dell'art. 15 del Marco Civil da Internet brasiliano (Legge n. 12.965/2014).",
               "**Token di integrazione:** fino a quando non disconnetti l'integrazione o elimini il tuo account.",
             ],
@@ -291,7 +291,7 @@ const it: LegalBundle = {
           {
             list: [
               "le connessioni sono sempre crittografate (HTTPS/TLS);",
-              "le regole di accesso isolano i dati di ogni account nel database e nell'archiviazione file;",
+              "le regole di accesso isolano i dati di ogni account nel database e nell'archiviazione file. I file allegati si aprono tramite link privati e impossibili da indovinare; chi riceve uno di questi link può aprire il file, quindi condividili con attenzione;",
               "i token di integrazione sono crittografati con AES-256-GCM;",
               "la sessione è conservata in un cookie HttpOnly, inaccessibile agli script;",
               "i tentativi di accesso sono limitati e la verifica reCAPTCHA protegge dagli attacchi automatizzati;",
@@ -317,7 +317,7 @@ const it: LegalBundle = {
               "richiedere la cancellazione del tuo account e dei tuoi dati.",
             ],
           },
-          "Per esercitarne uno qualsiasi, scrivi a {privacyEmail} dall'indirizzo email del tuo account. Rispondiamo entro {responseDays} giorni. Puoi anche presentare un reclamo all'ANPD.",
+          "Puoi scaricare una copia completa dei tuoi dati ed eliminare l'account da solo in Preferenze › Privacy e dati. Per esercitare qualsiasi diritto puoi anche scrivere a {privacyEmail} dall'indirizzo email del tuo account. Rispondiamo entro {responseDays} giorni. Puoi anche presentare un reclamo all'ANPD.",
           "Se ti trovi nello Spazio economico europeo o nel Regno Unito, hai anche i diritti previsti dal GDPR, incluso il diritto di presentare un reclamo all'autorità per la protezione dei dati del tuo paese.",
         ],
       },
@@ -404,10 +404,10 @@ const it: LegalBundle = {
               "la sessione di autenticazione Firebase, che ti mantiene connesso;",
               "un contatore di tentativi di accesso, usato per mostrare reCAPTCHA quando necessario;",
               "preferenze dell'interfaccia, come tema, barra laterale, quaderni recenti e le lingue scelte per trascrizioni e flashcard;",
-              "una copia temporanea dei dati affinché l'app si apra più velocemente.",
+              "una copia delle tue note e dei quaderni, perché l'app si apra più velocemente e continui a funzionare offline.",
             ],
           },
-          "Queste informazioni rimangono solo nel tuo browser e vengono cancellate quando elimini i dati del sito.",
+          "Queste informazioni rimangono solo nel tuo browser e vengono cancellate quando esci dall'account, quando la sessione scade o quando elimini i dati del sito.",
         ],
       },
       {
