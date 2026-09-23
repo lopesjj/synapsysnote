@@ -5,6 +5,7 @@ import type {
   Page,
   RichTextSpan,
 } from "@/types/models";
+import { fromTableRows } from "./table-rows";
 
 
 let counter = 0;
@@ -33,6 +34,12 @@ export function plainTextOf(blocks: AppBlock[]): string {
       if (b.richText) out.push(b.richText.map((s) => s.text).join(""));
       if (b.props?.title) out.push(b.props.title);
       if (b.media?.caption) out.push(b.media.caption.map((s) => s.text).join(""));
+      if (b.props?.expression) out.push(b.props.expression);
+      // Celulas de tabela e transcricoes tambem entram na busca.
+      for (const row of fromTableRows(b.props?.tableRows)) {
+        out.push(row.map((cell) => cell.map((s) => s.text).join("")).join("\t"));
+      }
+      if (b.media?.transcript) out.push(b.media.transcript);
       if (b.children) walk(b.children);
     }
   };

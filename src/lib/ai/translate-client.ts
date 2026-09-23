@@ -1,3 +1,5 @@
+import { optionalAuthHeader } from "@/lib/firebase/auth-headers";
+
 const clientTranslationCache = new Map<string, string>();
 
 export async function translateTextToTarget(text: string, targetLang: string): Promise<string> {
@@ -15,7 +17,7 @@ export async function translateTextToTarget(text: string, targetLang: string): P
   try {
     const res = await fetch("/api/ai/translate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await optionalAuthHeader()) },
       body: JSON.stringify({ text: clean, targetLang: normalizedLang }),
     });
 

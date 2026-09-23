@@ -10,7 +10,7 @@ import { LegalTrigger } from "@/components/legal/legal-links";
 import { interpolateNodes } from "@/components/legal/legal-text";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserProfile } from "@/hooks/use-user-profile";
-import { isValidPhoneBR } from "@/lib/phone";
+import { isValidPhone } from "@/lib/phone";
 import { appHref, navigateTo } from "@/lib/domains";
 import { firebaseJson } from "@/lib/firebase/auth-headers";
 import { useTranslation } from "@/lib/i18n/translations";
@@ -40,19 +40,26 @@ export function CompleteRegistrationForm() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!accepted) return;
-    if (!isValidPhoneBR(phone)) {
+    if (!isValidPhone(phone)) {
       toast.error(t("phone_invalid"));
       return;
     }
     setBusy(true);
     try {
-      await completeRegistration({
+      const requestedEmail = email.trim() || user?.email || "";
+      const result = await completeRegistration({
         name: (name.trim() || user?.displayName || email.split("@")[0]).slice(0, 60),
-        email: email.trim() || user?.email || "",
+        email: requestedEmail,
         phone,
         language: siteLanguage,
         legalAcceptedVersion: LEGAL_VERSION,
       });
+      // Troca de e-mail so vale depois da confirmacao pelo link enviado.
+      if (result.emailVerificationSent) {
+        toast.success(t("email_change_verification_sent", { email: requestedEmail }), { duration: 9000 });
+      } else if (result.emailChangeFailed) {
+        toast.error(t("email_change_failed"), { duration: 7000 });
+      }
       await complete();
       const language = useUiStore.getState().language || siteLanguage;
       try {

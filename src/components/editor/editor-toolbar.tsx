@@ -23,6 +23,7 @@ import {
   Type,
   Underline as UnderlineIcon,
   Undo2,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
@@ -302,7 +303,8 @@ export function EditorToolbar({
           className="flex items-center gap-1 px-1"
           onSubmit={(event) => {
             event.preventDefault();
-            const href = linkValue.trim();
+            const raw = linkValue.trim();
+            const href = raw ? (/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(raw) ? raw : `https://${raw}`) : "";
             if (href) editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
             else editor.chain().focus().extendMarkRange("link").unsetLink().run();
             setLinkOpen(false);
@@ -319,6 +321,19 @@ export function EditorToolbar({
               if (event.key === "Escape") setLinkOpen(false);
             }}
           />
+          <button
+            type="submit"
+            className="rounded-[var(--radius-xs)] bg-[var(--accent)] px-2 py-1 text-[11.5px] font-medium text-white transition hover:opacity-90"
+          >
+            {t("apply")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLinkOpen(false)}
+            className="rounded-[var(--radius-xs)] p-1 text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
+          >
+            <X className="size-3.5" />
+          </button>
         </form>
       ) : (
         <ToolButton

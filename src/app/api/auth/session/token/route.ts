@@ -1,11 +1,14 @@
 import { ApiError, jsonError } from "@/lib/api/errors";
+import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { adminAuth, isAdminConfigured } from "@/lib/firebase/admin";
 import { readSessionCookies } from "@/lib/auth/session-cookie";
+import { recordAccess } from "@/lib/auth/access-log-server";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    if (isCrossSiteRequest(request)) throw new ApiError(403, "Origem não permitida");
     if (!isAdminConfigured()) {
       throw new ApiError(503, "Firebase Admin não configurado.");
     }
@@ -17,7 +20,8 @@ export async function GET() {
       try {
         const decoded = await adminAuth().verifySessionCookie(cookie, true);
         const token = await adminAuth().createCustomToken(decoded.uid);
-        return Response.json({ token });
+        await recordAccess(request, { uid: decoded.uid, email: decoded.email }, "session");
+        return Response.json({ token }, { headers: { "Cache-Control": "no-store" } });
       } catch {}
     }
 

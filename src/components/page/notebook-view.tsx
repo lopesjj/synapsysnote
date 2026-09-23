@@ -36,7 +36,8 @@ import { sortNotebooks, sortPageTree } from "@/lib/data/list-sort";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { WorkspaceCrumbs } from "./workspace-crumbs";
 import { cn, compareNatural, formatRelative } from "@/lib/utils";
-import { useTranslation } from "@/lib/i18n/translations";
+import { localizeErrorMessage, useTranslation } from "@/lib/i18n/translations";
+import { useDebounceAutoSave } from "@/hooks/use-debounce-auto-save";
 import type { Notebook, Page } from "@/types/models";
 import { NOTEBOOK_ICONS } from "@/lib/icons/catalog";
 import {
@@ -97,6 +98,23 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
 
   const [titleDraft, setTitleDraft] = useState<{ id: string; value: string } | null>(null);
   const title = titleDraft?.id === notebookId ? titleDraft.value : (notebook?.name ?? "");
+  // O nome era gravado a cada tecla; agora vai depois de uma pausa na digitacao.
+  const { schedule: scheduleName } = useDebounceAutoSave<string>({
+    resetKey: notebookId,
+    delay: 600,
+    maxWait: 4000,
+    onSave: async (name) => {
+      await adapter.updateNotebook(notebookId, { name });
+    },
+    onUnloadSave: (name) => {
+      void adapter.updateNotebook(notebookId, { name }).catch(() => {});
+    },
+    onError: (error) =>
+      toast.error(
+        localizeErrorMessage(error instanceof Error ? error.message : null, t) || t("page_save_error"),
+        { id: "notebook-name-error" }
+      ),
+  });
 
   const childNotebooks = useMemo(
     () => childrenOf(notebooks, notebookId),
@@ -729,7 +747,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
               onChange={(event) => {
                 const value = event.target.value;
                 setTitleDraft({ id: notebookId, value });
-                if (value.trim()) void adapter.updateNotebook(notebookId, { name: value });
+                if (value.trim()) scheduleName(value);
               }}
               className="w-full min-w-0 resize-none overflow-hidden border-none bg-transparent py-0 text-[34px] font-semibold leading-[1.15] tracking-[-0.025em] text-ink outline-none placeholder:text-faint [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
             />

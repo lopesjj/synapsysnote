@@ -5,6 +5,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { Transform } from "node:stream";
 import { adminBucket, isAdminConfigured } from "@/lib/firebase/admin";
+import { safeFetch, safeFetchBuffer } from "@/lib/media/safe-fetch";
 import type { BlockMedia } from "@/types/models";
 
 const MAX_BYTES = Number(process.env.IMPORT_MAX_FILE_BYTES ?? 250 * 1024 * 1024);
@@ -29,22 +30,27 @@ export async function rehostNotionFile(input: {
   url: string;
   suggestedName: string;
 }): Promise<RehostResult> {
-  const response = await fetch(input.url, { redirect: "follow" });
-  if (!response.ok || !response.body) {
-    throw new Error(`Falha ao baixar ${input.suggestedName} (${response.status})`);
+  // Arquivos de propriedade "files" podem ser links externos quaisquer: a busca
+  // passa pela mesma validacao do proxy de midia (sem rede interna).
+  const response = await safeFetch(input.url, { timeoutMs: 120_000, userAgent: "SynapsysNote-Import/1.0" });
+  if (!response || response.status >= 400 || !response.body) {
+    response?.abort();
+    throw new Error(`Falha ao baixar ${input.suggestedName} (${response?.status ?? "bloqueado"})`);
   }
 
-  const declaredLength = Number(response.headers.get("content-length") ?? 0);
+  const declaredLength = Number(response.contentLength ?? 0);
   if (declaredLength && declaredLength > MAX_BYTES) {
+    response.abort();
     throw new Error(
       `arquivo ${input.suggestedName} excede o limite de ${Math.round(MAX_BYTES / 1024 / 1024)} MB`
     );
   }
 
-  const contentType = response.headers.get("content-type") ?? "application/octet-stream";
+  const contentType = response.contentType ?? "application/octet-stream";
   const safeName = sanitize(input.suggestedName);
 
   if (!isAdminConfigured()) {
+    response.abort();
     return {
       url: input.url,
       name: safeName,
@@ -124,10 +130,12 @@ export async function rehostNotionFile(input: {
 export async function rehostNotionIcon(url: string, fallback: string = "📄"): Promise<string> {
   if (!url || !/^https?:\/\//i.test(url)) return url || fallback;
   try {
-    const res = await fetch(url, { redirect: "follow" });
-    if (!res.ok) return fallback;
-    const arrayBuffer = await res.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const fetched = await safeFetchBuffer(url, 5 * 1024 * 1024, {
+      timeoutMs: 20_000,
+      userAgent: "SynapsysNote-Import/1.0",
+    });
+    if (!fetched) return fallback;
+    const buffer = fetched.buffer;
     const sharpModule = await import("sharp");
     const sharp = sharpModule.default || sharpModule;
     const optimized = await sharp(buffer)

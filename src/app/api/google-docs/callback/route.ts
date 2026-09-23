@@ -29,7 +29,10 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const destination = (query: { error?: string; connected?: string }) => {
     const dest = new URL(resolveUrl(appHref("/home/integrations"), url.origin));
-    if (query.error) dest.searchParams.set("error", query.error);
+    if (query.error) {
+      dest.searchParams.set("error", query.error);
+      dest.searchParams.set("provider", "google-docs");
+    }
     if (query.connected) dest.searchParams.set("connected", query.connected);
     return dest;
   };
@@ -69,7 +72,8 @@ export async function GET(request: Request) {
 
   const payload = (await response.json().catch(() => ({}))) as GoogleTokenResponse;
   if (!response.ok || !payload.access_token) {
-    return fail(payload.error_description ?? payload.error ?? "google_token_exchange_failed");
+    console.warn("[google-callback] troca de token falhou", payload.error, payload.error_description);
+    return fail(payload.error === "access_denied" ? "access_denied" : "google_token_exchange_failed");
   }
 
   const accessToken = payload.access_token;
@@ -92,7 +96,11 @@ export async function GET(request: Request) {
 
   if (!isAdminConfigured()) return fail("firebase_admin_not_configured");
 
-  await ensureWorkspace({ uid: parsedState.uid }, parsedState.workspaceId);
+  try {
+    await ensureWorkspace({ uid: parsedState.uid }, parsedState.workspaceId);
+  } catch {
+    return fail("google_connection_failed");
+  }
 
   const db = adminDb();
   const integrationRef = db

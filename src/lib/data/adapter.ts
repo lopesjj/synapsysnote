@@ -20,6 +20,8 @@ import type {
 export type Unsubscribe = () => void;
 
 export interface CreatePageInput {
+  /** Id pre-gerado (ex.: a duplicacao copia os arquivos antes de criar a nota). */
+  id?: string;
   title?: string;
   icon?: string;
   coverUrl?: string | null;
@@ -51,6 +53,23 @@ export interface RecordImportJobInput {
 
 export type { CreateFlashcardInput };
 
+export interface UpdatePageOptions {
+  /**
+   * Grava direto, sem ler a nota antes (sem quarentena de midia removida nem
+   * mescla de transcricao). So para o salvamento ao fechar a aba, quando nao da
+   * tempo de esperar a leitura.
+   */
+  fast?: boolean;
+}
+
+/** Destino da copia de arquivos do Storage ao duplicar. */
+export type MediaCopyTarget = { pageId: string } | "icons";
+
+export interface CopiedMedia {
+  url: string;
+  storagePath: string;
+}
+
 export interface FlashcardResetScope {
   cardIds?: string[];
   pageId?: string;
@@ -79,11 +98,15 @@ export interface DataAdapter {
   }): Promise<Notebook>;
   updateNotebook(id: string, patch: Partial<Notebook>): Promise<void>;
   moveNotebook(id: string, target: { parentId: string | null; order?: number }): Promise<void>;
+  /** Manda o caderno, os subcadernos e o que ha dentro para a lixeira. */
   deleteNotebook(id: string): Promise<void>;
+  /** Restaura o caderno e tudo o que foi para a lixeira junto com ele. */
+  restoreNotebook(id: string): Promise<void>;
+  purgeNotebook(id: string): Promise<void>;
 
   createPage(input: CreatePageInput): Promise<Page>;
   duplicatePage(id: string): Promise<Page>;
-  updatePage(id: string, patch: Partial<Page>): Promise<void>;
+  updatePage(id: string, patch: Partial<Page>, options?: UpdatePageOptions): Promise<void>;
   applyPageOrders(updates: { id: string; order: number }[]): Promise<void>;
   applyNotebookOrders(updates: { id: string; order: number }[]): Promise<void>;
   movePage(id: string, target: { notebookId?: string | null; parentPageId?: string | null; order?: number }): Promise<void>;
@@ -99,7 +122,13 @@ export interface DataAdapter {
 
   createDatabase(input: { name: string; notebookId?: string | null }): Promise<AppDatabase>;
   updateDatabase(id: string, patch: Partial<AppDatabase>): Promise<void>;
-  upsertRow(databaseId: string, row: Partial<DatabaseRow> & { id?: string }): Promise<DatabaseRow>;
+  restoreDatabase(id: string): Promise<void>;
+  purgeDatabase(id: string): Promise<void>;
+  /**
+   * Sem `id`, cria a linha. Com `id`, atualiza so os campos informados: editar
+   * uma celula nao mexe na ordem, na data de criacao nem no vinculo com a pagina.
+   */
+  upsertRow(databaseId: string, row: Partial<DatabaseRow> & { id?: string }): Promise<DatabaseRow | null>;
   deleteRow(databaseId: string, rowId: string): Promise<void>;
 
   fetchNotionTree(): Promise<NotionTreeNode[]>;
@@ -122,7 +151,6 @@ export interface DataAdapter {
 
   saveAudioNote(pageId: string, blob: Blob, durationSeconds: number): Promise<void>;
   uploadAudioNote(pageId: string, blob: Blob, durationSeconds: number): Promise<{ url: string; storagePath?: string }>;
-  retryMediaProcessing(pageId: string, storagePath: string): Promise<void>;
   saveAttachment(pageId: string, file: File): Promise<void>;
   uploadAttachment(
     pageId: string,
@@ -133,6 +161,12 @@ export interface DataAdapter {
   uploadWorkspaceIcon(file: File): Promise<string>;
   deleteMedia(storagePaths: string[], pageId?: string): Promise<void>;
   quarantineMedia(storagePaths: string[], pageId?: string): Promise<void>;
+  /**
+   * Copia arquivos do workspace para a pasta de outra nota (ou dos icones).
+   * Devolve, por origem, a nova URL e o novo caminho; o que nao pode ser
+   * copiado fica de fora e mantem a referencia antiga.
+   */
+  copyMedia(target: MediaCopyTarget, sources: string[]): Promise<Record<string, CopiedMedia>>;
   unquarantineMedia(storagePaths: string[]): Promise<void>;
 
   subscribeFlashcards(cb: (cards: Flashcard[]) => void): Unsubscribe;

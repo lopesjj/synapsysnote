@@ -14,13 +14,9 @@ import { SiteLanguageSwitcher } from "@/components/i18n/site-language-switcher";
 import { LegalConsentNotice, LegalFooter, LegalTrigger } from "@/components/legal/legal-links";
 import { interpolateNodes } from "@/components/legal/legal-text";
 import { formatTabTitle } from "@/lib/document-title";
-import {
-  loadUserProfile,
-  profileNeedsCompletion,
-  recordLegalAcceptance,
-} from "@/lib/data/user-profile";
+import { loadUserProfile, profileNeedsCompletion } from "@/lib/data/user-profile";
 import { LEGAL_FACTS, LEGAL_VERSION } from "@/lib/legal/entity";
-import { isValidPhoneBR } from "@/lib/phone";
+import { isValidPhone } from "@/lib/phone";
 import { Button } from "@/components/ui/button";
 import { RecaptchaField } from "@/components/auth/recaptcha-field";
 import { RecaptchaError, verifyRecaptchaToken } from "@/lib/recaptcha";
@@ -47,11 +43,6 @@ type Router = ReturnType<typeof useRouter>;
 
 function workspaceLanguage(profile: UserProfile | null | undefined, fallback: SupportedLanguage) {
   return profile?.preferences?.language ?? fallback;
-}
-
-function acknowledgeLegalNotice(uid: string, profile: UserProfile | null) {
-  if (!profile || profile.legalAcceptedVersion === LEGAL_VERSION) return;
-  void recordLegalAcceptance(uid);
 }
 
 function enterWorkspace(language: SupportedLanguage, router: Router, mode: "push" | "replace" = "push") {
@@ -153,7 +144,7 @@ export default function LandingPage() {
         if (!signupAccepted) {
           return;
         }
-        if (!isValidPhoneBR(phone)) {
+        if (!isValidPhone(phone)) {
           toast.error(t("phone_invalid"));
           return;
         }
@@ -174,7 +165,6 @@ export default function LandingPage() {
       const existing = await loadUserProfile(signedIn.uid);
       hydrateFromProfile(existing);
       if (!profileNeedsCompletion(signedIn, existing)) {
-        acknowledgeLegalNotice(signedIn.uid, existing);
         enterWorkspace(workspaceLanguage(existing, locale), router);
       }
     } catch (error) {
@@ -199,7 +189,6 @@ export default function LandingPage() {
       const existing = await loadUserProfile(signedIn.uid);
       hydrateFromProfile(existing);
       if (!profileNeedsCompletion(signedIn, existing)) {
-        acknowledgeLegalNotice(signedIn.uid, existing);
         enterWorkspace(workspaceLanguage(existing, locale), router);
       }
     } catch (error) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { getFirebaseAuth } from "./client";
+import { isFirebaseConfigured } from "./config";
 
 export async function firebaseAuthHeaders(): Promise<HeadersInit> {
   const user = getFirebaseAuth().currentUser;
@@ -10,6 +11,21 @@ export async function firebaseAuthHeaders(): Promise<HeadersInit> {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
+}
+
+/**
+ * Cabecalho de autorizacao quando ha alguem logado; vazio no modo demo ou antes
+ * do login. Para rotas que tambem aceitam o cookie de sessao.
+ */
+export async function optionalAuthHeader(): Promise<Record<string, string>> {
+  try {
+    if (!isFirebaseConfigured()) return {};
+    const user = getFirebaseAuth().currentUser;
+    if (!user) return {};
+    return { Authorization: `Bearer ${await user.getIdToken()}` };
+  } catch {
+    return {};
+  }
 }
 
 export async function firebaseJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {

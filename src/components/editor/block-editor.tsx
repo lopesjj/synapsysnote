@@ -45,7 +45,15 @@ import {
 import { BubbleToolbar } from "./bubble-toolbar";
 import { EditorToolbar, useEditorTick } from "./editor-toolbar";
 import { NoteOutline } from "./note-outline";
-import { blocksToDoc, collectMentionIds, docToBlocks } from "./serializer";
+import {
+  blocksSignature,
+  blocksToDoc,
+  collectMentionIds,
+  docToBlocks,
+  mentionDisplayText,
+  persistableBlocks,
+} from "./serializer";
+import { PreservedBlock } from "./extensions/preserved-block";
 import { indexMedia, isRicherMedia, mediaIdentity } from "@/lib/data/media-enrichment";
 import { cn } from "@/lib/utils";
 import { useTranslation, localizeErrorMessage } from "@/lib/i18n/translations";
@@ -72,6 +80,41 @@ function mentionHref(
   if (notebooks.some((notebook) => notebook.id === id)) return `/home/n/${id}`;
   if (pages.some((page) => page.id === id)) return `/home/p/${id}`;
   return `/home/p/${id}`;
+}
+
+/** Mencao do Notion pode ser de pagina, de pessoa ou de data; so a de pagina abre algo. */
+const SynapsysMention = Mention.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      kind: {
+        default: "page",
+        parseHTML: (element: HTMLElement) => element.getAttribute("data-kind") || "page",
+        renderHTML: (attributes: Record<string, unknown>) =>
+          attributes.kind && attributes.kind !== "page" ? { "data-kind": attributes.kind } : {},
+      },
+    };
+  },
+  parseHTML() {
+    return [
+      { tag: 'span[data-type="mention"]' },
+      // O editor desenha a mencao de pagina como link; sem esta regra, copiar e
+      // colar a transformava em texto com link comum.
+      { tag: 'a[data-type="mention"]', priority: 60 },
+    ];
+  },
+});
+
+function hasPendingMedia(editor: Editor): boolean {
+  let pending = false;
+  editor.state.doc.descendants((node) => {
+    if (pending) return false;
+    if (node.type.name !== "mediaBlock") return;
+    const url = String(node.attrs.url ?? "");
+    if (node.attrs.tempId || !url || url.startsWith("blob:")) pending = true;
+    return false;
+  });
+  return pending;
 }
 
 function mentionFromEvent(event: { target: EventTarget | null }): HTMLElement | null {
@@ -143,9 +186,21 @@ export function BlockEditor({
   languageRef.current = language;
   const { livePages, notebooks, adapter } = useWorkspace();
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
-  const storeBlockCount = useRef(page.blocks.length);
-  const emittedBlockCount = useRef(page.blocks.length);
   const trackedPageId = useRef(page.id);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  // Ultimo conteudo enviado para salvar que ainda nao voltou do banco. Enquanto
+  // existir, nada que chegue do banco substitui o editor (seria uma versao velha).
+  const pendingEmitted = useRef<{ blocks: AppBlock[]; signature: string | null } | null>(null);
+  const latestBlocksRef = useRef(page.blocks);
+  latestBlocksRef.current = page.blocks;
+  const [syncTick, setSyncTick] = useState(0);
+
+  const emitBlocks = useCallback((instance: Editor) => {
+    const blocks = persistableBlocks(docToBlocks(instance.getJSON()));
+    pendingEmitted.current = { blocks, signature: null };
+    onChangeRef.current?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
+  }, []);
   const applyingRemote = useRef(false);
   const lastLocalEditAt = useRef(0);
   const effectiveCandidates = useMemo(() => {
@@ -169,6 +224,8 @@ export function BlockEditor({
   const openMention = useCallback((event: React.MouseEvent | MouseEvent) => {
     const mention = mentionFromEvent(event);
     if (!mention) return false;
+    const kind = mention.getAttribute("data-kind");
+    if (kind && kind !== "page") return false;
     const href = mentionHref(
       mention.getAttribute("data-id") ?? "",
       mentionNavRef.current.livePages,
@@ -393,9 +450,7 @@ export function BlockEditor({
             if (found) {
               uploadSuccess = true;
               instance.view.dispatch(tr);
-              const blocks = docToBlocks(instance.getJSON());
-              emittedBlockCount.current = blocks.length;
-              onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
+              emitBlocks(instance);
 
               toast.success(
                 isAudio
@@ -428,9 +483,7 @@ export function BlockEditor({
             });
             if (removed) {
               instance.view.dispatch(tr);
-              const blocks = docToBlocks(instance.getJSON());
-              emittedBlockCount.current = blocks.length;
-              onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
+              emitBlocks(instance);
             }
             toast.error(
               localizeErrorMessage(error instanceof Error ? error.message : null, tRef.current) ||
@@ -455,7 +508,7 @@ export function BlockEditor({
         })();
       }
     },
-    [adapter, editable, onChange, page.id]
+    [adapter, editable, emitBlocks, page.id]
   );
 
   useEffect(() => {
@@ -538,9 +591,7 @@ export function BlockEditor({
           if (found) {
             uploadSuccess = true;
             instance.view.dispatch(tr);
-            const blocks = docToBlocks(instance.getJSON());
-            emittedBlockCount.current = blocks.length;
-            onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
+            emitBlocks(instance);
             toast.success(tRef.current("audio_attached"));
           } else if (storagePath) {
             void adapter.deleteMedia([storagePath], page.id);
@@ -562,9 +613,7 @@ export function BlockEditor({
           });
           if (removed) {
             instance.view.dispatch(tr);
-            const blocks = docToBlocks(instance.getJSON());
-            emittedBlockCount.current = blocks.length;
-            onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
+            emitBlocks(instance);
           }
           toast.error(
             localizeErrorMessage(error instanceof Error ? error.message : null, tRef.current) ||
@@ -587,7 +636,7 @@ export function BlockEditor({
         }
       })();
     },
-    [adapter, editable, onChange, page.id]
+    [adapter, editable, emitBlocks, page.id]
   );
 
   useEffect(() => {
@@ -600,9 +649,14 @@ export function BlockEditor({
         codeBlock: false,
         heading: { levels: [1, 2, 3] },
         link: {
-          openOnClick: !editable,
+          openOnClick: true,
           autolink: true,
-          HTMLAttributes: { rel: "noopener noreferrer" },
+          defaultProtocol: "https",
+          HTMLAttributes: {
+            target: "_blank",
+            rel: "noopener noreferrer",
+            class: "synapsys-link",
+          },
         },
       }),
       Placeholder.configure({
@@ -640,11 +694,24 @@ export function BlockEditor({
       TextAlign,
       MultiSelectionDecorator,
       ...(editable ? [DragAutoScroll, DragHandle, HeadingShortcut, SlashCommand.configure({ handlers })] : []),
-      Mention.configure({
+      PreservedBlock,
+      SynapsysMention.configure({
         HTMLAttributes: { class: "mention" },
+        renderText({ node }) {
+          const id = String(node.attrs.id ?? "");
+          return mentionDisplayText(node.attrs.kind, String(node.attrs.label ?? id));
+        },
         renderHTML({ options, node }) {
           const id = String(node.attrs.id ?? "");
           const label = String(node.attrs.label ?? id);
+          const kind = String(node.attrs.kind ?? "page");
+          if (kind !== "page") {
+            return [
+              "span",
+              mergeAttributes(options.HTMLAttributes, { "data-id": id, "data-label": label }),
+              mentionDisplayText(kind, label),
+            ];
+          }
           return [
             "a",
             mergeAttributes(options.HTMLAttributes, {
@@ -723,11 +790,8 @@ export function BlockEditor({
       },
       onUpdate: ({ editor: instance }) => {
         if (!editable || applyingRemote.current) return;
-        const blocks = docToBlocks(instance.getJSON());
-        emittedBlockCount.current = blocks.length;
-        storeBlockCount.current = Math.max(storeBlockCount.current, blocks.length);
         lastLocalEditAt.current = Date.now();
-        onChange?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
+        emitBlocks(instance);
       },
     },
     [page.id, editable]
@@ -750,8 +814,7 @@ export function BlockEditor({
     if (!editor) return;
     if (trackedPageId.current !== page.id) {
       trackedPageId.current = page.id;
-      storeBlockCount.current = page.blocks.length;
-      emittedBlockCount.current = page.blocks.length;
+      pendingEmitted.current = null;
       return;
     }
     if (!editable) {
@@ -760,39 +823,50 @@ export function BlockEditor({
           editor.commands.setContent(blocksToDoc(page.blocks), { emitUpdate: false });
         }
       }, 0);
-      storeBlockCount.current = page.blocks.length;
-      emittedBlockCount.current = page.blocks.length;
       return () => clearTimeout(timer);
     }
-    const incoming = page.blocks.length;
-    const isRecentlyEdited = Date.now() - lastLocalEditAt.current < 4000;
-    if (
-      !editor.isFocused &&
-      !isRecentlyEdited &&
-      incoming > storeBlockCount.current &&
-      incoming > emittedBlockCount.current
-    ) {
-      const { from, to } = editor.state.selection;
-      const focused = editor.isFocused;
-      const timer = setTimeout(() => {
-        if (editor.isDestroyed) return;
-        editor.commands.setContent(blocksToDoc(page.blocks), { emitUpdate: false });
-        if (focused) {
-          const size = editor.state.doc.content.size;
-          editor
-            .chain()
-            .setTextSelection({ from: Math.min(from, size), to: Math.min(to, size) })
-            .focus()
-            .run();
-        }
-      }, 0);
-      storeBlockCount.current = incoming;
-      return () => clearTimeout(timer);
-    } else {
+    if (editor.isDestroyed) return;
+
+    const incoming = blocksSignature(page.blocks);
+    const pending = pendingEmitted.current;
+    if (pending) {
+      pending.signature ??= blocksSignature(pending.blocks);
+      // O que chegou e o nosso proprio salvamento: confirmado.
+      if (pending.signature === incoming) pendingEmitted.current = null;
+      // Com edicao local ainda nao confirmada, o que chega do banco e mais
+      // antigo que o editor; so as transcricoes prontas entram.
       applyRemoteMediaEnrichment(editor, page.blocks, applyingRemote);
+      return;
     }
-    storeBlockCount.current = incoming;
-  }, [editable, editor, page.blocks, page.id]);
+
+    if (incoming === blocksSignature(docToBlocks(editor.getJSON()))) {
+      applyRemoteMediaEnrichment(editor, page.blocks, applyingRemote);
+      return;
+    }
+
+    // Mudanca feita em outra aba ou aparelho. Espera a pessoa parar de digitar
+    // e os envios de midia terminarem, para nao apagar nada que esta em curso.
+    const idleFor = Date.now() - lastLocalEditAt.current;
+    if (idleFor < 4000 || hasPendingMedia(editor)) {
+      applyRemoteMediaEnrichment(editor, page.blocks, applyingRemote);
+      const timer = setTimeout(() => setSyncTick((tick) => tick + 1), Math.max(4000 - idleFor, 1500));
+      return () => clearTimeout(timer);
+    }
+
+    const { from, to } = editor.state.selection;
+    const focused = editor.isFocused;
+    const timer = setTimeout(() => {
+      if (editor.isDestroyed || pendingEmitted.current) return;
+      editor.commands.setContent(blocksToDoc(latestBlocksRef.current), { emitUpdate: false });
+      const size = editor.state.doc.content.size;
+      const chain = editor
+        .chain()
+        .setTextSelection({ from: Math.min(from, size), to: Math.min(to, size) });
+      if (focused) chain.focus();
+      chain.run();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [editable, editor, page.blocks, page.id, syncTick]);
 
   const focusEnd = useCallback(() => editor?.commands.focus("end"), [editor]);
 

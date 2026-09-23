@@ -435,16 +435,19 @@ export function PageView({ pageId }: { pageId: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [page, narrating, pausedNarration, speechRate, language, handleInterpretLibras, libras]);
 
-  const { schedule, flush, status, lastSavedAt } = useDebounceAutoSave<Partial<Page>>({
+  const { schedule, flushNow, discardPending, status, lastSavedAt } = useDebounceAutoSave<Partial<Page>>({
     resetKey: pageId,
     delay: 900,
     maxWait: 6000,
     onSave: async (patch) => {
       await adapter.updatePage(pageId, patch);
     },
+    onUnloadSave: (patch) => {
+      void adapter.updatePage(pageId, patch, { fast: true }).catch(() => {});
+    },
     onError: (error) =>
       toast.error(
-        error instanceof Error ? error.message : t("page_save_error"),
+        localizeErrorMessage(error instanceof Error ? error.message : null, t) || t("page_save_error"),
         { id: "page-save-error" }
       ),
   });
@@ -530,7 +533,9 @@ export function PageView({ pageId }: { pageId: string }) {
     const toastId = toast.loading(t("pdf_export_preparing"));
 
     try {
-      await exportNoteToPdf(page, {
+      await flushNow();
+      const current = latestPageRef.current?.id === page.id ? latestPageRef.current : page;
+      await exportNoteToPdf(current, {
         notebookName: notebook?.name,
         t,
         onProgress: (status) => {
@@ -559,8 +564,8 @@ export function PageView({ pageId }: { pageId: string }) {
         const isAudio = isAudioFile(file);
         const isVideo = !isAudio && isVideoFile(file);
         const prepared = await prepareEditorAttachment(file);
-        if (isAudio && typeof adapter.uploadAudioNote === "function") {
-          await adapter.uploadAudioNote(pageId, prepared, 0);
+        if (isAudio) {
+          await adapter.saveAudioNote(pageId, prepared, 0);
         } else {
           await adapter.saveAttachment(pageId, prepared);
         }
@@ -793,6 +798,7 @@ export function PageView({ pageId }: { pageId: string }) {
             <MenuSeparator />
             <MenuItem
               onSelect={async () => {
+                await flushNow();
                 await adapter.snapshotVersion(pageId, "Manual");
                 toast.success(`${t("save_version")} - ${t("saved")}`);
               }}
@@ -810,6 +816,7 @@ export function PageView({ pageId }: { pageId: string }) {
             <MenuItem
               onSelect={async () => {
                 try {
+                  await flushNow();
                   const copy = await adapter.duplicatePage(pageId);
                   toast.success(t("note_duplicated"));
                   useUiStore.getState().closeMenu();
@@ -887,7 +894,7 @@ export function PageView({ pageId }: { pageId: string }) {
                   isIconUrl(page.icon ?? "") ? "rounded-[22px] sm:rounded-[28px]" : "rounded-[10px]",
                   !hasCover && "hover:bg-[var(--surface-hover)]"
                 )}
-                aria-label="Ícone da página"
+                aria-label={t("page_icon")}
               >
                 <WorkspaceIcon
                   icon={page.icon}
@@ -909,7 +916,7 @@ export function PageView({ pageId }: { pageId: string }) {
           >
             <textarea
               id="page-title-input"
-              aria-label={page.title ? `Título: ${page.title}` : t("untitled")}
+              aria-label={page.title ? t("page_title_label", { title: page.title }) : t("untitled")}
               value={title}
               rows={1}
               cols={1}
@@ -947,7 +954,7 @@ export function PageView({ pageId }: { pageId: string }) {
                   adapter.updatePage(pageId, { tags: page.tags.filter((t) => t !== tag) })
                 }
                 className="opacity-0 transition group-hover/tag:opacity-100"
-                aria-label={`Remover tag ${tag}`}
+                aria-label={t("remove_tag_label", { tag })}
               >
                 <X className="size-2.5" />
               </button>
@@ -1150,7 +1157,7 @@ export function PageView({ pageId }: { pageId: string }) {
         >
           <div className="flex items-center justify-between">
             <p className="text-[13px] font-semibold text-ink">{t("history_versions")}</p>
-            <Button variant="ghost" size="icon-sm" onClick={() => setVersionsOpen(false)}>
+            <Button variant="ghost" size="icon-sm" aria-label={t("close")} onClick={() => setVersionsOpen(false)}>
               <X />
             </Button>
           </div>
@@ -1175,7 +1182,25 @@ export function PageView({ pageId }: { pageId: string }) {
                     size="icon-sm"
                     aria-label={t("undo")}
                     onClick={async () => {
-                      await adapter.restoreVersion(pageId, version.id);
+                      const saved = await flushNow();
+                      if (!saved) {
+                        toast.error(t("page_save_error"), { id: "page-save-error" });
+                        return;
+                      }
+                      try {
+                        // O conteudo atual vira uma versao, para a restauracao poder ser desfeita.
+                        await adapter.snapshotVersion(pageId);
+                        await adapter.restoreVersion(pageId, version.id);
+                      } catch (error) {
+                        toast.error(
+                          localizeErrorMessage(error instanceof Error ? error.message : null, t) ||
+                            t("page_save_error")
+                        );
+                        return;
+                      }
+                      discardPending();
+                      setTitleDraft(null);
+                      setEditorKey((key) => key + 1);
                       toast.success(t("undo_action"));
                       setVersionsOpen(false);
                     }}

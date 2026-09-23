@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import type { AppBlock, Flashcard, Notebook, Page } from "@/types/models";
-import type { CreateFlashcardInput, CreatePageInput } from "./adapter";
+import type { CopiedMedia, CreateFlashcardInput, CreatePageInput, MediaCopyTarget } from "./adapter";
 import { cardImage } from "@/lib/flashcards/card-images";
 import { childrenOf, parentIdOf } from "./notebook-tree";
 
@@ -30,14 +30,50 @@ export interface DuplicateHost {
   updatePage(id: string, patch: Partial<Page>): Promise<void>;
   listPageFlashcards(pageId: string): Promise<Flashcard[]>;
   createFlashcard(input: CreateFlashcardInput): Promise<Flashcard>;
+  copyMedia(target: MediaCopyTarget, sources: string[]): Promise<Record<string, CopiedMedia>>;
+}
+
+export function newPageId(): string {
+  return `page_${nanoid(10)}`;
+}
+
+/** Referencias de arquivo (caminho e URL) de todos os blocos de midia. */
+function mediaReferences(blocks: AppBlock[]): string[] {
+  const refs: string[] = [];
+  const walk = (list: AppBlock[]) => {
+    for (const block of list) {
+      if (block.media?.storagePath) refs.push(block.media.storagePath);
+      if (block.media?.url) refs.push(block.media.url);
+      if (block.children?.length) walk(block.children);
+    }
+  };
+  walk(blocks);
+  return refs;
+}
+
+function copyFor(copies: Record<string, CopiedMedia>, ...refs: (string | null | undefined)[]) {
+  for (const ref of refs) {
+    if (ref && copies[ref]) return copies[ref];
+  }
+  return null;
+}
+
+function remapMedia(blocks: AppBlock[], copies: Record<string, CopiedMedia>): AppBlock[] {
+  if (!Object.keys(copies).length) return blocks;
+  return blocks.map((block) => {
+    const children = block.children ? remapMedia(block.children, copies) : block.children;
+    const copy = block.media ? copyFor(copies, block.media.storagePath, block.media.url) : null;
+    return {
+      ...block,
+      ...(children ? { children } : {}),
+      ...(copy && block.media ? { media: { ...block.media, url: copy.url, storagePath: copy.storagePath } } : {}),
+    };
+  });
 }
 
 /**
- * Copia os flashcards de uma nota para a nota recem-criada.
- *
- * A copia referencia a mesma imagem pela URL, mas nao recebe o `storagePath`:
- * ela nao e dona do arquivo. Sem isso, apagar a copia apagaria a imagem do card
- * original no storage.
+ * Copia os flashcards de uma nota para a nota recem-criada, com copia propria
+ * das imagens: excluir a original (ou a copia) nao quebra a outra.
  */
 async function duplicatePageFlashcards(
   host: DuplicateHost,
@@ -45,7 +81,23 @@ async function duplicatePageFlashcards(
   target: Page
 ): Promise<void> {
   const cards = await host.listPageFlashcards(sourcePageId);
+  if (!cards.length) return;
+
+  const imageRefs: string[] = [];
   for (const card of cards) {
+    for (const side of ["front", "back"] as const) {
+      const image = cardImage(card, side);
+      if (image.storagePath) imageRefs.push(image.storagePath);
+      if (image.url) imageRefs.push(image.url);
+    }
+  }
+  const copies = imageRefs.length ? await host.copyMedia({ pageId: target.id }, imageRefs) : {};
+
+  for (const card of cards) {
+    const front = cardImage(card, "front");
+    const back = cardImage(card, "back");
+    const frontCopy = copyFor(copies, front.storagePath, front.url);
+    const backCopy = copyFor(copies, back.storagePath, back.url);
     await host.createFlashcard({
       pageId: target.id,
       notebookId: target.notebookId,
@@ -53,10 +105,12 @@ async function duplicatePageFlashcards(
       front: card.front,
       back: card.back,
       hint: card.hint,
-      frontImageUrl: cardImage(card, "front").url,
-      frontImageStoragePath: null,
-      backImageUrl: cardImage(card, "back").url,
-      backImageStoragePath: null,
+      // Sem copia (arquivo externo ou falha), a imagem e referenciada pela URL
+      // e sem storagePath: a copia nao e dona do arquivo e nao o apaga.
+      frontImageUrl: frontCopy?.url ?? front.url,
+      frontImageStoragePath: frontCopy?.storagePath ?? null,
+      backImageUrl: backCopy?.url ?? back.url,
+      backImageStoragePath: backCopy?.storagePath ?? null,
     });
   }
 }
@@ -81,7 +135,7 @@ export function cloneBlocks(blocks: AppBlock[]): AppBlock[] {
       mention: span.mention ? { ...span.mention } : undefined,
     })),
     props: block.props ? structuredClone(block.props) : undefined,
-    media: block.media ? { ...block.media } : undefined,
+    media: block.media ? structuredClone(block.media) : undefined,
     children: block.children ? cloneBlocks(block.children) : undefined,
   }));
 }
@@ -108,11 +162,22 @@ export async function duplicatePageTree(
   if (!source) throw new Error("Nota não encontrada");
 
   const rename = options.rename !== false;
-  const blocks = cloneBlocks(source.blocks);
+  const targetId = newPageId();
+  const originalBlocks = cloneBlocks(source.blocks);
+  // Copia os arquivos antes de criar a nota, direto na pasta dela: criar e
+  // depois trocar as URLs faria a nota nova "remover" as midias da original.
+  const copies = await host.copyMedia({ pageId: targetId }, [
+    ...mediaReferences(originalBlocks),
+    ...(source.coverUrl ? [source.coverUrl] : []),
+    ...(source.icon ? [source.icon] : []),
+  ]);
+  const blocks = remapMedia(originalBlocks, copies);
+
   const created = await host.createPage({
+    id: targetId,
     title: rename ? copyTitle(source.title) : source.title,
-    icon: source.icon,
-    coverUrl: source.coverUrl ?? null,
+    icon: copyFor(copies, source.icon)?.url ?? source.icon,
+    coverUrl: copyFor(copies, source.coverUrl)?.url ?? source.coverUrl ?? null,
     coverPosition: source.coverPosition ?? null,
     notebookId: options.notebookId !== undefined ? options.notebookId : source.notebookId,
     parentPageId:
@@ -156,15 +221,19 @@ export async function duplicateNotebookTree(
   if (!source) throw new Error("Caderno não encontrado");
 
   const rename = options.rename !== false;
+  const copies = await host.copyMedia(
+    "icons",
+    [source.coverUrl, source.emoji].filter((value): value is string => Boolean(value))
+  );
   const created = await host.createNotebook({
     name: rename ? copyTitle(source.name, "Sem nome") : source.name,
-    emoji: source.emoji,
+    emoji: copyFor(copies, source.emoji)?.url ?? source.emoji,
     color: source.color,
     parentId: options.parentId !== undefined ? options.parentId : parentIdOf(source),
   });
 
   const extras: Partial<Notebook> = {};
-  if (source.coverUrl) extras.coverUrl = source.coverUrl;
+  if (source.coverUrl) extras.coverUrl = copyFor(copies, source.coverUrl)?.url ?? source.coverUrl;
   if (source.coverPosition !== undefined) extras.coverPosition = source.coverPosition;
   if (source.description) extras.description = source.description;
   if (Object.keys(extras).length) await host.updateNotebook(created.id, extras);

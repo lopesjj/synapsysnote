@@ -64,6 +64,9 @@ export function ImportWizard({
     createBacklinks: true,
   });
   const [connecting, setConnecting] = useState(false);
+  // Reimportar substitui o que ja existe: so libera depois da confirmacao.
+  const [reimportConfirmed, setReimportConfirmed] = useState(false);
+  const needsReimportConfirmation = summary.existingCount > 0 && !reimportConfirmed;
 
   const connected = Boolean(integration?.connected);
   const isJobActive = Boolean(job && ["pending", "discovering", "running"].includes(job.status));
@@ -88,6 +91,7 @@ export function ImportWizard({
   };
 
   const handleStart = async () => {
+    if (needsReimportConfirmation) return;
     try {
       await start({ targetNotebookId: resolvedNotebookId, ...options });
       setStepOverride("progress");
@@ -142,6 +146,8 @@ export function ImportWizard({
         {step === "preview" ? (
           <PreviewStep
             summary={summary}
+            reimportConfirmed={reimportConfirmed}
+            onConfirmReimport={setReimportConfirmed}
             notebooks={notebooks}
             targetNotebookId={resolvedNotebookId}
             onChangeNotebook={setTargetNotebookId}
@@ -189,7 +195,10 @@ export function ImportWizard({
               <Button
                 variant="primary"
                 disabled={!selected.size}
-                onClick={() => setStepOverride("preview")}
+                onClick={() => {
+                  setReimportConfirmed(false);
+                  setStepOverride("preview");
+                }}
               >
                 {t("wizard_review", { count: selected.size ? `(${selected.size})` : "" })}
                 <ArrowRight />
@@ -202,7 +211,11 @@ export function ImportWizard({
               <Button variant="ghost" onClick={() => setStepOverride("select")}>
                 <ArrowLeft /> {t("wizard_back")}
               </Button>
-              <Button variant="primary" disabled={submitting} onClick={handleStart}>
+              <Button
+                variant="primary"
+                disabled={submitting || needsReimportConfirmation}
+                onClick={handleStart}
+              >
                 {submitting ? <Loader2 className="animate-spin" /> : null}
                 {t("wizard_import_action", {
                   count: summary.total,
@@ -478,13 +491,17 @@ function SelectStep({
 
 function PreviewStep({
   summary,
+  reimportConfirmed,
+  onConfirmReimport,
   notebooks,
   targetNotebookId,
   onChangeNotebook,
   options,
   onChangeOptions,
 }: {
-  summary: { pages: number; databases: number; rows: number; total: number };
+  summary: { pages: number; databases: number; rows: number; total: number; existingCount: number };
+  reimportConfirmed: boolean;
+  onConfirmReimport: (confirmed: boolean) => void;
   notebooks: { id: string; name: string; emoji?: string }[];
   targetNotebookId: string | null;
   onChangeNotebook: (id: string | null) => void;
@@ -523,9 +540,25 @@ function PreviewStep({
         <SummaryCard label={t("wizard_summary_records")} value={summary.rows} />
       </div>
 
-      {"existingCount" in summary && (summary as { existingCount: number }).existingCount > 0 ? (
-        <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-2)] p-2.5 text-[12px] text-muted">
-          💡 <strong className="text-ink">{(summary as { existingCount: number }).existingCount}</strong> {t("wizard_existing_notice")}
+      {summary.existingCount > 0 ? (
+        <div
+          role="alert"
+          className="space-y-2.5 rounded-[var(--radius-sm)] border border-[color-mix(in_oklab,var(--warning)_45%,transparent)] bg-[color-mix(in_oklab,var(--warning)_10%,transparent)] p-3"
+        >
+          <p className="flex items-center gap-2 text-[12.5px] font-semibold text-ink">
+            <AlertTriangle className="size-4 shrink-0 text-[var(--warning)]" aria-hidden />
+            {t("notion_reimport_warning_title")}
+          </p>
+          <p className="text-[12px] leading-relaxed text-muted">
+            {t("notion_reimport_warning_body", { count: summary.existingCount })}
+          </p>
+          <label className="flex cursor-pointer items-center gap-2.5 text-[12.5px] font-medium text-ink">
+            <Checkbox
+              checked={reimportConfirmed}
+              onCheckedChange={(value) => onConfirmReimport(value === true)}
+            />
+            {t("notion_reimport_confirm")}
+          </label>
         </div>
       ) : null}
 

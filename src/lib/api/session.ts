@@ -53,6 +53,12 @@ export async function ensureWorkspace(
     const [ws, member] = await Promise.all([tx.get(wsRef), tx.get(memberRef)]);
 
     if (!ws.exists) {
+      // So o workspace pessoal nasce aqui. Aceitar qualquer id deixava criar
+      // workspaces arbitrarios (ou reservar o id de outra conta) contornando as
+      // regras do Firestore, que so permitem `ws_{uid}`.
+      if (workspaceId !== workspaceIdFor(user.uid)) {
+        throw new ApiError(403, "Sem permissão neste workspace");
+      }
       tx.set(wsRef, {
         id: workspaceId,
         name: defaultWorkspaceName(language, user.name),

@@ -29,7 +29,11 @@ async function applyAuthPersistence(remember: boolean) {
   await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
   markRemembered(remember);
 }
-import { completeUserRegistration, updateUserProfile } from "@/lib/data/user-profile";
+import {
+  completeUserRegistration,
+  recordLegalAcceptance,
+  updateUserProfile,
+} from "@/lib/data/user-profile";
 import { useUiStore } from "@/lib/store/ui-store";
 import {
   clearCrossHostSession,
@@ -95,12 +99,11 @@ interface AuthContextValue {
     phone: string;
     language: SupportedLanguage;
     legalAcceptedVersion?: string;
-  }) => Promise<void>;
+  }) => Promise<{ emailVerificationSent: boolean; emailChangeFailed: boolean }>;
   resetPassword: (email: string, language?: SupportedLanguage) => Promise<void>;
   verifyResetCode: (oobCode: string) => Promise<string>;
   confirmPasswordReset: (oobCode: string, password: string) => Promise<void>;
   changePassword: (currentPassword: string, nextPassword: string) => Promise<void>;
-  continueAsGuest: () => Promise<void>;
   updateAuthPhoto: (photoURL: string | null) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -210,8 +213,7 @@ export function hasActiveSessionHint(): boolean {
   try {
     return Boolean(
       window.localStorage.getItem(AUTH_ACTIVE_KEY) ||
-      window.localStorage.getItem(CACHED_USER_KEY) ||
-      document.cookie.includes("synapsys_session=")
+      window.localStorage.getItem(CACHED_USER_KEY)
     );
   } catch {
     return false;
@@ -378,7 +380,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await persistCrossHostSession(remember);
           writeCachedUser(next);
           setFirebaseUser(next);
-          void reportAccess("login");
+          // Com os dois dominios o login e registrado pelo servidor ao criar a sessao.
+          if (!isSplitHosts()) void reportAccess("login");
           return next;
         } catch (error) {
           if (authenticated) {
@@ -416,7 +419,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await persistCrossHostSession(remember);
           writeCachedUser(next);
           setFirebaseUser(next);
-          void reportAccess("login");
+          // Com os dois dominios o login e registrado pelo servidor ao criar a sessao.
+          if (!isSplitHosts()) void reportAccess("login");
           return next;
         } catch (error) {
           if (authenticated) {
@@ -445,8 +449,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             phone,
             providers: next.providers,
             language,
-            legalAcceptedVersion,
           });
+          if (legalAcceptedVersion) await recordLegalAcceptance(next.uid);
           useUiStore.getState().setLanguage(language);
           return next;
         }
@@ -467,13 +471,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             photoURL: next.photoURL,
             providers: next.providers,
             language,
-            legalAcceptedVersion,
           });
+          if (legalAcceptedVersion) {
+            // Se falhar, o app pede o aceite de novo na entrada.
+            await recordLegalAcceptance(next.uid).catch(() => {});
+          }
           await persistCrossHostSession(true);
           writeCachedUser(next);
           setFirebaseUser(next);
           useUiStore.getState().setLanguage(language);
-          void reportAccess("login");
+          if (!isSplitHosts()) void reportAccess("login");
           return next;
         } catch (error) {
           throw toAuthError(error);
@@ -491,13 +498,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             phone,
             providers: next.providers,
             language,
-            legalAcceptedVersion,
           });
+          if (legalAcceptedVersion) await recordLegalAcceptance(next.uid);
           useUiStore.getState().setLanguage(profile.preferences?.language ?? language);
-          return;
+          return { emailVerificationSent: false, emailChangeFailed: false };
         }
 
-        const [{ updateProfile, updateEmail }, auth] = await Promise.all([
+        const [{ updateProfile, verifyBeforeUpdateEmail }, auth] = await Promise.all([
           import("firebase/auth"),
           firebaseAuth(),
         ]);
@@ -505,27 +512,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!current) throw createAuthError("unknown");
 
         await updateProfile(current, { displayName: name });
-        if (email && email !== (current.email ?? "")) {
+
+        // `updateEmail` falha com a protecao contra enumeracao de e-mails ativa e o
+        // erro era engolido, deixando o perfil com um e-mail diferente do login.
+        // A troca agora so vale depois que a pessoa confirma o novo endereco.
+        let emailVerificationSent = false;
+        let emailChangeFailed = false;
+        const requestedEmail = email.trim();
+        if (requestedEmail && requestedEmail.toLowerCase() !== (current.email ?? "").toLowerCase()) {
           try {
-            await updateEmail(current, email);
-          } catch {}
+            await verifyBeforeUpdateEmail(current, requestedEmail);
+            emailVerificationSent = true;
+          } catch {
+            emailChangeFailed = true;
+          }
         }
 
-        const next = { ...toAppUser(current), email: email || current.email || "", displayName: name };
+        const next = { ...toAppUser(current), displayName: name };
         const profile = await completeUserRegistration({
           uid: next.uid,
-          email: next.email,
+          email: current.email ?? "",
           displayName: name,
           phone,
           photoURL: next.photoURL,
           providers: next.providers,
           language,
-          legalAcceptedVersion,
         });
+        if (legalAcceptedVersion) await recordLegalAcceptance(next.uid);
         await persistCrossHostSession(true);
         setFirebaseUser(next);
         useUiStore.getState().setLanguage(profile.preferences?.language ?? language);
-        void reportAccess("login");
+        if (!isSplitHosts()) void reportAccess("login");
+        return { emailVerificationSent, emailChangeFailed };
       },
 
       async resetPassword(email, language = "pt") {
@@ -588,11 +606,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const next = toAppUser(auth.currentUser);
         setFirebaseUser(next);
         void updateUserProfile(next.uid, { providers: next.providers }).catch(() => {});
-      },
-
-      async continueAsGuest() {
-        writeDemoUser(DEMO_USER);
-        markRemembered(true);
       },
 
       async updateAuthPhoto(photoURL) {

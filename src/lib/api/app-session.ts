@@ -19,12 +19,7 @@ function isDevelopmentRuntime(): boolean {
   return process.env.NODE_ENV !== "production";
 }
 
-export async function hasValidAppSession(): Promise<boolean> {
-  // Sem Admin configurado nao ha como validar ninguem; as demais defesas da
-  // rota seguem valendo.
-  if (!isAdminConfigured()) return true;
-  if (isDevelopmentRuntime()) return true;
-
+async function hasSessionCookie(): Promise<boolean> {
   const cookies = await readSessionCookies();
   for (const cookie of cookies) {
     try {
@@ -33,4 +28,30 @@ export async function hasValidAppSession(): Promise<boolean> {
     } catch {}
   }
   return false;
+}
+
+export async function hasValidAppSession(): Promise<boolean> {
+  if (isDevelopmentRuntime()) return true;
+  // Em producao, sem Admin nao ha como validar ninguem: melhor recusar.
+  if (!isAdminConfigured()) return false;
+  return hasSessionCookie();
+}
+
+/**
+ * Aceita o ID token do Firebase no cabecalho `Authorization` ou o cookie de
+ * sessao. O token vale em qualquer host e nao depende do cookie, que expira
+ * antes da sessao do navegador quando "Manter conectado" fica desmarcado.
+ */
+export async function authorizeAppRequest(request: Request): Promise<boolean> {
+  if (isDevelopmentRuntime()) return true;
+  if (!isAdminConfigured()) return false;
+
+  const header = request.headers.get("authorization");
+  if (header?.startsWith("Bearer ")) {
+    try {
+      await adminAuth().verifyIdToken(header.slice(7));
+      return true;
+    } catch {}
+  }
+  return hasSessionCookie();
 }

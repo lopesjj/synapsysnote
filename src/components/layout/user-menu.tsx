@@ -57,7 +57,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
 
   const photoURL = imageError ? null : rawPhotoURL;
   const initial = displayName.trim().charAt(0).toUpperCase() || "?";
-  const planLabel = mode === "demo" || user?.uid === "demo-user" ? t("guest") : t("plan_pro");
+  const planLabel = mode === "demo" || user?.uid === "demo-user" ? t("guest") : t("plan_free");
 
   const avatar = (
     <span className={cn(AVATAR_CLASS, "relative overflow-hidden")}>

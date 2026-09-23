@@ -29,7 +29,14 @@ export function useUserProfile() {
     queryFn: async () => {
       if (!user) return null;
       const existing = await loadUserProfile(user.uid);
-      if (existing) return existing;
+      if (existing) {
+        // O e-mail de login muda depois que a pessoa confirma a troca: o perfil acompanha.
+        if (user.email && existing.email !== user.email) {
+          void updateUserProfile(user.uid, { email: user.email }).catch(() => {});
+          return { ...existing, email: user.email };
+        }
+        return existing;
+      }
       if (profileNeedsCompletion(user, null)) return null;
       return ensureUserProfile({
         uid: user.uid,

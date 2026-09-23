@@ -343,7 +343,8 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
           onMouseDown={keepSelection}
           onSubmit={(event) => {
             event.preventDefault();
-            const href = linkValue.trim();
+            const raw = linkValue.trim();
+            const href = raw ? (/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(raw) ? raw : `https://${raw}`) : "";
             if (href) editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
             else editor.chain().focus().extendMarkRange("link").unsetLink().run();
             setPanel(null);
@@ -364,7 +365,7 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
             type="submit"
             className="rounded-[var(--radius-xs)] bg-[var(--accent)] px-2 py-1 text-[11.5px] font-medium text-white"
           >
-            Aplicar
+            {t("apply")}
           </button>
         </form>
       ) : null}

@@ -8,6 +8,7 @@ import {
   discoverAuthorizationServer,
   exchangeAuthorizationCode,
   fetchUserInfo,
+  unpackEvernoteCookie,
   EVERNOTE_OAUTH_COOKIE,
 } from "@/lib/evernote/oauth";
 import { saveEvernoteConnection } from "@/lib/evernote/store";
@@ -18,14 +19,17 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const destination = (query: { error?: string; connected?: string }) => {
     const dest = new URL(resolveUrl(appHref("/home/integrations"), url.origin));
-    if (query.error) dest.searchParams.set("error", query.error);
+    if (query.error) {
+      dest.searchParams.set("error", query.error);
+      dest.searchParams.set("provider", "evernote");
+    }
     if (query.connected) dest.searchParams.set("connected", query.connected);
     return dest;
   };
   const fail = (code: string) => NextResponse.redirect(destination({ error: code }));
 
   const jar = await cookies();
-  const cookieState = jar.get(EVERNOTE_OAUTH_COOKIE)?.value;
+  const stored = unpackEvernoteCookie(jar.get(EVERNOTE_OAUTH_COOKIE)?.value);
   jar.set(EVERNOTE_OAUTH_COOKIE, "", sharedCookieOptions(0));
 
   const oauthError = url.searchParams.get("error");
@@ -34,7 +38,7 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   if (!code || !state) return fail("evernote_incomplete_response");
-  if (!cookieState || cookieState !== state) return fail("evernote_state_mismatch");
+  if (!stored || stored.state !== state) return fail("evernote_state_mismatch");
 
   const parsed = decodeEvernoteOauthState(state);
   if (!parsed) return fail("evernote_invalid_state");
@@ -44,7 +48,7 @@ export async function GET(request: Request) {
     const tokens = await exchangeAuthorizationCode({
       metadata,
       code,
-      verifier: parsed.verifier,
+      verifier: stored.verifier,
       clientId: parsed.clientId,
       redirectUri: parsed.redirectUri,
     });
@@ -60,7 +64,8 @@ export async function GET(request: Request) {
       user,
     });
   } catch (error) {
-    return fail(error instanceof Error ? error.message : "evernote_connection_failed");
+    console.warn("[evernote-callback] conexão falhou", error);
+    return fail("evernote_connection_failed");
   }
 
   return NextResponse.redirect(destination({ connected: "evernote" }));

@@ -6,6 +6,10 @@ import {
   type CardSignature,
 } from "@/lib/flashcards/duplicate-cards";
 import { filterSemanticDuplicates } from "@/lib/flashcards/semantic-duplicates";
+import { authorizeAppRequest } from "@/lib/api/app-session";
+import { isCrossSiteRequest } from "@/lib/api/request-origin";
+import { createRateLimiter } from "@/lib/api/rate-limit";
+import { clientIpOf } from "@/lib/api/client-ip";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -461,7 +465,45 @@ function isWeakHint(hint: string, front: string, back: string): boolean {
   return false;
 }
 
+/**
+ * Cada pedido pode virar varias chamadas pagas ao Gemini (um segmento por
+ * chamada, mais reenvios e a passada de repetidos). O teto cabe algumas notas
+ * por minuto de quem estuda e segura quem tentar usar a rota como proxy.
+ */
+const generateLimiter = createRateLimiter({
+  windowMs: 10 * 60_000,
+  maxRequests: 30,
+  maxConcurrent: 2,
+  maxBytes: 200 * 1024 * 1024,
+});
+
+/** Abaixo do teto de corpo do Cloud Run (32 MiB), com folga para o JSON. */
+const MAX_BODY_BYTES = 30 * 1024 * 1024;
+
 export async function POST(req: NextRequest) {
+  if (isCrossSiteRequest(req)) {
+    return NextResponse.json({ error: "forbidden", flashcards: [] }, { status: 403 });
+  }
+  if (!(await authorizeAppRequest(req))) {
+    return NextResponse.json({ error: "unauthorized", flashcards: [] }, { status: 401 });
+  }
+  const declaredBytes = Number(req.headers.get("content-length") || 0);
+  if (declaredBytes > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: "payload_too_large", flashcards: [] }, { status: 413 });
+  }
+
+  const key = clientIpOf(req);
+  if (!generateLimiter.take(key)) {
+    return NextResponse.json({ error: "rate_limited", flashcards: [] }, { status: 429 });
+  }
+  try {
+    return await generateFlashcards(req);
+  } finally {
+    generateLimiter.release(key, declaredBytes);
+  }
+}
+
+async function generateFlashcards(req: NextRequest) {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) {
@@ -592,7 +634,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const consolidated = sections.join("\n\n").trim();
+    // O modo "max" ja fatia em no maximo MAX_SEGMENTS pedacos; sem o teto, o
+    // modo com contagem mandaria a nota inteira, de qualquer tamanho, numa chamada.
+    const consolidated = sections.join("\n\n").trim().slice(0, SEGMENT_CHAR_BUDGET * MAX_SEGMENTS);
 
     // O título sozinho não é material de estudo. Sem este corte, uma nota cujo
     // único conteúdo é um vídeo que falhou na transcrição chegava aqui só com o

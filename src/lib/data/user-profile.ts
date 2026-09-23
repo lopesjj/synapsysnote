@@ -1,6 +1,6 @@
 import type { SupportedLanguage, UserPreferences, UserProfile } from "@/types/models";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
-import { isValidPhoneBR } from "@/lib/phone";
+import { isValidPhone } from "@/lib/phone";
 import { LEGAL_VERSION } from "@/lib/legal/entity";
 import { isCustomAvatar } from "./user-avatar";
 
@@ -15,7 +15,6 @@ export interface ProfileIdentity {
   photoURL?: string | null;
   providers?: string[];
   language?: SupportedLanguage;
-  legalAcceptedVersion?: string;
 }
 
 export function profileNeedsCompletion(
@@ -23,7 +22,16 @@ export function profileNeedsCompletion(
   profile: UserProfile | null | undefined
 ): boolean {
   if (!user || user.uid === "demo-user") return false;
-  return !isValidPhoneBR(profile?.phone ?? "");
+  return !isValidPhone(profile?.phone ?? "");
+}
+
+/** Conta com cadastro completo que ainda nao aceitou a versao atual dos documentos. */
+export function legalAcceptanceRequired(
+  user: { uid: string } | null,
+  profile: UserProfile | null | undefined
+): boolean {
+  if (!user || user.uid === "demo-user" || !profile) return false;
+  return profile.legalAcceptedVersion !== LEGAL_VERSION;
 }
 
 function isLocalProfile(uid: string): boolean {
@@ -53,6 +61,11 @@ async function profileRef(uid: string) {
   return doc(getDb(), "users", uid);
 }
 
+/**
+ * Perfil gravado pelo navegador. O aceite dos documentos nao entra aqui: so o
+ * servidor grava esses campos (ver `recordLegalAcceptance`), e o `merge` do
+ * Firestore preserva o que ja estiver la.
+ */
 function buildProfile(
   identity: ProfileIdentity,
   previous: Partial<UserProfile> | null,
@@ -73,8 +86,6 @@ function buildProfile(
     photoURL: customPhoto,
     providers: identity.providers ?? previous?.providers ?? [],
     registrationCompleted: completed,
-    legalAcceptedVersion: identity.legalAcceptedVersion ?? previous?.legalAcceptedVersion,
-    legalAcceptedAt: identity.legalAcceptedVersion ? now : previous?.legalAcceptedAt,
     preferences: {
       language: identity.language ?? "pt",
       ...(previous?.preferences ?? {}),
@@ -82,6 +93,14 @@ function buildProfile(
     createdAt: previous?.createdAt ?? now,
     updatedAt: now,
     lastSeenAt: now,
+  };
+}
+
+function withLegal(profile: UserProfile, previous: Partial<UserProfile> | null): UserProfile {
+  return {
+    ...profile,
+    ...(previous?.legalAcceptedVersion ? { legalAcceptedVersion: previous.legalAcceptedVersion } : {}),
+    ...(previous?.legalAcceptedAt ? { legalAcceptedAt: previous.legalAcceptedAt } : {}),
   };
 }
 
@@ -118,7 +137,7 @@ export async function ensureUserProfile(identity: ProfileIdentity): Promise<User
 
   if (isLocalProfile(identity.uid)) {
     const existing = readLocal(identity.uid);
-    const profile = buildProfile(identity, existing, now, true);
+    const profile = withLegal(buildProfile(identity, existing, now, true), existing);
     writeLocal(profile);
     return profile;
   }
@@ -130,12 +149,12 @@ export async function ensureUserProfile(identity: ProfileIdentity): Promise<User
 
   const snap = await getDoc(ref);
   const previous = snap.exists() ? (snap.data() as Partial<UserProfile>) : null;
-  const completed = isValidPhoneBR(identity.phone ?? previous?.phone ?? "");
+  const completed = isValidPhone(identity.phone ?? previous?.phone ?? "");
 
   const profile = buildProfile(identity, previous, now, completed);
 
   await setDoc(ref, profile, { merge: true });
-  return profile;
+  return withLegal(profile, previous);
 }
 
 export async function completeUserRegistration(identity: ProfileIdentity): Promise<UserProfile> {
@@ -143,7 +162,7 @@ export async function completeUserRegistration(identity: ProfileIdentity): Promi
 
   if (isLocalProfile(identity.uid)) {
     const existing = readLocal(identity.uid);
-    const profile = buildProfile(identity, existing, now, true);
+    const profile = withLegal(buildProfile(identity, existing, now, true), existing);
     writeLocal(profile);
     return profile;
   }
@@ -156,12 +175,12 @@ export async function completeUserRegistration(identity: ProfileIdentity): Promi
   const previous = snap.exists() ? (snap.data() as Partial<UserProfile>) : null;
   const profile = buildProfile(identity, previous, now, true);
   await setDoc(ref, profile, { merge: true });
-  return profile;
+  return withLegal(profile, previous);
 }
 
 export async function updateUserProfile(
   uid: string,
-  patch: Partial<Pick<UserProfile, "displayName" | "photoURL" | "phone" | "providers">>
+  patch: Partial<Pick<UserProfile, "displayName" | "photoURL" | "phone" | "providers" | "email">>
 ): Promise<void> {
   const cleanPatch = { ...patch };
   if (typeof cleanPatch.displayName === "string") {
@@ -178,20 +197,26 @@ export async function updateUserProfile(
   await setDoc(ref, { uid, ...cleanPatch, updatedAt: Date.now() }, { merge: true });
 }
 
+/**
+ * Registra o aceite da versao atual dos Termos e da Politica. Na conta real o
+ * registro e feito pelo servidor, com a hora do servidor; falhas sobem para
+ * quem chamou mostrar o erro.
+ */
 export async function recordLegalAcceptance(uid: string): Promise<void> {
-  try {
-    const now = Date.now();
-    const acceptance = { legalAcceptedVersion: LEGAL_VERSION, legalAcceptedAt: now };
-
-    if (isLocalProfile(uid)) {
-      const existing = readLocal(uid);
-      if (existing) writeLocal({ ...existing, ...acceptance, updatedAt: now });
-      return;
+  const now = Date.now();
+  if (isLocalProfile(uid)) {
+    const existing = readLocal(uid);
+    if (existing) {
+      writeLocal({ ...existing, legalAcceptedVersion: LEGAL_VERSION, legalAcceptedAt: now, updatedAt: now });
     }
+    return;
+  }
 
-    const [{ setDoc }, ref] = await Promise.all([import("firebase/firestore"), profileRef(uid)]);
-    await setDoc(ref, { uid, ...acceptance, updatedAt: now }, { merge: true });
-  } catch {}
+  const { firebaseJson } = await import("@/lib/firebase/auth-headers");
+  await firebaseJson("/api/legal/accept", {
+    method: "POST",
+    body: JSON.stringify({ version: LEGAL_VERSION }),
+  });
 }
 
 export async function saveUserPreferences(

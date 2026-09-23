@@ -127,10 +127,11 @@ function ResizeHandle({
   visible: boolean;
   onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
-      aria-label="Redimensionar imagem"
+      aria-label={t("resize_image")}
       draggable={false}
       onPointerDown={onPointerDown}
       onDragStart={(event) => event.preventDefault()}
@@ -162,6 +163,7 @@ function ResizableImage({
   onWidth: (percent: number) => void;
   onDoubleClick?: () => void;
 }) {
+  const { t } = useTranslation();
   const boxRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
   const [resizing, setResizing] = useState<number | null>(null);
@@ -271,14 +273,14 @@ function ResizableImage({
       data-drag-handle={editable ? "" : undefined}
       draggable={editable}
       role="img"
-      aria-label="Imagem"
+      aria-label={t("image_label")}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       
       <img
         src={url}
-        alt="Imagem da nota"
+        alt={t("note_image_alt")}
         onLoad={onNaturalSize}
         onDoubleClick={handleDoubleClick}
         onTouchStart={handleTouchStart}
@@ -325,6 +327,7 @@ function ResizablePdf({
   selected: boolean;
   onResize: (dims: { displayWidth?: number; displayHeight?: number }) => void;
 }) {
+  const { t } = useTranslation();
   const boxRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
   const [resizing, setResizing] = useState<{ width?: number; height?: number } | null>(null);
@@ -406,16 +409,16 @@ function ResizablePdf({
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
-            title="Abrir em nova aba / tela cheia"
+            title={t("open_new_tab_fullscreen")}
           >
             <ExternalLink className="size-3.5" />
-            <span className="hidden sm:inline">Abrir</span>
+            <span className="hidden sm:inline">{t("open")}</span>
           </a>
           <a
             href={url}
             download={name || "documento.pdf"}
             className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
-            title="Baixar PDF"
+            title={t("download_pdf")}
           >
             <Download className="size-3.5" />
           </a>
@@ -464,7 +467,7 @@ function ResizablePdf({
           
           <button
             type="button"
-            aria-label="Redimensionar largura à esquerda"
+            aria-label={t("resize_left_edge")}
             draggable={false}
             onPointerDown={startResize("horizontal", "left")}
             className={cn(
@@ -480,7 +483,7 @@ function ResizablePdf({
           
           <button
             type="button"
-            aria-label="Redimensionar largura à direita"
+            aria-label={t("resize_right_edge")}
             draggable={false}
             onPointerDown={startResize("horizontal", "right")}
             className={cn(
@@ -496,7 +499,7 @@ function ResizablePdf({
           
           <button
             type="button"
-            aria-label="Redimensionar altura vertical"
+            aria-label={t("resize_height")}
             draggable={false}
             onPointerDown={startResize("vertical")}
             className={cn(
@@ -512,7 +515,7 @@ function ResizablePdf({
           
           <button
             type="button"
-            aria-label="Redimensionar largura e altura"
+            aria-label={t("resize_both")}
             draggable={false}
             onPointerDown={startResize("both", "right")}
             className={cn(
@@ -564,6 +567,7 @@ function ResizableVideo({
   onDurationResolved: (seconds: number) => void;
   onWidth: (percent: number) => void;
 }) {
+  const { t } = useTranslation();
   const boxRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const proxyTriedRef = useRef(false);
@@ -683,7 +687,7 @@ function ResizableVideo({
         <>
           <button
             type="button"
-            aria-label="Redimensionar vídeo à esquerda"
+            aria-label={t("resize_left_edge")}
             draggable={false}
             onPointerDown={startResize("left")}
             className={cn(
@@ -697,7 +701,7 @@ function ResizableVideo({
           </button>
           <button
             type="button"
-            aria-label="Redimensionar vídeo à direita"
+            aria-label={t("resize_right_edge")}
             draggable={false}
             onPointerDown={startResize("right")}
             className={cn(
@@ -743,6 +747,12 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
     transcriptLanguage,
     transcriptCollapsed,
   } = node.attrs as Record<string, string | number | boolean | null>;
+  const captionText = Array.isArray(node.attrs.caption)
+    ? (node.attrs.caption as { text?: unknown }[])
+        .map((span) => (typeof span?.text === "string" ? span.text : ""))
+        .join("")
+        .trim()
+    : "";
 
   const [isCompressing, setIsCompressing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -836,6 +846,8 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
 
   const persistMediaAttributes = useCallback(
     (attributes: Record<string, unknown>) => {
+      // Visualizacao somente leitura (versao antiga, pre-visualizacao) nao grava nada.
+      if (!editor || editor.isDestroyed || !editor.isEditable) return;
       updateAttributes(attributes);
       if (typeof getPos === "function") {
         const pos = getPos();
@@ -1080,94 +1092,10 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
             });
           }
         } else if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/")) {
-          if (mediaType === "audio" && sizeBytes && Number(sizeBytes) > AUDIO_SIZE_LIMIT) {
-            setIsCompressing(true);
-            let blob: Blob | null = null;
-            try {
-              const res = await fetch(url);
-              if (res.ok) blob = await res.blob();
-            } catch {
-              try {
-                const proxyUrl = `/api/media/proxy?url=${encodeURIComponent(url)}`;
-                const res = await fetch(proxyUrl);
-                if (res.ok) blob = await res.blob();
-              } catch {}
-            }
-            if (!active || !blob) {
-              if (active) setIsCompressing(false);
-              return;
-            }
-            if (blob.size > AUDIO_SIZE_LIMIT) {
-              try {
-                const compressed = await compressAudioUntilFits(blob);
-                if (compressed.size < blob.size && active) {
-                  const storage = (editor.storage as unknown as Record<string, unknown>)?.mediaBlock as
-                    | {
-                        adapter?: {
-                          uploadAudioNote?: (
-                            pageId: string,
-                            blob: Blob,
-                            dur: number
-                          ) => Promise<{ url: string; storagePath?: string }>;
-                          deleteMedia?: (paths: string[], pageId?: string) => Promise<void>;
-                        };
-                        pageId?: string;
-                      }
-                    | undefined;
-
-                  if (storage?.adapter?.uploadAudioNote && storage.pageId) {
-                    try {
-                      const uploaded = await storage.adapter.uploadAudioNote(
-                        storage.pageId,
-                        compressed,
-                        Number(durationSeconds) || 0
-                      );
-                      if (
-                        storagePath &&
-                        uploaded.storagePath &&
-                        storagePath !== uploaded.storagePath &&
-                        storage.adapter.deleteMedia
-                      ) {
-                        void storage.adapter.deleteMedia([String(storagePath)], storage.pageId);
-                      }
-                      if (active) {
-                        persistMediaAttributes({
-                          url: uploaded.url,
-                          storagePath: uploaded.storagePath ?? storagePath,
-                          sizeBytes: compressed.size,
-                          mimeType: compressed.type || "audio/ogg",
-                        });
-                      }
-                    } catch {
-                      if (active) {
-                        persistMediaAttributes({
-                          sizeBytes: compressed.size,
-                          mimeType: compressed.type || "audio/ogg",
-                        });
-                      }
-                    }
-                  } else if (active) {
-                    persistMediaAttributes({
-                      sizeBytes: compressed.size,
-                      mimeType: compressed.type || "audio/ogg",
-                    });
-                  }
-                  return;
-                }
-              } finally {
-                if (active) setIsCompressing(false);
-              }
-            } else if (blob.size !== sizeBytes && active) {
-              persistMediaAttributes({
-                sizeBytes: blob.size,
-                mimeType: blob.type || mimeType,
-              });
-              if (active) setIsCompressing(false);
-              return;
-            }
-            if (active) setIsCompressing(false);
-          }
-
+          // Arquivo ja salvo nao e recomprimido aqui: isso reenviava o audio a
+          // cada abertura e apagava o original, que versoes e copias da nota
+          // ainda usam. So o tamanho e conferido.
+          if (sizeBytes) return;
           const headRes = await fetch(url, { method: "HEAD" });
           const len = headRes.headers.get("content-length");
           const type = headRes.headers.get("content-type");
@@ -1190,7 +1118,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
     return () => {
       active = false;
     };
-  }, [url, sizeBytes, mimeType, mediaType, isVideo, durationSeconds, storagePath, persistMediaAttributes, editor]);
+  }, [url, sizeBytes, mimeType, mediaType, isVideo, persistMediaAttributes, editor]);
 
   const handleOpenLightbox = () => {
     editor.commands.blur();
@@ -1238,6 +1166,10 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
           onWidth={(percent) => updateAttributes({ displayWidth: percent })}
           onDoubleClick={handleOpenLightbox}
         />
+      ) : null}
+
+      {mediaType === "image" && captionText ? (
+        <p className="mt-1.5 text-center text-[12.5px] leading-snug text-muted">{captionText}</p>
       ) : null}
 
       {pdf && url ? (
@@ -2070,6 +2002,27 @@ export const MediaBlock = Node.create({
       pending: { default: false },
       displayWidth: { default: null },
       displayHeight: { default: null },
+      width: { default: null },
+      height: { default: null },
+      // Legenda vinda do Notion (texto rico). Guardada como JSON no HTML para
+      // sobreviver a copiar e colar.
+      caption: {
+        default: null,
+        parseHTML: (element) => {
+          const raw = element.getAttribute("data-caption");
+          if (!raw) return null;
+          try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : null;
+          } catch {
+            return null;
+          }
+        },
+        renderHTML: (attributes) =>
+          Array.isArray(attributes.caption) && attributes.caption.length
+            ? { "data-caption": JSON.stringify(attributes.caption) }
+            : {},
+      },
       tempId: { default: null },
     };
   },

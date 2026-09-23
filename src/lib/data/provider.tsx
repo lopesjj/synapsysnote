@@ -38,7 +38,9 @@ interface WorkspaceContextValue {
   adapter: DataAdapter;
   ready: boolean;
   mode: "firestore" | "local";
+  /** Cadernos ativos. Os que estao na lixeira ficam em `trashedNotebooks`. */
   notebooks: Notebook[];
+  trashedNotebooks: Notebook[];
   pages: Page[];
   livePages: Page[];
   trashedPages: Page[];
@@ -240,6 +242,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const flashcardsReady = flashcardsAdapter === adapter || flashcards.length > 0;
 
   const value = useMemo<WorkspaceContextValue>(() => {
+    const liveNotebooks = notebooks.filter((notebook) => !notebook.deletedAt);
+    const trashedNotebooks = notebooks
+      .filter((notebook) => notebook.deletedAt)
+      .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
     const livePages = pages.filter((p) => !p.deletedAt);
     const trashedPages = pages
       .filter((p) => p.deletedAt)
@@ -290,7 +296,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       adapter,
       ready,
       mode: adapter.mode,
-      notebooks,
+      notebooks: liveNotebooks,
+      trashedNotebooks,
       pages,
       livePages,
       trashedPages,
@@ -309,10 +316,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         .sort((a, b) => b.count - a.count),
       treeFor,
       pageById: (id: string) => pages.find((p) => p.id === id),
-      notebookById: (id: string) => notebooks.find((notebook) => notebook.id === id),
-      childNotebooks: (parentId: string | null) => childrenOf(notebooks, parentId),
-      notebookPath: (notebookId: string) => notebookAncestors(notebooks, notebookId),
-      rootNotebooks: childrenOf(notebooks, null),
+      notebookById: (id: string) => liveNotebooks.find((notebook) => notebook.id === id),
+      childNotebooks: (parentId: string | null) => childrenOf(liveNotebooks, parentId),
+      notebookPath: (notebookId: string) => notebookAncestors(liveNotebooks, notebookId),
+      rootNotebooks: childrenOf(liveNotebooks, null),
     };
   }, [
     adapter,

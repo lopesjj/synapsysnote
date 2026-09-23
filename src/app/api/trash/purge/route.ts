@@ -1,344 +1,127 @@
 import "server-only";
 
+import { Timestamp } from "firebase-admin/firestore";
 import { requireWorkspaceEditor } from "@/lib/api/session";
-import { jsonError } from "@/lib/api/errors";
-import { adminBucket, adminDb, isAdminConfigured } from "@/lib/firebase/admin";
-import type { AppBlock } from "@/types/models";
+import { ApiError, jsonError } from "@/lib/api/errors";
+import { isCrossSiteRequest } from "@/lib/api/request-origin";
+import { adminDb } from "@/lib/firebase/admin";
+import { TRASH_RETENTION_MS, purgeExpiredQuarantine, purgeItems } from "@/lib/trash/purge-server";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-function extractStoragePathFromUrl(url: unknown): string | null {
-  if (typeof url !== "string") return null;
-  if (!url.includes("firebasestorage.googleapis.com") && !url.includes("firebasestorage.app")) {
-    if (url.startsWith("workspaces/") || url.startsWith("users/")) return url;
-    return null;
-  }
-  try {
-    const match = url.match(/\/o\/([^?]+)/);
-    if (match && match[1]) {
-      return decodeURIComponent(match[1]);
-    }
-  } catch {}
-  return null;
+type Snap = FirebaseFirestore.DocumentSnapshot;
+
+interface PurgeBody {
+  workspaceId?: string;
+  pageId?: string;
+  notebookId?: string;
+  databaseId?: string;
+  emptyAll?: boolean;
+  purgeExpired?: boolean;
 }
 
-function extractStoragePaths(blocks: unknown[]): string[] {
-  const paths: string[] = [];
-  const walk = (list: unknown[]) => {
-    for (const item of list) {
-      if (!item || typeof item !== "object") continue;
-      const b = item as AppBlock;
-      if (b.media?.storagePath) {
-        paths.push(b.media.storagePath);
-      }
-      if (b.media?.url) {
-        const p = extractStoragePathFromUrl(b.media.url);
-        if (p) paths.push(p);
-      }
-      if (Array.isArray(b.children) && b.children.length) {
-        walk(b.children);
-      }
-    }
-  };
-  walk(blocks);
-  return paths;
-}
-
-async function deletePageStorageAndDoc(
-  workspaceId: string,
-  pageDoc: FirebaseFirestore.DocumentSnapshot
-) {
-  const pageId = pageDoc.id;
-  const pageData = pageDoc.data() ?? {};
-  let blocks = (pageData.blocks ?? []) as unknown[];
-  if (!blocks.length && typeof pageData.blocksJson === "string") {
-    try {
-      const parsed = JSON.parse(pageData.blocksJson);
-      if (Array.isArray(parsed)) blocks = parsed;
-    } catch {}
-  }
-
-  const storagePaths = new Set<string>(extractStoragePaths(blocks));
-
-  if (pageData.coverUrl) {
-    const p = extractStoragePathFromUrl(pageData.coverUrl);
-    if (p) storagePaths.add(p);
-  }
-  if (pageData.icon) {
-    const p = extractStoragePathFromUrl(pageData.icon);
-    if (p) storagePaths.add(p);
-  }
-
-  const versionsSnap = await pageDoc.ref.collection("versions").get();
-  for (const vDoc of versionsSnap.docs) {
-    const vData = vDoc.data();
-    let vBlocks = (vData.blocks ?? []) as unknown[];
-    if (!vBlocks.length && typeof vData.blocksJson === "string") {
-      try {
-        const parsed = JSON.parse(vData.blocksJson);
-        if (Array.isArray(parsed)) vBlocks = parsed;
-      } catch {}
-    }
-    for (const p of extractStoragePaths(vBlocks)) {
-      storagePaths.add(p);
-    }
-  }
-
-  const db = adminDb();
-  const flashcardsSnap = await db
-    .collection("workspaces")
-    .doc(workspaceId)
-    .collection("flashcards")
-    .where("pageId", "==", pageId)
-    .get();
-
-  // Coletado antes da limpeza do storage: imagens de flashcard podem ter sido
-  // gravadas fora do prefixo da nota (ex.: cards importados/migrados).
-  for (const fcDoc of flashcardsSnap.docs) {
-    const fcData = fcDoc.data();
-    for (const field of ["frontImageStoragePath", "backImageStoragePath", "imageStoragePath"]) {
-      const path = fcData[field];
-      if (typeof path === "string" && path.trim()) storagePaths.add(path);
-    }
-  }
-
-  if (isAdminConfigured()) {
-    const bucket = adminBucket();
-
-    await Promise.allSettled([
-      bucket.deleteFiles({ prefix: `workspaces/${workspaceId}/uploads/${pageId}/` }),
-      bucket.deleteFiles({ prefix: `workspaces/${workspaceId}/audio/${pageId}/` }),
-      ...Array.from(storagePaths)
-        .filter((p) => p.startsWith(`workspaces/${workspaceId}/`))
-        .map((p) =>
-          bucket
-            .file(p)
-            .delete()
-            .catch(() => {})
-        ),
-    ]);
-  }
-
-  const trashedMediaSnap = await db
-    .collection("workspaces")
-    .doc(workspaceId)
-    .collection("trashed_media")
-    .where("pageId", "==", pageId)
-    .get();
-
-  const refsToDelete: FirebaseFirestore.DocumentReference[] = [
-    ...versionsSnap.docs.map((v) => v.ref),
-    ...trashedMediaSnap.docs.map((m) => m.ref),
-    ...flashcardsSnap.docs.map((f) => f.ref),
-    pageDoc.ref,
-  ];
-
-  for (let i = 0; i < refsToDelete.length; i += 400) {
-    const batch = db.batch();
-    for (const ref of refsToDelete.slice(i, i + 400)) {
-      batch.delete(ref);
-    }
-    await batch.commit();
-  }
+function unique(snaps: Snap[]): Snap[] {
+  const byId = new Map<string, Snap>();
+  for (const snap of snaps) if (snap.exists) byId.set(snap.ref.path, snap);
+  return [...byId.values()];
 }
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as {
-      workspaceId?: string;
-      pageId?: string;
-      emptyAll?: boolean;
-      purgeExpired?: boolean;
-    };
+    if (isCrossSiteRequest(request)) throw new ApiError(403, "Origem não permitida");
 
-    const { workspaceId, pageId, emptyAll, purgeExpired } = body;
-    if (!workspaceId) {
-      return Response.json({ error: "workspaceId é obrigatório" }, { status: 400 });
-    }
+    const body = (await request.json().catch(() => ({}))) as PurgeBody;
+    const { workspaceId } = body;
+    if (!workspaceId) throw new ApiError(400, "workspaceId é obrigatório");
 
     await requireWorkspaceEditor(request, workspaceId);
-    const db = adminDb();
-    const wsRef = db.collection("workspaces").doc(workspaceId);
-    const pagesCol = wsRef.collection("pages");
-    const databasesCol = wsRef.collection("databases");
+    const ws = adminDb().collection("workspaces").doc(workspaceId);
+    const pages = ws.collection("pages");
+    const databases = ws.collection("databases");
+    const notebooks = ws.collection("notebooks");
 
-    if (purgeExpired) {
-      const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-      const expiredThreshold = Date.now() - THIRTY_DAYS_MS;
-
-      const trashedPages = await pagesCol
-        .where("deletedAt", "!=", null)
-        .where("deletedAt", "<=", expiredThreshold)
-        .get();
-      const pageDocs = trashedPages.docs;
-      for (let i = 0; i < pageDocs.length; i += 5) {
-        const chunk = pageDocs.slice(i, i + 5);
-        await Promise.all(chunk.map((pDoc) => deletePageStorageAndDoc(workspaceId, pDoc)));
-      }
-
-      const trashedDatabases = await databasesCol
-        .where("deletedAt", "!=", null)
-        .where("deletedAt", "<=", expiredThreshold)
-        .get();
-      for (const dDoc of trashedDatabases.docs) {
-        const rowsSnap = await dDoc.ref.collection("rows").get();
-        if (isAdminConfigured()) {
-          const bucket = adminBucket();
-          for (const rowDoc of rowsSnap.docs) {
-            const values = rowDoc.data()?.values ?? {};
-            for (const val of Object.values(values)) {
-              if (Array.isArray(val)) {
-                for (const item of val) {
-                  const storagePath =
-                    item?.storagePath ||
-                    (item?.url ? extractStoragePathFromUrl(item.url) : null);
-                  if (
-                    storagePath &&
-                    typeof storagePath === "string" &&
-                    storagePath.startsWith(`workspaces/${workspaceId}/`)
-                  ) {
-                    await bucket.file(storagePath).delete().catch(() => {});
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        const refsToDelete = [...rowsSnap.docs.map((r) => r.ref), dDoc.ref];
-        for (let i = 0; i < refsToDelete.length; i += 400) {
-          const batch = db.batch();
-          for (const ref of refsToDelete.slice(i, i + 400)) {
-            batch.delete(ref);
-          }
-          await batch.commit();
-        }
-      }
-
-      const trashedMediaCol = wsRef.collection("trashed_media");
-      const expiredSnap = await trashedMediaCol.where("expiresAt", "<=", Date.now()).get();
-      if (!expiredSnap.empty) {
-        if (isAdminConfigured()) {
-          const bucket = adminBucket();
-          const expiredPaths: string[] = [];
-          for (const doc of expiredSnap.docs) {
-            const p = doc.data().storagePath;
-            if (p && typeof p === "string" && p.startsWith(`workspaces/${workspaceId}/`)) {
-              expiredPaths.push(p);
-            }
-          }
-          await Promise.allSettled(expiredPaths.map((p) => bucket.file(p).delete().catch(() => {})));
-        }
-        const batch = db.batch();
-        for (const doc of expiredSnap.docs) batch.delete(doc.ref);
-        await batch.commit();
-      }
-
-      return Response.json({
-        ok: true,
-        purgedExpiredPages: trashedPages.size,
-        purgedExpiredDatabases: trashedDatabases.size,
-      });
-    }
-
-    if (emptyAll) {
-      const trashedPages = await pagesCol.where("deletedAt", "!=", null).get();
-      const pageDocs = trashedPages.docs;
-      for (let i = 0; i < pageDocs.length; i += 5) {
-        const chunk = pageDocs.slice(i, i + 5);
-        await Promise.all(chunk.map((pDoc) => deletePageStorageAndDoc(workspaceId, pDoc)));
-      }
-
-      const trashedDatabases = await databasesCol.where("deletedAt", "!=", null).get();
-      for (const dDoc of trashedDatabases.docs) {
-        const rowsSnap = await dDoc.ref.collection("rows").get();
-        if (isAdminConfigured()) {
-          const bucket = adminBucket();
-          for (const rowDoc of rowsSnap.docs) {
-            const values = rowDoc.data()?.values ?? {};
-            for (const val of Object.values(values)) {
-              if (Array.isArray(val)) {
-                for (const item of val) {
-                  const storagePath =
-                    item?.storagePath ||
-                    (item?.url ? extractStoragePathFromUrl(item.url) : null);
-                  if (storagePath && typeof storagePath === "string") {
-                    await bucket.file(storagePath).delete().catch(() => {});
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        const refsToDelete = [...rowsSnap.docs.map((r) => r.ref), dDoc.ref];
-        for (let i = 0; i < refsToDelete.length; i += 400) {
-          const batch = db.batch();
-          for (const ref of refsToDelete.slice(i, i + 400)) {
-            batch.delete(ref);
-          }
-          await batch.commit();
-        }
-      }
-
-      const trashedMediaCol = wsRef.collection("trashed_media");
-      const expiredSnap = await trashedMediaCol.where("expiresAt", "<=", Date.now()).get();
-      if (!expiredSnap.empty) {
-        if (isAdminConfigured()) {
-          const bucket = adminBucket();
-          const expiredPaths: string[] = [];
-          for (const doc of expiredSnap.docs) {
-            const p = doc.data().storagePath;
-            if (p && typeof p === "string") expiredPaths.push(p);
-          }
-          await Promise.allSettled(expiredPaths.map((p) => bucket.file(p).delete().catch(() => {})));
-        }
-        const batch = db.batch();
-        for (const doc of expiredSnap.docs) batch.delete(doc.ref);
-        await batch.commit();
-      }
-
-      return Response.json({ ok: true, purgedPages: trashedPages.size, purgedDatabases: trashedDatabases.size });
-    }
-
-    if (pageId) {
-      const [targetDoc, descendantsSnap, directChildrenSnap] = await Promise.all([
-        pagesCol.doc(pageId).get(),
-        pagesCol.where("path", "array-contains", pageId).get(),
-        pagesCol.where("parentPageId", "==", pageId).get(),
+    if (body.purgeExpired) {
+      // `deletedAt` e gravado com serverTimestamp(): a comparacao precisa ser
+      // com Timestamp, porque o Firestore nao compara Timestamp com numero.
+      const cutoff = Timestamp.fromMillis(Date.now() - TRASH_RETENTION_MS);
+      const [expiredPages, expiredDatabases, expiredNotebooks] = await Promise.all([
+        pages.where("deletedAt", "<=", cutoff).get(),
+        databases.where("deletedAt", "<=", cutoff).get(),
+        notebooks.where("deletedAt", "<=", cutoff).get(),
       ]);
-
-      const seenIds = new Set<string>();
-      const docsToPurge: FirebaseFirestore.DocumentSnapshot[] = [];
-
-      if (targetDoc.exists) {
-        docsToPurge.push(targetDoc);
-        seenIds.add(targetDoc.id);
-      }
-
-      for (const d of descendantsSnap.docs) {
-        if (!seenIds.has(d.id)) {
-          seenIds.add(d.id);
-          docsToPurge.push(d);
-        }
-      }
-
-      for (const d of directChildrenSnap.docs) {
-        if (!seenIds.has(d.id)) {
-          seenIds.add(d.id);
-          docsToPurge.push(d);
-        }
-      }
-
-      for (const doc of docsToPurge) {
-        await deletePageStorageAndDoc(workspaceId, doc);
-      }
-
-      return Response.json({ ok: true, purgedCount: docsToPurge.length });
+      const purged = await purgeItems(workspaceId, {
+        pages: expiredPages.docs,
+        databases: expiredDatabases.docs,
+        notebooks: expiredNotebooks.docs,
+      });
+      const quarantined = await purgeExpiredQuarantine(workspaceId);
+      return Response.json({ ok: true, purged, quarantined });
     }
 
-    return Response.json({ error: "pageId ou emptyAll deve ser fornecido" }, { status: 400 });
+    if (body.emptyAll) {
+      const [trashedPages, trashedDatabases, trashedNotebooks] = await Promise.all([
+        pages.where("deletedAt", "!=", null).get(),
+        databases.where("deletedAt", "!=", null).get(),
+        notebooks.where("deletedAt", "!=", null).get(),
+      ]);
+      const purged = await purgeItems(workspaceId, {
+        pages: trashedPages.docs,
+        databases: trashedDatabases.docs,
+        notebooks: trashedNotebooks.docs,
+      });
+      const quarantined = await purgeExpiredQuarantine(workspaceId);
+      return Response.json({ ok: true, purged, quarantined });
+    }
+
+    if (body.notebookId) {
+      const notebook = await notebooks.doc(body.notebookId).get();
+      if (!notebook.exists || !notebook.get("deletedAt")) {
+        throw new ApiError(409, "O caderno não está na lixeira");
+      }
+      // Sai o caderno e tudo o que foi para a lixeira junto com ele.
+      const [withPages, withDatabases, withNotebooks] = await Promise.all([
+        pages.where("trashedWith", "==", body.notebookId).get(),
+        databases.where("trashedWith", "==", body.notebookId).get(),
+        notebooks.where("trashedWith", "==", body.notebookId).get(),
+      ]);
+      const purged = await purgeItems(workspaceId, {
+        pages: withPages.docs.filter((snap) => snap.get("deletedAt")),
+        databases: withDatabases.docs.filter((snap) => snap.get("deletedAt")),
+        notebooks: unique([notebook, ...withNotebooks.docs.filter((snap) => snap.get("deletedAt"))]),
+      });
+      return Response.json({ ok: true, purged });
+    }
+
+    if (body.databaseId) {
+      const database = await databases.doc(body.databaseId).get();
+      if (!database.exists || !database.get("deletedAt")) {
+        throw new ApiError(409, "A base não está na lixeira");
+      }
+      const purged = await purgeItems(workspaceId, { pages: [], databases: [database], notebooks: [] });
+      return Response.json({ ok: true, purged });
+    }
+
+    if (body.pageId) {
+      const [target, descendants, directChildren] = await Promise.all([
+        pages.doc(body.pageId).get(),
+        pages.where("path", "array-contains", body.pageId).get(),
+        pages.where("parentPageId", "==", body.pageId).get(),
+      ]);
+      if (!target.exists || !target.get("deletedAt")) {
+        throw new ApiError(409, "A nota não está na lixeira");
+      }
+      // Subnotas que ja foram restauradas continuam vivas.
+      const trashed = unique([
+        target,
+        ...descendants.docs.filter((snap) => snap.get("deletedAt")),
+        ...directChildren.docs.filter((snap) => snap.get("deletedAt")),
+      ]);
+      const purged = await purgeItems(workspaceId, { pages: trashed, databases: [], notebooks: [] });
+      return Response.json({ ok: true, purged });
+    }
+
+    throw new ApiError(400, "Informe o que excluir");
   } catch (error) {
     return jsonError(error);
   }

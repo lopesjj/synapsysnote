@@ -11,7 +11,7 @@ export interface ImportSelection {
 }
 
 export function useNotionImport() {
-  const { adapter, integration, importJobs, activeImportJob, notebooks, livePages, databases } =
+  const { adapter, integration, importJobs, activeImportJob, notebooks, trashedNotebooks, pages, databases } =
     useWorkspace();
 
   const [tree, setTree] = useState<NotionTreeNode[]>([]);
@@ -22,13 +22,15 @@ export function useNotionImport() {
   const [submitting, setSubmitting] = useState(false);
   const [treeRequest, setTreeRequest] = useState(0);
 
+  // Inclui o que esta na lixeira: a importacao tambem substitui (e restaura) esses itens.
   const existingNotionIds = useMemo(() => {
     const set = new Set<string>();
-    for (const p of livePages) if (p.notionPageId) set.add(p.notionPageId);
+    for (const p of pages) if (p.notionPageId) set.add(p.notionPageId);
     for (const nb of notebooks) if (nb.notionPageId) set.add(nb.notionPageId);
+    for (const nb of trashedNotebooks) if (nb.notionPageId) set.add(nb.notionPageId);
     for (const db of databases) if (db.notionDatabaseId) set.add(db.notionDatabaseId);
     return set;
-  }, [livePages, notebooks, databases]);
+  }, [pages, notebooks, trashedNotebooks, databases]);
 
   const loadTree = useCallback(async () => {
     setTreeError(null);

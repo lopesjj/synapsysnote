@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import type { AppBlock, BlockType, RichTextSpan } from "@/types/models";
+import type { AppBlock, BlockMedia, BlockType, MentionTarget, RichTextSpan } from "@/types/models";
 import { fromTableRows, fromTableRowsAlignments, toTableRows } from "@/lib/data/table-rows";
 import { isAudioFile, isVideoFile } from "@/lib/media/compress-attachment";
 
@@ -13,6 +13,46 @@ type JSONContent = {
 };
 
 
+/** Bloco original guardado no no `preservedBlock` (JSON no atributo `block`). */
+export function readPreservedBlock(raw: unknown): AppBlock | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as AppBlock;
+    return parsed && typeof parsed === "object" && typeof parsed.type === "string" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+type MentionKind = MentionTarget["kind"];
+
+function mentionKind(value: unknown): MentionKind {
+  return value === "user" || value === "date" ? value : "page";
+}
+
+/** Texto que a mencao mostra no editor e na copia em texto puro. */
+export function mentionDisplayText(kind: unknown, label: string): string {
+  const resolved = mentionKind(kind);
+  if (resolved === "date") return label;
+  if (resolved === "user" && label.startsWith("@")) return label;
+  return `@${label}`;
+}
+
+function mentionId(mention: MentionTarget): string {
+  if (mention.kind === "page") return mention.pageId;
+  if (mention.kind === "user") return mention.userId;
+  return mention.iso;
+}
+
+function mentionFromAttrs(attrs: Record<string, unknown> | undefined): MentionTarget {
+  const id = String(attrs?.id ?? "");
+  const label = String(attrs?.label ?? "");
+  const kind = mentionKind(attrs?.kind);
+  if (kind === "user") return { kind, userId: id, label };
+  if (kind === "date") return { kind, iso: id, label };
+  return { kind, pageId: id, label };
+}
+
 function spansToInline(spans: RichTextSpan[] | undefined): JSONContent[] {
   if (!spans?.length) return [];
   const out: JSONContent[] = [];
@@ -22,8 +62,9 @@ function spansToInline(spans: RichTextSpan[] | undefined): JSONContent[] {
       out.push({
         type: "mention",
         attrs: {
-          id: span.mention.kind === "page" ? span.mention.pageId : span.mention.label,
+          id: mentionId(span.mention),
           label: span.mention.label,
+          kind: span.mention.kind,
         },
       });
       continue;
@@ -59,11 +100,8 @@ function inlineToSpans(content: JSONContent[] | undefined): RichTextSpan[] {
 
   for (const node of content) {
     if (node.type === "mention") {
-      const label = String(node.attrs?.label ?? "");
-      spans.push({
-        text: `@${label}`,
-        mention: { kind: "page", pageId: String(node.attrs?.id ?? ""), label },
-      });
+      const mention = mentionFromAttrs(node.attrs);
+      spans.push({ text: mentionDisplayText(mention.kind, mention.label), mention });
       continue;
     }
     if (node.type === "hardBreak") {
@@ -160,12 +198,14 @@ function blockToNode(block: AppBlock): JSONContent | null {
         attrs: headingAttrs(block, Number(block.type.slice(-1))),
         ...(inline.length ? { content: inline } : {}),
       };
-    case "quote":
+    case "quote": {
+      const children = block.children?.length ? blocksToNodes(block.children) : [];
       return {
         type: "blockquote",
         ...(block.props?.indent ? { attrs: { indent: block.props.indent } } : {}),
-        content: [paragraph()],
+        content: inline.length || !children.length ? [paragraph(), ...children] : children,
       };
+    }
     case "divider":
       return { type: "horizontalRule" };
     case "code":
@@ -235,22 +275,12 @@ function blockToNode(block: AppBlock): JSONContent | null {
           transcriptCollapsed: block.media?.transcriptCollapsed ?? false,
           pending: block.media?.pending ?? false,
           displayWidth: block.media?.displayWidth ?? null,
+          displayHeight: block.media?.displayHeight ?? null,
+          width: block.media?.width ?? null,
+          height: block.media?.height ?? null,
+          caption: block.media?.caption?.length ? block.media.caption : null,
         },
       };
-    case "bookmark":
-    case "embed":
-      return paragraph([
-        {
-          type: "text",
-          text: block.props?.title || block.props?.url || "Link",
-          marks: [{ type: "link", attrs: { href: block.props?.url ?? "#" } }],
-        },
-      ]);
-    case "child_page":
-    case "child_database":
-      return paragraph([
-        { type: "text", text: `↳ ${block.props?.title ?? "Página"}`, marks: [{ type: "bold" }] },
-      ]);
     case "table":
       return {
         type: "tableBlock",
@@ -263,7 +293,9 @@ function blockToNode(block: AppBlock): JSONContent | null {
         },
       };
     default:
-      return paragraph();
+      // Subpagina, base, link salvo, conteudo incorporado e blocos nao
+      // suportados ficam guardados inteiros e voltam iguais ao salvar.
+      return { type: "preservedBlock", attrs: { block: JSON.stringify(block) } };
   }
 }
 
@@ -333,14 +365,23 @@ function nodeToBlocks(node: JSONContent): AppBlock[] {
     }
     case "blockquote": {
       const indent = Number(node.attrs?.indent ?? 0);
+      const content = node.content ?? [];
+      const [first, ...rest] = content;
+      const leading = first?.type === "paragraph";
+      const children = (leading ? rest : content).flatMap(nodeToBlocks);
       return [
         {
           id: id(),
           type: "quote",
-          richText: inlineToSpans(node.content?.[0]?.content),
+          richText: leading ? inlineToSpans(first.content) : [],
           ...(indent > 0 ? { props: { indent } } : {}),
+          ...(children.length ? { children } : {}),
         },
       ];
+    }
+    case "preservedBlock": {
+      const block = readPreservedBlock(node.attrs?.block);
+      return block ? [{ ...block, id: id() }] : [];
     }
     case "horizontalRule":
       return [{ id: id(), type: "divider" }];
@@ -425,6 +466,12 @@ function nodeToBlocks(node: JSONContent): AppBlock[] {
             transcriptCollapsed: typeof attrs.transcriptCollapsed === "boolean" ? attrs.transcriptCollapsed : undefined,
             pending: Boolean(attrs.pending),
             displayWidth: attrs.displayWidth ? Number(attrs.displayWidth) : undefined,
+            displayHeight: attrs.displayHeight ? Number(attrs.displayHeight) : undefined,
+            width: attrs.width ? Number(attrs.width) : undefined,
+            height: attrs.height ? Number(attrs.height) : undefined,
+            caption: Array.isArray(attrs.caption) && attrs.caption.length
+              ? (attrs.caption as BlockMedia["caption"])
+              : undefined,
           },
         },
       ];
@@ -460,6 +507,48 @@ function nodeToBlocks(node: JSONContent): AppBlock[] {
 
 export function docToBlocks(doc: JSONContent): AppBlock[] {
   return (doc.content ?? []).flatMap(nodeToBlocks);
+}
+
+function isUnsavedMedia(block: AppBlock): boolean {
+  if (!block.media) return false;
+  const url = block.media.url ?? "";
+  return !url || url.startsWith("blob:");
+}
+
+/**
+ * Tira os anexos que ainda estao subindo (endereco `blob:` so existe nesta
+ * aba). Salvos assim, outro aparelho mostraria um anexo quebrado e, se o envio
+ * falhasse, o bloco ficaria para sempre no documento.
+ */
+export function persistableBlocks(blocks: AppBlock[]): AppBlock[] {
+  let changed = false;
+  const out: AppBlock[] = [];
+  for (const block of blocks) {
+    if (isUnsavedMedia(block)) {
+      changed = true;
+      continue;
+    }
+    if (block.children?.length) {
+      const children = persistableBlocks(block.children);
+      if (children !== block.children) {
+        changed = true;
+        out.push({ ...block, children });
+        continue;
+      }
+    }
+    out.push(block);
+  }
+  return changed ? out : blocks;
+}
+
+/**
+ * Conteudo normalizado (sem ids, que mudam a cada salvamento) para saber se o
+ * que veio do banco e diferente do que esta no editor.
+ */
+export function blocksSignature(blocks: AppBlock[]): string {
+  return JSON.stringify(docToBlocks(blocksToDoc(blocks)), (key, value) =>
+    key === "id" ? undefined : value
+  );
 }
 
 export function blocksToPlainText(

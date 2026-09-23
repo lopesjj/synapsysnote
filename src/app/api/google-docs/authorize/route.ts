@@ -14,7 +14,35 @@ import type { GoogleDocsIntegration } from "@/types/models";
 export const runtime = "nodejs";
 
 const SCOPES = ["drive.readonly", "documents.readonly"];
-const POPUP_TOKEN_TTL_MS = 55 * 60 * 1000;
+const REQUIRED_SCOPES = [
+  "https://www.googleapis.com/auth/drive.readonly",
+  "https://www.googleapis.com/auth/documents.readonly",
+];
+
+interface TokenInfo {
+  email?: string;
+  scope?: string;
+  expires_in?: string | number;
+  error_description?: string;
+}
+
+/**
+ * O token do pop-up chega do navegador: antes de guardar, o Google confirma que
+ * ele vale, que tem os escopos pedidos e de qual conta ele e.
+ */
+async function inspectAccessToken(accessToken: string): Promise<TokenInfo> {
+  const response = await fetch(
+    `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`,
+    { cache: "no-store", signal: AbortSignal.timeout(10_000) }
+  ).catch(() => null);
+  if (!response?.ok) throw new ApiError(400, "google_token_invalid");
+  const info = (await response.json().catch(() => ({}))) as TokenInfo;
+  const granted = new Set(String(info.scope ?? "").split(" ").filter(Boolean));
+  if (!REQUIRED_SCOPES.every((scope) => granted.has(scope))) {
+    throw new ApiError(400, "google_scope_missing");
+  }
+  return info;
+}
 
 export async function POST(request: Request) {
   try {
@@ -41,10 +69,14 @@ export async function POST(request: Request) {
         );
       }
 
-      const accountEmail = body.accountEmail?.trim() || user.email || "";
-      const accountName = body.accountName?.trim() || user.name || "Conta Google";
-      const avatarUrl = body.avatarUrl || null;
-      const tokenExpiresAt = Date.now() + POPUP_TOKEN_TTL_MS;
+      const info = await inspectAccessToken(accessToken);
+      const accountEmail = info.email || body.accountEmail?.trim() || user.email || "";
+      const accountName = body.accountName?.trim().slice(0, 120) || user.name || "Conta Google";
+      const avatarUrl =
+        typeof body.avatarUrl === "string" && body.avatarUrl.startsWith("https://") ? body.avatarUrl : null;
+      const expiresInSeconds = Number(info.expires_in);
+      const tokenExpiresAt =
+        Date.now() + (Number.isFinite(expiresInSeconds) && expiresInSeconds > 0 ? expiresInSeconds : 3300) * 1000;
 
       const db = adminDb();
       const integrationRef = db
@@ -139,5 +171,6 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const dest = new URL(resolveUrl(appHref("/home/integrations"), url.origin));
   dest.searchParams.set("error", "google_start_from_app");
+  dest.searchParams.set("provider", "google-docs");
   return NextResponse.redirect(dest);
 }

@@ -6,11 +6,7 @@ import { encryptToken, tokenPreview } from "@/lib/crypto/token-cipher";
 import { ensureWorkspace } from "@/lib/api/session";
 import { sharedCookieOptions } from "@/lib/auth/cookie-options";
 import { appHref, resolveUrl } from "@/lib/domains";
-import {
-  decodeOauthState,
-  notionOauthErrorMessage,
-  NOTION_OAUTH_COOKIE,
-} from "@/lib/notion/server/oauth";
+import { decodeOauthState, NOTION_OAUTH_COOKIE } from "@/lib/notion/server/oauth";
 
 export const runtime = "nodejs";
 
@@ -29,7 +25,10 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const integrationsUrl = (query?: { error?: string; connected?: string }) => {
     const dest = new URL(resolveUrl(appHref("/home/integrations"), url.origin));
-    if (query?.error) dest.searchParams.set("error", query.error);
+    if (query?.error) {
+      dest.searchParams.set("error", query.error);
+      dest.searchParams.set("provider", "notion");
+    }
     if (query?.connected) dest.searchParams.set("connected", query.connected);
     return dest;
   };
@@ -39,23 +38,23 @@ export async function GET(request: Request) {
   const state = url.searchParams.get("state");
   const notionError = url.searchParams.get("error");
 
-  if (notionError) return fail(notionOauthErrorMessage(notionError));
-  if (!code || !state) return fail("Resposta do Notion incompleta (code/state ausentes).");
+  if (notionError) return fail(notionError);
+  if (!code || !state) return fail("notion_incomplete_response");
 
   const jar = await cookies();
   const expectedState = jar.get(NOTION_OAUTH_COOKIE)?.value;
   if (!expectedState || expectedState !== state) {
-    return fail("Falha na verificação de CSRF (state divergente).");
+    return fail("notion_state_mismatch");
   }
   jar.set(NOTION_OAUTH_COOKIE, "", sharedCookieOptions(0));
 
   const parsedState = decodeOauthState(state);
-  if (!parsedState) return fail("State inválido.");
+  if (!parsedState) return fail("notion_invalid_state");
 
   const clientId = process.env.NOTION_CLIENT_ID;
   const clientSecret = process.env.NOTION_CLIENT_SECRET;
   const redirectUri = process.env.NOTION_REDIRECT_URI ?? `${url.origin}/api/notion/callback`;
-  if (!clientId || !clientSecret) return fail("Credenciais do Notion ausentes no servidor.");
+  if (!clientId || !clientSecret) return fail("notion_client_not_configured");
 
   const response = await fetch("https://api.notion.com/v1/oauth/token", {
     method: "POST",
@@ -66,18 +65,19 @@ export async function GET(request: Request) {
     body: JSON.stringify({ grant_type: "authorization_code", code, redirect_uri: redirectUri }),
   });
 
-  const payload = (await response.json()) as NotionTokenResponse;
+  const payload = (await response.json().catch(() => ({}))) as NotionTokenResponse;
   if (!response.ok || !payload.access_token) {
-    return fail(payload.error_description ?? payload.error ?? "Troca de token falhou.");
+    console.warn("[notion-callback] troca de token falhou", payload.error, payload.error_description);
+    return fail(payload.error === "access_denied" ? "access_denied" : "notion_token_exchange_failed");
   }
 
-  if (!isAdminConfigured()) {
-    return fail(
-      "Firebase Admin não configurado: defina FIREBASE_SERVICE_ACCOUNT_JSON para salvar a integração."
-    );
-  }
+  if (!isAdminConfigured()) return fail("firebase_admin_not_configured");
 
-  await ensureWorkspace({ uid: parsedState.uid }, parsedState.workspaceId);
+  try {
+    await ensureWorkspace({ uid: parsedState.uid }, parsedState.workspaceId);
+  } catch {
+    return fail("notion_connection_failed");
+  }
 
   const db = adminDb();
   const integrationRef = db

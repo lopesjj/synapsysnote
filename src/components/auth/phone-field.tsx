@@ -1,7 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/primitives";
-import { formatPhoneBR } from "@/lib/phone";
+import { formatPhone } from "@/lib/phone";
 import { useTranslation } from "@/lib/i18n/translations";
 import { AuthField } from "./auth-field";
 
@@ -14,19 +14,23 @@ export function PhoneField({
   onChange: (value: string) => void;
   required?: boolean;
 }) {
-  const { t } = useTranslation();
+  const { t, textDir } = useTranslation();
   return (
     <AuthField label={t("field_phone")}>
       <Input
         type="tel"
         dir="ltr"
-        inputMode="numeric"
+        inputMode="tel"
         autoComplete="tel"
         required={required}
         value={value}
-        onChange={(event) => onChange(formatPhoneBR(event.target.value))}
+        onChange={(event) => onChange(formatPhone(event.target.value))}
         placeholder="(11) 98765-4321"
+        aria-describedby="phone-field-hint"
       />
+      <span id="phone-field-hint" dir={textDir} className="block text-start text-[11px] leading-snug text-faint">
+        {t("phone_hint")}
+      </span>
     </AuthField>
   );
 }

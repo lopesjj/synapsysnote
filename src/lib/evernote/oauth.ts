@@ -13,11 +13,11 @@ export const EVERNOTE_SCOPES = "read";
 const PROTECTED_RESOURCE_METADATA = `${EVERNOTE_MCP_RESOURCE}/.well-known/oauth-protected-resource`;
 const FALLBACK_ISSUER = "https://accounts.evernote.com";
 
+/** Vai na URL de autorizacao: nada aqui pode ser segredo. */
 export interface EvernoteOauthState {
   nonce: string;
   workspaceId: string;
   uid: string;
-  verifier: string;
   clientId: string;
   redirectUri: string;
 }
@@ -38,12 +38,28 @@ export function encodeEvernoteOauthState(state: EvernoteOauthState): string {
 export function decodeEvernoteOauthState(raw: string): EvernoteOauthState | null {
   try {
     const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as EvernoteOauthState;
-    if (!parsed.nonce || !parsed.workspaceId || !parsed.uid || !parsed.verifier) return null;
+    if (!parsed.nonce || !parsed.workspaceId || !parsed.uid) return null;
     if (!parsed.clientId || !parsed.redirectUri) return null;
     return parsed;
   } catch {
     return null;
   }
+}
+
+/**
+ * O verificador PKCE fica so no cookie HttpOnly, junto do state: quem visse a
+ * URL de retorno (log, historico, referer) teria code e state, mas nao o
+ * verificador para trocar o code por token.
+ */
+export function packEvernoteCookie(state: string, verifier: string): string {
+  return `${state}.${verifier}`;
+}
+
+export function unpackEvernoteCookie(value: string | undefined): { state: string; verifier: string } | null {
+  if (!value) return null;
+  const cut = value.lastIndexOf(".");
+  if (cut <= 0 || cut === value.length - 1) return null;
+  return { state: value.slice(0, cut), verifier: value.slice(cut + 1) };
 }
 
 export function createPkcePair(): { verifier: string; challenge: string } {

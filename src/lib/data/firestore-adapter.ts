@@ -46,26 +46,22 @@ import { notebookSubtreeIds } from "./notebook-tree";
 import { duplicateNotebookTree, duplicatePageTree } from "./duplicate";
 import { subtreePatches } from "./page-tree";
 import { plainTextOf } from "./seed";
-import {
-  clearMediaPending,
-  extractAggregatedTranscripts,
-  hasMergeableMedia,
-  mergeMediaEnrichment,
-  stampTranscript,
-  type TranscriptResult,
-} from "./media-enrichment";
-import { canonicalizePagePatch, pagePatchIsNoop } from "./page-write";
+import { hasMergeableMedia, mergeMediaEnrichment } from "./media-enrichment";
+import { pagePatchIsNoop } from "./page-write";
 import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
 import { calculateNextReview } from "@/lib/flashcards/srs";
 import { cardStoragePaths } from "@/lib/flashcards/card-images";
 import type {
+  CopiedMedia,
   CreateFlashcardInput,
   FlashcardResetScope,
   CreateImportJobInput,
   RecordImportJobInput,
   CreatePageInput,
   DataAdapter,
+  MediaCopyTarget,
   Unsubscribe,
+  UpdatePageOptions,
 } from "./adapter";
 
 const SERVER_OWNED = ["extractedOCRText", "transcriptText", "embedding", "embeddingUpdatedAt"];
@@ -133,14 +129,22 @@ function hasUnsupportedFirestoreArrays(val: unknown, inArray = false): boolean {
   return false;
 }
 
+/**
+ * Escrita ainda nao confirmada pelo servidor devolve `serverTimestamp()` como
+ * null por padrao: a nota recem-excluida continuava viva na tela (e, offline,
+ * ate a rede voltar). A estimativa local resolve.
+ */
+const LOCAL_TIMESTAMPS = { serverTimestamps: "estimate" } as const;
+
 function mapPage(snap: QueryDocumentSnapshot<DocumentData>): Page {
-  const data = snap.data();
+  const data = snap.data(LOCAL_TIMESTAMPS);
   return {
     ...(data as Page),
     id: snap.id,
     createdAt: ms(data.createdAt),
     updatedAt: ms(data.updatedAt),
     deletedAt: data.deletedAt ? ms(data.deletedAt) : null,
+    trashedWith: (data.trashedWith as string | null | undefined) ?? null,
     blocks: parseBlocksFromData(data),
     path: data.path ?? [],
     tags: data.tags ?? [],
@@ -152,8 +156,21 @@ function mapPage(snap: QueryDocumentSnapshot<DocumentData>): Page {
   };
 }
 
+function mapNotebook(snap: QueryDocumentSnapshot<DocumentData>): Notebook {
+  const data = snap.data(LOCAL_TIMESTAMPS);
+  return {
+    ...(data as Notebook),
+    id: snap.id,
+    parentId: (data.parentId as string | null | undefined) ?? null,
+    deletedAt: data.deletedAt ? ms(data.deletedAt) : null,
+    trashedWith: (data.trashedWith as string | null | undefined) ?? null,
+    createdAt: ms(data.createdAt),
+    updatedAt: ms(data.updatedAt),
+  };
+}
+
 function mapFlashcard(snap: QueryDocumentSnapshot<DocumentData>): Flashcard {
-  const data = snap.data();
+  const data = snap.data(LOCAL_TIMESTAMPS);
   return {
     ...(data as Flashcard),
     id: snap.id,
@@ -218,7 +235,6 @@ export class FirestoreAdapter implements DataAdapter {
 
   private bootstrapped = false;
   private bootstrapPromise: Promise<void> | null = null;
-  private lastPagePatch = new Map<string, Record<string, unknown>>();
 
   private isLocallyBootstrapped(): boolean {
     if (typeof window === "undefined") return false;
@@ -234,13 +250,6 @@ export class FirestoreAdapter implements DataAdapter {
     try {
       window.localStorage.setItem(`synapsys.bootstrapped.${this.workspaceId}`, "1");
     } catch {}
-  }
-
-  private rememberPagePatch(id: string, patch: Record<string, unknown>) {
-    this.lastPagePatch.set(id, {
-      ...(this.lastPagePatch.get(id) ?? {}),
-      ...canonicalizePagePatch(patch),
-    });
   }
 
   async ensureWorkspace() {
@@ -324,17 +333,7 @@ export class FirestoreAdapter implements DataAdapter {
   subscribeNotebooks(cb: (notebooks: Notebook[]) => void): Unsubscribe {
     return onSnapshot(
       query(this.col("notebooks"), orderBy("order", "asc")),
-      (snap) => {
-        cb(
-          snap.docs.map((d) => ({
-            ...(d.data() as Notebook),
-            id: d.id,
-            parentId: (d.data().parentId as string | null | undefined) ?? null,
-            createdAt: ms(d.data().createdAt),
-            updatedAt: ms(d.data().updatedAt),
-          }))
-        );
-      },
+      (snap) => cb(snap.docs.map(mapNotebook)),
       () => {}
     );
   }
@@ -364,13 +363,19 @@ export class FirestoreAdapter implements DataAdapter {
     const unsubMeta = onSnapshot(
       this.col("databases"),
       (snap) => {
-        metas = snap.docs.map((d) => ({
-          ...(d.data() as AppDatabase),
-          id: d.id,
-          createdAt: ms(d.data().createdAt),
-          updatedAt: ms(d.data().updatedAt),
-          rows: [],
-        }));
+        metas = snap.docs.map((d) => {
+          const data = d.data(LOCAL_TIMESTAMPS);
+          return {
+            ...(data as AppDatabase),
+            id: d.id,
+            // Sem a conversao, o Timestamp cru virava "Invalid Date" na lixeira.
+            deletedAt: data.deletedAt ? ms(data.deletedAt) : null,
+            trashedWith: (data.trashedWith as string | null | undefined) ?? null,
+            createdAt: ms(data.createdAt),
+            updatedAt: ms(data.updatedAt),
+            rows: [],
+          };
+        });
         const live = new Set(metas.map((m) => m.id));
         for (const [id, unsub] of rowUnsubs) {
           if (!live.has(id)) {
@@ -389,12 +394,15 @@ export class FirestoreAdapter implements DataAdapter {
               (rowsSnap) => {
                 rowsById.set(
                   dbId,
-                  rowsSnap.docs.map((r) => ({
-                    ...(r.data() as DatabaseRow),
-                    id: r.id,
-                    createdAt: ms(r.data().createdAt),
-                    updatedAt: ms(r.data().updatedAt),
-                  }))
+                  rowsSnap.docs.map((r) => {
+                    const data = r.data(LOCAL_TIMESTAMPS);
+                    return {
+                      ...(data as DatabaseRow),
+                      id: r.id,
+                      createdAt: ms(data.createdAt),
+                      updatedAt: ms(data.updatedAt),
+                    };
+                  })
                 );
                 emit();
               },
@@ -504,11 +512,8 @@ export class FirestoreAdapter implements DataAdapter {
       getDocs(this.col("notebooks")),
       getDocs(this.col("pages")),
     ]);
-    const notebooks = notebooksSnap.docs.map((snap) => ({
-      ...(snap.data() as Notebook),
-      id: snap.id,
-      parentId: (snap.data().parentId as string | null | undefined) ?? null,
-    }));
+    // Subcaderno na lixeira nao entra na copia.
+    const notebooks = notebooksSnap.docs.map(mapNotebook).filter((notebook) => !notebook.deletedAt);
     return duplicateNotebookTree(this, notebooks, pagesSnap.docs.map(mapPage), id);
   }
 
@@ -536,7 +541,9 @@ export class FirestoreAdapter implements DataAdapter {
           removed.push(data.emoji);
         }
         if (removed.length > 0) {
-          void this.deleteMedia(removed);
+          // Quarentena, e nao exclusao imediata: uma copia antiga do caderno
+          // pode usar a mesma imagem, e a limpeza confere isso antes de apagar.
+          void this.quarantineMedia(removed);
         }
       }
     }
@@ -566,61 +573,179 @@ export class FirestoreAdapter implements DataAdapter {
     });
   }
 
+  /**
+   * Caderno vai para a lixeira como as notas: com `deletedAt` e mantendo o
+   * lugar na arvore. Subcadernos, notas e bases que estavam ativos saem juntos,
+   * marcados com `trashedWith`, para que restaurar o caderno traga exatamente o
+   * que saiu com ele. O que ja estava na lixeira antes fica como estava.
+   */
   async deleteNotebook(id: string) {
     const [notebooksSnap, pagesSnap, databasesSnap] = await Promise.all([
       getDocs(this.col("notebooks")),
       getDocs(this.col("pages")),
       getDocs(this.col("databases")),
     ]);
-    const notebooks = notebooksSnap.docs.map((snap) => ({
-      id: snap.id,
-      parentId: (snap.data().parentId as string | null | undefined) ?? null,
-    }));
-    const ids = new Set(notebookSubtreeIds(notebooks, id));
+    const live = notebooksSnap.docs.map(mapNotebook).filter((notebook) => !notebook.deletedAt);
+    if (!live.some((notebook) => notebook.id === id)) return;
+    const ids = new Set(notebookSubtreeIds(live, id));
     const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
 
     for (const snap of pagesSnap.docs) {
-      const notebookId = (snap.data().notebookId as string | null | undefined) ?? null;
-      if (!notebookId || !ids.has(notebookId)) continue;
+      const data = snap.data();
+      const notebookId = (data.notebookId as string | null | undefined) ?? null;
+      if (!notebookId || !ids.has(notebookId) || data.deletedAt) continue;
       ops.push((batch) =>
         batch.update(snap.ref, {
-          notebookId: null,
-          deletedAt: snap.data().deletedAt ?? serverTimestamp(),
+          deletedAt: serverTimestamp(),
+          trashedWith: id,
           updatedBy: this.userId,
           updatedAt: serverTimestamp(),
         })
       );
     }
     for (const snap of databasesSnap.docs) {
-      const notebookId = (snap.data().notebookId as string | null | undefined) ?? null;
-      if (!notebookId || !ids.has(notebookId)) continue;
+      const data = snap.data();
+      const notebookId = (data.notebookId as string | null | undefined) ?? null;
+      if (!notebookId || !ids.has(notebookId) || data.deletedAt) continue;
       ops.push((batch) =>
         batch.update(snap.ref, {
-          notebookId: null,
-          deletedAt: snap.data().deletedAt ?? serverTimestamp(),
+          deletedAt: serverTimestamp(),
+          trashedWith: id,
           updatedAt: serverTimestamp(),
         })
       );
     }
-    const mediaToDelete: string[] = [];
-    for (const snap of notebooksSnap.docs) {
-      if (ids.has(snap.id)) {
-        const data = snap.data();
-        if (data.coverUrl && isStorageFile(data.coverUrl, this.workspaceId)) {
-          mediaToDelete.push(data.coverUrl);
-        }
-        if (data.emoji && isStorageFile(data.emoji, this.workspaceId)) {
-          mediaToDelete.push(data.emoji);
-        }
-      }
-    }
-    if (mediaToDelete.length > 0) {
-      void this.deleteMedia(mediaToDelete);
-    }
     for (const notebookId of ids) {
-      ops.push((batch) => batch.delete(this.docRef("notebooks", notebookId)));
+      ops.push((batch) =>
+        batch.update(this.docRef("notebooks", notebookId), {
+          deletedAt: serverTimestamp(),
+          trashedWith: notebookId === id ? null : id,
+          updatedAt: serverTimestamp(),
+        })
+      );
     }
     await commitWrites(ops);
+  }
+
+  /** Reativa o caderno e os ancestrais que estiverem na lixeira (so os cadernos). */
+  private notebookChainOps(
+    notebookId: string | null | undefined,
+    notebooks: Notebook[]
+  ): Array<(batch: ReturnType<typeof writeBatch>) => void> {
+    const byId = new Map(notebooks.map((notebook) => [notebook.id, notebook]));
+    const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
+    const seen = new Set<string>();
+    let current = notebookId ? byId.get(notebookId) : undefined;
+    while (current && !seen.has(current.id)) {
+      seen.add(current.id);
+      if (current.deletedAt) {
+        const ref = this.docRef("notebooks", current.id);
+        ops.push((batch) =>
+          batch.update(ref, { deletedAt: null, trashedWith: null, updatedAt: serverTimestamp() })
+        );
+      }
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+    return ops;
+  }
+
+  private async allNotebooks(): Promise<Notebook[]> {
+    const snap = await getDocs(this.col("notebooks"));
+    return snap.docs.map(mapNotebook);
+  }
+
+  async restoreNotebook(id: string) {
+    const [notebooks, withPages, withDatabases] = await Promise.all([
+      this.allNotebooks(),
+      getDocs(query(this.col("pages"), where("trashedWith", "==", id))),
+      getDocs(query(this.col("databases"), where("trashedWith", "==", id))),
+    ]);
+    if (!notebooks.some((notebook) => notebook.id === id)) return;
+
+    const ops = this.notebookChainOps(id, notebooks);
+    for (const notebook of notebooks) {
+      if (notebook.trashedWith !== id || !notebook.deletedAt) continue;
+      const ref = this.docRef("notebooks", notebook.id);
+      ops.push((batch) =>
+        batch.update(ref, { deletedAt: null, trashedWith: null, updatedAt: serverTimestamp() })
+      );
+    }
+    for (const snap of withPages.docs) {
+      ops.push((batch) =>
+        batch.update(snap.ref, {
+          deletedAt: null,
+          trashedWith: null,
+          updatedBy: this.userId,
+          updatedAt: serverTimestamp(),
+        })
+      );
+    }
+    for (const snap of withDatabases.docs) {
+      ops.push((batch) =>
+        batch.update(snap.ref, { deletedAt: null, trashedWith: null, updatedAt: serverTimestamp() })
+      );
+    }
+    await commitWrites(ops);
+  }
+
+  async purgeNotebook(id: string) {
+    try {
+      await firebaseJson("/api/trash/purge", {
+        method: "POST",
+        body: JSON.stringify({ workspaceId: this.workspaceId, notebookId: id }),
+      });
+      return;
+    } catch (error) {
+      // Sem a API (Admin nao configurado no ambiente local), apaga so os
+      // documentos; os arquivos saem na limpeza do servidor.
+      const notebook = await getDoc(this.docRef("notebooks", id));
+      if (!notebook.exists() || !notebook.data().deletedAt) throw error;
+    }
+    const [withPages, withDatabases, notebooks] = await Promise.all([
+      getDocs(query(this.col("pages"), where("trashedWith", "==", id))),
+      getDocs(query(this.col("databases"), where("trashedWith", "==", id))),
+      this.allNotebooks(),
+    ]);
+    for (const snap of withPages.docs) {
+      if (snap.data().deletedAt) await this.deletePageDocs(snap.ref);
+    }
+    for (const snap of withDatabases.docs) {
+      if (snap.data().deletedAt) await this.deleteDatabaseDocs(snap.ref);
+    }
+    const notebookIds = [
+      id,
+      ...notebooks.filter((item) => item.trashedWith === id && item.deletedAt).map((item) => item.id),
+    ];
+    await commitWrites(
+      notebookIds.map((notebookId) => (batch: ReturnType<typeof writeBatch>) =>
+        batch.delete(this.docRef("notebooks", notebookId))
+      )
+    );
+  }
+
+  private async deletePageDocs(ref: ReturnType<typeof doc>) {
+    const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
+    const orphanMedia = new Set<string>();
+    const [versionsSnap, cardsSnap] = await Promise.all([
+      getDocs(collection(ref, "versions")),
+      getDocs(query(this.col("flashcards"), where("pageId", "==", ref.id))),
+    ]);
+    for (const v of versionsSnap.docs) ops.push((batch) => batch.delete(v.ref));
+    for (const card of cardsSnap.docs) {
+      for (const path of cardStoragePaths(card.data() as Flashcard)) orphanMedia.add(path);
+      ops.push((batch) => batch.delete(card.ref));
+    }
+    ops.push((batch) => batch.delete(ref));
+    await commitWrites(ops);
+    if (orphanMedia.size > 0) await this.deleteMedia([...orphanMedia]);
+  }
+
+  private async deleteDatabaseDocs(ref: ReturnType<typeof doc>) {
+    const rows = await getDocs(collection(ref, "rows"));
+    await commitWrites([
+      ...rows.docs.map((row) => (batch: ReturnType<typeof writeBatch>) => batch.delete(row.ref)),
+      (batch) => batch.delete(ref),
+    ]);
   }
 
   private async purgeLegacyInbox() {
@@ -650,7 +775,7 @@ export class FirestoreAdapter implements DataAdapter {
 
 
   async createPage(input: CreatePageInput): Promise<Page> {
-    const id = `page_${nanoid(10)}`;
+    const id = input.id ?? `page_${nanoid(10)}`;
     let path: string[] = [];
     if (input.parentPageId) {
       const parent = await getDoc(this.docRef("pages", input.parentPageId));
@@ -730,11 +855,12 @@ export class FirestoreAdapter implements DataAdapter {
     return duplicatePageTree(this, pagesSnap.docs.map(mapPage), id);
   }
 
-  async updatePage(id: string, patch: Partial<Page>) {
+  async updatePage(id: string, patch: Partial<Page>, options: UpdatePageOptions = {}) {
     let blocks = patch.blocks;
     let currentData: DocumentData | undefined;
     const shouldInspectMedia =
-      blocks !== undefined || patch.coverUrl !== undefined || patch.icon !== undefined;
+      !options.fast &&
+      (blocks !== undefined || patch.coverUrl !== undefined || patch.icon !== undefined);
 
     if (shouldInspectMedia) {
       const current = await getDoc(this.docRef("pages", id));
@@ -791,20 +917,19 @@ export class FirestoreAdapter implements DataAdapter {
     if (blocks) payload.plainText = plainTextOf(blocks);
     for (const key of SERVER_OWNED) delete payload[key];
 
-    const comparable = { ...payload };
-    delete comparable.updatedAt;
-    delete comparable.updatedBy;
-    const baseline = currentData ?? this.lastPagePatch.get(id);
-    if (baseline && pagePatchIsNoop(baseline, comparable)) {
-      this.rememberPagePatch(id, comparable);
-      return;
+    // So compara com o que acabou de ser lido do servidor. Comparar com a ultima
+    // gravacao desta aba ignorava a mudanca feita em outro dispositivo: voltar
+    // ao valor anterior parecia "nada mudou" e nao era salvo.
+    if (currentData) {
+      const comparable = { ...payload };
+      delete comparable.updatedAt;
+      delete comparable.updatedBy;
+      if (pagePatchIsNoop(currentData, comparable)) return;
     }
 
     const encoded = JSON.stringify(payload);
     if (encoded.length > MAX_PAGE_JSON_BYTES) {
-      throw new Error(
-        "Esta nota ficou grande demais para salvar. Divida o conteúdo em subnotas ou anexe arquivos em vez de colar mídia."
-      );
+      throw new Error("NOTE_TOO_LARGE");
     }
 
     try {
@@ -827,7 +952,6 @@ export class FirestoreAdapter implements DataAdapter {
         throw err;
       }
     }
-    this.rememberPagePatch(id, comparable);
   }
 
   async applyPageOrders(updates: { id: string; order: number }[]) {
@@ -843,7 +967,6 @@ export class FirestoreAdapter implements DataAdapter {
             })
       )
     );
-    for (const { id, order } of updates) this.rememberPagePatch(id, { order });
   }
 
   async applyNotebookOrders(updates: { id: string; order: number }[]) {
@@ -929,6 +1052,7 @@ export class FirestoreAdapter implements DataAdapter {
       refs.map((ref) => (batch) =>
         batch.update(ref, {
           deletedAt: serverTimestamp(),
+          trashedWith: null,
           updatedBy: this.userId,
           updatedAt: serverTimestamp(),
         })
@@ -937,7 +1061,10 @@ export class FirestoreAdapter implements DataAdapter {
   }
 
   async restorePage(id: string) {
-    const pageSnap = await getDoc(this.docRef("pages", id));
+    const [pageSnap, notebooks] = await Promise.all([
+      getDoc(this.docRef("pages", id)),
+      this.allNotebooks(),
+    ]);
     if (!pageSnap.exists()) return;
     const pageData = pageSnap.data();
 
@@ -960,6 +1087,7 @@ export class FirestoreAdapter implements DataAdapter {
           parentPageId: null,
           path: newPath,
           deletedAt: null,
+          trashedWith: null,
           updatedBy: this.userId,
           updatedAt: serverTimestamp(),
         })
@@ -972,6 +1100,7 @@ export class FirestoreAdapter implements DataAdapter {
             path: patch.path,
             notebookId: patch.notebookId,
             deletedAt: null,
+            trashedWith: null,
             updatedBy: this.userId,
             updatedAt: serverTimestamp(),
           })
@@ -985,6 +1114,7 @@ export class FirestoreAdapter implements DataAdapter {
           ops.push((batch) =>
             batch.update(ref, {
               deletedAt: null,
+              trashedWith: null,
               updatedBy: this.userId,
               updatedAt: serverTimestamp(),
             })
@@ -996,6 +1126,7 @@ export class FirestoreAdapter implements DataAdapter {
         ops.push((batch) =>
           batch.update(ref, {
             deletedAt: null,
+            trashedWith: null,
             updatedBy: this.userId,
             updatedAt: serverTimestamp(),
           })
@@ -1003,6 +1134,9 @@ export class FirestoreAdapter implements DataAdapter {
       }
     }
 
+    // Nota de um caderno que esta na lixeira: o caderno (e os pais dele) voltam
+    // tambem, senao a nota restaurada ficaria sem lugar na barra lateral.
+    ops.push(...this.notebookChainOps(pageData.notebookId as string | null | undefined, notebooks));
     await commitWrites(ops);
   }
 
@@ -1018,29 +1152,14 @@ export class FirestoreAdapter implements DataAdapter {
           workspaceId: this.workspaceId,
           pageId: id,
         });
-      } catch {
-        const refs = await this.pageSubtreeRefs(id);
-        const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
-        const orphanMedia = new Set<string>();
-        for (const ref of refs) {
-          const versionsSnap = await getDocs(collection(ref, "versions"));
-          for (const v of versionsSnap.docs) {
-            ops.push((batch) => batch.delete(v.ref));
-          }
-          const cardsSnap = await getDocs(
-            query(this.col("flashcards"), where("pageId", "==", ref.id))
-          );
-          for (const card of cardsSnap.docs) {
-            // Apagar so o documento deixaria a imagem do card no storage.
-            for (const path of cardStoragePaths(card.data() as Flashcard)) {
-              orphanMedia.add(path);
-            }
-            ops.push((batch) => batch.delete(card.ref));
-          }
-          ops.push((batch) => batch.delete(ref));
+      } catch (error) {
+        // Ultimo recurso sem servidor: so documentos que estao na lixeira.
+        const target = await getDoc(this.docRef("pages", id));
+        if (!target.exists() || !target.data().deletedAt) throw error;
+        for (const ref of await this.pageSubtreeRefs(id)) {
+          const snap = ref.id === id ? target : await getDoc(ref);
+          if (snap.exists() && snap.data().deletedAt) await this.deletePageDocs(ref);
         }
-        await commitWrites(ops);
-        if (orphanMedia.size > 0) await this.deleteMedia([...orphanMedia]);
       }
     }
   }
@@ -1064,13 +1183,12 @@ export class FirestoreAdapter implements DataAdapter {
       }
 
       const databases = await getDocs(query(this.col("databases"), where("deletedAt", "!=", null)));
-      for (const snapDoc of databases.docs) {
-        const rows = await getDocs(collection(snapDoc.ref, "rows"));
-        await commitWrites([
-          ...rows.docs.map((row) => (batch: ReturnType<typeof writeBatch>) => batch.delete(row.ref)),
-          (batch) => batch.delete(snapDoc.ref),
-        ]);
-      }
+      for (const snapDoc of databases.docs) await this.deleteDatabaseDocs(snapDoc.ref);
+
+      const notebooks = await getDocs(query(this.col("notebooks"), where("deletedAt", "!=", null)));
+      await commitWrites(
+        notebooks.docs.map((snapDoc) => (batch: ReturnType<typeof writeBatch>) => batch.delete(snapDoc.ref))
+      );
     }
   }
 
@@ -1201,11 +1319,52 @@ export class FirestoreAdapter implements DataAdapter {
     await updateDoc(this.docRef("databases", id), { ...meta, updatedAt: serverTimestamp() });
   }
 
+  async restoreDatabase(id: string) {
+    const [snap, notebooks] = await Promise.all([getDoc(this.docRef("databases", id)), this.allNotebooks()]);
+    if (!snap.exists()) return;
+    await commitWrites([
+      (batch) =>
+        batch.update(snap.ref, { deletedAt: null, trashedWith: null, updatedAt: serverTimestamp() }),
+      ...this.notebookChainOps(snap.data().notebookId as string | null | undefined, notebooks),
+    ]);
+  }
+
+  async purgeDatabase(id: string) {
+    try {
+      await firebaseJson("/api/trash/purge", {
+        method: "POST",
+        body: JSON.stringify({ workspaceId: this.workspaceId, databaseId: id }),
+      });
+    } catch (error) {
+      const snap = await getDoc(this.docRef("databases", id));
+      if (!snap.exists() || !snap.data().deletedAt) throw error;
+      await this.deleteDatabaseDocs(snap.ref);
+    }
+  }
+
   async upsertRow(databaseId: string, row: Partial<DatabaseRow> & { id?: string }) {
-    const rowId = row.id ?? `row_${nanoid(8)}`;
-    const rowRef = doc(this.docRef("databases", databaseId), "rows", rowId);
+    const rowRef = doc(this.docRef("databases", databaseId), "rows", row.id ?? `row_${nanoid(8)}`);
+
+    if (row.id) {
+      // Edicao de celula: so os campos informados. Regravar a linha inteira
+      // mandava a linha para o fim (order), zerava a data de criacao e soltava
+      // o vinculo com a pagina.
+      const patch: Record<string, unknown> = { updatedAt: serverTimestamp() };
+      if (row.values !== undefined) patch.values = row.values;
+      if (row.order !== undefined) patch.order = row.order;
+      if (row.pageId !== undefined) patch.pageId = row.pageId;
+      if (row.notionPageId !== undefined) patch.notionPageId = row.notionPageId;
+      try {
+        await updateDoc(rowRef, patch);
+        return null;
+      } catch (error) {
+        const code = (error as { code?: string } | null)?.code;
+        if (code !== "not-found") throw error;
+      }
+    }
+
     const next: DatabaseRow = {
-      id: rowId,
+      id: rowRef.id,
       values: row.values ?? {},
       order: row.order ?? Date.now(),
       pageId: row.pageId ?? null,
@@ -1213,11 +1372,7 @@ export class FirestoreAdapter implements DataAdapter {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    await setDoc(
-      rowRef,
-      { ...next, createdAt: serverTimestamp(), updatedAt: serverTimestamp() },
-      { merge: true }
-    );
+    await setDoc(rowRef, { ...next, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
     return next;
   }
 
@@ -1444,62 +1599,6 @@ export class FirestoreAdapter implements DataAdapter {
     await this.updatePage(pageId, { blocks });
   }
 
-  async retryMediaProcessing(pageId: string, storagePath: string) {
-    void pageId;
-    void storagePath;
-  }
-
-  private async requestTranscription(pageId: string, storagePath: string) {
-    try {
-      const result = await this.invokeTranscription(pageId, storagePath);
-      if (result) await this.applyTranscriptResult(pageId, storagePath, result);
-    } catch (error) {
-      await this.clearPendingMedia(pageId, storagePath);
-      throw error;
-    }
-  }
-
-  private async invokeTranscription(
-    pageId: string,
-    storagePath: string
-  ): Promise<TranscriptResult | null> {
-    const payload = { workspaceId: this.workspaceId, pageId, storagePath };
-    try {
-      const callable = httpsCallable<typeof payload, TranscriptResult>(
-        getFirebaseFunctions(),
-        "transcribeAudio"
-      );
-      const { data } = await Promise.race([
-        callable(payload),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("A transcrição demorou demais.")), 45_000)
-        ),
-      ]);
-      return data;
-    } catch {
-      return { transcript: "", summary: "", actionItems: [] };
-    }
-  }
-
-  private async applyTranscriptResult(
-    pageId: string,
-    storagePath: string,
-    result: TranscriptResult
-  ) {
-    const page = await getDoc(this.docRef("pages", pageId));
-    if (!page.exists()) return;
-    const blocks = stampTranscript(parseBlocksFromData(page.data()), storagePath, result);
-    await this.updatePage(pageId, { blocks });
-  }
-
-  private async clearPendingMedia(pageId: string, storagePath: string) {
-    const page = await getDoc(this.docRef("pages", pageId));
-    if (!page.exists()) return;
-    await this.updatePage(pageId, {
-      blocks: clearMediaPending(parseBlocksFromData(page.data()), storagePath),
-    });
-  }
-
   async uploadAttachment(
     pageId: string,
     file: File,
@@ -1647,6 +1746,30 @@ export class FirestoreAdapter implements DataAdapter {
         })
       );
     } catch {}
+  }
+
+  async copyMedia(target: MediaCopyTarget, sources: string[]): Promise<Record<string, CopiedMedia>> {
+    const unique = [...new Set(sources.filter((source) => isStorageFile(source, this.workspaceId)))];
+    const copies: Record<string, CopiedMedia> = {};
+    for (let start = 0; start < unique.length; start += 100) {
+      try {
+        const result = await firebaseJson<{ copies?: Record<string, CopiedMedia> }>("/api/media/copy", {
+          method: "POST",
+          body: JSON.stringify({
+            workspaceId: this.workspaceId,
+            target: target === "icons" ? "icons" : "page",
+            pageId: target === "icons" ? undefined : target.pageId,
+            sources: unique.slice(start, start + 100),
+          }),
+        });
+        Object.assign(copies, result.copies ?? {});
+      } catch (err) {
+        // Sem a copia a nota duplicada continua funcionando, so compartilhando o
+        // arquivo; a limpeza da lixeira nao apaga arquivo que ainda tem dono.
+        console.error("Falha ao copiar mídia:", err);
+      }
+    }
+    return copies;
   }
 
   async quarantineMedia(storagePaths: string[], pageId?: string): Promise<void> {

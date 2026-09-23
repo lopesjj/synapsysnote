@@ -1,3 +1,4 @@
+import { optionalAuthHeader } from "@/lib/firebase/auth-headers";
 import {
   TRANSCRIPTION_SAMPLE_RATE,
   createMonoFrameReader,
@@ -155,7 +156,7 @@ async function postAudioFile(blob: Blob, targetLang: string): Promise<Transcribe
   try {
     const res = await fetch("/api/ai/transcribe", {
       method: "POST",
-      headers: { "x-target-language": targetLang },
+      headers: { "x-target-language": targetLang, ...(await optionalAuthHeader()) },
       body: formData,
     });
     return await readTranscribeResponse(res);
@@ -200,6 +201,7 @@ async function tryGeminiTranscription(
         headers: {
           "Content-Type": "application/json",
           "x-target-language": targetLang,
+          ...(await optionalAuthHeader()),
         },
         body: JSON.stringify({
           audioUrl,
@@ -247,6 +249,7 @@ async function postPcmChunk(chunk: Float32Array, langCode: string): Promise<stri
     headers: {
       "Content-Type": "application/octet-stream",
       "x-target-language": langCode,
+      ...(await optionalAuthHeader()),
     },
     body,
   });

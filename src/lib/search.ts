@@ -6,22 +6,30 @@ const STOPWORDS = new Set([
   "para", "com", "que", "no", "na", "the", "of", "to", "and", "in",
 ]);
 
+/**
+ * Separa por qualquer coisa que nao seja letra ou numero de qualquer idioma.
+ * Antes so a-z e 0-9 contavam, e buscas em russo, japones, chines ou arabe
+ * nunca achavam nada. Um caractere so vale como termo fora do alfabeto latino
+ * (em chines e japones uma palavra pode ter um so ideograma).
+ */
 export function tokenize(value: string): string[] {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .split(/[^a-z0-9@#_]+/)
-    .filter((token) => token.length > 1 && !STOPWORDS.has(token));
+  return normalizeText(value)
+    .split(/[^\p{L}\p{N}@#_]+/u)
+    .filter((token) => (token.length > 1 || /[^\x00-\x7f]/.test(token)) && !STOPWORDS.has(token));
+}
+
+/**
+ * Minusculas e sem acentos latinos. O NFC final recompoe o que nao e acento
+ * latino (o dakuten japones, por exemplo), igual na busca e no texto.
+ */
+function normalizeText(text: string): string {
+  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").normalize("NFC");
 }
 
 function snippetAround(text: string, tokens: string[], length = 150): string {
   if (!text) return "";
   const haystack = text.replace(/\s+/g, " ");
-  const lower = haystack
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+  const lower = normalizeText(haystack);
   const index = tokens.map((token) => lower.indexOf(token)).filter((i) => i >= 0).sort((a, b) => a - b)[0];
   if (index === undefined) return haystack.slice(0, length);
   const start = Math.max(0, index - 40);
@@ -59,10 +67,7 @@ export function searchWorkspace(
 
     for (const { field, text, weight } of fields) {
       if (!text) continue;
-      const normalized = text
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "");
+      const normalized = normalizeText(text);
       for (const token of tokens) {
         const occurrences = normalized.split(token).length - 1;
         if (occurrences > 0) {
@@ -100,10 +105,7 @@ export function searchWorkspace(
 
     for (const { field, text, weight } of fields) {
       if (!text) continue;
-      const normalized = text
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "");
+      const normalized = normalizeText(text);
       for (const token of tokens) {
         const occurrences = normalized.split(token).length - 1;
         if (occurrences > 0) {

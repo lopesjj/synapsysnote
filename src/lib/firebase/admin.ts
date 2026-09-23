@@ -16,6 +16,16 @@ export interface ServiceAccountCredentials {
   private_key?: string;
 }
 
+function readJsonFile(path: string): ServiceAccountCredentials | null {
+  try {
+    const resolved = isAbsolute(path) ? path : resolve(/*turbopackIgnore: true*/ process.cwd(), path);
+    if (!existsSync(resolved)) return null;
+    return JSON.parse(readFileSync(resolved, "utf-8")) as ServiceAccountCredentials;
+  } catch {
+    return null;
+  }
+}
+
 export function resolveServiceAccountCredentials(): ServiceAccountCredentials | null {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
   if (raw) {
@@ -32,39 +42,24 @@ export function resolveServiceAccountCredentials(): ServiceAccountCredentials | 
         return JSON.parse(decoded) as ServiceAccountCredentials;
       }
     } catch {}
-    try {
-      const resolved = isAbsolute(raw) ? raw : resolve(process.cwd(), raw);
-      if (existsSync(resolved)) {
-        return JSON.parse(readFileSync(resolved, "utf-8")) as ServiceAccountCredentials;
-      }
-    } catch {}
+    const fromPath = readJsonFile(raw);
+    if (fromPath) return fromPath;
   }
 
   const credsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
   if (credsPath) {
-    try {
-      const resolved = isAbsolute(credsPath) ? credsPath : resolve(process.cwd(), credsPath);
-      if (existsSync(resolved)) {
-        return JSON.parse(readFileSync(resolved, "utf-8")) as ServiceAccountCredentials;
-      }
-    } catch (err) {
-      console.error("[firebase-admin] Falha ao carregar GOOGLE_APPLICATION_CREDENTIALS:", err);
-    }
+    const fromPath = readJsonFile(credsPath);
+    if (fromPath) return fromPath;
+    console.error("[firebase-admin] Falha ao carregar GOOGLE_APPLICATION_CREDENTIALS:", credsPath);
   }
 
+  // Chave baixada do console e deixada na raiz do projeto: so para scripts e
+  // desenvolvimento local. Em producao a credencial vem do secret (ou do ADC).
+  if (process.env.NODE_ENV === "production") return null;
   try {
-    const specificKey = resolve(process.cwd(), "synapsysnote-firebase-adminsdk-fbsvc-b29e1e849c.json");
-    if (existsSync(specificKey)) {
-      return JSON.parse(readFileSync(specificKey, "utf-8")) as ServiceAccountCredentials;
-    }
-    const files = readdirSync(process.cwd());
-    const matched = files.find((f) => f.includes("firebase-adminsdk") && f.endsWith(".json"));
-    if (matched) {
-      const candidate = resolve(process.cwd(), matched);
-      if (existsSync(candidate)) {
-        return JSON.parse(readFileSync(candidate, "utf-8")) as ServiceAccountCredentials;
-      }
-    }
+    const root = /*turbopackIgnore: true*/ process.cwd();
+    const matched = readdirSync(root).find((f) => f.includes("firebase-adminsdk") && f.endsWith(".json"));
+    if (matched) return readJsonFile(resolve(root, matched));
   } catch {}
 
   return null;

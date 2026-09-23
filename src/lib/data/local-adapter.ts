@@ -25,13 +25,16 @@ import {
   parentMap,
 } from "@/lib/notion/mock-workspace";
 import type {
+  CopiedMedia,
   CreateFlashcardInput,
   FlashcardResetScope,
   CreateImportJobInput,
   RecordImportJobInput,
   CreatePageInput,
   DataAdapter,
+  MediaCopyTarget,
   Unsubscribe,
+  UpdatePageOptions,
 } from "./adapter";
 import { pageSubtree, subtreePatches } from "./page-tree";
 import { notebookSubtreeIds } from "./notebook-tree";
@@ -264,18 +267,72 @@ export class LocalAdapter implements DataAdapter {
   }
 
   async deleteNotebook(id: string) {
-    const ids = new Set(notebookSubtreeIds(this.state.notebooks, id));
+    const live = this.state.notebooks.filter((notebook) => !notebook.deletedAt);
+    if (!live.some((notebook) => notebook.id === id)) return;
+    const ids = new Set(notebookSubtreeIds(live, id));
     const now = nowMs();
-    this.state.notebooks = this.state.notebooks.filter((notebook) => !ids.has(notebook.id));
+    this.state.notebooks = this.state.notebooks.map((notebook) =>
+      ids.has(notebook.id)
+        ? { ...notebook, deletedAt: now, trashedWith: notebook.id === id ? null : id, updatedAt: now }
+        : notebook
+    );
     this.state.pages = this.state.pages.map((page) =>
-      page.notebookId && ids.has(page.notebookId)
-        ? { ...page, notebookId: null, deletedAt: page.deletedAt ?? now }
+      page.notebookId && ids.has(page.notebookId) && !page.deletedAt
+        ? { ...page, deletedAt: now, trashedWith: id }
         : page
     );
     this.state.databases = this.state.databases.map((database) =>
-      database.notebookId && ids.has(database.notebookId)
-        ? { ...database, notebookId: null, deletedAt: database.deletedAt ?? now }
+      database.notebookId && ids.has(database.notebookId) && !database.deletedAt
+        ? { ...database, deletedAt: now, trashedWith: id }
         : database
+    );
+    this.emit();
+  }
+
+  /** Reativa o caderno e os ancestrais que estiverem na lixeira (so os cadernos). */
+  private restoreNotebookChain(notebookId: string | null | undefined) {
+    const byId = new Map(this.state.notebooks.map((notebook) => [notebook.id, notebook]));
+    const chain = new Set<string>();
+    let current = notebookId ? byId.get(notebookId) : undefined;
+    while (current && !chain.has(current.id)) {
+      if (current.deletedAt) chain.add(current.id);
+      else chain.add(`live:${current.id}`);
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+    this.state.notebooks = this.state.notebooks.map((notebook) =>
+      chain.has(notebook.id) ? { ...notebook, deletedAt: null, trashedWith: null } : notebook
+    );
+  }
+
+  async restoreNotebook(id: string) {
+    if (!this.state.notebooks.some((notebook) => notebook.id === id)) return;
+    this.restoreNotebookChain(id);
+    this.state.notebooks = this.state.notebooks.map((notebook) =>
+      notebook.trashedWith === id ? { ...notebook, deletedAt: null, trashedWith: null } : notebook
+    );
+    this.state.pages = this.state.pages.map((page) =>
+      page.trashedWith === id ? { ...page, deletedAt: null, trashedWith: null } : page
+    );
+    this.state.databases = this.state.databases.map((database) =>
+      database.trashedWith === id ? { ...database, deletedAt: null, trashedWith: null } : database
+    );
+    this.emit();
+  }
+
+  async purgeNotebook(id: string) {
+    const notebook = this.state.notebooks.find((item) => item.id === id);
+    if (!notebook?.deletedAt) return;
+    const pageIds = new Set(
+      this.state.pages.filter((page) => page.trashedWith === id && page.deletedAt).map((page) => page.id)
+    );
+    this.state.pages = this.state.pages.filter((page) => !pageIds.has(page.id));
+    this.state.versions = this.state.versions.filter((v) => !pageIds.has(v.pageId));
+    this.state.flashcards = (this.state.flashcards ?? []).filter((c) => !pageIds.has(c.pageId));
+    this.state.databases = this.state.databases.filter(
+      (database) => !(database.trashedWith === id && database.deletedAt)
+    );
+    this.state.notebooks = this.state.notebooks.filter(
+      (item) => item.id !== id && !(item.trashedWith === id && item.deletedAt)
     );
     this.emit();
   }
@@ -289,7 +346,7 @@ export class LocalAdapter implements DataAdapter {
       { id: `blk_${nanoid(8)}`, type: "paragraph" as const, richText: [{ text: "" }] },
     ];
     const page: Page = {
-      id: `page_${nanoid(10)}`,
+      id: input.id ?? `page_${nanoid(10)}`,
       title: input.title ?? "Sem título",
       icon: input.icon ?? "📄",
       coverUrl: input.coverUrl ?? null,
@@ -331,7 +388,8 @@ export class LocalAdapter implements DataAdapter {
     return page;
   }
 
-  async updatePage(id: string, patch: Partial<Page>) {
+  async updatePage(id: string, patch: Partial<Page>, _options?: UpdatePageOptions) {
+    void _options;
     const current = this.state.pages.find((page) => page.id === id);
     if (!current) return;
     const blocks = patch.blocks ? mergeMediaEnrichment(patch.blocks, current.blocks) : current.blocks;
@@ -397,7 +455,7 @@ export class LocalAdapter implements DataAdapter {
     const ids = new Set(pageSubtree(this.state.pages, id).map((page) => page.id));
     const now = nowMs();
     this.state.pages = this.state.pages.map((page) =>
-      ids.has(page.id) ? { ...page, deletedAt: page.deletedAt ?? now } : page
+      ids.has(page.id) ? { ...page, deletedAt: page.deletedAt ?? now, trashedWith: null } : page
     );
     this.emit();
   }
@@ -421,27 +479,35 @@ export class LocalAdapter implements DataAdapter {
       );
       this.state.pages = this.state.pages.map((p) => {
         if (p.id === id) {
-          return { ...p, parentPageId: null, path: [], deletedAt: null };
+          return { ...p, parentPageId: null, path: [], deletedAt: null, trashedWith: null };
         }
         const patch = patches.get(p.id);
         if (patch) {
-          return { ...p, path: patch.path, notebookId: patch.notebookId, deletedAt: null };
+          return { ...p, path: patch.path, notebookId: patch.notebookId, deletedAt: null, trashedWith: null };
         }
         if (ids.has(p.id)) {
-          return { ...p, deletedAt: null };
+          return { ...p, deletedAt: null, trashedWith: null };
         }
         return p;
       });
     } else {
       this.state.pages = this.state.pages.map((p) =>
-        ids.has(p.id) ? { ...p, deletedAt: null } : p
+        ids.has(p.id) ? { ...p, deletedAt: null, trashedWith: null } : p
       );
     }
+    this.restoreNotebookChain(page.notebookId);
     this.emit();
   }
 
   async purgePage(id: string) {
-    const ids = new Set(pageSubtree(this.state.pages, id).map((page) => page.id));
+    // So sai o que esta na lixeira: subnota ja restaurada continua viva.
+    const target = this.state.pages.find((page) => page.id === id);
+    if (!target?.deletedAt) return;
+    const ids = new Set(
+      pageSubtree(this.state.pages, id)
+        .filter((page) => page.deletedAt)
+        .map((page) => page.id)
+    );
     this.state.pages = this.state.pages.filter((page) => !ids.has(page.id));
     this.state.versions = this.state.versions.filter((v) => !ids.has(v.pageId));
     this.state.flashcards = (this.state.flashcards ?? []).filter((c) => !ids.has(c.pageId));
@@ -453,6 +519,7 @@ export class LocalAdapter implements DataAdapter {
     this.state.pages = this.state.pages.filter((page) => !page.deletedAt);
     this.state.versions = this.state.versions.filter((v) => !trashedPageIds.has(v.pageId));
     this.state.databases = this.state.databases.filter((database) => !database.deletedAt);
+    this.state.notebooks = this.state.notebooks.filter((notebook) => !notebook.deletedAt);
     this.state.flashcards = (this.state.flashcards ?? []).filter((c) => !trashedPageIds.has(c.pageId));
     this.emit();
   }
@@ -460,11 +527,19 @@ export class LocalAdapter implements DataAdapter {
   async purgeExpiredTrash() {
     const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
     const threshold = nowMs() - THIRTY_DAYS_MS;
-    const expiredPages = this.state.pages.filter((page) => page.deletedAt && page.deletedAt <= threshold);
-    if (expiredPages.length === 0) return;
-    for (const page of expiredPages) {
-      await this.purgePage(page.id);
-    }
+    const expired = (value: number | null | undefined) => Boolean(value && value <= threshold);
+    const expiredPageIds = new Set(this.state.pages.filter((page) => expired(page.deletedAt)).map((p) => p.id));
+    const hasExpired =
+      expiredPageIds.size > 0 ||
+      this.state.databases.some((database) => expired(database.deletedAt)) ||
+      this.state.notebooks.some((notebook) => expired(notebook.deletedAt));
+    if (!hasExpired) return;
+    this.state.pages = this.state.pages.filter((page) => !expiredPageIds.has(page.id));
+    this.state.versions = this.state.versions.filter((v) => !expiredPageIds.has(v.pageId));
+    this.state.flashcards = (this.state.flashcards ?? []).filter((c) => !expiredPageIds.has(c.pageId));
+    this.state.databases = this.state.databases.filter((database) => !expired(database.deletedAt));
+    this.state.notebooks = this.state.notebooks.filter((notebook) => !expired(notebook.deletedAt));
+    this.emit();
   }
 
 
@@ -539,6 +614,21 @@ export class LocalAdapter implements DataAdapter {
     this.state.databases = this.state.databases.map((d) =>
       d.id === id ? { ...d, ...patch, updatedAt: nowMs() } : d
     );
+    this.emit();
+  }
+
+  async restoreDatabase(id: string) {
+    const database = this.state.databases.find((d) => d.id === id);
+    if (!database) return;
+    this.restoreNotebookChain(database.notebookId);
+    this.state.databases = this.state.databases.map((d) =>
+      d.id === id ? { ...d, deletedAt: null, trashedWith: null, updatedAt: nowMs() } : d
+    );
+    this.emit();
+  }
+
+  async purgeDatabase(id: string) {
+    this.state.databases = this.state.databases.filter((d) => !(d.id === id && d.deletedAt));
     this.emit();
   }
 
@@ -968,11 +1058,6 @@ export class LocalAdapter implements DataAdapter {
     await this.updatePage(pageId, { blocks });
   }
 
-  async retryMediaProcessing(pageId: string, storagePath: string) {
-    void pageId;
-    void storagePath;
-  }
-
   async uploadAttachment(
     pageId: string,
     file: File,
@@ -1019,6 +1104,13 @@ export class LocalAdapter implements DataAdapter {
   async quarantineMedia(storagePaths: string[], _pageId?: string): Promise<void> {
     void storagePaths;
     void _pageId;
+  }
+
+  /** No modo local a midia vive em data URLs dentro do proprio bloco: nada a copiar. */
+  async copyMedia(_target: MediaCopyTarget, _sources: string[]): Promise<Record<string, CopiedMedia>> {
+    void _target;
+    void _sources;
+    return {};
   }
 
   async unquarantineMedia(storagePaths: string[]): Promise<void> {

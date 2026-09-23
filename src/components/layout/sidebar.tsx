@@ -47,7 +47,7 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn, isMac } from "@/lib/utils";
+import { cn, compareNatural, isMac } from "@/lib/utils";
 import { useWorkspace, type PageTreeNode } from "@/lib/data/provider";
 import { useUiStore } from "@/lib/store/ui-store";
 import { SIDEBAR_MARK_SIZE, SynapsysLettering, SynapsysMark } from "@/components/brand/logo";
@@ -242,8 +242,21 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
-  const { notebooks, livePages, databases, tags, trashedPages, treeFor, adapter, rootNotebooks, flashcards, dueFlashcards } =
-    useWorkspace();
+  const {
+    notebooks,
+    livePages,
+    databases,
+    tags,
+    trashedPages,
+    trashedDatabases,
+    trashedNotebooks,
+    treeFor,
+    adapter,
+    rootNotebooks,
+    flashcards,
+    dueFlashcards,
+  } = useWorkspace();
+  const trashedCount = trashedPages.length + trashedDatabases.length + trashedNotebooks.length;
 
   const notebooksSort = useUiStore((state) => state.notebooksSort);
   const notebooksSortDirection = useUiStore((state) => state.notebooksSortDirection);
@@ -312,6 +325,14 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
       ),
     [treeFor, notesSort, notesSortDirection, subnotesSort, subnotesSortDirection]
   );
+
+  // Bases sem caderno (ou cujo caderno nao existe mais) nao apareciam em lugar nenhum.
+  const orphanDatabases = useMemo(() => {
+    const notebookIds = new Set(notebooks.map((notebook) => notebook.id));
+    return databases
+      .filter((db) => !db.deletedAt && (!db.notebookId || !notebookIds.has(db.notebookId)))
+      .sort((a, b) => compareNatural(a.name ?? "", b.name ?? ""));
+  }, [databases, notebooks]);
 
   const sortedRootNotebooks = useMemo(
     () => sortNotebooks(rootNotebooks, notebooksSort, notebooksSortDirection),
@@ -775,8 +796,8 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         </NavLink>
         <NavLink href="/home/trash" active={pathname === "/home/trash"} icon={<TrashCanIcon className="size-3.5" />}>
           {t("trash")}
-          {trashedPages.length ? (
-            <span className="ml-auto text-[10.5px] text-faint">{trashedPages.length}</span>
+          {trashedCount ? (
+            <span className="ml-auto text-[10.5px] text-faint">{trashedCount}</span>
           ) : null}
         </NavLink>
         <NavLink
@@ -849,7 +870,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
             {renderNotebooks(sortedRootNotebooks, 0)}
           </Section>
 
-          {orphanPages.length ? (
+          {orphanPages.length || orphanDatabases.length ? (
             <Section title={t("unfiled")}>
               <SortableContext
                 items={sortableIds(orphanPages)}
@@ -857,6 +878,23 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               >
                 {renderTree(orphanPages)}
               </SortableContext>
+              {orphanDatabases.map((database) => (
+                <Link
+                  key={database.id}
+                  href={`/home/db/${database.id}`}
+                  prefetch={true}
+                  onMouseEnter={() => router.prefetch(`/home/db/${database.id}`)}
+                  onClick={closeMenuBar}
+                  draggable={false}
+                  className={cn(
+                    "flex items-center gap-2 rounded-[var(--radius-xs)] px-2 py-1 text-[13.5px] transition hover:bg-[var(--surface-hover)]",
+                    pathname === `/home/db/${database.id}` ? "font-medium text-ink" : "text-muted hover:text-ink"
+                  )}
+                >
+                  <SidebarItemIcon icon={database.icon} fallback="🗂️" />
+                  <span className="truncate">{database.name || t("untitled")}</span>
+                </Link>
+              ))}
             </Section>
           ) : null}
 
@@ -1126,7 +1164,7 @@ function NotebookRow({
           <MenuTrigger asChild>
             <button
               className="rounded p-0.5 text-faint hover:text-ink"
-              aria-label={`Ações de ${notebook.name}`}
+              aria-label={`${t("open_menu")}: ${notebook.name || t("untitled")}`}
             >
               <MoreHorizontal className="size-3.5" />
             </button>
@@ -1307,7 +1345,7 @@ function SortablePageRow({
               <button
                 type="button"
                 className="rounded p-0.5 text-faint hover:text-ink"
-                aria-label="Ações da página"
+                aria-label={t("page_actions")}
               >
                 <MoreHorizontal className="size-3.5" />
               </button>

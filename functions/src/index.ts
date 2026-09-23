@@ -6,13 +6,6 @@ setGlobalOptions({
   maxInstances: 20,
 });
 
-export {
-  listNotionTreeFn as listNotionTree,
-  startNotionImport,
-  processNotionImportJob,
-  disconnectNotion,
-} from "./notion/import-job";
-
-export { transcribeAudio, transcribeOnUpload } from "./ai/transcribe";
-export { embedPageOnWrite, semanticSearch } from "./ai/embeddings";
-export { purgeExpiredTrash, purgeExpiredQuarantineMedia, purgePage, restorePage } from "./maintenance/trash";
+// A importacao do Notion, a transcricao e a busca rodam nas rotas do Next.js,
+// sob a sessao de quem pediu. Aqui ficam so as rotinas de manutencao.
+export { purgeExpiredTrash, purgeExpiredQuarantineMedia, purgePage } from "./maintenance/trash";

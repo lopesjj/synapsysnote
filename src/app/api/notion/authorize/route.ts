@@ -53,6 +53,7 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const dest = new URL(resolveUrl(appHref("/home/integrations"), url.origin));
-  dest.searchParams.set("error", "Conecte o Notion pelo botão no app, com a sua conta Synapsys.");
+  dest.searchParams.set("error", "notion_start_from_app");
+  dest.searchParams.set("provider", "notion");
   return NextResponse.redirect(dest);
 }

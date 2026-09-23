@@ -50,7 +50,13 @@ function IntegrationsBody() {
   );
 
   const oauthError = params.get("error");
+  // As rotas de retorno dizem qual servico falhou; codigos antigos trazem o
+  // nome do servico no proprio codigo.
+  const oauthProvider = oauthError
+    ? connectedProviderLabel(params.get("provider") || oauthError, t)
+    : "";
   const justConnected = params.get("connected");
+  const justConnectedLabel = justConnected ? connectedProviderLabel(justConnected, t) : "";
 
   const connectNotion = async () => {
     setBusyService("notion");
@@ -144,15 +150,16 @@ function IntegrationsBody() {
       {oauthError ? (
         <div className="mt-5 rounded-[var(--radius-md)] border border-[color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[color-mix(in_oklab,var(--danger)_8%,transparent)] p-3">
           <p className="text-[12.5px] text-ink">
-            {t("notion_auth_failed")}: {localizeErrorMessage(oauthErrorLabel(oauthError, t), t)}
+            {oauthProvider ? t("integration_auth_failed", { provider: oauthProvider }) : t("connection_failed")}:{" "}
+            {oauthErrorLabel(oauthError, t)}
           </p>
         </div>
       ) : null}
 
-      {justConnected ? (
+      {justConnectedLabel ? (
         <div className="mt-5 rounded-[var(--radius-md)] border border-[color-mix(in_oklab,var(--success)_35%,transparent)] bg-[color-mix(in_oklab,var(--success)_8%,transparent)] p-3">
           <p className="text-[12.5px] text-ink">
-            {t("connected_to", { name: connectedProviderLabel(justConnected, t) })}
+            {t("connected_to", { name: justConnectedLabel })}
           </p>
         </div>
       ) : null}
@@ -543,7 +550,8 @@ function connectedProviderLabel(code: string, t: (key: TranslationKey) => string
   if (normalized.startsWith("google")) return t("provider_google_docs");
   if (normalized.startsWith("evernote")) return t("provider_evernote");
   if (normalized.startsWith("notion")) return t("provider_notion");
-  return code;
+  // Texto vindo da URL nao aparece na tela.
+  return "";
 }
 
 function oauthErrorLabel(code: string, t: (key: TranslationKey) => string): string {
@@ -554,6 +562,6 @@ function oauthErrorLabel(code: string, t: (key: TranslationKey) => string): stri
   if (/state_mismatch|invalid_state/.test(code)) return t("oauth_error_state");
   if (/incomplete_response/.test(code)) return t("oauth_error_incomplete");
   if (/start_from_app/.test(code)) return t("oauth_error_start_from_app");
-  if (/token_exchange_failed|connection_failed/.test(code)) return t("oauth_error_generic");
-  return code;
+  // Qualquer outro codigo (inclusive texto colado na URL) vira a mensagem generica.
+  return t("oauth_error_generic");
 }

@@ -26,6 +26,7 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
 import { Input, Textarea } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/data/provider";
+import { optionalAuthHeader } from "@/lib/firebase/auth-headers";
 import { useTranslation } from "@/lib/i18n/translations";
 import { SUPPORTED_LANGUAGES, getLanguageDefinition } from "@/lib/i18n/languages";
 import {
@@ -479,7 +480,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
 
       const res = await fetch("/api/ai/flashcards/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await optionalAuthHeader()) },
         body: JSON.stringify({
           title: page.title || t("untitled"),
           textContent: comprehensive.textContent,

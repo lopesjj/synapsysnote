@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { lookup } from "node:dns/promises";
-import { hasValidAppSession } from "@/lib/api/app-session";
+import { authorizeAppRequest } from "@/lib/api/app-session";
 import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { createRateLimiter } from "@/lib/api/rate-limit";
 import { clientIpOf } from "@/lib/api/client-ip";
-import { parseProxyTarget, isBlockedIp } from "@/lib/media/proxy-guard";
+import { safeFetchBuffer } from "@/lib/media/safe-fetch";
 import { transcribeModelChain } from "@/lib/ai/transcribe-models";
 import {
   isModelResting,
@@ -44,7 +43,6 @@ function transcribeKey(req: NextRequest): string {
  * saudável e ainda dá tempo de tentar outros dois modelos.
  */
 const UPSTREAM_TIMEOUT_MS = 90_000;
-const TRANSLATE_TIMEOUT_MS = 15_000;
 const FETCH_TIMEOUT_MS = 60_000;
 
 let transcriberPromise: Promise<unknown> | null = null;
@@ -109,74 +107,6 @@ function cleanTranscriptText(raw: string): string {
   text = text.trim();
 
   return text;
-}
-
-function chunkTextForTranslation(text: string, maxLen = 4500): string[] {
-  if (text.length <= maxLen) return [text];
-  const chunks: string[] = [];
-  let remaining = text;
-  while (remaining.length > 0) {
-    if (remaining.length <= maxLen) {
-      chunks.push(remaining);
-      break;
-    }
-    let idx = remaining.lastIndexOf(". ", maxLen);
-    if (idx < maxLen * 0.4) idx = remaining.lastIndexOf("\n", maxLen);
-    if (idx < maxLen * 0.4) idx = remaining.lastIndexOf(" ", maxLen);
-    if (idx <= 0) idx = maxLen;
-    chunks.push(remaining.slice(0, idx).trim());
-    remaining = remaining.slice(idx).trim();
-  }
-  return chunks.filter(Boolean);
-}
-
-async function adaptToTargetLanguage(text: string, targetLang: string): Promise<string> {
-  const clean = text.trim();
-  if (!clean || !targetLang) return clean;
-
-  const chunks = chunkTextForTranslation(clean, 4500);
-  const translatedChunks: string[] = [];
-
-  for (const chunk of chunks) {
-    let translatedChunk = "";
-    const clients = ["gtx", "dict-chrome-ex"];
-    for (const client of clients) {
-      try {
-        const url = `https://translate.googleapis.com/translate_a/single?client=${client}&sl=auto&tl=${encodeURIComponent(
-          targetLang
-        )}&dt=t`;
-
-        const res = await fetch(url, {
-          method: "POST",
-          signal: AbortSignal.timeout(TRANSLATE_TIMEOUT_MS),
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-          },
-          body: new URLSearchParams({ q: chunk }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && Array.isArray(data[0])) {
-            const joined = data[0]
-              .map((part: unknown[]) =>
-                Array.isArray(part) && typeof part[0] === "string" ? part[0] : ""
-              )
-              .join("");
-            if (joined && joined.trim()) {
-              translatedChunk = joined.trim();
-              break;
-            }
-          }
-        }
-      } catch {}
-    }
-    translatedChunks.push(translatedChunk || chunk);
-  }
-
-  return translatedChunks.join(" ").trim();
 }
 
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -299,63 +229,22 @@ async function deleteFromFilesApi(apiKey: string, fileName: string): Promise<voi
   }
 }
 
-const SSRF_DNS_TIMEOUT_MS = 4_000;
 
 async function safeFetchAudioUrl(
   audioUrl: string,
   timeoutMs: number
 ): Promise<{ buffer: Buffer; mime: string } | null> {
-  const validated = parseProxyTarget(audioUrl);
-  if (!validated.ok) {
-    console.warn(`[transcribe] URL bloqueada: ${validated.reason}`);
-    return null;
-  }
-  const url = validated.url;
-  const hostname = url.hostname.toLowerCase().replace(/\.+$/, "");
-
-  let address = hostname;
-  if (!/^[0-9.]+$/.test(hostname) && !hostname.includes(":")) {
-    try {
-      const records = await Promise.race([
-        lookup(hostname, { all: true }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("DNS_TIMEOUT")), SSRF_DNS_TIMEOUT_MS)
-        ),
-      ]);
-      if (!records.length || records.some((r) => isBlockedIp(r.address))) {
-        console.warn(`[transcribe] DNS resolveu para IP bloqueado: ${hostname}`);
-        return null;
-      }
-      address = records[0].address;
-    } catch {
-      console.warn(`[transcribe] falha de DNS para ${hostname}`);
-      return null;
-    }
-  } else if (isBlockedIp(address)) {
-    console.warn(`[transcribe] IP bloqueado: ${address}`);
-    return null;
-  }
-
-  const fetchUrl = new URL(url.toString());
-  fetchUrl.hostname = address;
-
-  const res = await fetch(fetchUrl.toString(), {
-    signal: AbortSignal.timeout(timeoutMs),
-    headers: {
-      Host: url.host,
-      Accept: "*/*",
-      "User-Agent": "SynapsysNote-Transcribe/1.0",
-    },
+  // Conexao presa ao IP validado, com o nome no SNI: buscar pelo IP com fetch
+  // quebrava a validacao do certificado em toda URL https.
+  const fetched = await safeFetchBuffer(audioUrl, MAX_AUDIO_BYTES, {
+    timeoutMs,
+    userAgent: "SynapsysNote-Transcribe/1.0",
   });
-  if (!res.ok) return null;
-
-  const declaredLen = Number(res.headers.get("content-length") || 0);
-  if (declaredLen > MAX_AUDIO_BYTES) return null;
-
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.byteLength > MAX_AUDIO_BYTES) return null;
-
-  return { buffer: buf, mime: res.headers.get("content-type") || "audio/webm" };
+  if (!fetched) {
+    console.warn("[transcribe] URL recusada ou indisponível");
+    return null;
+  }
+  return { buffer: fetched.buffer, mime: fetched.contentType || "audio/webm" };
 }
 
 async function callGemini(
@@ -643,6 +532,11 @@ const INLINE_LIMIT_BYTES = 14 * 1024 * 1024;
  */
 const MAX_AUDIO_BYTES = 24 * 1024 * 1024;
 /**
+ * PCM float32 a 16 kHz: o navegador manda trechos de 60 s (~3,8 MB). Dois
+ * minutos de folga bastam; o que passar disso nao veio do app.
+ */
+const MAX_PCM_BYTES = 8 * 1024 * 1024;
+/**
  * Cada modelo congestionado gasta ~50 s até responder 503. Com 70 s o orçamento
  * acabava na segunda tentativa e metade da lista nunca era tentada; com muito
  * mais que isto, quem espera por uma aula inteira em trechos ficaria minutos
@@ -684,20 +578,16 @@ async function runGemini(
 ): Promise<GeminiResult> {
   const deadline = Date.now() + MODEL_CHAIN_DEADLINE_MS;
   const result = await transcribeWithGemini(buffer, mimeType, lang, deadline);
-  if (result.text && lang) {
-    const translated = await adaptToTargetLanguage(result.text, lang);
-    if (translated) {
-      result.text = cleanTranscriptText(translated);
-    }
-  }
+  // O proprio Gemini ja devolve no idioma pedido (ver o prompt): nenhum
+  // tradutor externo recebe o audio transcrito.
+  if (result.text) result.text = cleanTranscriptText(result.text);
   return result;
 }
 
 async function transcribeLocally(
   audioSamples: Float32Array,
   whisperLanguage: string,
-  promptContext: string,
-  targetLang: string
+  promptContext: string
 ) {
   const transcriber = await getTranscriber();
 
@@ -710,15 +600,7 @@ async function transcribeLocally(
     initial_prompt: promptContext,
   });
 
-  const rawResult = (output?.text || "").trim();
-  let resultText = cleanTranscriptText(rawResult);
-
-  if (resultText && targetLang) {
-    const translated = await adaptToTargetLanguage(resultText, targetLang);
-    if (translated) {
-      resultText = cleanTranscriptText(translated);
-    }
-  }
+  const resultText = cleanTranscriptText((output?.text || "").trim());
 
   return NextResponse.json({ transcript: resultText, reason: resultText ? "OK" : "NO_SPEECH" });
 }
@@ -731,7 +613,7 @@ export async function POST(req: NextRequest) {
     if (isCrossSiteRequest(req)) {
       return NextResponse.json({ transcript: "", reason: "FORBIDDEN" }, { status: 403 });
     }
-    if (!(await hasValidAppSession())) {
+    if (!(await authorizeAppRequest(req))) {
       return NextResponse.json({ transcript: "", reason: "UNAUTHORIZED" }, { status: 401 });
     }
 
@@ -739,7 +621,8 @@ export async function POST(req: NextRequest) {
     if (!transcribeLimiter.take(limitKey)) {
       return NextResponse.json({ transcript: "", reason: "RATE_LIMITED" }, { status: 429 });
     }
-    releaseLimit = () => transcribeLimiter.release(limitKey, 0);
+    let bytesUsed = 0;
+    releaseLimit = () => transcribeLimiter.release(limitKey, bytesUsed);
 
     const contentType = req.headers.get("content-type") || "";
     const targetLangHeader = req.headers.get("x-target-language") || "pt";
@@ -749,16 +632,18 @@ export async function POST(req: NextRequest) {
 
     // --- PCM cru vindo do fallback local do navegador --------------------
     if (contentType.includes("application/octet-stream")) {
+      if (Number(req.headers.get("content-length") || 0) > MAX_PCM_BYTES) {
+        return NextResponse.json({ transcript: "", reason: "TOO_LARGE" }, { status: 413 });
+      }
       const arrayBuffer = await req.arrayBuffer();
+      bytesUsed = arrayBuffer.byteLength;
+      if (arrayBuffer.byteLength > MAX_PCM_BYTES) {
+        return NextResponse.json({ transcript: "", reason: "TOO_LARGE" }, { status: 413 });
+      }
       if (arrayBuffer.byteLength === 0 || arrayBuffer.byteLength % 4 !== 0) {
         return NextResponse.json({ transcript: "", reason: "INVALID_PCM" }, { status: 400 });
       }
-      return await transcribeLocally(
-        new Float32Array(arrayBuffer),
-        whisperLanguage,
-        promptContext,
-        targetLang
-      );
+      return await transcribeLocally(new Float32Array(arrayBuffer), whisperLanguage, promptContext);
     }
 
     // --- URL de mídia: o servidor baixa e manda para o Gemini -------------
@@ -782,6 +667,7 @@ export async function POST(req: NextRequest) {
         if (!fetched) {
           return NextResponse.json({ transcript: "", reason: "FETCH_FAILED" });
         }
+        bytesUsed = fetched.buffer.byteLength;
 
         const result = await runGemini(fetched.buffer, fetched.mime, reqTargetLang);
         if (result.text) {
@@ -814,6 +700,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buf = Buffer.from(await file.arrayBuffer());
+    bytesUsed = buf.byteLength;
     const result = await runGemini(buf, file.type || "audio/webm", effectiveLang);
     if (result.text) {
       return NextResponse.json({ transcript: result.text, reason: result.reason });

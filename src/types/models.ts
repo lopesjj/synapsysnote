@@ -58,6 +58,7 @@ export interface BlockMedia {
   width?: number;
   height?: number;
   displayWidth?: number;
+  displayHeight?: number;
   durationSeconds?: number;
   caption?: RichTextSpan[];
   transcript?: string;
@@ -210,6 +211,10 @@ export interface Notebook {
   parentId?: string | null;
   order: number;
   notionPageId?: string | null;
+  /** Na lixeira desde quando; `null`/ausente = caderno ativo. */
+  deletedAt?: ISOTimestamp | null;
+  /** Caderno cuja exclusao levou este para a lixeira junto. */
+  trashedWith?: string | null;
   createdAt: ISOTimestamp;
   updatedAt: ISOTimestamp;
 }
@@ -238,6 +243,8 @@ export interface Page {
   favorite: boolean;
   archived: boolean;
   deletedAt: ISOTimestamp | null;
+  /** Caderno cuja exclusao levou esta nota para a lixeira junto. */
+  trashedWith?: string | null;
   notionPageId?: string | null;
   notionUrl?: string | null;
   importJobId?: string | null;
@@ -338,6 +345,8 @@ export interface AppDatabase {
   rows: DatabaseRow[];
   notionDatabaseId?: string | null;
   deletedAt: ISOTimestamp | null;
+  /** Caderno cuja exclusao levou esta base para a lixeira junto. */
+  trashedWith?: string | null;
   createdAt: ISOTimestamp;
   updatedAt: ISOTimestamp;
 }

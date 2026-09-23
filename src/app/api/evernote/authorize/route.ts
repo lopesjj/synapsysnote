@@ -10,6 +10,7 @@ import {
   createPkcePair,
   discoverAuthorizationServer,
   encodeEvernoteOauthState,
+  packEvernoteCookie,
   resolveClientId,
   EVERNOTE_OAUTH_COOKIE,
 } from "@/lib/evernote/oauth";
@@ -36,13 +37,12 @@ export async function POST(request: Request) {
       nonce: randomBytes(16).toString("hex"),
       workspaceId: body.workspaceId,
       uid: user.uid,
-      verifier,
       clientId,
       redirectUri,
     });
 
     const jar = await cookies();
-    jar.set(EVERNOTE_OAUTH_COOKIE, state, sharedCookieOptions(900));
+    jar.set(EVERNOTE_OAUTH_COOKIE, packEvernoteCookie(state, verifier), sharedCookieOptions(900));
 
     return Response.json({
       redirectUrl: buildAuthorizeUrl({ metadata, clientId, redirectUri, state, challenge }),
@@ -56,5 +56,6 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const dest = new URL(resolveUrl(appHref("/home/integrations"), url.origin));
   dest.searchParams.set("error", "evernote_start_from_app");
+  dest.searchParams.set("provider", "evernote");
   return NextResponse.redirect(dest);
 }
