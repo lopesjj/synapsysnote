@@ -371,6 +371,8 @@ export interface GoogleDocsIntegration {
   scopes?: string[];
   connectedBy: string;
   connectedAt: ISOTimestamp;
+  tokenExpiresAt?: number | null;
+  refreshable?: boolean;
   lastSyncAt?: ISOTimestamp | null;
   revokedAt?: ISOTimestamp | null;
 }

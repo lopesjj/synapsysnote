@@ -75,6 +75,7 @@ export function GoogleDocsImportWizard({
       if (result.redirected) return;
       toast.success(t("connected_to", { name: result.accountName || "Google Docs" }));
       setStepOverride("select");
+      void load(search);
     } catch (err) {
       toast.error(
         err instanceof Error ? localizeErrorMessage(err.message, t) : t("connection_failed")

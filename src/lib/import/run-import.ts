@@ -32,6 +32,24 @@ export interface RunImportOptions {
 
 type ResolvedAsset = { url: string; storagePath?: string };
 
+const SOURCE_TAG: Partial<Record<ImportedNote["source"], string>> = {
+  evernote: "evernote",
+  "google-docs": "google-docs",
+  docx: "word",
+};
+
+function importedNoteTags(note: ImportedNote, keepTags: boolean): string[] {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+  for (const tag of [SOURCE_TAG[note.source], ...(keepTags ? note.tags : [])]) {
+    const value = tag?.trim();
+    if (!value || seen.has(value.toLowerCase())) continue;
+    seen.add(value.toLowerCase());
+    tags.push(value);
+  }
+  return tags.slice(0, 50);
+}
+
 function walkBlocks(blocks: AppBlock[], visit: (block: AppBlock) => void) {
   for (const block of blocks) {
     visit(block);
@@ -177,7 +195,7 @@ export async function persistImportedNote(
       title: (note.title || fallbackTitle).slice(0, 200),
       notebookId: options.notebookId,
       parentPageId: options.parentPageId ?? null,
-      tags: keepTags ? note.tags.slice(0, 50) : [],
+      tags: importedNoteTags(note, keepTags),
       ...(initialBlocks.length ? { blocks: initialBlocks } : {}),
       importSource: note.source,
     });

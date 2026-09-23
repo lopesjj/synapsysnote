@@ -9,6 +9,7 @@ import {
   type ImportedNoteTree,
 } from "../src/lib/import/run-tree-import";
 import { parseEnex } from "../src/lib/import/enex";
+import { runFileImport } from "../src/lib/import/run-import";
 import { parseImportFile } from "../src/lib/import/parse-file";
 import { markdownToHtml, plainTextToHtml } from "../src/lib/import/markdown";
 import {
@@ -60,6 +61,7 @@ interface RecordedPage {
   title: string;
   notebookId: string | null;
   parentPageId: string | null;
+  tags: string[];
 }
 
 function fakeAdapter(existing: RecordedNotebook[] = []) {
@@ -86,6 +88,7 @@ function fakeAdapter(existing: RecordedNotebook[] = []) {
       title?: string;
       notebookId?: string | null;
       parentPageId?: string | null;
+      tags?: string[];
     }) {
       pageSeq += 1;
       const page: RecordedPage = {
@@ -93,6 +96,7 @@ function fakeAdapter(existing: RecordedNotebook[] = []) {
         title: input.title ?? "",
         notebookId: input.notebookId ?? null,
         parentPageId: input.parentPageId ?? null,
+        tags: input.tags ?? [],
       };
       pages.push(page);
       return page as unknown as Page;
@@ -766,6 +770,49 @@ async function main() {
     const mixed = summarizeImportedPages([notionApi, evernote, word, googleDocs]);
     assert.equal(mixed.total, 4);
     assert.equal(importedPagesLabelKey(mixed), "from_imports");
+  });
+
+  await run("imported notes carry their provider tag like notion", async () => {
+    const { adapter, pages } = fakeAdapter();
+    const base = noteFor({ id: "base", title: "Base", kind: "document" });
+    const notes: ImportedNote[] = [
+      { ...base, sourceId: "g", title: "Doc", source: "google-docs" },
+      { ...base, sourceId: "w", title: "Word", source: "docx" },
+      { ...base, sourceId: "e", title: "Nota", source: "evernote", tags: ["estudo", "Evernote"] },
+      { ...base, sourceId: "h", title: "Html", source: "html", tags: ["solta"] },
+    ];
+
+    await runFileImport({
+      adapter,
+      notes,
+      targetNotebookId: null,
+      uploadMedia: false,
+      keepTags: true,
+      fallbackTitle: "Nota",
+    });
+
+    const tagsOf = (title: string) => pages.find((page) => page.title === title)?.tags;
+    assert.deepEqual(tagsOf("Doc"), ["google-docs"]);
+    assert.deepEqual(tagsOf("Word"), ["word"]);
+    assert.deepEqual(tagsOf("Nota"), ["evernote", "estudo"]);
+    assert.deepEqual(tagsOf("Html"), ["solta"]);
+
+    const off = fakeAdapter();
+    await runTreeImport({
+      adapter: off.adapter,
+      roots: evernoteTree,
+      selectedIds: new Set(["note_calculo"]),
+      targetNotebookId: null,
+      preserveStructure: true,
+      uploadMedia: false,
+      keepTags: false,
+      fallbackTitle: "Evernote",
+      provider: "evernote",
+      fetchNote: async (node) => ({
+        note: { ...noteFor(node), source: "evernote", tags: ["estudo"] },
+      }),
+    });
+    assert.deepEqual(off.pages[0]?.tags, ["evernote"]);
   });
 
   await run("every language ships the integration strings", () => {

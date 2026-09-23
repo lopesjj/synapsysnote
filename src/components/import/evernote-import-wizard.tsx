@@ -87,6 +87,7 @@ export function EvernoteImportWizard({
       }
       toast.success(t("connected_to", { name: "Evernote" }));
       setStepOverride("select");
+      void load(search);
     } catch (err) {
       toast.error(
         err instanceof Error ? localizeErrorMessage(err.message, t) : t("connection_failed")

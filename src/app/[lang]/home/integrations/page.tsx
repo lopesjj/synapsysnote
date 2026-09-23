@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Cloud, FileText, Layers, NotebookPen, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -32,6 +32,22 @@ function IntegrationsBody() {
   } = useWorkspace();
 
   const [busyService, setBusyService] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const googleTokenExpiresAt =
+    googleDocsIntegration?.tokenExpiresAt ??
+    (googleDocsIntegration?.connectedAt ? googleDocsIntegration.connectedAt + 55 * 60_000 : null);
+  const googleSessionExpired = Boolean(
+    googleDocsIntegration?.connected &&
+      googleDocsIntegration.refreshable !== true &&
+      googleTokenExpiresAt !== null &&
+      googleTokenExpiresAt <= now
+  );
 
   const oauthError = params.get("error");
   const justConnected = params.get("connected");
@@ -214,7 +230,9 @@ function IntegrationsBody() {
                   </div>
                   <h3 className="text-[14px] font-semibold text-ink">Google Docs</h3>
                 </div>
-                {googleDocsIntegration?.connected ? (
+                {googleSessionExpired ? (
+                  <Badge tone="warning">{t("google_session_expired_title")}</Badge>
+                ) : googleDocsIntegration?.connected ? (
                   <Badge tone="success">{t("google_connected")}</Badge>
                 ) : (
                   <Badge>{t("google_disconnected")}</Badge>
@@ -234,7 +252,12 @@ function IntegrationsBody() {
                   <Button
                     variant="primary"
                     className="w-full"
-                    onClick={() => useUiStore.getState().setGoogleDocsImportOpen(true)}
+                    disabled={busyService === "google"}
+                    onClick={() =>
+                      googleSessionExpired
+                        ? void connectGoogle()
+                        : useUiStore.getState().setGoogleDocsImportOpen(true)
+                    }
                   >
                     {t("import_google_docs")}
                   </Button>

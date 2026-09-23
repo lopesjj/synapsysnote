@@ -115,6 +115,8 @@ export async function GET(request: Request) {
         scopes: ["drive.readonly", "documents.readonly"],
         connectedBy: parsedState.uid,
         connectedAt: FieldValue.serverTimestamp(),
+        tokenExpiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000,
+        refreshable: Boolean(refreshToken),
         lastSyncAt: null,
         revokedAt: null,
       },

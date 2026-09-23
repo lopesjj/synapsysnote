@@ -14,6 +14,7 @@ import type { GoogleDocsIntegration } from "@/types/models";
 export const runtime = "nodejs";
 
 const SCOPES = ["drive.readonly", "documents.readonly"];
+const POPUP_TOKEN_TTL_MS = 55 * 60 * 1000;
 
 export async function POST(request: Request) {
   try {
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
       const accountEmail = body.accountEmail?.trim() || user.email || "";
       const accountName = body.accountName?.trim() || user.name || "Conta Google";
       const avatarUrl = body.avatarUrl || null;
+      const tokenExpiresAt = Date.now() + POPUP_TOKEN_TTL_MS;
 
       const db = adminDb();
       const integrationRef = db
@@ -65,6 +67,8 @@ export async function POST(request: Request) {
             scopes: SCOPES,
             connectedBy: user.uid,
             connectedAt: FieldValue.serverTimestamp(),
+            tokenExpiresAt,
+            refreshable: false,
             lastSyncAt: null,
             revokedAt: null,
           },
@@ -88,6 +92,8 @@ export async function POST(request: Request) {
         scopes: SCOPES,
         connectedBy: user.uid,
         connectedAt: Date.now(),
+        tokenExpiresAt,
+        refreshable: false,
         lastSyncAt: null,
         revokedAt: null,
       };

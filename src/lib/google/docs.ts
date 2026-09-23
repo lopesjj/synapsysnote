@@ -81,7 +81,10 @@ async function refreshGoogleAccessToken(workspaceId: string): Promise<string | n
     }),
   });
 
-  const payload = (await response.json().catch(() => ({}))) as { access_token?: string };
+  const payload = (await response.json().catch(() => ({}))) as {
+    access_token?: string;
+    expires_in?: number;
+  };
   if (!response.ok || !payload.access_token) return null;
 
   await secureRef(workspaceId).set(
@@ -89,7 +92,10 @@ async function refreshGoogleAccessToken(workspaceId: string): Promise<string | n
     { merge: true }
   );
   await integrationRef(workspaceId).set(
-    { tokenPreview: tokenPreview(payload.access_token) },
+    {
+      tokenPreview: tokenPreview(payload.access_token),
+      tokenExpiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000,
+    },
     { merge: true }
   );
   return payload.access_token;
