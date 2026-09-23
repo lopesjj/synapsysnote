@@ -7,7 +7,7 @@ import { bucket, pagesRef } from "../lib/firebase";
 import type { AppBlock } from "../types";
 
 
-const REGION = process.env.FUNCTIONS_REGION || "us-central1";
+const REGION = process.env.FUNCTIONS_REGION || "us-east1";
 // Áudio tem disponibilidade própria: a mesma chave que aceita texto no flash
 // mais novo devolve 429 de cota (ou 503) quando o pedido leva áudio. O padrão
 // aqui é o modelo medido como disponível para transcrever, e `GEMINI_MODEL`

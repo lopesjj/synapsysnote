@@ -2,7 +2,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 
 
 setGlobalOptions({
-  region: process.env.FUNCTIONS_REGION || "us-central1",
+  region: process.env.FUNCTIONS_REGION || "us-east1",
   maxInstances: 20,
 });
 

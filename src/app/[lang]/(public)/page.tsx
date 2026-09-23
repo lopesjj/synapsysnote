@@ -11,8 +11,15 @@ import { AuthField } from "@/components/auth/auth-field";
 import { CompleteRegistrationForm } from "@/components/auth/complete-registration-form";
 import { PhoneField } from "@/components/auth/phone-field";
 import { SiteLanguageSwitcher } from "@/components/i18n/site-language-switcher";
+import { LegalConsentNotice, LegalFooter, LegalTrigger } from "@/components/legal/legal-links";
+import { interpolateNodes } from "@/components/legal/legal-text";
 import { formatTabTitle } from "@/lib/document-title";
-import { loadUserProfile, profileNeedsCompletion } from "@/lib/data/user-profile";
+import {
+  loadUserProfile,
+  profileNeedsCompletion,
+  recordLegalAcceptance,
+} from "@/lib/data/user-profile";
+import { LEGAL_FACTS, LEGAL_VERSION } from "@/lib/legal/entity";
 import { isValidPhoneBR } from "@/lib/phone";
 import { Button } from "@/components/ui/button";
 import { RecaptchaField } from "@/components/auth/recaptcha-field";
@@ -33,10 +40,18 @@ import type { SupportedLanguage, UserProfile } from "@/types/models";
 
 const SIGNUP_ENABLED = false;
 
+const LEGAL_LINK_CLASS =
+  "font-medium text-ink underline decoration-[var(--border-strong)] underline-offset-[3px] transition hover:decoration-current";
+
 type Router = ReturnType<typeof useRouter>;
 
 function workspaceLanguage(profile: UserProfile | null | undefined, fallback: SupportedLanguage) {
   return profile?.preferences?.language ?? fallback;
+}
+
+function acknowledgeLegalNotice(uid: string, profile: UserProfile | null) {
+  if (!profile || profile.legalAcceptedVersion === LEGAL_VERSION) return;
+  void recordLegalAcceptance(uid);
 }
 
 function enterWorkspace(language: SupportedLanguage, router: Router, mode: "push" | "replace" = "push") {
@@ -45,7 +60,7 @@ function enterWorkspace(language: SupportedLanguage, router: Router, mode: "push
 }
 
 export default function LandingPage() {
-  const { t } = useTranslation();
+  const { t, textDir } = useTranslation();
   const locale = useLocale();
   const router = useRouter();
   const {
@@ -64,6 +79,7 @@ export default function LandingPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
+  const [signupAccepted, setSignupAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [oauthBusy, setOauthBusy] = useState<OAuthProviderId | null>(null);
   const [captcha, setCaptcha] = useState<string | null>(null);
@@ -134,11 +150,21 @@ export default function LandingPage() {
         await verifyRecaptchaToken(captcha);
       }
       if (tab === "signup") {
+        if (!signupAccepted) {
+          return;
+        }
         if (!isValidPhoneBR(phone)) {
           toast.error(t("phone_invalid"));
           return;
         }
-        await signUpWithEmail((name.trim() || email.split("@")[0]).slice(0, 60), email, password, phone, locale);
+        await signUpWithEmail(
+          (name.trim() || email.split("@")[0]).slice(0, 60),
+          email,
+          password,
+          phone,
+          locale,
+          LEGAL_VERSION
+        );
         enterWorkspace(locale, router);
         return;
       }
@@ -148,6 +174,7 @@ export default function LandingPage() {
       const existing = await loadUserProfile(signedIn.uid);
       hydrateFromProfile(existing);
       if (!profileNeedsCompletion(signedIn, existing)) {
+        acknowledgeLegalNotice(signedIn.uid, existing);
         enterWorkspace(workspaceLanguage(existing, locale), router);
       }
     } catch (error) {
@@ -172,6 +199,7 @@ export default function LandingPage() {
       const existing = await loadUserProfile(signedIn.uid);
       hydrateFromProfile(existing);
       if (!profileNeedsCompletion(signedIn, existing)) {
+        acknowledgeLegalNotice(signedIn.uid, existing);
         enterWorkspace(workspaceLanguage(existing, locale), router);
       }
     } catch (error) {
@@ -201,7 +229,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="relative min-h-dvh overflow-hidden bg-[var(--canvas)]">
+    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[var(--canvas)]">
       <div
         className="pointer-events-none absolute inset-x-0 -top-40 h-[420px]"
         style={{
@@ -214,15 +242,15 @@ export default function LandingPage() {
         <SiteLanguageSwitcher />
       </div>
 
-      <div className="relative mx-auto grid min-h-dvh max-w-6xl grid-cols-1 gap-12 px-6 pb-12 pt-20 sm:py-12 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:gap-16">
+      <div className="relative mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 gap-12 px-6 pb-12 pt-20 sm:py-12 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:gap-16">
         <div className="max-w-xl">
           <div className="flex select-none justify-center sm:-translate-x-5 sm:-translate-y-7">
             <SynapsysLockup size={92} />
           </div>
 
-          <p dir="auto" className="text-left mt-10 text-[13px] text-muted">{t("landing_audience")}</p>
+          <p dir={textDir} className="mt-10 text-[13px] text-muted">{t("landing_audience")}</p>
 
-          <h1 dir="auto" className="text-left mt-4 max-w-xl text-[40px] font-semibold leading-[1.08] tracking-[-0.03em] text-ink sm:text-[52px]">
+          <h1 dir={textDir} className="mt-4 max-w-xl text-[40px] font-semibold leading-[1.08] tracking-[-0.03em] text-ink sm:text-[52px]">
             {t("landing_headline_lead")}
             <span className="bg-gradient-to-r from-[var(--accent)] to-[#0ea5e9] bg-clip-text text-transparent">
               {t("landing_headline_accent")}
@@ -230,7 +258,7 @@ export default function LandingPage() {
             {t("landing_headline_tail")}
           </h1>
 
-          <p dir="auto" className="text-left mt-5 max-w-lg text-[15px] leading-relaxed text-muted">{t("landing_description")}</p>
+          <p dir={textDir} className="mt-5 me-auto max-w-lg text-[15px] leading-relaxed text-muted">{t("landing_description")}</p>
         </div>
 
         <div className="mx-auto w-full max-w-sm sm:max-w-none lux-gradient rounded-[var(--radius-xl)] border border-[var(--border)] p-6 shadow-[var(--shadow-float)]">
@@ -239,13 +267,13 @@ export default function LandingPage() {
           ) : user && !sessionSyncFailed && !needsCompletion ? (
             <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
               <Loader2 className="size-6 animate-spin text-[var(--accent)]" />
-              <p dir="auto" className="text-[13px] font-medium text-ink">{t("accessing_workspace")}</p>
-              <p dir="auto" className="text-[11.5px] text-muted">{t("redirecting_home")}</p>
+              <p dir={textDir} className="text-[13px] font-medium text-ink">{t("accessing_workspace")}</p>
+              <p dir={textDir} className="text-[11.5px] text-muted">{t("redirecting_home")}</p>
             </div>
           ) : tab === "reset" ? (
             <>
-              <p dir="auto" className="text-left text-[15px] font-medium tracking-[-0.015em] text-ink">{t("reset_heading")}</p>
-              <p dir="auto" className="text-left mt-1 text-[13px] leading-relaxed text-muted">{t("reset_description")}</p>
+              <p dir={textDir} className="text-start text-[15px] font-medium tracking-[-0.015em] text-ink">{t("reset_heading")}</p>
+              <p dir={textDir} className="text-start mt-1 text-[13px] leading-relaxed text-muted">{t("reset_description")}</p>
               <form onSubmit={sendReset} className="mt-5 space-y-3.5">
                 <AuthField label={t("field_email")}>
                   <Input
@@ -269,6 +297,7 @@ export default function LandingPage() {
                     setTab("signin");
                     refreshCaptcha();
                   }}
+                  dir={textDir}
                   className="w-full text-center text-[12.5px] text-muted transition hover:text-ink"
                 >
                   {t("back_to_login")}
@@ -277,7 +306,7 @@ export default function LandingPage() {
             </>
           ) : (
             <>
-          <p dir="auto" className="text-left text-[15px] font-medium tracking-[-0.015em] text-ink">
+          <p dir={textDir} className="text-start text-[15px] font-medium tracking-[-0.015em] text-ink">
             {tab === "signin" ? t("signin_heading") : t("signup_heading")}
           </p>
 
@@ -308,6 +337,7 @@ export default function LandingPage() {
             {tab === "signup" ? (
               <AuthField label={t("field_name")}>
                 <Input
+                  dir={textDir}
                   required
                   maxLength={60}
                   value={name}
@@ -332,6 +362,7 @@ export default function LandingPage() {
             <AuthField label={t("field_password")}>
               <Input
                 type="password"
+                dir="ltr"
                 required
                 minLength={6}
                 value={password}
@@ -348,7 +379,7 @@ export default function LandingPage() {
                     checked={remember}
                     onCheckedChange={(value) => setRemember(value === true)}
                   />
-                  <span dir="auto" className="text-left">{t("stay_logged_in")}</span>
+                  <span dir={textDir} className="text-start">{t("stay_logged_in")}</span>
                 </label>
                 <button
                   type="button"
@@ -356,6 +387,7 @@ export default function LandingPage() {
                     setTab("reset");
                     refreshCaptcha();
                   }}
+                  dir={textDir}
                   className="text-[12.5px] text-[var(--accent)] transition hover:underline"
                 >
                   {t("forgot_password")}
@@ -367,7 +399,38 @@ export default function LandingPage() {
               <RecaptchaField key={`${tab}-${captchaKey}`} onChange={setCaptcha} />
             ) : null}
 
-            <Button type="submit" variant="primary" size="lg" className="w-full" disabled={busy}>
+            {tab === "signup" ? (
+              <label className="flex cursor-pointer items-start gap-2 text-[12.5px] leading-relaxed text-muted">
+                <Checkbox
+                  checked={signupAccepted}
+                  onCheckedChange={(value) => setSignupAccepted(value === true)}
+                  aria-required
+                  className="mt-[3px]"
+                />
+                <span dir={textDir} className="text-start">
+                  {interpolateNodes(t("legal_accept_registration", { age: LEGAL_FACTS.minimumAge }), {
+                    terms: (
+                      <LegalTrigger doc="terms" className={LEGAL_LINK_CLASS}>
+                        {t("legal_consent_terms")}
+                      </LegalTrigger>
+                    ),
+                    privacy: (
+                      <LegalTrigger doc="privacy" className={LEGAL_LINK_CLASS}>
+                        {t("legal_consent_privacy")}
+                      </LegalTrigger>
+                    ),
+                  })}
+                </span>
+              </label>
+            ) : null}
+
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              className="w-full"
+              disabled={busy || (tab === "signup" && !signupAccepted)}
+            >
               {busy ? <Loader2 className="animate-spin" /> : null}
               {tab === "signin" ? t("signin_tab") : t("signup_tab")}
             </Button>
@@ -375,7 +438,7 @@ export default function LandingPage() {
 
           <div className="my-5 flex items-center gap-3">
             <span className="h-px flex-1 bg-[var(--border)]" />
-            <span className="text-[11px] text-faint">{t("or_sign_in_with")}</span>
+            <span dir={textDir} className="text-[11px] text-faint">{t("or_sign_in_with")}</span>
             <span className="h-px flex-1 bg-[var(--border)]" />
           </div>
 
@@ -390,13 +453,17 @@ export default function LandingPage() {
             Google
           </Button>
 
+          <LegalConsentNotice className="mt-4" />
+
           {mode === "demo" ? (
-            <p dir="auto" className="text-left mt-3 text-[11px] leading-relaxed text-faint">{t("demo_mode_notice")}</p>
+            <p dir={textDir} className="text-start mt-3 text-[11px] leading-relaxed text-faint">{t("demo_mode_notice")}</p>
           ) : null}
             </>
           )}
         </div>
       </div>
+
+      <LegalFooter />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PublicLocaleProvider } from "@/components/i18n/public-locale-provider";
+import { LegalLayer } from "@/components/legal/legal-layer";
 import { LOCALES, isSupportedLanguage } from "@/lib/i18n/locale";
 import { LOGIN_ORIGIN } from "@/lib/domains";
 
@@ -26,5 +27,10 @@ export default async function PublicLayout({
 }: LayoutParams & { children: React.ReactNode }) {
   const { lang } = await params;
   if (!isSupportedLanguage(lang)) notFound();
-  return <PublicLocaleProvider language={lang}>{children}</PublicLocaleProvider>;
+  return (
+    <PublicLocaleProvider language={lang}>
+      {children}
+      <LegalLayer />
+    </PublicLocaleProvider>
+  );
 }

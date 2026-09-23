@@ -91,6 +91,7 @@ export interface DataAdapter {
   restorePage(id: string): Promise<void>;
   purgePage(id: string): Promise<void>;
   emptyTrash(): Promise<void>;
+  purgeExpiredTrash?(): Promise<void>;
 
   listVersions(pageId: string): Promise<PageVersion[]>;
   snapshotVersion(pageId: string, label?: string): Promise<void>;

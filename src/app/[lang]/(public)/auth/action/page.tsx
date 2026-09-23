@@ -29,7 +29,7 @@ export default function AuthActionPage() {
 }
 
 function AuthActionForm() {
-  const { t } = useTranslation();
+  const { t, textDir } = useTranslation();
   const router = useRouter();
   const params = useSearchParams();
   const { confirmPasswordReset, verifyResetCode } = useAuth();
@@ -117,8 +117,8 @@ function AuthActionForm() {
             </div>
           ) : invalid ? (
             <>
-              <p dir="auto" className="text-left text-[15px] font-medium tracking-[-0.015em] text-ink">{t("reset_link_invalid_title")}</p>
-              <p dir="auto" className="text-left mt-2 text-[13px] leading-relaxed text-muted">
+              <p dir={textDir} className="text-start text-[15px] font-medium tracking-[-0.015em] text-ink">{t("reset_link_invalid_title")}</p>
+              <p dir={textDir} className="text-start mt-2 text-[13px] leading-relaxed text-muted">
                 {t("reset_link_invalid_desc")}
               </p>
               <Button asChild variant="primary" size="lg" className="mt-5 w-full">
@@ -127,14 +127,15 @@ function AuthActionForm() {
             </>
           ) : (
             <>
-              <p dir="auto" className="text-left text-[15px] font-medium tracking-[-0.015em] text-ink">{t("reset_new_password_title")}</p>
-              <p dir="auto" className="text-left mt-1 text-[13px] leading-relaxed text-muted">
-                {email ? t("resetting_for_email", { email }) : t("choose_new_password")}
+              <p dir={textDir} className="text-start text-[15px] font-medium tracking-[-0.015em] text-ink">{t("reset_new_password_title")}</p>
+              <p dir={textDir} className="text-start mt-1 text-[13px] leading-relaxed text-muted">
+                {email ? t("resetting_for_email", { email: `\u2068${email}\u2069` }) : t("choose_new_password")}
               </p>
               <form onSubmit={submit} className="mt-5 space-y-3.5">
                 <AuthField label={t("new_password_label")}>
                   <Input
                     type="password"
+                    dir="ltr"
                     required
                     minLength={6}
                     value={password}
@@ -146,6 +147,7 @@ function AuthActionForm() {
                 <AuthField label={t("confirm_password_label")}>
                   <Input
                     type="password"
+                    dir="ltr"
                     required
                     minLength={6}
                     value={confirm}

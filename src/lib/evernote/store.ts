@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb, isAdminConfigured } from "@/lib/firebase/admin";
 import { decryptToken, encryptToken, tokenPreview } from "@/lib/crypto/token-cipher";
 import { ApiError } from "@/lib/api/errors";
+import { disconnectedIntegrationPatch, settleWithin } from "@/lib/import/integration-disconnect";
 import { EvernoteMcpClient } from "./mcp";
 import {
   discoverAuthorizationServer,
@@ -83,20 +84,18 @@ export async function clearEvernoteConnection(workspaceId: string): Promise<void
     const clientId = snapshot.get("clientId") as string | undefined;
     const cipher = snapshot.get("refreshTokenCipher") ?? snapshot.get("accessTokenCipher");
     if (clientId && typeof cipher === "string") {
-      try {
-        const metadata = await discoverAuthorizationServer();
-        await revokeToken(metadata, clientId, decryptToken(cipher));
-      } catch {}
+      await settleWithin(
+        (async () => {
+          const metadata = await discoverAuthorizationServer();
+          await revokeToken(metadata, clientId, decryptToken(cipher));
+        })()
+      );
     }
   }
 
   const db = adminDb();
   await db.runTransaction(async (tx) => {
-    tx.set(
-      integrationRef(workspaceId),
-      { connected: false, revokedAt: FieldValue.serverTimestamp() },
-      { merge: true }
-    );
+    tx.set(integrationRef(workspaceId), disconnectedIntegrationPatch("evernote"), { merge: true });
     tx.delete(secureRef(workspaceId));
   });
 }

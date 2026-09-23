@@ -6,7 +6,7 @@ import { assertWorkspaceEditor, bucket, db, pagesRef } from "../lib/firebase";
 import type { AppBlock } from "../types";
 
 
-const REGION = process.env.FUNCTIONS_REGION || "us-central1";
+const REGION = process.env.FUNCTIONS_REGION || "us-east1";
 const RETENTION_DAYS = Number(process.env.TRASH_RETENTION_DAYS ?? 30);
 
 function extractStoragePathFromUrl(url: unknown): string | null {
@@ -57,7 +57,7 @@ export const purgeExpiredTrash = onSchedule(
 );
 
 export const purgeExpiredQuarantineMedia = onSchedule(
-  { schedule: "every 7 days", timeZone: "America/Sao_Paulo", region: REGION, memory: "512MiB" },
+  { schedule: "every sunday 04:00", timeZone: "America/Sao_Paulo", region: REGION, memory: "512MiB" },
   async () => {
     const workspaces = await db.collection("workspaces").get();
     let totalPurged = 0;

@@ -25,6 +25,14 @@ export const HTML_LANG: Record<SupportedLanguage, string> = {
   ar: "ar",
 };
 
+export const RTL_LANGUAGES: readonly SupportedLanguage[] = ["ar"];
+
+export type TextDirection = "ltr" | "rtl";
+
+export function textDirection(language: string): TextDirection {
+  return (RTL_LANGUAGES as readonly string[]).includes(language) ? "rtl" : "ltr";
+}
+
 export function isSupportedLanguage(value: unknown): value is SupportedLanguage {
   return typeof value === "string" && (LOCALES as readonly string[]).includes(value);
 }

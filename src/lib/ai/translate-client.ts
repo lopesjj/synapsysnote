@@ -31,29 +31,5 @@ export async function translateTextToTarget(text: string, targetLang: string): P
     }
   } catch {}
 
-  const clients = ["gtx", "dict-chrome-ex"];
-  for (const client of clients) {
-    try {
-      const url = `https://translate.googleapis.com/translate_a/single?client=${client}&sl=auto&tl=${encodeURIComponent(
-        normalizedLang
-      )}&dt=t&q=${encodeURIComponent(clean)}`;
-
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && Array.isArray(data[0])) {
-          const translated = data[0].map((part: unknown[]) => part?.[0] ?? "").join("");
-          if (translated && translated.trim()) {
-            if (clientTranslationCache.size > 2000) {
-              clientTranslationCache.clear();
-            }
-            clientTranslationCache.set(cacheKey, translated);
-            return translated;
-          }
-        }
-      }
-    } catch {}
-  }
-
   return clean;
 }

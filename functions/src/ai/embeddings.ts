@@ -6,7 +6,7 @@ import * as logger from "firebase-functions/logger";
 import { pagesRef } from "../lib/firebase";
 
 
-const REGION = process.env.FUNCTIONS_REGION || "us-central1";
+const REGION = process.env.FUNCTIONS_REGION || "us-east1";
 const SECRETS = ["GEMINI_API_KEY"];
 const MODEL = process.env.EMBEDDING_MODEL || "gemini-embedding-001";
 const DIMENSION = 768;

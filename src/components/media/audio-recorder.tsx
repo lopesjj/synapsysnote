@@ -6,6 +6,7 @@ import { AudioLines, Mic, Square } from "lucide-react";
 import { toast } from "sonner";
 import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/primitives";
 import { formatDuration } from "@/lib/utils";
 import { localizeErrorMessage, useTranslation } from "@/lib/i18n/translations";
 import { prepareAudioAttachment } from "@/lib/media/compress-attachment";
@@ -34,6 +35,7 @@ export function AudioRecorder({
 }) {
   const { t, language } = useTranslation();
   const [recording, setRecording] = useState(false);
+  const [liveTranscription, setLiveTranscription] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [levels, setLevels] = useState<number[]>(Array.from({ length: 40 }, () => 0.08));
   const [saving, setSaving] = useState(false);
@@ -141,7 +143,7 @@ export function AudioRecorder({
               .webkitSpeechRecognition
           : null;
 
-      if (SpeechRec) {
+      if (liveTranscription && SpeechRec) {
         try {
           const rec = new SpeechRec();
           rec.continuous = true;
@@ -263,6 +265,16 @@ export function AudioRecorder({
         </p>
 
         {error ? <p className="max-w-xs text-center text-[12px] text-[var(--danger)]">{error}</p> : null}
+
+        {!recording ? (
+          <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-muted">
+            <Checkbox
+              checked={liveTranscription}
+              onCheckedChange={(val) => setLiveTranscription(val === true)}
+            />
+            <span>{t("voice_note_live_transcribe")}</span>
+          </label>
+        ) : null}
 
         {!recording ? (
           <Button type="button" variant="primary" size="lg" onClick={startRecording} disabled={saving}>

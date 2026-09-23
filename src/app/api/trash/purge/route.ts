@@ -109,12 +109,14 @@ async function deletePageStorageAndDoc(
     await Promise.allSettled([
       bucket.deleteFiles({ prefix: `workspaces/${workspaceId}/uploads/${pageId}/` }),
       bucket.deleteFiles({ prefix: `workspaces/${workspaceId}/audio/${pageId}/` }),
-      ...Array.from(storagePaths).map((p) =>
-        bucket
-          .file(p)
-          .delete()
-          .catch(() => {})
-      ),
+      ...Array.from(storagePaths)
+        .filter((p) => p.startsWith(`workspaces/${workspaceId}/`))
+        .map((p) =>
+          bucket
+            .file(p)
+            .delete()
+            .catch(() => {})
+        ),
     ]);
   }
 
@@ -147,9 +149,10 @@ export async function POST(request: Request) {
       workspaceId?: string;
       pageId?: string;
       emptyAll?: boolean;
+      purgeExpired?: boolean;
     };
 
-    const { workspaceId, pageId, emptyAll } = body;
+    const { workspaceId, pageId, emptyAll, purgeExpired } = body;
     if (!workspaceId) {
       return Response.json({ error: "workspaceId é obrigatório" }, { status: 400 });
     }
@@ -159,6 +162,85 @@ export async function POST(request: Request) {
     const wsRef = db.collection("workspaces").doc(workspaceId);
     const pagesCol = wsRef.collection("pages");
     const databasesCol = wsRef.collection("databases");
+
+    if (purgeExpired) {
+      const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+      const expiredThreshold = Date.now() - THIRTY_DAYS_MS;
+
+      const trashedPages = await pagesCol
+        .where("deletedAt", "!=", null)
+        .where("deletedAt", "<=", expiredThreshold)
+        .get();
+      const pageDocs = trashedPages.docs;
+      for (let i = 0; i < pageDocs.length; i += 5) {
+        const chunk = pageDocs.slice(i, i + 5);
+        await Promise.all(chunk.map((pDoc) => deletePageStorageAndDoc(workspaceId, pDoc)));
+      }
+
+      const trashedDatabases = await databasesCol
+        .where("deletedAt", "!=", null)
+        .where("deletedAt", "<=", expiredThreshold)
+        .get();
+      for (const dDoc of trashedDatabases.docs) {
+        const rowsSnap = await dDoc.ref.collection("rows").get();
+        if (isAdminConfigured()) {
+          const bucket = adminBucket();
+          for (const rowDoc of rowsSnap.docs) {
+            const values = rowDoc.data()?.values ?? {};
+            for (const val of Object.values(values)) {
+              if (Array.isArray(val)) {
+                for (const item of val) {
+                  const storagePath =
+                    item?.storagePath ||
+                    (item?.url ? extractStoragePathFromUrl(item.url) : null);
+                  if (
+                    storagePath &&
+                    typeof storagePath === "string" &&
+                    storagePath.startsWith(`workspaces/${workspaceId}/`)
+                  ) {
+                    await bucket.file(storagePath).delete().catch(() => {});
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        const refsToDelete = [...rowsSnap.docs.map((r) => r.ref), dDoc.ref];
+        for (let i = 0; i < refsToDelete.length; i += 400) {
+          const batch = db.batch();
+          for (const ref of refsToDelete.slice(i, i + 400)) {
+            batch.delete(ref);
+          }
+          await batch.commit();
+        }
+      }
+
+      const trashedMediaCol = wsRef.collection("trashed_media");
+      const expiredSnap = await trashedMediaCol.where("expiresAt", "<=", Date.now()).get();
+      if (!expiredSnap.empty) {
+        if (isAdminConfigured()) {
+          const bucket = adminBucket();
+          const expiredPaths: string[] = [];
+          for (const doc of expiredSnap.docs) {
+            const p = doc.data().storagePath;
+            if (p && typeof p === "string" && p.startsWith(`workspaces/${workspaceId}/`)) {
+              expiredPaths.push(p);
+            }
+          }
+          await Promise.allSettled(expiredPaths.map((p) => bucket.file(p).delete().catch(() => {})));
+        }
+        const batch = db.batch();
+        for (const doc of expiredSnap.docs) batch.delete(doc.ref);
+        await batch.commit();
+      }
+
+      return Response.json({
+        ok: true,
+        purgedExpiredPages: trashedPages.size,
+        purgedExpiredDatabases: trashedDatabases.size,
+      });
+    }
 
     if (emptyAll) {
       const trashedPages = await pagesCol.where("deletedAt", "!=", null).get();

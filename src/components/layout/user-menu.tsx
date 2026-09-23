@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
+  Cookie,
   KeyRound,
   LogOut,
   Minimize2,
   Moon,
   Plug,
+  Scale,
   Settings,
   Sun,
 } from "lucide-react";
@@ -22,6 +24,8 @@ import { Menu, MenuContent, MenuItem, MenuSeparator, MenuShortcut, MenuTrigger }
 import { cn, isMac } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/translations";
 import { isCustomAvatar } from "@/lib/data/user-avatar";
+import { useLegalStore } from "@/lib/legal/store";
+import { COOKIE_PREFERENCES_SECTION } from "@/components/legal/legal-article";
 
 const AVATAR_CLASS =
   "flex size-9 shrink-0 items-center justify-center rounded-full bg-[#ea580c] text-[14px] font-semibold text-white";
@@ -167,6 +171,22 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
           <MenuItem onSelect={() => useUiStore.getState().toggleZenMode()}>
             <Minimize2 /> {t("focus_mode")}
             <MenuShortcut>{isMac() ? "⌘⇧F" : "Ctrl ⇧ F"}</MenuShortcut>
+          </MenuItem>
+          <MenuItem
+            onSelect={() => {
+              useUiStore.getState().setMobileSidebarOpen(false);
+              useLegalStore.getState().openDoc("terms");
+            }}
+          >
+            <Scale /> {t("legal_center")}
+          </MenuItem>
+          <MenuItem
+            onSelect={() => {
+              useUiStore.getState().setMobileSidebarOpen(false);
+              useLegalStore.getState().openDoc("cookies", COOKIE_PREFERENCES_SECTION);
+            }}
+          >
+            <Cookie /> {t("cookie_preferences")}
           </MenuItem>
         </div>
 

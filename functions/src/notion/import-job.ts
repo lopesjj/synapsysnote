@@ -104,7 +104,7 @@ async function deleteStorageFilesSafe(paths: string[]) {
   await Promise.allSettled(paths.map((p) => b.file(p).delete({ ignoreNotFound: true })));
 }
 
-const REGION = process.env.FUNCTIONS_REGION || "us-central1";
+const REGION = process.env.FUNCTIONS_REGION || "us-east1";
 const SECRETS = ["TOKEN_ENCRYPTION_KEY"];
 
 
@@ -205,7 +205,7 @@ export const processNotionImportJob = onDocumentCreated(
     document: "workspaces/{workspaceId}/import_jobs/{jobId}",
     region: REGION,
     secrets: SECRETS,
-    timeoutSeconds: 3600,
+    timeoutSeconds: 540,
     memory: "1GiB",
     retry: false,
   },

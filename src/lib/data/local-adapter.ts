@@ -457,6 +457,16 @@ export class LocalAdapter implements DataAdapter {
     this.emit();
   }
 
+  async purgeExpiredTrash() {
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const threshold = nowMs() - THIRTY_DAYS_MS;
+    const expiredPages = this.state.pages.filter((page) => page.deletedAt && page.deletedAt <= threshold);
+    if (expiredPages.length === 0) return;
+    for (const page of expiredPages) {
+      await this.purgePage(page.id);
+    }
+  }
+
 
   async listVersions(pageId: string): Promise<PageVersion[]> {
     return this.state.versions

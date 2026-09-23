@@ -14,6 +14,7 @@ import {
   localizePath,
   splitLocale,
 } from "@/lib/i18n/locale";
+import { CONSENT_COOKIE, allowsFunctionalCookies } from "@/lib/legal/consent";
 
 const LOGIN_HOST = (
   process.env.NEXT_PUBLIC_LOGIN_ORIGIN
@@ -109,7 +110,7 @@ interface SiteLanguage {
   lookedUpCountry: string | null;
 }
 
-async function detectSiteLanguage(request: NextRequest): Promise<SiteLanguage> {
+async function detectSiteLanguage(request: NextRequest, geoCookieAllowed: boolean): Promise<SiteLanguage> {
   const chosen = request.cookies.get(SITE_LANG_COOKIE)?.value;
   if (isSupportedLanguage(chosen)) return { language: chosen, lookedUpCountry: null };
 
@@ -118,12 +119,14 @@ async function detectSiteLanguage(request: NextRequest): Promise<SiteLanguage> {
     if (language) return { language, lookedUpCountry: null };
   }
 
-  const cached = languageForCountry(validCountry(request.cookies.get(GEO_COUNTRY_COOKIE)?.value));
-  if (cached) return { language: cached, lookedUpCountry: null };
+  if (geoCookieAllowed) {
+    const cached = languageForCountry(validCountry(request.cookies.get(GEO_COUNTRY_COOKIE)?.value));
+    if (cached) return { language: cached, lookedUpCountry: null };
 
-  const country = await lookupCountry(request);
-  const fromIp = languageForCountry(country);
-  if (fromIp) return { language: fromIp, lookedUpCountry: country };
+    const country = await lookupCountry(request);
+    const fromIp = languageForCountry(country);
+    if (fromIp) return { language: fromIp, lookedUpCountry: country };
+  }
 
   const acceptLanguage = request.headers.get("accept-language");
   const language =
@@ -155,7 +158,21 @@ function redirect(
   return response;
 }
 
+/**
+ * O país detectado pelo IP só fica guardado em cookie com consentimento para
+ * cookies funcionais. Sem ele (ou depois de uma recusa), o cookie antigo sai
+ * na primeira resposta.
+ */
 export async function proxy(request: NextRequest) {
+  const geoCookieAllowed = allowsFunctionalCookies(request.cookies.get(CONSENT_COOKIE)?.value);
+  const response = await route(request, geoCookieAllowed);
+  if (!geoCookieAllowed && request.cookies.has(GEO_COUNTRY_COOKIE)) {
+    response.cookies.set(GEO_COUNTRY_COOKIE, "", { path: "/", maxAge: 0 });
+  }
+  return response;
+}
+
+async function route(request: NextRequest, geoCookieAllowed: boolean) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith("/api/") || pathname.startsWith("/.well-known/")) return NextResponse.next();
@@ -179,8 +196,8 @@ export async function proxy(request: NextRequest) {
   const userLanguage = isSupportedLanguage(userCookie) ? userCookie : null;
 
   let detected: SiteLanguage | null = null;
-  const siteLanguage = async () => (detected ??= await detectSiteLanguage(request));
-  const geoCookie = () => detected?.lookedUpCountry ?? null;
+  const siteLanguage = async () => (detected ??= await detectSiteLanguage(request, geoCookieAllowed));
+  const geoCookie = () => (geoCookieAllowed ? detected?.lookedUpCountry ?? null : null);
 
   if (path === "/" && hasSession && !leaving) {
     const language = userLanguage ?? locale ?? (await siteLanguage()).language;

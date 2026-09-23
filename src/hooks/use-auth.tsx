@@ -40,6 +40,7 @@ import {
 import { isSplitHosts, loginHref, resolveUrl } from "@/lib/domains";
 import { isCustomAvatar } from "@/lib/data/user-avatar";
 import { forgetUserLanguage } from "@/lib/i18n/locale-cookies";
+import { forgetAccessSession, reportAccess } from "@/lib/auth/access-log-client";
 import type { SupportedLanguage } from "@/types/models";
 
 function toAppUser(fbUser: {
@@ -85,13 +86,15 @@ interface AuthContextValue {
     email: string,
     password: string,
     phone: string,
-    language: SupportedLanguage
+    language: SupportedLanguage,
+    legalAcceptedVersion?: string
   ) => Promise<AppUser>;
   completeRegistration: (input: {
     name: string;
     email: string;
     phone: string;
     language: SupportedLanguage;
+    legalAcceptedVersion?: string;
   }) => Promise<void>;
   resetPassword: (email: string, language?: SupportedLanguage) => Promise<void>;
   verifyResetCode: (oobCode: string) => Promise<string>;
@@ -166,6 +169,41 @@ function writeDemoUser(next: AppUser | null) {
 
 const CACHED_USER_KEY = "synapsys.auth_user";
 const AUTH_ACTIVE_KEY = "synapsys.auth_active";
+const OFFLINE_CACHE_PREFIX = "synapsys.cache.";
+const SIGNED_OUT_SESSION_KEYS = [
+  "synapsys.session.openNotebooks",
+  "synapsys.session.expandedPages",
+  "synapsys_open_notebooks",
+  "synapsys_expanded_pages",
+];
+
+function clearSignedOutStorage(): void {
+  if (typeof window === "undefined") return;
+  try {
+    for (const key of SIGNED_OUT_SESSION_KEYS) window.sessionStorage.removeItem(key);
+  } catch {}
+  try {
+    const storage = window.localStorage;
+    const cacheKeys: string[] = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(OFFLINE_CACHE_PREFIX)) cacheKeys.push(key);
+    }
+    for (const key of cacheKeys) storage.removeItem(key);
+  } catch {}
+  try {
+    if (window.indexedDB && typeof window.indexedDB.databases === "function") {
+      void window.indexedDB.databases().then((dbs) => {
+        for (const dbInfo of dbs) {
+          if (dbInfo.name && (dbInfo.name.includes("firestore") || dbInfo.name.startsWith("synapsys"))) {
+            window.indexedDB.deleteDatabase(dbInfo.name);
+          }
+        }
+      }).catch(() => {});
+    }
+  } catch {}
+  forgetAccessSession();
+}
 
 export function hasActiveSessionHint(): boolean {
   if (typeof window === "undefined") return false;
@@ -259,6 +297,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           writeCachedUser(nextUser);
           setFirebaseUser(nextUser);
           setFirebaseLoading(false);
+          void reportAccess("session");
           return;
         }
         if (hydrating) return;
@@ -339,6 +378,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await persistCrossHostSession(remember);
           writeCachedUser(next);
           setFirebaseUser(next);
+          void reportAccess("login");
           return next;
         } catch (error) {
           if (authenticated) {
@@ -376,6 +416,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await persistCrossHostSession(remember);
           writeCachedUser(next);
           setFirebaseUser(next);
+          void reportAccess("login");
           return next;
         } catch (error) {
           if (authenticated) {
@@ -391,7 +432,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
 
-      async signUpWithEmail(name, email, password, phone, language) {
+      async signUpWithEmail(name, email, password, phone, language, legalAcceptedVersion) {
         setLoggingOut(false);
         if (!configured) {
           const next = { ...DEMO_USER, email, displayName: name };
@@ -404,6 +445,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             phone,
             providers: next.providers,
             language,
+            legalAcceptedVersion,
           });
           useUiStore.getState().setLanguage(language);
           return next;
@@ -425,18 +467,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             photoURL: next.photoURL,
             providers: next.providers,
             language,
+            legalAcceptedVersion,
           });
           await persistCrossHostSession(true);
           writeCachedUser(next);
           setFirebaseUser(next);
           useUiStore.getState().setLanguage(language);
+          void reportAccess("login");
           return next;
         } catch (error) {
           throw toAuthError(error);
         }
       },
 
-      async completeRegistration({ name, email, phone, language }) {
+      async completeRegistration({ name, email, phone, language, legalAcceptedVersion }) {
         if (!configured) {
           const next = { ...(firebaseUser ?? DEMO_USER), email, displayName: name };
           writeDemoUser(next);
@@ -447,6 +491,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             phone,
             providers: next.providers,
             language,
+            legalAcceptedVersion,
           });
           useUiStore.getState().setLanguage(profile.preferences?.language ?? language);
           return;
@@ -475,10 +520,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           photoURL: next.photoURL,
           providers: next.providers,
           language,
+          legalAcceptedVersion,
         });
         await persistCrossHostSession(true);
         setFirebaseUser(next);
         useUiStore.getState().setLanguage(profile.preferences?.language ?? language);
+        void reportAccess("login");
       },
 
       async resetPassword(email, language = "pt") {
@@ -584,13 +631,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           clearRemembered();
           queryClient.clear();
           forgetUserLanguage();
-          if (typeof window !== "undefined") {
-            try {
-              sessionStorage.removeItem("synapsys.session.openNotebooks");
-              sessionStorage.removeItem("synapsys.session.expandedPages");
-            } catch {
-            }
-          }
+          clearSignedOutStorage();
         } finally {
           setLoggingOut(false);
         }

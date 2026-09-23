@@ -170,6 +170,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const init = async () => {
       try {
         await adapter.ensureWorkspace();
+        void adapter.purgeExpiredTrash?.();
       } catch {}
       if (cancelled) return;
 

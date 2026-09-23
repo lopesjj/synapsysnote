@@ -32,7 +32,7 @@ export function getFirebaseWebConfig() {
 }
 
 export function getFirebaseRegion() {
-  return process.env.NEXT_PUBLIC_FIREBASE_REGION || "us-central1";
+  return process.env.NEXT_PUBLIC_FIREBASE_REGION || "us-east1";
 }
 
 export function firebaseEmulatorsEnabled() {

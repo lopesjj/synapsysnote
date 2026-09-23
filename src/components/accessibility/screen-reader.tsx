@@ -43,14 +43,22 @@ export function findBestVoiceForLanguage(langCode: string): SpeechSynthesisVoice
   const target = resolveVoiceLanguage(langCode).toLowerCase().replace("_", "-");
   const targetPrefix = target.split("-")[0];
 
-  const exactMatch = voices.find((v) => v.lang.toLowerCase().replace("_", "-") === target);
-  if (exactMatch) return exactMatch;
+  const matchExact = (v: SpeechSynthesisVoice) =>
+    v.lang.toLowerCase().replace("_", "-") === target;
+  const matchPrefix = (v: SpeechSynthesisVoice) =>
+    v.lang.toLowerCase().replace("_", "-").startsWith(targetPrefix);
 
-  const prefixMatch = voices.find((v) => {
-    const vLang = v.lang.toLowerCase().replace("_", "-");
-    return vLang.startsWith(targetPrefix);
-  });
-  if (prefixMatch) return prefixMatch;
+  const localExact = voices.find((v) => v.localService && matchExact(v));
+  if (localExact) return localExact;
+
+  const localPrefix = voices.find((v) => v.localService && matchPrefix(v));
+  if (localPrefix) return localPrefix;
+
+  const anyExact = voices.find(matchExact);
+  if (anyExact) return anyExact;
+
+  const anyPrefix = voices.find(matchPrefix);
+  if (anyPrefix) return anyPrefix;
 
   return null;
 }

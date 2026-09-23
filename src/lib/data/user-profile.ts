@@ -1,6 +1,7 @@
 import type { SupportedLanguage, UserPreferences, UserProfile } from "@/types/models";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
 import { isValidPhoneBR } from "@/lib/phone";
+import { LEGAL_VERSION } from "@/lib/legal/entity";
 import { isCustomAvatar } from "./user-avatar";
 
 
@@ -14,6 +15,7 @@ export interface ProfileIdentity {
   photoURL?: string | null;
   providers?: string[];
   language?: SupportedLanguage;
+  legalAcceptedVersion?: string;
 }
 
 export function profileNeedsCompletion(
@@ -71,6 +73,8 @@ function buildProfile(
     photoURL: customPhoto,
     providers: identity.providers ?? previous?.providers ?? [],
     registrationCompleted: completed,
+    legalAcceptedVersion: identity.legalAcceptedVersion ?? previous?.legalAcceptedVersion,
+    legalAcceptedAt: identity.legalAcceptedVersion ? now : previous?.legalAcceptedAt,
     preferences: {
       language: identity.language ?? "pt",
       ...(previous?.preferences ?? {}),
@@ -172,6 +176,22 @@ export async function updateUserProfile(
 
   const [{ setDoc }, ref] = await Promise.all([import("firebase/firestore"), profileRef(uid)]);
   await setDoc(ref, { uid, ...cleanPatch, updatedAt: Date.now() }, { merge: true });
+}
+
+export async function recordLegalAcceptance(uid: string): Promise<void> {
+  try {
+    const now = Date.now();
+    const acceptance = { legalAcceptedVersion: LEGAL_VERSION, legalAcceptedAt: now };
+
+    if (isLocalProfile(uid)) {
+      const existing = readLocal(uid);
+      if (existing) writeLocal({ ...existing, ...acceptance, updatedAt: now });
+      return;
+    }
+
+    const [{ setDoc }, ref] = await Promise.all([import("firebase/firestore"), profileRef(uid)]);
+    await setDoc(ref, { uid, ...acceptance, updatedAt: now }, { merge: true });
+  } catch {}
 }
 
 export async function saveUserPreferences(

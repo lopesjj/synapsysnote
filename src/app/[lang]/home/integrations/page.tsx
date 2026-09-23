@@ -91,6 +91,18 @@ function IntegrationsBody() {
     useUiStore.getState().setEvernoteImportOpen(true, "connect");
   };
 
+  const revokeAccess = async (service: string, disconnect: () => Promise<void> | undefined) => {
+    setBusyService(service);
+    try {
+      await disconnect();
+      toast.success(t("access_revoked"));
+    } catch {
+      toast.error(`${t("revoke_access")}: ${t("status_failed")}`);
+    } finally {
+      setBusyService(null);
+    }
+  };
+
   const getStatusLabel = (status: string) => {
     switch (status) {
       case "completed":
@@ -199,10 +211,8 @@ function IntegrationsBody() {
                       variant="ghost"
                       size="sm"
                       className="text-muted hover:text-red-400"
-                      onClick={async () => {
-                        await adapter.disconnectNotion();
-                        toast.success(t("access_revoked"));
-                      }}
+                      disabled={busyService === "notion"}
+                      onClick={() => void revokeAccess("notion", () => adapter.disconnectNotion())}
                     >
                       {t("revoke_access")}
                     </Button>
@@ -275,10 +285,8 @@ function IntegrationsBody() {
                       variant="ghost"
                       size="sm"
                       className="text-muted hover:text-red-400"
-                      onClick={async () => {
-                        if (adapter.disconnectGoogleDocs) await adapter.disconnectGoogleDocs();
-                        toast.success(t("access_revoked"));
-                      }}
+                      disabled={busyService === "google"}
+                      onClick={() => void revokeAccess("google", () => adapter.disconnectGoogleDocs?.())}
                     >
                       {t("revoke_access")}
                     </Button>
@@ -344,10 +352,8 @@ function IntegrationsBody() {
                       variant="ghost"
                       size="sm"
                       className="text-muted hover:text-red-400"
-                      onClick={async () => {
-                        if (adapter.disconnectEvernote) await adapter.disconnectEvernote();
-                        toast.success(t("access_revoked"));
-                      }}
+                      disabled={busyService === "evernote"}
+                      onClick={() => void revokeAccess("evernote", () => adapter.disconnectEvernote?.())}
                     >
                       {t("revoke_access")}
                     </Button>

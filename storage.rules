@@ -52,9 +52,10 @@ service firebase.storage {
     // Inclui `uploads/zip-import/...` — o importador .zip usa "zip-import"
     // no lugar de pageId porque a página ainda não existe.
     match /workspaces/{workspaceId}/uploads/icons/{fileName} {
-      allow read: if true;
+      allow read: if isMember(workspaceId);
       allow create, update: if canWrite(workspaceId)
-        && withinSizeLimit(10);
+        && withinSizeLimit(10)
+        && request.resource.contentType.matches('image/.*');
       allow delete: if canWrite(workspaceId);
     }
 
@@ -93,7 +94,7 @@ service firebase.storage {
     }
 
     match /users/{userId}/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && request.auth.uid == userId;
       allow create, update: if isSignedIn()
         && request.auth.uid == userId
         && withinSizeLimit(5)

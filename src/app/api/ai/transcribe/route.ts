@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { lookup } from "node:dns/promises";
 import { hasValidAppSession } from "@/lib/api/app-session";
 import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { createRateLimiter } from "@/lib/api/rate-limit";
 import { clientIpOf } from "@/lib/api/client-ip";
+import { parseProxyTarget, isBlockedIp } from "@/lib/media/proxy-guard";
 import { transcribeModelChain } from "@/lib/ai/transcribe-models";
 import {
   isModelResting,
@@ -223,18 +225,23 @@ function isAbortError(error: unknown): boolean {
  * corpo embutido tem teto de ~20 MB por requisição; a referência não tem.
  */
 type AudioSource =
-  | { kind: "inline"; data: string }
-  | { kind: "file"; uri: string };
+  | { kind: "inline"; data: string; fileName?: undefined }
+  | { kind: "file"; uri: string; fileName: string };
 
 /** Acima disto vale o custo de subir o arquivo antes em vez de embutir. */
 const FILES_API_THRESHOLD_BYTES = 6 * 1024 * 1024;
 const FILES_UPLOAD_TIMEOUT_MS = 120_000;
 
+interface FilesApiUpload {
+  uri: string;
+  fileName: string;
+}
+
 async function uploadToFilesApi(
   apiKey: string,
   buffer: Buffer,
   rawMimeType: string
-): Promise<string | null> {
+): Promise<FilesApiUpload | null> {
   const mimeType = rawMimeType.split(";")[0]?.trim() || "audio/webm";
   try {
     const res = await fetch(
@@ -257,7 +264,6 @@ async function uploadToFilesApi(
     }
     const data = await res.json();
     let file = data?.file;
-    // O arquivo só pode ser usado em ACTIVE; áudio costuma já nascer pronto.
     const name = typeof file?.name === "string" ? file.name : "";
     const deadline = Date.now() + FILES_UPLOAD_TIMEOUT_MS;
     while (file?.state === "PROCESSING" && name && Date.now() < deadline) {
@@ -268,11 +274,11 @@ async function uploadToFilesApi(
       );
       file = await check.json().catch(() => null);
     }
-    if (file?.state !== "ACTIVE" || typeof file?.uri !== "string") {
+    if (file?.state !== "ACTIVE" || typeof file?.uri !== "string" || !name) {
       console.warn(`[transcribe] arquivo não ficou pronto na Files API (${file?.state})`);
       return null;
     }
-    return file.uri;
+    return { uri: file.uri, fileName: name };
   } catch (error) {
     if (isAbortError(error)) {
       console.warn("[transcribe] upload para a Files API estourou o tempo");
@@ -280,6 +286,76 @@ async function uploadToFilesApi(
     }
     throw error;
   }
+}
+
+async function deleteFromFilesApi(apiKey: string, fileName: string): Promise<void> {
+  try {
+    await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`,
+      { method: "DELETE", signal: AbortSignal.timeout(15_000) }
+    );
+  } catch {
+    console.warn(`[transcribe] falha ao apagar ${fileName} da Files API`);
+  }
+}
+
+const SSRF_DNS_TIMEOUT_MS = 4_000;
+
+async function safeFetchAudioUrl(
+  audioUrl: string,
+  timeoutMs: number
+): Promise<{ buffer: Buffer; mime: string } | null> {
+  const validated = parseProxyTarget(audioUrl);
+  if (!validated.ok) {
+    console.warn(`[transcribe] URL bloqueada: ${validated.reason}`);
+    return null;
+  }
+  const url = validated.url;
+  const hostname = url.hostname.toLowerCase().replace(/\.+$/, "");
+
+  let address = hostname;
+  if (!/^[0-9.]+$/.test(hostname) && !hostname.includes(":")) {
+    try {
+      const records = await Promise.race([
+        lookup(hostname, { all: true }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("DNS_TIMEOUT")), SSRF_DNS_TIMEOUT_MS)
+        ),
+      ]);
+      if (!records.length || records.some((r) => isBlockedIp(r.address))) {
+        console.warn(`[transcribe] DNS resolveu para IP bloqueado: ${hostname}`);
+        return null;
+      }
+      address = records[0].address;
+    } catch {
+      console.warn(`[transcribe] falha de DNS para ${hostname}`);
+      return null;
+    }
+  } else if (isBlockedIp(address)) {
+    console.warn(`[transcribe] IP bloqueado: ${address}`);
+    return null;
+  }
+
+  const fetchUrl = new URL(url.toString());
+  fetchUrl.hostname = address;
+
+  const res = await fetch(fetchUrl.toString(), {
+    signal: AbortSignal.timeout(timeoutMs),
+    headers: {
+      Host: url.host,
+      Accept: "*/*",
+      "User-Agent": "SynapsysNote-Transcribe/1.0",
+    },
+  });
+  if (!res.ok) return null;
+
+  const declaredLen = Number(res.headers.get("content-length") || 0);
+  if (declaredLen > MAX_AUDIO_BYTES) return null;
+
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.byteLength > MAX_AUDIO_BYTES) return null;
+
+  return { buffer: buf, mime: res.headers.get("content-type") || "audio/webm" };
 }
 
 async function callGemini(
@@ -447,18 +523,27 @@ async function transcribeWithGemini(
   // reenviar 9 MB embutidos a cada tentativa era o que fazia cada recusa
   // custar quase um minuto.
   let source: AudioSource | null = null;
+  let uploadedFileName: string | null = null;
   if (buffer.byteLength > FILES_API_THRESHOLD_BYTES) {
-    const uri = await uploadToFilesApi(apiKey, buffer, mimeType);
-    if (uri) source = { kind: "file", uri };
+    const upload = await uploadToFilesApi(apiKey, buffer, mimeType);
+    if (upload) {
+      source = { kind: "file", uri: upload.uri, fileName: upload.fileName };
+      uploadedFileName = upload.fileName;
+    }
   }
   if (!source) {
     if (buffer.byteLength > INLINE_LIMIT_BYTES) {
-      // Sem a Files API não há como embutir isto: melhor dizer do que tentar.
       console.warn("[transcribe] arquivo grande e Files API indisponível");
       return { text: "", reason: "SERVICE_BUSY" };
     }
     source = { kind: "inline", data: buffer.toString("base64") };
   }
+
+  const cleanupFile = async () => {
+    if (uploadedFileName) {
+      await deleteFromFilesApi(apiKey, uploadedFileName);
+    }
+  };
 
   let lastReason: TranscribeReason = "NOT_CONFIGURED";
   let quotaScope: "day" | "minute" | null = null;
@@ -501,6 +586,7 @@ async function transcribeWithGemini(
     }
     if (result.text) {
       noteModelWorked(model);
+      await cleanupFile();
       return result;
     }
     lastReason = result.reason;
@@ -538,6 +624,7 @@ async function transcribeWithGemini(
   if (!quotaScope && fullChain.every((m) => isModelResting(m) && restingKindOf([m]) === "quota-day")) {
     quotaScope = "day";
   }
+  await cleanupFile();
   if (quotaScope) {
     return { text: "", reason: "QUOTA", quotaScope };
   }
@@ -691,40 +778,13 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        const head = await fetch(audioUrl, {
-          method: "HEAD",
-          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-        }).catch(() => null);
-        const declared = Number(head?.headers.get("content-length") || 0);
-        // Um vídeo de 150 MB não cabe embutido na chamada — nem na memória do
-        // servidor. O cliente já sabe extrair só a fala; deixa com ele.
-        if (declared > MAX_AUDIO_BYTES) {
-          return NextResponse.json({ transcript: "", reason: "TOO_LARGE_FOR_URL" });
-        }
-
-        const audioFetch = await fetch(audioUrl, {
-          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-        });
-        if (!audioFetch.ok) {
+        const fetched = await safeFetchAudioUrl(audioUrl, FETCH_TIMEOUT_MS);
+        if (!fetched) {
           return NextResponse.json({ transcript: "", reason: "FETCH_FAILED" });
         }
-        // Alguns destinos nao declaram `content-length`: sem este segundo teto,
-        // um arquivo enorme entraria inteiro na memoria do servidor.
-        const declaredGet = Number(audioFetch.headers.get("content-length") || 0);
-        if (declaredGet > MAX_AUDIO_BYTES) {
-          return NextResponse.json({ transcript: "", reason: "TOO_LARGE_FOR_URL" });
-        }
-        const buf = Buffer.from(await audioFetch.arrayBuffer());
-        if (buf.byteLength > MAX_AUDIO_BYTES) {
-          return NextResponse.json({ transcript: "", reason: "TOO_LARGE_FOR_URL" });
-        }
 
-        const mime = audioFetch.headers.get("content-type") || "audio/webm";
-        const result = await runGemini(buf, mime, reqTargetLang);
+        const result = await runGemini(fetched.buffer, fetched.mime, reqTargetLang);
         if (result.text) {
-          // O proprio prompt ja pede a saida no idioma alvo: reenviar o texto a
-          // um endpoint nao documentado de traducao so adicionaria latencia e
-          // exposicao do conteudo da nota.
           return NextResponse.json({ transcript: result.text, reason: result.reason });
         }
         return reasonResponse(result.reason, result.quotaScope);

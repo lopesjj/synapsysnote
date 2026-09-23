@@ -167,6 +167,8 @@ export interface UserProfile {
   photoURL?: string | null;
   providers?: string[];
   registrationCompleted?: boolean;
+  legalAcceptedVersion?: string;
+  legalAcceptedAt?: ISOTimestamp;
   preferences: UserPreferences;
   createdAt: ISOTimestamp;
   updatedAt: ISOTimestamp;

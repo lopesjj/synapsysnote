@@ -1074,6 +1074,22 @@ export class FirestoreAdapter implements DataAdapter {
     }
   }
 
+  async purgeExpiredTrash() {
+    try {
+      if (typeof window === "undefined") return;
+      const cooldownKey = `synapsys.trash_purge_cooldown.${this.workspaceId}`;
+      const last = Number(window.localStorage.getItem(cooldownKey) || 0);
+      const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+      if (Date.now() - last < TWELVE_HOURS_MS) return;
+
+      window.localStorage.setItem(cooldownKey, String(Date.now()));
+      await firebaseJson("/api/trash/purge", {
+        method: "POST",
+        body: JSON.stringify({ workspaceId: this.workspaceId, purgeExpired: true }),
+      });
+    } catch {}
+  }
+
 
   async listVersions(pageId: string): Promise<PageVersion[]> {
     const snap = await getDocs(
