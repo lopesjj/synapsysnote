@@ -698,6 +698,35 @@ export interface ImportStepResult {
   status: string;
   processedPages?: number;
   totalPages?: number;
+  busy?: boolean;
+}
+
+const LEASE_MS = 120_000;
+
+function treeRef(jobRef: FirebaseFirestore.DocumentReference) {
+  return jobRef.collection("meta").doc("tree");
+}
+
+async function claimLease(jobRef: FirebaseFirestore.DocumentReference, owner: string): Promise<boolean> {
+  return jobRef.firestore.runTransaction(async (tx) => {
+    const snap = await tx.get(jobRef);
+    if (!snap.exists) return false;
+    const until = Number(snap.get("leaseUntil") ?? 0);
+    if (until > Date.now() && snap.get("leaseOwner") !== owner) return false;
+    tx.update(jobRef, { leaseUntil: Date.now() + LEASE_MS, leaseOwner: owner });
+    return true;
+  });
+}
+
+async function releaseLease(jobRef: FirebaseFirestore.DocumentReference, owner: string) {
+  await jobRef.firestore
+    .runTransaction(async (tx) => {
+      const snap = await tx.get(jobRef);
+      if (snap.exists && snap.get("leaseOwner") === owner) {
+        tx.update(jobRef, { leaseUntil: 0, leaseOwner: null });
+      }
+    })
+    .catch(() => undefined);
 }
 
 interface TreeMetadata {
@@ -717,6 +746,26 @@ export async function runNotionImportStep(
   jobId: string
 ): Promise<ImportStepResult> {
   const jobRef = importJobRef(workspaceId, jobId);
+  const owner = randomUUID();
+  if (!(await claimLease(jobRef, owner))) {
+    const current = await jobRef.get();
+    if (!current.exists) throw new Error("Job de importação não encontrado");
+    const status = String(current.get("status") ?? "running");
+    const finished = ["completed", "completed_with_errors", "failed", "canceled"].includes(status);
+    return { done: finished, status, busy: !finished };
+  }
+  try {
+    return await runLeasedImportStep(workspaceId, jobId, jobRef);
+  } finally {
+    await releaseLease(jobRef, owner);
+  }
+}
+
+async function runLeasedImportStep(
+  workspaceId: string,
+  jobId: string,
+  jobRef: FirebaseFirestore.DocumentReference
+): Promise<ImportStepResult> {
   const snap = await jobRef.get();
   if (!snap.exists) {
     throw new Error("Job de importação não encontrado");
@@ -760,6 +809,7 @@ export async function runNotionImportStep(
   }
 
   const progress = new ProgressReporter(jobRef, jobData);
+  let discoveredTree: TreeMetadata | null = null;
 
   if (jobData.status === "pending") {
     await progress.patch({
@@ -799,13 +849,13 @@ export async function runNotionImportStep(
         roles: {},
       };
 
+      await treeRef(jobRef).set(treeMetadata);
       await progress.patch({
         status: "running",
         currentStep: `Preparando ${ordered.length} itens…`,
         totalPages: ordered.length,
         processedPages: 0,
         items,
-        treeMetadata,
       });
 
       jobData = {
@@ -814,8 +864,8 @@ export async function runNotionImportStep(
         totalPages: ordered.length,
         processedPages: 0,
         items,
-        treeMetadata,
       };
+      discoveredTree = treeMetadata;
     } catch (error) {
       await progress.fail((error as Error).message);
       return { done: true, status: "failed" };
@@ -826,10 +876,13 @@ export async function runNotionImportStep(
     return { done: true, status: "canceled" };
   }
 
-  const treeMetadata = jobData.treeMetadata ?? {
-    parents: {},
-    orderedNodes: [],
-    roles: {},
+  const legacyTree = Boolean(jobData.treeMetadata);
+  const storedTree =
+    discoveredTree ?? jobData.treeMetadata ?? ((await treeRef(jobRef).get()).data() as TreeMetadata | undefined);
+  const treeMetadata: TreeMetadata = {
+    parents: storedTree?.parents ?? {},
+    orderedNodes: storedTree?.orderedNodes ?? [],
+    roles: storedTree?.roles ?? {},
   };
 
   const parents = new Map<string, string | null>(Object.entries(treeMetadata.parents ?? {}));
@@ -932,10 +985,14 @@ export async function runNotionImportStep(
   }
 
   if (hasRoleUpdates) {
-    await jobRef.update({
-      "treeMetadata.roles": treeMetadata.roles,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    if (legacyTree) {
+      await jobRef.update({
+        "treeMetadata.roles": treeMetadata.roles,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    } else {
+      await treeRef(jobRef).set({ roles: treeMetadata.roles }, { merge: true });
+    }
   }
 
   const remaining = progress.currentItems.filter(

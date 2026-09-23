@@ -543,14 +543,22 @@ export class FirestoreAdapter implements DataAdapter {
     return notebook;
   }
 
+  private async docsWhereIn(collectionName: string, field: string, values: string[]) {
+    const unique = [...new Set(values)];
+    const groups: string[][] = [];
+    for (let start = 0; start < unique.length; start += 30) groups.push(unique.slice(start, start + 30));
+    const snaps = await Promise.all(
+      groups.map((group) => getDocs(query(this.col(collectionName), where(field, "in", group))))
+    );
+    return snaps.flatMap((snap) => snap.docs);
+  }
+
   async duplicateNotebook(id: string): Promise<Notebook> {
-    const [notebooksSnap, pagesSnap] = await Promise.all([
-      getDocs(this.col("notebooks")),
-      getDocs(this.col("pages")),
-    ]);
+    const notebooksSnap = await getDocs(this.col("notebooks"));
     // Subcaderno na lixeira nao entra na copia.
     const notebooks = notebooksSnap.docs.map(mapNotebook).filter((notebook) => !notebook.deletedAt);
-    return duplicateNotebookTree(this, notebooks, pagesSnap.docs.map(mapPage), id);
+    const pageDocs = await this.docsWhereIn("pages", "notebookId", notebookSubtreeIds(notebooks, id));
+    return duplicateNotebookTree(this, notebooks, pageDocs.map(mapPage), id);
   }
 
   async updateNotebook(id: string, patch: Partial<Notebook>) {
@@ -616,17 +624,17 @@ export class FirestoreAdapter implements DataAdapter {
    * que saiu com ele. O que ja estava na lixeira antes fica como estava.
    */
   async deleteNotebook(id: string) {
-    const [notebooksSnap, pagesSnap, databasesSnap] = await Promise.all([
-      getDocs(this.col("notebooks")),
-      getDocs(this.col("pages")),
-      getDocs(this.col("databases")),
-    ]);
+    const notebooksSnap = await getDocs(this.col("notebooks"));
     const live = notebooksSnap.docs.map(mapNotebook).filter((notebook) => !notebook.deletedAt);
     if (!live.some((notebook) => notebook.id === id)) return;
     const ids = new Set(notebookSubtreeIds(live, id));
+    const [pageDocs, databaseDocs] = await Promise.all([
+      this.docsWhereIn("pages", "notebookId", [...ids]),
+      this.docsWhereIn("databases", "notebookId", [...ids]),
+    ]);
     const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
 
-    for (const snap of pagesSnap.docs) {
+    for (const snap of pageDocs) {
       const data = snap.data();
       const notebookId = (data.notebookId as string | null | undefined) ?? null;
       if (!notebookId || !ids.has(notebookId) || data.deletedAt) continue;
@@ -639,7 +647,7 @@ export class FirestoreAdapter implements DataAdapter {
         })
       );
     }
-    for (const snap of databasesSnap.docs) {
+    for (const snap of databaseDocs) {
       const data = snap.data();
       const notebookId = (data.notebookId as string | null | undefined) ?? null;
       if (!notebookId || !ids.has(notebookId) || data.deletedAt) continue;
@@ -864,8 +872,13 @@ export class FirestoreAdapter implements DataAdapter {
   }
 
   async duplicatePage(id: string): Promise<Page> {
-    const pagesSnap = await getDocs(this.col("pages"));
-    return duplicatePageTree(this, pagesSnap.docs.map(mapPage), id);
+    const [page, descendants] = await Promise.all([
+      getDoc(this.docRef("pages", id)),
+      getDocs(query(this.col("pages"), where("path", "array-contains", id))),
+    ]);
+    if (!page.exists()) throw new Error("Nota não encontrada");
+    const docs = [page as QueryDocumentSnapshot<DocumentData>, ...descendants.docs];
+    return duplicatePageTree(this, docs.map(mapPage), id);
   }
 
   private lastWritten = new Map<string, { blocks: AppBlock[]; at: number }>();
@@ -1001,8 +1014,11 @@ export class FirestoreAdapter implements DataAdapter {
   async movePage(id: string, target: { notebookId?: string | null; parentPageId?: string | null; order?: number }) {
     let path: string[] = [];
     if (target.parentPageId) {
+      if (target.parentPageId === id) return;
       const parent = await getDoc(this.docRef("pages", target.parentPageId));
-      path = parent.exists() ? [...((parent.data().path as string[]) ?? []), target.parentPageId] : [];
+      const parentPath = parent.exists() ? ((parent.data().path as string[]) ?? []) : [];
+      if (parentPath.includes(id)) return;
+      path = parent.exists() ? [...parentPath, target.parentPageId] : [];
     }
 
     const moved = await getDoc(this.docRef("pages", id));
@@ -1011,27 +1027,31 @@ export class FirestoreAdapter implements DataAdapter {
         ? target.notebookId
         : ((moved.data()?.notebookId as string | null | undefined) ?? null);
 
-    const batch = writeBatch(getDb());
-    batch.update(this.docRef("pages", id), {
-      notebookId,
-      parentPageId: target.parentPageId ?? null,
-      path,
-      ...(target.order !== undefined ? { order: target.order } : {}),
-      updatedBy: this.userId,
-      updatedAt: serverTimestamp(),
-    });
+    const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [
+      (batch) =>
+        batch.update(this.docRef("pages", id), {
+          notebookId,
+          parentPageId: target.parentPageId ?? null,
+          path,
+          ...(target.order !== undefined ? { order: target.order } : {}),
+          updatedBy: this.userId,
+          updatedAt: serverTimestamp(),
+        }),
+    ];
 
     const descendants = await getDocs(query(this.col("pages"), where("path", "array-contains", id)));
     for (const patch of subtreePatches(descendants.docs.map(mapPage), id, path, notebookId)) {
-      batch.update(this.docRef("pages", patch.pageId), {
-        path: patch.path,
-        notebookId: patch.notebookId,
-        updatedBy: this.userId,
-        updatedAt: serverTimestamp(),
-      });
+      ops.push((batch) =>
+        batch.update(this.docRef("pages", patch.pageId), {
+          path: patch.path,
+          notebookId: patch.notebookId,
+          updatedBy: this.userId,
+          updatedAt: serverTimestamp(),
+        })
+      );
     }
 
-    await batch.commit();
+    await commitWrites(ops);
   }
 
   private async pageSubtreeRefs(id: string) {
@@ -1424,12 +1444,14 @@ export class FirestoreAdapter implements DataAdapter {
             status?: string;
             processedPages?: number;
             totalPages?: number;
+            busy?: boolean;
           }>("/api/notion/import", {
             method: "PUT",
             body: JSON.stringify({ workspaceId: this.workspaceId, jobId }),
           });
 
           consecutiveErrors = 0;
+          if (stepRes?.busy) await new Promise((resolve) => setTimeout(resolve, 5000));
           if (
             stepRes?.done ||
             ["completed", "completed_with_errors", "failed", "canceled"].includes(stepRes?.status ?? "")
@@ -1881,18 +1903,27 @@ export class FirestoreAdapter implements DataAdapter {
 
   async reviewFlashcard(id: string, rating: FlashcardRating, modifier = 1.0): Promise<void> {
     const targetRef = this.docRef("flashcards", id);
-    const snap = await getDoc(targetRef);
-    if (!snap.exists()) return;
-    const current = snap.data() as Flashcard;
-    const result = calculateNextReview(current, rating, modifier);
-    await updateDoc(targetRef, {
-      repetition: result.repetition,
-      interval: result.interval,
-      easeFactor: result.easeFactor,
-      nextReviewDate: result.nextReviewDate,
-      lastReviewedAt: Date.now(),
-      updatedAt: serverTimestamp(),
-    });
+    const reviewPatch = (card: Flashcard) => {
+      const result = calculateNextReview(card, rating, modifier);
+      return {
+        repetition: result.repetition,
+        interval: result.interval,
+        easeFactor: result.easeFactor,
+        nextReviewDate: result.nextReviewDate,
+        lastReviewedAt: Date.now(),
+        updatedAt: serverTimestamp(),
+      };
+    };
+    try {
+      await runTransaction(getDb(), async (tx) => {
+        const snap = await tx.get(targetRef);
+        if (snap.exists()) tx.update(targetRef, reviewPatch(snap.data() as Flashcard));
+      });
+    } catch (error) {
+      if (!isOfflineError(error)) throw error;
+      const snap = await getDoc(targetRef);
+      if (snap.exists()) await updateDoc(targetRef, reviewPatch(snap.data() as Flashcard));
+    }
   }
 
   async resetFlashcardsProgress(scope?: FlashcardResetScope): Promise<number> {

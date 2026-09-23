@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { hasValidAppSession } from "@/lib/api/app-session";
+import { appSessionUser, rateLimitKey } from "@/lib/api/app-session";
 import { isSameOriginRequest } from "@/lib/api/request-origin";
 import { createRateLimiter } from "@/lib/api/rate-limit";
 import { clientIpOf } from "@/lib/api/client-ip";
@@ -111,11 +111,12 @@ export async function GET(request: NextRequest) {
     return deny(`Blocked: ${target.reason}`, rejectionStatus(target.reason));
   }
 
-  if (!(await hasValidAppSession())) {
+  const uid = await appSessionUser();
+  if (!uid) {
     return deny("Login obrigatório", 401);
   }
 
-  const key = clientIpOf(request);
+  const key = rateLimitKey(uid, clientIpOf(request));
   if (!limiter.take(key)) {
     return deny("Too many requests", 429);
   }

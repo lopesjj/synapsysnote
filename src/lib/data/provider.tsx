@@ -219,6 +219,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         adapter.subscribeImportJobs((next) => {
           if (cancelled) return;
           setImportJobs(next);
+          for (const job of next) {
+            const notionJob = !job.provider || job.provider === "notion";
+            const active = ["pending", "discovering", "running"].includes(job.status);
+            if (notionJob && active && job.requestedBy === userKey) void adapter.resumeImportJob?.(job.id);
+          }
         }),
         adapter.subscribeIntegration((next) => {
           if (cancelled) return;

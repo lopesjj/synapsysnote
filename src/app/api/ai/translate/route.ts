@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authorizeAppRequest } from "@/lib/api/app-session";
+import { appRequestUser, rateLimitKey } from "@/lib/api/app-session";
 import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { createRateLimiter } from "@/lib/api/rate-limit";
 import { clientIpOf } from "@/lib/api/client-ip";
@@ -90,11 +90,12 @@ export async function POST(req: NextRequest) {
   if (isCrossSiteRequest(req)) {
     return NextResponse.json({ translatedText: "", error: "forbidden" }, { status: 403 });
   }
-  if (!(await authorizeAppRequest(req))) {
+  const uid = await appRequestUser(req);
+  if (!uid) {
     return NextResponse.json({ translatedText: "", error: "unauthorized" }, { status: 401 });
   }
 
-  const key = clientIpOf(req);
+  const key = rateLimitKey(uid, clientIpOf(req));
   if (!limiter.take(key)) {
     return NextResponse.json({ translatedText: "", error: "rate_limited" }, { status: 429 });
   }

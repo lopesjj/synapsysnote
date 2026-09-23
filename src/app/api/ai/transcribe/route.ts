@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authorizeAppRequest } from "@/lib/api/app-session";
+import { appRequestUser, rateLimitKey } from "@/lib/api/app-session";
 import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { createRateLimiter } from "@/lib/api/rate-limit";
 import { clientIpOf } from "@/lib/api/client-ip";
@@ -29,9 +29,6 @@ const transcribeLimiter = createRateLimiter({
   maxBytes: 300 * 1024 * 1024,
 });
 
-function transcribeKey(req: NextRequest): string {
-  return clientIpOf(req);
-}
 
 /**
  * Teto de cada chamada externa: sem isso um destino lento trava a rota.
@@ -584,21 +581,29 @@ async function runGemini(
   return result;
 }
 
+let localTranscriptionRunning = false;
+
 async function transcribeLocally(
   audioSamples: Float32Array,
   whisperLanguage: string,
   promptContext: string
 ) {
-  const transcriber = await getTranscriber();
-
-  const output = await transcriber(audioSamples, {
-    language: whisperLanguage,
-    task: "transcribe",
-    chunk_length_s: 30,
-    stride_length_s: 5,
-    temperature: 0.0,
-    initial_prompt: promptContext,
-  });
+  if (localTranscriptionRunning) return reasonResponse("SERVICE_BUSY");
+  localTranscriptionRunning = true;
+  let output: { text?: string };
+  try {
+    const transcriber = await getTranscriber();
+    output = await transcriber(audioSamples, {
+      language: whisperLanguage,
+      task: "transcribe",
+      chunk_length_s: 30,
+      stride_length_s: 5,
+      temperature: 0.0,
+      initial_prompt: promptContext,
+    });
+  } finally {
+    localTranscriptionRunning = false;
+  }
 
   const resultText = cleanTranscriptText((output?.text || "").trim());
 
@@ -613,11 +618,12 @@ export async function POST(req: NextRequest) {
     if (isCrossSiteRequest(req)) {
       return NextResponse.json({ transcript: "", reason: "FORBIDDEN" }, { status: 403 });
     }
-    if (!(await authorizeAppRequest(req))) {
+    const uid = await appRequestUser(req);
+    if (!uid) {
       return NextResponse.json({ transcript: "", reason: "UNAUTHORIZED" }, { status: 401 });
     }
 
-    const limitKey = transcribeKey(req);
+    const limitKey = rateLimitKey(uid, clientIpOf(req));
     if (!transcribeLimiter.take(limitKey)) {
       return NextResponse.json({ transcript: "", reason: "RATE_LIMITED" }, { status: 429 });
     }

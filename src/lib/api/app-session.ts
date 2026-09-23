@@ -19,39 +19,65 @@ function isDevelopmentRuntime(): boolean {
   return process.env.NODE_ENV !== "production";
 }
 
-async function hasSessionCookie(): Promise<boolean> {
+const DEV_USER = "dev";
+
+const REVOCATION_TTL_MS = 5 * 60 * 1000;
+const revocation = new Map<string, { validAfterMs: number; checkedAt: number }>();
+
+async function tokensValidAfter(uid: string): Promise<number> {
+  const cached = revocation.get(uid);
+  if (cached && Date.now() - cached.checkedAt < REVOCATION_TTL_MS) return cached.validAfterMs;
+  const user = await adminAuth().getUser(uid);
+  const validAfterMs = user.tokensValidAfterTime ? Date.parse(user.tokensValidAfterTime) : 0;
+  if (revocation.size > 5_000) revocation.clear();
+  revocation.set(uid, { validAfterMs, checkedAt: Date.now() });
+  return validAfterMs;
+}
+
+async function sessionCookieUser(): Promise<string | null> {
   const cookies = await readSessionCookies();
   for (const cookie of cookies) {
     try {
-      await adminAuth().verifySessionCookie(cookie);
-      return true;
+      const decoded = await adminAuth().verifySessionCookie(cookie);
+      if (decoded.auth_time * 1000 < (await tokensValidAfter(decoded.uid))) continue;
+      return decoded.uid;
     } catch {}
   }
-  return false;
+  return null;
+}
+
+export async function appSessionUser(): Promise<string | null> {
+  if (isDevelopmentRuntime()) return DEV_USER;
+  if (!isAdminConfigured()) return null;
+  return sessionCookieUser();
 }
 
 export async function hasValidAppSession(): Promise<boolean> {
-  if (isDevelopmentRuntime()) return true;
-  // Em producao, sem Admin nao ha como validar ninguem: melhor recusar.
-  if (!isAdminConfigured()) return false;
-  return hasSessionCookie();
+  return (await appSessionUser()) !== null;
 }
 
 /**
  * Aceita o ID token do Firebase no cabecalho `Authorization` ou o cookie de
- * sessao. O token vale em qualquer host e nao depende do cookie, que expira
- * antes da sessao do navegador quando "Manter conectado" fica desmarcado.
+ * sessao e devolve o uid, usado tambem como chave do limite de uso.
  */
-export async function authorizeAppRequest(request: Request): Promise<boolean> {
-  if (isDevelopmentRuntime()) return true;
-  if (!isAdminConfigured()) return false;
+export async function appRequestUser(request: Request): Promise<string | null> {
+  if (isDevelopmentRuntime()) return DEV_USER;
+  if (!isAdminConfigured()) return null;
 
   const header = request.headers.get("authorization");
   if (header?.startsWith("Bearer ")) {
     try {
-      await adminAuth().verifyIdToken(header.slice(7));
-      return true;
+      const decoded = await adminAuth().verifyIdToken(header.slice(7));
+      return decoded.uid;
     } catch {}
   }
-  return hasSessionCookie();
+  return sessionCookieUser();
+}
+
+export async function authorizeAppRequest(request: Request): Promise<boolean> {
+  return (await appRequestUser(request)) !== null;
+}
+
+export function rateLimitKey(uid: string | null, fallbackIp: string): string {
+  return uid && uid !== DEV_USER ? `uid:${uid}` : `ip:${fallbackIp}`;
 }

@@ -6,7 +6,7 @@ import {
   type CardSignature,
 } from "@/lib/flashcards/duplicate-cards";
 import { filterSemanticDuplicates } from "@/lib/flashcards/semantic-duplicates";
-import { authorizeAppRequest } from "@/lib/api/app-session";
+import { appRequestUser, rateLimitKey } from "@/lib/api/app-session";
 import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { createRateLimiter } from "@/lib/api/rate-limit";
 import { clientIpOf } from "@/lib/api/client-ip";
@@ -484,7 +484,8 @@ export async function POST(req: NextRequest) {
   if (isCrossSiteRequest(req)) {
     return NextResponse.json({ error: "forbidden", flashcards: [] }, { status: 403 });
   }
-  if (!(await authorizeAppRequest(req))) {
+  const uid = await appRequestUser(req);
+  if (!uid) {
     return NextResponse.json({ error: "unauthorized", flashcards: [] }, { status: 401 });
   }
   const declaredBytes = Number(req.headers.get("content-length") || 0);
@@ -492,7 +493,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "payload_too_large", flashcards: [] }, { status: 413 });
   }
 
-  const key = clientIpOf(req);
+  const key = rateLimitKey(uid, clientIpOf(req));
   if (!generateLimiter.take(key)) {
     return NextResponse.json({ error: "rate_limited", flashcards: [] }, { status: 429 });
   }
