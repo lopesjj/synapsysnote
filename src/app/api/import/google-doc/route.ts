@@ -16,7 +16,7 @@ const limiter = createRateLimiter({
   maxBytes: 200 * 1024 * 1024,
 });
 
-export function extractGoogleDocRef(input: string): { kind: "doc" | "published"; id: string } | null {
+function extractGoogleDocRef(input: string): { kind: "doc" | "published"; id: string } | null {
   const value = input.trim();
   if (!value) return null;
 

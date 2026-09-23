@@ -1,7 +1,7 @@
 "use client";
 
 import { Link } from "@/lib/i18n/navigation";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace, TRASH_RETENTION_DAYS } from "@/lib/data/provider";
@@ -59,6 +59,11 @@ export default function TrashPage() {
   const totalTrashedCount =
     trashedPages.length + trashedDatabases.length + trashedNotebooks.length;
   const dayUnit = TRASH_RETENTION_DAYS === 1 ? t("unit_day_singular") : t("unit_day_plural");
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const expiresOn = (deletedAt: number | null) =>
     new Date((deletedAt ?? 0) + TRASH_RETENTION_DAYS * 86_400_000).toLocaleDateString(
@@ -68,7 +73,7 @@ export default function TrashPage() {
   const getRemainingDays = (deletedAt: number | null) => {
     if (!deletedAt) return TRASH_RETENTION_DAYS;
     const expiresAt = deletedAt + TRASH_RETENTION_DAYS * 86_400_000;
-    const diff = expiresAt - Date.now();
+    const diff = expiresAt - now;
     return Math.max(0, Math.ceil(diff / 86_400_000));
   };
 

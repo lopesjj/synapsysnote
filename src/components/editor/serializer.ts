@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import type { AppBlock, BlockMedia, BlockType, MentionTarget, RichTextSpan } from "@/types/models";
-import { fromTableRows, fromTableRowsAlignments, toTableRows } from "@/lib/data/table-rows";
+import { fromTableRows, fromTableRowsAlignments, toTableRows, type CellAlignment } from "@/lib/data/table-rows";
 import { isAudioFile, isVideoFile } from "@/lib/media/compress-attachment";
 
 
@@ -432,7 +432,7 @@ function nodeToBlocks(node: JSONContent): AppBlock[] {
     }
     case "tableBlock": {
       const rows = (node.attrs?.rows as RichTextSpan[][][] | undefined) ?? [];
-      const cellAlignments = (node.attrs?.cellAlignments as any) ?? [];
+      const cellAlignments = (node.attrs?.cellAlignments as (CellAlignment | null)[][] | undefined) ?? [];
       return [
         {
           id: id(),

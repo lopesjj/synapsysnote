@@ -554,17 +554,45 @@ function BottomNav() {
     router.push(`/home/p/${page.id}`);
   };
 
-  const NavItem = ({
-    icon,
-    label,
-    active,
-    onClick,
-  }: {
-    icon: React.ReactNode;
-    label: string;
-    active?: boolean;
-    onClick: () => void;
-  }) => (
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-50 flex border-t border-[var(--border)] bg-[var(--surface)]/95 py-3.5 pb-[calc(0.875rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl md:hidden"
+      aria-label={t("main_navigation")}
+    >
+      <MobileNavItem
+        icon={<Home className="size-[18px]" />}
+        label={t("home")}
+        active={pathname === "/home"}
+        onClick={() => router.push("/home")}
+      />
+      <MobileNavItem
+        icon={<Search className="size-[18px]" />}
+        label={t("search")}
+        active={false}
+        onClick={() => useUiStore.getState().setPaletteOpen(true)}
+      />
+      <MobileNavItem
+        icon={<FilePlus className="size-[18px]" />}
+        label={t("new_note")}
+        active={false}
+        onClick={() => void createNote()}
+      />
+    </nav>
+  );
+}
+
+function MobileNavItem({
+  icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
     <button
       type="button"
       onClick={onClick}
@@ -584,32 +612,6 @@ function BottomNav() {
       </span>
       {label}
     </button>
-  );
-
-  return (
-    <nav
-      className="fixed inset-x-0 bottom-0 z-50 flex border-t border-[var(--border)] bg-[var(--surface)]/95 py-3.5 pb-[calc(0.875rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl md:hidden"
-      aria-label={t("main_navigation")}
-    >
-      <NavItem
-        icon={<Home className="size-[18px]" />}
-        label={t("home")}
-        active={pathname === "/home"}
-        onClick={() => router.push("/home")}
-      />
-      <NavItem
-        icon={<Search className="size-[18px]" />}
-        label={t("search")}
-        active={false}
-        onClick={() => useUiStore.getState().setPaletteOpen(true)}
-      />
-      <NavItem
-        icon={<FilePlus className="size-[18px]" />}
-        label={t("new_note")}
-        active={false}
-        onClick={() => void createNote()}
-      />
-    </nav>
   );
 }
 

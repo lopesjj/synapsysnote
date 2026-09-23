@@ -23,7 +23,6 @@ interface MediaBlock {
 }
 
 const BATCH_LIMIT = 400;
-const IN_QUERY_LIMIT = 30;
 
 export const CARD_IMAGE_FIELDS = [
   "frontImageStoragePath",

@@ -506,7 +506,7 @@ export class FirestoreAdapter implements DataAdapter {
         if (!snap.exists()) return cb(null);
         const data = snap.data();
         cb({
-          ...(data as any),
+          ...(data as Record<string, unknown>),
           id: provider,
           connectedAt: ms(data.connectedAt),
           lastSyncAt: data.lastSyncAt ? ms(data.lastSyncAt) : null,

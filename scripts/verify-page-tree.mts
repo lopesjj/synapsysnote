@@ -123,18 +123,20 @@ async function main() {
 
   await adapter.deleteNotebook(cascadeRoot.id);
 
-  assert.equal(
-    notebooks.some((notebook) => notebook.id === cascadeRoot.id || notebook.id === cascadeChild.id),
-    false,
-    "the notebook and its nested cadernos are removed"
-  );
+  const notebookState = (id: string) => notebooks.find((notebook) => notebook.id === id);
+  assert.ok(notebookState(cascadeRoot.id)?.deletedAt, "the notebook goes to the trash");
+  assert.ok(notebookState(cascadeChild.id)?.deletedAt, "nested cadernos go to the trash with it");
+  assert.equal(notebookState(cascadeChild.id)?.trashedWith, cascadeRoot.id, "nested cadernos remember who took them");
   assert.ok(find(cascadeNote.id).deletedAt, "notes inside the tree go to the trash");
   assert.ok(find(cascadeNestedNote.id).deletedAt, "nested notes go to the trash too");
-  assert.equal(find(cascadeNote.id).notebookId, null, "trashed notes detach from the deleted notebook");
+  assert.equal(find(cascadeNote.id).notebookId, cascadeChild.id, "trashed notes keep their place in the tree");
+  assert.equal(find(cascadeNote.id).trashedWith, cascadeRoot.id, "trashed notes remember the notebook that took them");
 
   await adapter.restorePage(cascadeNote.id);
   assert.equal(find(cascadeNote.id).deletedAt, null, "restore clears the parent note");
   assert.equal(find(cascadeNestedNote.id).deletedAt, null, "restore also brings the subtree back");
+  assert.equal(notebookState(cascadeChild.id)?.deletedAt ?? null, null, "restoring a note brings its notebook back");
+  assert.equal(notebookState(cascadeRoot.id)?.deletedAt ?? null, null, "and the notebooks above it");
 
   stopNotebooks();
   stop();

@@ -29,6 +29,17 @@ import type { RichTextAnnotations, RichTextSpan } from "@/types/models";
 import { TEXT_COLORS, HIGHLIGHT_COLORS } from "@/components/editor/editor-colors";
 import { cn } from "@/lib/utils";
 
+interface ViewInternals {
+  dragging: { slice: unknown; move: boolean; node?: unknown } | null;
+  docView?: {
+    nearestDesc(dom: Node, onlyDOM?: boolean): { node?: { type?: { name?: string } }; posBefore: number } | null;
+  };
+}
+
+function viewInternals(view: unknown): ViewInternals {
+  return view as ViewInternals;
+}
+
 export type TableGrid = RichTextSpan[][][];
 
 export type CellAlignment = {
@@ -1205,7 +1216,7 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
           editor.view.dispatch(editor.state.tr.setSelection(selection));
         }
         const slice = selection.content();
-        (editor.view as any).dragging = { slice, move: true, node: selection };
+        viewInternals(editor.view).dragging = { slice, move: true, node: selection };
         if (e.dataTransfer) {
           e.dataTransfer.effectAllowed = "move";
           e.dataTransfer.setData("text/plain", "");
@@ -2002,7 +2013,7 @@ export const TableBlock = TiptapNode.create({
               const tableEl = target?.closest?.('[data-type="table-block"]') || target?.closest?.('[data-table-block]');
               let tablePos: number | null = null;
               if (tableEl) {
-                const desc = (view as any).docView?.nearestDesc(tableEl, true);
+                const desc = viewInternals(view).docView?.nearestDesc(tableEl, true);
                 if (desc && desc.node?.type?.name === "tableBlock") {
                   tablePos = desc.posBefore;
                 }
@@ -2021,7 +2032,7 @@ export const TableBlock = TiptapNode.create({
                   view.dispatch(view.state.tr.setSelection(selection));
                 }
                 const slice = selection.content();
-                (view as any).dragging = { slice, move: true, node: selection };
+                viewInternals(view).dragging = { slice, move: true, node: selection };
                 if (event.dataTransfer) {
                   event.dataTransfer.effectAllowed = "move";
                   event.dataTransfer.setData("text/plain", "");
@@ -2039,7 +2050,7 @@ export const TableBlock = TiptapNode.create({
           handleDrop(view, event) {
             let fromPos = activeDraggedTablePos;
             if (fromPos == null) {
-              const draggingNode = (view as any).dragging?.node;
+              const draggingNode = viewInternals(view).dragging?.node;
               if (draggingNode instanceof NodeSelection && draggingNode.node.type.name === "tableBlock") {
                 fromPos = draggingNode.from;
               } else if (
@@ -2053,7 +2064,7 @@ export const TableBlock = TiptapNode.create({
             if (fromPos == null) return false;
 
             activeDraggedTablePos = null;
-            (view as any).dragging = null;
+            viewInternals(view).dragging = null;
 
             const tableNode = view.state.doc.nodeAt(fromPos);
             if (!tableNode || tableNode.type.name !== "tableBlock") {

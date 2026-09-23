@@ -898,7 +898,7 @@ export function BlockEditor({
       chain.run();
     }, 0);
     return () => clearTimeout(timer);
-  }, [editable, editor, page.blocks, page.id, syncTick]);
+  }, [editable, editor, page.blocks, page.id, page.lastWriteId, syncTick]);
 
   const focusEnd = useCallback(() => editor?.commands.focus("end"), [editor]);
 

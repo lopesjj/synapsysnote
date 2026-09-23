@@ -11,6 +11,24 @@ import { formatDuration } from "@/lib/utils";
 import { localizeErrorMessage, useTranslation } from "@/lib/i18n/translations";
 import { prepareAudioAttachment } from "@/lib/media/compress-attachment";
 
+interface SpeechResultEvent {
+  results: ArrayLike<ArrayLike<{ transcript?: string }>>;
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechResultEvent) => void) | null;
+  start(): void;
+  stop(): void;
+}
+
+interface SpeechWindow {
+  SpeechRecognition?: new () => SpeechRecognitionLike;
+  webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+}
+
 const SPEECH_LANG_MAP: Record<string, string> = {
   pt: "pt-BR",
   en: "en-US",
@@ -137,10 +155,8 @@ export function AudioRecorder({
 
       const SpeechRec =
         typeof window !== "undefined"
-          ? (window as unknown as { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any })
-              .SpeechRecognition ||
-            (window as unknown as { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any })
-              .webkitSpeechRecognition
+          ? (window as unknown as SpeechWindow).SpeechRecognition ||
+            (window as unknown as SpeechWindow).webkitSpeechRecognition
           : null;
 
       if (liveTranscription && SpeechRec) {
@@ -149,7 +165,7 @@ export function AudioRecorder({
           rec.continuous = true;
           rec.interimResults = false;
           rec.lang = SPEECH_LANG_MAP[language] || "pt-BR";
-          rec.onresult = (event: any) => {
+          rec.onresult = (event: SpeechResultEvent) => {
             let full = "";
             for (let i = 0; i < event.results.length; i++) {
               full += (event.results[i][0]?.transcript || "") + " ";
