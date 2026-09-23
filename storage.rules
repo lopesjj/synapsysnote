@@ -49,8 +49,6 @@ service firebase.storage {
            ];
     }
 
-    // Inclui `uploads/zip-import/...` — o importador .zip usa "zip-import"
-    // no lugar de pageId porque a página ainda não existe.
     match /workspaces/{workspaceId}/uploads/icons/{fileName} {
       allow read: if isMember(workspaceId);
       allow create, update: if canWrite(workspaceId)
@@ -63,7 +61,8 @@ service firebase.storage {
       allow read: if isMember(workspaceId);
       // Vídeo tem folga maior: comprimir 1 h de aula no navegador custaria a
       // duração inteira do vídeo. Os demais anexos continuam em 50 MB.
-      allow create, update: if canWrite(workspaceId)
+      allow create, update: if pageId != 'icons'
+        && canWrite(workspaceId)
         && isAllowedUploadType()
         && withinSizeLimit(
              request.resource.contentType.matches('video/.*') ? 150 : 50

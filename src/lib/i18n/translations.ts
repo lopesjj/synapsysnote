@@ -1186,7 +1186,9 @@ export type TranslationKey =
   | "pdf_page_counter"
   | "pdf_video"
   | "pdf_audio_recording"
-  | "delete_permanently";
+  | "delete_permanently"
+  | "page_merge_conflict"
+  | "sync_error";
 
 export const TRANSLATIONS: Record<string, Record<string, string>> & Record<SupportedLanguage, Partial<Record<TranslationKey, string>>> & { pt: Record<TranslationKey, string>; en: Record<TranslationKey, string> } = {
   ar: {} as Record<TranslationKey, string>,
@@ -2370,6 +2372,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     pdf_video: "Vídeo",
     pdf_audio_recording: "Gravação de áudio",
     delete_permanently: "Excluir definitivamente",
+    page_merge_conflict: "Esta nota foi editada em outro aparelho ao mesmo tempo. As duas versões do trecho alterado foram mantidas; confira e apague a que sobrar.",
+    sync_error: "Não foi possível sincronizar com o servidor. Verifique a conexão e recarregue a página se o problema continuar.",
   },
   en: {
     evernote_paid_plan_notice: "The direct connection uses Evernote MCP, which Evernote only allows on paid plans. On a free account, export your notes as .enex and use the file import below.",
@@ -3551,6 +3555,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     pdf_video: "Video",
     pdf_audio_recording: "Audio recording",
     delete_permanently: "Delete permanently",
+    page_merge_conflict: "This note was edited on another device at the same time. Both versions of the changed passage were kept; review them and delete the extra one.",
+    sync_error: "Couldn't sync with the server. Check your connection and reload the page if the problem persists.",
   },
 
   es: {
@@ -4733,6 +4739,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     pdf_video: "Vídeo",
     pdf_audio_recording: "Grabación de audio",
     delete_permanently: "Eliminar definitivamente",
+    page_merge_conflict: "Esta nota se editó en otro dispositivo al mismo tiempo. Se conservaron ambas versiones del fragmento modificado; revísalas y borra la que sobre.",
+    sync_error: "No se pudo sincronizar con el servidor. Revisa la conexión y recarga la página si el problema continúa.",
   },
 
   fr: {
@@ -5915,6 +5923,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     pdf_video: "Vidéo",
     pdf_audio_recording: "Enregistrement audio",
     delete_permanently: "Supprimer définitivement",
+    page_merge_conflict: "Cette note a été modifiée sur un autre appareil en même temps. Les deux versions du passage modifié ont été conservées ; vérifiez-les et supprimez celle en trop.",
+    sync_error: "Impossible de synchroniser avec le serveur. Vérifiez la connexion et rechargez la page si le problème persiste.",
   },
 
   it: {
@@ -7097,6 +7107,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     pdf_video: "Video",
     pdf_audio_recording: "Registrazione audio",
     delete_permanently: "Elimina definitivamente",
+    page_merge_conflict: "Questa nota è stata modificata su un altro dispositivo nello stesso momento. Sono state mantenute entrambe le versioni del passaggio modificato; controllale ed elimina quella in più.",
+    sync_error: "Impossibile sincronizzare con il server. Controlla la connessione e ricarica la pagina se il problema persiste.",
   },
 
   de: {
@@ -8279,6 +8291,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     pdf_video: "Video",
     pdf_audio_recording: "Audioaufnahme",
     delete_permanently: "Endgültig löschen",
+    page_merge_conflict: "Diese Notiz wurde gleichzeitig auf einem anderen Gerät bearbeitet. Beide Versionen der geänderten Stelle wurden behalten; prüfe sie und lösche die überzählige.",
+    sync_error: "Synchronisierung mit dem Server nicht möglich. Prüfe die Verbindung und lade die Seite neu, falls das Problem bleibt.",
   },
 
   ru: {
@@ -9461,6 +9475,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     pdf_video: "Видео",
     pdf_audio_recording: "Аудиозапись",
     delete_permanently: "Удалить навсегда",
+    page_merge_conflict: "Эта заметка одновременно редактировалась на другом устройстве. Обе версии изменённого фрагмента сохранены; проверьте их и удалите лишнюю.",
+    sync_error: "Не удалось синхронизироваться с сервером. Проверьте подключение и перезагрузите страницу, если проблема сохраняется.",
   },
 
   ja: {
@@ -10643,6 +10659,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     pdf_video: "動画",
     pdf_audio_recording: "音声録音",
     delete_permanently: "完全に削除",
+    page_merge_conflict: "このノートは同時に別のデバイスで編集されました。変更された箇所は両方のバージョンを残しています。確認して不要な方を削除してください。",
+    sync_error: "サーバーと同期できませんでした。接続を確認し、問題が続く場合はページを再読み込みしてください。",
   },
 
   zh: {
@@ -11825,6 +11843,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     pdf_video: "视频",
     pdf_audio_recording: "录音",
     delete_permanently: "永久删除",
+    page_merge_conflict: "此笔记同时在另一台设备上被编辑。已保留被修改段落的两个版本，请检查并删除多余的一个。",
+    sync_error: "无法与服务器同步。请检查网络连接，如问题持续请刷新页面。",
   },
 };
 
@@ -13009,6 +13029,8 @@ TRANSLATIONS.ar = {
   pdf_video: "فيديو",
   pdf_audio_recording: "تسجيل صوتي",
   delete_permanently: "حذف نهائي",
+  page_merge_conflict: "تم تعديل هذه الملاحظة على جهاز آخر في الوقت نفسه. احتفظنا بنسختَي المقطع المعدَّل؛ راجعهما واحذف النسخة الزائدة.",
+  sync_error: "تعذّرت المزامنة مع الخادم. تحقّق من الاتصال وأعد تحميل الصفحة إذا استمرت المشكلة.",
 };
 
 /**
@@ -13088,6 +13110,15 @@ export function formatTranslation(
   return str;
 }
 
+export function translate(
+  language: string,
+  key: TranslationKey,
+  params?: Record<string, string | number>
+): string {
+  const dict = TRANSLATIONS[language] || TRANSLATIONS.pt;
+  return formatTranslation(dict[key] || TRANSLATIONS.pt[key] || key, language, params);
+}
+
 export const PageLanguageContext = createContext<SupportedLanguage | null>(null);
 
 export function useTranslation() {
@@ -13096,11 +13127,8 @@ export function useTranslation() {
   const language = pageLanguage ?? storeLanguage;
   const setLanguage = useUiStore((state) => state.setLanguage);
 
-  const t = (key: TranslationKey, params?: Record<string, string | number>): string => {
-    const dict = TRANSLATIONS[language] || TRANSLATIONS.pt;
-    const str = dict[key] || TRANSLATIONS.pt[key] || key;
-    return formatTranslation(str, language, params);
-  };
+  const t = (key: TranslationKey, params?: Record<string, string | number>): string =>
+    translate(language, key, params);
 
   return { t, language, setLanguage, textDir: textDirection(language) };
 }

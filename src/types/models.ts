@@ -249,6 +249,7 @@ export interface Page {
   notionUrl?: string | null;
   importJobId?: string | null;
   importSource?: "notion-zip" | "evernote" | "docx" | "google-docs" | "html" | null;
+  lastWriteId?: string | null;
   createdBy: string;
   updatedBy: string;
   createdAt: ISOTimestamp;

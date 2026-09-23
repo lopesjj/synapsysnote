@@ -27,7 +27,7 @@ export interface DuplicateHost {
   }): Promise<Notebook>;
   updateNotebook(id: string, patch: Partial<Notebook>): Promise<void>;
   createPage(input: CreatePageInput): Promise<Page>;
-  updatePage(id: string, patch: Partial<Page>): Promise<void>;
+  updatePage(id: string, patch: Partial<Page>): Promise<unknown>;
   listPageFlashcards(pageId: string): Promise<Flashcard[]>;
   createFlashcard(input: CreateFlashcardInput): Promise<Flashcard>;
   copyMedia(target: MediaCopyTarget, sources: string[]): Promise<Record<string, CopiedMedia>>;

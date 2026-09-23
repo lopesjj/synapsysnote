@@ -1,4 +1,5 @@
 import type {
+  AppBlock,
   AppDatabase,
   CreateFlashcardInput,
   DatabaseRow,
@@ -60,6 +61,19 @@ export interface UpdatePageOptions {
    * tempo de esperar a leitura.
    */
   fast?: boolean;
+  base?: PageWriteBase;
+  overwrite?: boolean;
+}
+
+export interface PageWriteBase {
+  blocks: AppBlock[];
+  at: number;
+}
+
+export interface UpdatePageResult {
+  merged?: boolean;
+  conflict?: boolean;
+  blocks?: AppBlock[];
 }
 
 /** Destino da copia de arquivos do Storage ao duplicar. */
@@ -82,8 +96,8 @@ export interface DataAdapter {
 
   ensureWorkspace(): Promise<void>;
 
-  subscribeNotebooks(cb: (notebooks: Notebook[]) => void): Unsubscribe;
-  subscribePages(cb: (pages: Page[]) => void): Unsubscribe;
+  subscribeNotebooks(cb: (notebooks: Notebook[]) => void, onError?: (error: Error) => void): Unsubscribe;
+  subscribePages(cb: (pages: Page[]) => void, onError?: (error: Error) => void): Unsubscribe;
   subscribeDatabases(cb: (databases: AppDatabase[]) => void): Unsubscribe;
   subscribeImportJobs(cb: (jobs: ImportJob[]) => void): Unsubscribe;
   subscribeIntegration(cb: (integration: NotionIntegration | null) => void): Unsubscribe;
@@ -106,7 +120,7 @@ export interface DataAdapter {
 
   createPage(input: CreatePageInput): Promise<Page>;
   duplicatePage(id: string): Promise<Page>;
-  updatePage(id: string, patch: Partial<Page>, options?: UpdatePageOptions): Promise<void>;
+  updatePage(id: string, patch: Partial<Page>, options?: UpdatePageOptions): Promise<UpdatePageResult | void>;
   applyPageOrders(updates: { id: string; order: number }[]): Promise<void>;
   applyNotebookOrders(updates: { id: string; order: number }[]): Promise<void>;
   movePage(id: string, target: { notebookId?: string | null; parentPageId?: string | null; order?: number }): Promise<void>;
@@ -169,7 +183,7 @@ export interface DataAdapter {
   copyMedia(target: MediaCopyTarget, sources: string[]): Promise<Record<string, CopiedMedia>>;
   unquarantineMedia(storagePaths: string[]): Promise<void>;
 
-  subscribeFlashcards(cb: (cards: Flashcard[]) => void): Unsubscribe;
+  subscribeFlashcards(cb: (cards: Flashcard[]) => void, onError?: (error: Error) => void): Unsubscribe;
   listPageFlashcards(pageId: string): Promise<Flashcard[]>;
   createFlashcard(input: CreateFlashcardInput): Promise<Flashcard>;
   updateFlashcard(id: string, patch: Partial<Flashcard>): Promise<void>;

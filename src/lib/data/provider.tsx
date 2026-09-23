@@ -26,6 +26,9 @@ import { getLocalAdapter } from "./local-adapter";
 import { childrenOf, notebookAncestors } from "./notebook-tree";
 import { endOfDay, isCardDueForReview } from "@/lib/flashcards/srs";
 import { compareNatural } from "@/lib/utils";
+import { toast } from "sonner";
+import { useUiStore } from "@/lib/store/ui-store";
+import { translate } from "@/lib/i18n/translations";
 
 
 export interface PageTreeNode {
@@ -82,13 +85,19 @@ function readLocalStore<T>(key: string, fallback: T): T {
   }
 }
 
-function writeLocalStore(key: string, value: unknown) {
+const pendingLocalWrites = new Map<string, { timer: ReturnType<typeof setTimeout>; value: () => unknown }>();
+
+function writeLocalStore(key: string, value: () => unknown) {
   if (typeof window === "undefined") return;
-  setTimeout(() => {
+  const previous = pendingLocalWrites.get(key);
+  if (previous) clearTimeout(previous.timer);
+  const timer = setTimeout(() => {
+    pendingLocalWrites.delete(key);
     try {
-      window.localStorage.setItem(key, JSON.stringify(value));
+      window.localStorage.setItem(key, JSON.stringify(value()));
     } catch {}
-  }, 0);
+  }, 1200);
+  pendingLocalWrites.set(key, { timer, value });
 }
 
 function stripHeavyPageFields(pages: Page[]): Page[] {
@@ -169,6 +178,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const unsubs: Array<() => void> = [];
 
+    const reportSyncError = (error: Error) => {
+      if (cancelled) return;
+      console.error("Falha ao sincronizar o workspace:", error);
+      toast.error(translate(useUiStore.getState().language, "sync_error"), { id: "workspace-sync-error" });
+    };
+
     const init = async () => {
       try {
         await adapter.ensureWorkspace();
@@ -180,14 +195,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         adapter.subscribeNotebooks((next) => {
           if (cancelled) return;
           setNotebooks(next);
-          writeLocalStore(`synapsys.cache.notebooks.${userKey}`, next);
-        }),
+          writeLocalStore(`synapsys.cache.notebooks.${userKey}`, () => next);
+        }, reportSyncError),
         adapter.subscribePages((next) => {
           if (cancelled) return;
           setPages(next);
           setLoadedAdapter(adapter);
-          writeLocalStore(`synapsys.cache.pages.${userKey}`, stripHeavyPageFields(next));
-        }),
+          writeLocalStore(`synapsys.cache.pages.${userKey}`, () => stripHeavyPageFields(next));
+        }, reportSyncError),
         adapter.subscribeDatabases((next) => {
           if (cancelled) return;
           setDatabases(next);
@@ -196,7 +211,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           if (cancelled) return;
           setFlashcards(next);
           setFlashcardsAdapter(adapter);
-          writeLocalStore(`synapsys.cache.flashcards.${userKey}`, stripHeavyFlashcardFields(next));
+          writeLocalStore(`synapsys.cache.flashcards.${userKey}`, () => stripHeavyFlashcardFields(next));
+        }, (error) => {
+          if (!cancelled) setFlashcardsAdapter(adapter);
+          reportSyncError(error);
         }),
         adapter.subscribeImportJobs((next) => {
           if (cancelled) return;
@@ -252,6 +270,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
 
     const livePageById = new Map(livePages.map((p) => [p.id, p]));
+    const pageIndex = new Map(pages.map((p) => [p.id, p]));
     // pageTitle/notebookId sao gravados no card na criacao; renomear ou mover a
     // nota depois nao reescreve os cards, entao o valor vivo manda.
     const liveFlashcards = flashcards.flatMap((card) => {
@@ -272,9 +291,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const scope = livePages.filter((p) =>
         notebookId === null ? true : p.notebookId === notebookId
       );
+      const scopeIds = new Set(scope.map((p) => p.id));
       const byParent = new Map<string | null, Page[]>();
       for (const page of scope) {
-        const key = page.parentPageId && scope.some((p) => p.id === page.parentPageId)
+        const key = page.parentPageId && scopeIds.has(page.parentPageId)
           ? page.parentPageId
           : null;
         if (!byParent.has(key)) byParent.set(key, []);
@@ -315,7 +335,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count),
       treeFor,
-      pageById: (id: string) => pages.find((p) => p.id === id),
+      pageById: (id: string) => pageIndex.get(id),
       notebookById: (id: string) => liveNotebooks.find((notebook) => notebook.id === id),
       childNotebooks: (parentId: string | null) => childrenOf(liveNotebooks, parentId),
       notebookPath: (notebookId: string) => notebookAncestors(liveNotebooks, notebookId),

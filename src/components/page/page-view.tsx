@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { AppBlock, Page, PageVersion } from "@/types/models";
+import type { PageWriteBase } from "@/lib/data/adapter";
 import { exportNoteToPdf } from "@/lib/export/export-note-pdf";
 import { useWorkspace } from "@/lib/data/provider";
 import { useDebounceAutoSave } from "@/hooks/use-debounce-auto-save";
@@ -275,6 +276,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const editorInsertAudioRef = useRef<((blob: Blob, duration: number, transcript?: string) => Promise<void>) | null>(null);
   const latestPageRef = useRef<Page | null>(null);
   const hasEditedRef = useRef(false);
+  const editorBaseRef = useRef<{ pageId: string; base: PageWriteBase } | null>(null);
   const announcedPageIdRef = useRef<string | null>(null);
 
   const zenMode = useUiStore((state) => state.zenMode);
@@ -440,7 +442,12 @@ export function PageView({ pageId }: { pageId: string }) {
     delay: 900,
     maxWait: 6000,
     onSave: async (patch) => {
-      await adapter.updatePage(pageId, patch);
+      const tracked = editorBaseRef.current;
+      const base = patch.blocks && tracked?.pageId === pageId ? tracked.base : undefined;
+      const result = await adapter.updatePage(pageId, patch, { base });
+      if (result && result.conflict) {
+        toast.warning(t("page_merge_conflict"), { id: "page-merge-conflict", duration: 9000 });
+      }
     },
     onUnloadSave: (patch) => {
       void adapter.updatePage(pageId, patch, { fast: true }).catch(() => {});
@@ -512,11 +519,16 @@ export function PageView({ pageId }: { pageId: string }) {
   const handleEditorChange = ({
     blocks,
     outgoingLinks,
+    writeId,
+    base,
   }: {
     blocks: AppBlock[];
     outgoingLinks: string[];
+    writeId: string;
+    base: PageWriteBase;
   }) => {
     hasEditedRef.current = true;
+    editorBaseRef.current = { pageId, base };
     if (latestPageRef.current) {
       latestPageRef.current = {
         ...latestPageRef.current,
@@ -524,7 +536,7 @@ export function PageView({ pageId }: { pageId: string }) {
         outgoingLinks,
       };
     }
-    schedule({ blocks, outgoingLinks });
+    schedule({ blocks, outgoingLinks, lastWriteId: writeId });
   };
 
   const handleExportPdf = async () => {

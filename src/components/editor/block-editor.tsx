@@ -14,6 +14,8 @@ import { Color, TextStyle } from "@tiptap/extension-text-style";
 import Typography from "@tiptap/extension-typography";
 import CharacterCount from "@tiptap/extension-character-count";
 import type { AppBlock, BlockMedia, Page } from "@/types/models";
+import type { PageWriteBase } from "@/lib/data/adapter";
+import { nanoid } from "nanoid";
 import { useWorkspace } from "@/lib/data/provider";
 import { toast } from "sonner";
 import {
@@ -63,7 +65,12 @@ export interface BlockEditorProps {
   editable?: boolean;
   chrome?: boolean;
   mentionCandidates?: MentionCandidate[];
-  onChange?: (payload: { blocks: AppBlock[]; outgoingLinks: string[] }) => void;
+  onChange?: (payload: {
+    blocks: AppBlock[];
+    outgoingLinks: string[];
+    writeId: string;
+    base: PageWriteBase;
+  }) => void;
   onRequestUpload?: () => void;
   onRequestAudio?: () => void;
   onInsertFiles?: (files: File[]) => void;
@@ -191,15 +198,17 @@ export function BlockEditor({
   onChangeRef.current = onChange;
   // Ultimo conteudo enviado para salvar que ainda nao voltou do banco. Enquanto
   // existir, nada que chegue do banco substitui o editor (seria uma versao velha).
-  const pendingEmitted = useRef<{ blocks: AppBlock[]; signature: string | null } | null>(null);
+  const pendingEmitted = useRef<{ blocks: AppBlock[]; signature: string | null; writeId: string } | null>(null);
   const latestBlocksRef = useRef(page.blocks);
   latestBlocksRef.current = page.blocks;
+  const baseRef = useRef<PageWriteBase>({ blocks: page.blocks, at: 0 });
   const [syncTick, setSyncTick] = useState(0);
 
   const emitBlocks = useCallback((instance: Editor) => {
     const blocks = persistableBlocks(docToBlocks(instance.getJSON()));
-    pendingEmitted.current = { blocks, signature: null };
-    onChangeRef.current?.({ blocks, outgoingLinks: collectMentionIds(blocks) });
+    const writeId = `w_${nanoid(10)}`;
+    pendingEmitted.current = { blocks, signature: null, writeId };
+    onChangeRef.current?.({ blocks, outgoingLinks: collectMentionIds(blocks), writeId, base: baseRef.current });
   }, []);
   const applyingRemote = useRef(false);
   const lastLocalEditAt = useRef(0);
@@ -815,6 +824,7 @@ export function BlockEditor({
     if (trackedPageId.current !== page.id) {
       trackedPageId.current = page.id;
       pendingEmitted.current = null;
+      baseRef.current = { blocks: page.blocks, at: Date.now() };
       return;
     }
     if (!editable) {
@@ -832,7 +842,27 @@ export function BlockEditor({
     if (pending) {
       pending.signature ??= blocksSignature(pending.blocks);
       // O que chegou e o nosso proprio salvamento: confirmado.
-      if (pending.signature === incoming) pendingEmitted.current = null;
+      if (pending.signature === incoming) {
+        pendingEmitted.current = null;
+        baseRef.current = { blocks: page.blocks, at: Date.now() };
+      } else if (page.lastWriteId === pending.writeId) {
+        const { from, to } = editor.state.selection;
+        const focused = editor.isFocused;
+        const merged = page.blocks;
+        const timer = setTimeout(() => {
+          if (editor.isDestroyed || pendingEmitted.current?.writeId !== pending.writeId) return;
+          pendingEmitted.current = null;
+          baseRef.current = { blocks: merged, at: Date.now() };
+          applyingRemote.current = true;
+          editor.commands.setContent(blocksToDoc(merged), { emitUpdate: false });
+          applyingRemote.current = false;
+          const size = editor.state.doc.content.size;
+          const chain = editor.chain().setTextSelection({ from: Math.min(from, size), to: Math.min(to, size) });
+          if (focused) chain.focus();
+          chain.run();
+        }, 0);
+        return () => clearTimeout(timer);
+      }
       // Com edicao local ainda nao confirmada, o que chega do banco e mais
       // antigo que o editor; so as transcricoes prontas entram.
       applyRemoteMediaEnrichment(editor, page.blocks, applyingRemote);
@@ -840,6 +870,7 @@ export function BlockEditor({
     }
 
     if (incoming === blocksSignature(docToBlocks(editor.getJSON()))) {
+      baseRef.current = { blocks: page.blocks, at: Date.now() };
       applyRemoteMediaEnrichment(editor, page.blocks, applyingRemote);
       return;
     }
@@ -857,6 +888,7 @@ export function BlockEditor({
     const focused = editor.isFocused;
     const timer = setTimeout(() => {
       if (editor.isDestroyed || pendingEmitted.current) return;
+      baseRef.current = { blocks: latestBlocksRef.current, at: Date.now() };
       editor.commands.setContent(blocksToDoc(latestBlocksRef.current), { emitUpdate: false });
       const size = editor.state.doc.content.size;
       const chain = editor

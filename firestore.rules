@@ -69,11 +69,20 @@ service cloud.firestore {
       return workspaceId == 'ws_' + request.auth.uid;
     }
 
+    function legalFields() {
+      return ['legalAcceptedVersion', 'legalAcceptedAt'];
+    }
+
     match /users/{userId} {
       allow read: if isSignedIn() && request.auth.uid == userId;
-      allow create, update: if isSignedIn()
+      allow create: if isSignedIn()
         && request.auth.uid == userId
-        && incoming().uid == userId;
+        && incoming().uid == userId
+        && !incoming().keys().hasAny(legalFields());
+      allow update: if isSignedIn()
+        && request.auth.uid == userId
+        && incoming().uid == userId
+        && !incoming().diff(existing()).affectedKeys().hasAny(legalFields());
       allow delete: if false;
     }
 
@@ -111,11 +120,13 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId
               == request.auth.uid
           )
-          || isAdmin(workspaceId)
+          || (isAdmin(workspaceId) && (incoming().role != 'owner' || isOwner(workspaceId)))
         );
 
         allow update: if isAdmin(workspaceId)
-          && !(existing().role == 'owner' && incoming().role != 'owner');
+          && (userId != request.auth.uid || incoming().role == existing().role)
+          && !(existing().role == 'owner' && incoming().role != 'owner')
+          && (incoming().role != 'owner' || isOwner(workspaceId));
 
         allow delete: if isAdmin(workspaceId) && existing().role != 'owner';
       }

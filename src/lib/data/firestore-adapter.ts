@@ -13,6 +13,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -26,6 +27,7 @@ import { deleteObject, getDownloadURL, ref, uploadBytes, uploadBytesResumable } 
 import { httpsCallable } from "firebase/functions";
 import { nanoid } from "nanoid";
 import type {
+  AppBlock,
   AppDatabase,
   DatabaseRow,
   Flashcard,
@@ -48,6 +50,7 @@ import { subtreePatches } from "./page-tree";
 import { plainTextOf } from "./seed";
 import { hasMergeableMedia, mergeMediaEnrichment } from "./media-enrichment";
 import { pagePatchIsNoop } from "./page-write";
+import { mergeBlocks, sameBlocks } from "./block-merge";
 import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
 import { calculateNextReview } from "@/lib/flashcards/srs";
 import { cardStoragePaths } from "@/lib/flashcards/card-images";
@@ -62,6 +65,8 @@ import type {
   MediaCopyTarget,
   Unsubscribe,
   UpdatePageOptions,
+  UpdatePageResult,
+  PageWriteBase,
 } from "./adapter";
 
 const SERVER_OWNED = ["extractedOCRText", "transcriptText", "embedding", "embeddingUpdatedAt"];
@@ -76,7 +81,7 @@ async function commitWrites(ops: Array<(batch: ReturnType<typeof writeBatch>) =>
   }
 }
 
-const MAX_PAGE_JSON_BYTES = 900_000;
+const MAX_PAGE_BYTES = 900_000;
 
 function stripUndefined<T>(value: T): T {
   if (Array.isArray(value)) {
@@ -113,20 +118,26 @@ function parseBlocksFromData(data: DocumentData | undefined): Page["blocks"] {
   return (data.blocks ?? []) as Page["blocks"];
 }
 
-function hasUnsupportedFirestoreArrays(val: unknown, inArray = false): boolean {
-  if (Array.isArray(val)) {
-    if (inArray) return true;
-    for (const item of val) {
-      if (hasUnsupportedFirestoreArrays(item, true)) return true;
-    }
-    return false;
+function utf8Bytes(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+function assertPageFits(fields: Record<string, unknown>) {
+  const sized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (key === "blocks" || value === undefined) continue;
+    if (value && typeof value === "object" && !Array.isArray(value) && (value as object).constructor !== Object) continue;
+    sized[key] = value;
   }
-  if (val && typeof val === "object" && (val as object).constructor === Object) {
-    for (const v of Object.values(val as Record<string, unknown>)) {
-      if (hasUnsupportedFirestoreArrays(v, inArray)) return true;
-    }
+  if (utf8Bytes(JSON.stringify(sized)) > MAX_PAGE_BYTES) {
+    throw new Error("NOTE_TOO_LARGE");
   }
-  return false;
+}
+
+function isOfflineError(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code;
+  const message = error instanceof Error ? error.message : String(error);
+  return code === "unavailable" || /offline/i.test(message);
 }
 
 /**
@@ -135,6 +146,24 @@ function hasUnsupportedFirestoreArrays(val: unknown, inArray = false): boolean {
  * ate a rede voltar). A estimativa local resolve.
  */
 const LOCAL_TIMESTAMPS = { serverTimestamps: "estimate" } as const;
+
+interface PreparedPageWrite {
+  payload: Record<string, unknown>;
+  blocks: AppBlock[] | undefined;
+  removed: string[];
+  added: string[];
+  conflict: boolean;
+  merged: boolean;
+}
+
+function pickBase(
+  editor: PageWriteBase | undefined,
+  written: PageWriteBase | undefined
+): PageWriteBase | undefined {
+  if (!editor) return written;
+  if (!written) return editor;
+  return written.at > editor.at ? written : editor;
+}
 
 function mapPage(snap: QueryDocumentSnapshot<DocumentData>): Page {
   const data = snap.data(LOCAL_TIMESTAMPS);
@@ -330,19 +359,26 @@ export class FirestoreAdapter implements DataAdapter {
     return doc(getDb(), "workspaces", this.workspaceId, name, id);
   }
 
-  subscribeNotebooks(cb: (notebooks: Notebook[]) => void): Unsubscribe {
+  subscribeNotebooks(cb: (notebooks: Notebook[]) => void, onError?: (error: Error) => void): Unsubscribe {
     return onSnapshot(
       query(this.col("notebooks"), orderBy("order", "asc")),
       (snap) => cb(snap.docs.map(mapNotebook)),
-      () => {}
+      (error) => onError?.(error)
     );
   }
 
-  subscribePages(cb: (pages: Page[]) => void): Unsubscribe {
+  subscribePages(cb: (pages: Page[]) => void, onError?: (error: Error) => void): Unsubscribe {
+    const cache = new Map<string, Page>();
     return onSnapshot(
       query(this.col("pages"), orderBy("updatedAt", "desc")),
-      (snap) => cb(snap.docs.map(mapPage)),
-      () => {}
+      (snap) => {
+        for (const change of snap.docChanges()) {
+          if (change.type === "removed") cache.delete(change.doc.id);
+          else cache.set(change.doc.id, mapPage(change.doc));
+        }
+        cb(snap.docs.map((docSnap) => cache.get(docSnap.id) ?? mapPage(docSnap)));
+      },
+      (error) => onError?.(error)
     );
   }
 
@@ -813,40 +849,17 @@ export class FirestoreAdapter implements DataAdapter {
       updatedAt: Date.now(),
       order: Date.now(),
     };
-    const hasUnsupported = blocks && hasUnsupportedFirestoreArrays(blocks);
     const writable = Object.fromEntries(
-      Object.entries(page).filter(([key]) => {
-        if (SERVER_OWNED.includes(key)) return false;
-        if (key === "blocks" && hasUnsupported) return false;
-        return true;
-      })
+      Object.entries(page).filter(([key]) => !SERVER_OWNED.includes(key) && key !== "blocks")
     );
     const createPayload: Record<string, unknown> = {
       ...writable,
-      ...(blocks ? { blocksJson: JSON.stringify(blocks) } : {}),
+      blocksJson: JSON.stringify(blocks),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-    try {
-      await setDoc(this.docRef("pages", id), createPayload);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (
-        msg.includes("invalid nested entity") ||
-        msg.includes("nested array") ||
-        msg.includes("Nested arrays") ||
-        msg.includes("INVALID_ARGUMENT")
-      ) {
-        const fallbackPayload: Record<string, unknown> = { ...createPayload };
-        delete fallbackPayload.blocks;
-        if (blocks && !fallbackPayload.blocksJson) {
-          fallbackPayload.blocksJson = JSON.stringify(blocks);
-        }
-        await setDoc(this.docRef("pages", id), fallbackPayload);
-      } else {
-        throw err;
-      }
-    }
+    assertPageFits(createPayload);
+    await setDoc(this.docRef("pages", id), createPayload);
     return page;
   }
 
@@ -855,103 +868,105 @@ export class FirestoreAdapter implements DataAdapter {
     return duplicatePageTree(this, pagesSnap.docs.map(mapPage), id);
   }
 
-  async updatePage(id: string, patch: Partial<Page>, options: UpdatePageOptions = {}) {
-    let blocks = patch.blocks;
-    let currentData: DocumentData | undefined;
-    const shouldInspectMedia =
-      !options.fast &&
-      (blocks !== undefined || patch.coverUrl !== undefined || patch.icon !== undefined);
+  private lastWritten = new Map<string, { blocks: AppBlock[]; at: number }>();
 
-    if (shouldInspectMedia) {
-      const current = await getDoc(this.docRef("pages", id));
-      if (current.exists()) {
-        currentData = current.data();
-        const currentBlocks = parseBlocksFromData(currentData);
-        if (blocks && hasMergeableMedia(blocks)) {
-          blocks = mergeMediaEnrichment(blocks, currentBlocks);
-        }
-        const removed: string[] = [];
-        if (blocks && currentBlocks.length > 0) {
-          const oldPaths = extractMediaPathsFromBlocks(currentBlocks);
-          const newPaths = new Set(extractMediaPathsFromBlocks(blocks));
-          for (const p of oldPaths) {
-            if (!newPaths.has(p) && isStorageFile(p, this.workspaceId)) {
-              removed.push(p);
-            }
-          }
-        }
-        if (
-          patch.coverUrl !== undefined &&
-          currentData.coverUrl &&
-          currentData.coverUrl !== patch.coverUrl &&
-          isStorageFile(currentData.coverUrl, this.workspaceId)
-        ) {
-          removed.push(currentData.coverUrl);
-        }
-        if (
-          patch.icon !== undefined &&
-          currentData.icon &&
-          currentData.icon !== patch.icon &&
-          isStorageFile(currentData.icon, this.workspaceId)
-        ) {
-          removed.push(currentData.icon);
-        }
-        if (removed.length > 0) {
-          void this.quarantineMedia(removed, id);
-        }
-        if (blocks && currentBlocks.length > 0) {
-          const newPaths = extractMediaPathsFromBlocks(blocks);
-          if (newPaths.length > 0) {
-            void this.unquarantineMedia(newPaths);
-          }
-        }
+  private preparePageWrite(
+    pageId: string,
+    patch: Partial<Page>,
+    current: DocumentData | undefined,
+    options: UpdatePageOptions
+  ): PreparedPageWrite | null {
+    const { blocks: requested, ...rest } = patch;
+    let blocks = requested;
+    let conflict = false;
+    let merged = false;
+    const currentBlocks = current ? parseBlocksFromData(current) : [];
+
+    if (blocks && current && !options.overwrite) {
+      const base = pickBase(options.base, this.lastWritten.get(pageId));
+      if (base && !sameBlocks(base.blocks, currentBlocks)) {
+        const result = mergeBlocks(base.blocks, blocks, currentBlocks);
+        merged = !sameBlocks(result.blocks, blocks);
+        conflict = result.conflict;
+        blocks = result.blocks;
       }
+      if (hasMergeableMedia(blocks)) blocks = mergeMediaEnrichment(blocks, currentBlocks);
     }
-    const hasUnsupported = blocks && hasUnsupportedFirestoreArrays(blocks);
+
     const payload: Record<string, unknown> = stripUndefined({
-      ...patch,
-      ...(blocks ? { ...(hasUnsupported ? {} : { blocks }), blocksJson: JSON.stringify(blocks) } : {}),
+      ...rest,
+      ...(blocks ? { blocksJson: JSON.stringify(blocks), plainText: plainTextOf(blocks) } : {}),
       updatedBy: this.userId,
-      updatedAt: serverTimestamp(),
     });
-    if (blocks) payload.plainText = plainTextOf(blocks);
     for (const key of SERVER_OWNED) delete payload[key];
 
-    // So compara com o que acabou de ser lido do servidor. Comparar com a ultima
-    // gravacao desta aba ignorava a mudanca feita em outro dispositivo: voltar
-    // ao valor anterior parecia "nada mudou" e nao era salvo.
-    if (currentData) {
-      const comparable = { ...payload };
-      delete comparable.updatedAt;
-      delete comparable.updatedBy;
-      if (pagePatchIsNoop(currentData, comparable)) return;
-    }
+    const comparable: Record<string, unknown> = { ...payload };
+    delete comparable.blocksJson;
+    if (blocks) comparable.blocks = blocks;
+    if (current && pagePatchIsNoop({ ...current, blocks: currentBlocks }, comparable)) return null;
 
-    const encoded = JSON.stringify(payload);
-    if (encoded.length > MAX_PAGE_JSON_BYTES) {
-      throw new Error("NOTE_TOO_LARGE");
-    }
+    if (blocks && current && Array.isArray(current.blocks)) payload.blocks = deleteField();
+    payload.updatedAt = serverTimestamp();
+    assertPageFits({ ...(current ?? {}), ...payload });
 
-    try {
-      await updateDoc(this.docRef("pages", id), payload);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (
-        msg.includes("invalid nested entity") ||
-        msg.includes("nested array") ||
-        msg.includes("Nested arrays") ||
-        msg.includes("INVALID_ARGUMENT")
-      ) {
-        const fallbackPayload = { ...payload };
-        delete fallbackPayload.blocks;
-        if (blocks && !fallbackPayload.blocksJson) {
-          fallbackPayload.blocksJson = JSON.stringify(blocks);
+    const removed: string[] = [];
+    const added: string[] = [];
+    if (current) {
+      if (blocks) {
+        const oldPaths = new Set(extractMediaPathsFromBlocks(currentBlocks));
+        const newPaths = new Set(extractMediaPathsFromBlocks(blocks));
+        for (const path of oldPaths) {
+          if (!newPaths.has(path) && isStorageFile(path, this.workspaceId)) removed.push(path);
         }
-        await updateDoc(this.docRef("pages", id), fallbackPayload);
-      } else {
-        throw err;
+        for (const path of newPaths) {
+          if (!oldPaths.has(path) && isStorageFile(path, this.workspaceId)) added.push(path);
+        }
+      }
+      for (const field of ["coverUrl", "icon"] as const) {
+        const before = current[field];
+        const after = patch[field];
+        if (after !== undefined && before && before !== after && isStorageFile(before, this.workspaceId)) {
+          removed.push(before as string);
+        }
+        if (after && after !== before && isStorageFile(after, this.workspaceId)) added.push(after as string);
       }
     }
+
+    return { payload, blocks, removed, added, conflict, merged };
+  }
+
+  async updatePage(id: string, patch: Partial<Page>, options: UpdatePageOptions = {}): Promise<UpdatePageResult> {
+    const ref = this.docRef("pages", id);
+
+    if (options.fast) {
+      const prepared = this.preparePageWrite(id, patch, undefined, options);
+      if (!prepared) return {};
+      await updateDoc(ref, prepared.payload);
+      if (prepared.blocks) this.lastWritten.set(id, { blocks: prepared.blocks, at: Date.now() });
+      return {};
+    }
+
+    let prepared: PreparedPageWrite | null;
+    try {
+      prepared = await runTransaction(getDb(), async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error("PAGE_NOT_FOUND");
+        const next = this.preparePageWrite(id, patch, snap.data(), options);
+        if (next) tx.update(ref, next.payload);
+        return next;
+      });
+    } catch (error) {
+      if (!isOfflineError(error)) throw error;
+      const snap = await getDoc(ref);
+      prepared = this.preparePageWrite(id, patch, snap.exists() ? snap.data() : undefined, options);
+      if (prepared) await updateDoc(ref, prepared.payload);
+    }
+
+    if (!prepared) return {};
+    if (prepared.blocks) this.lastWritten.set(id, { blocks: prepared.blocks, at: Date.now() });
+    if (prepared.removed.length) void this.quarantineMedia(prepared.removed, id);
+    if (prepared.added.length) void this.unquarantineMedia(prepared.added);
+    return prepared.merged ? { merged: true, conflict: prepared.conflict, blocks: prepared.blocks } : {};
   }
 
   async applyPageOrders(updates: { id: string; order: number }[]) {
@@ -1228,34 +1243,16 @@ export class FirestoreAdapter implements DataAdapter {
     const page = await getDoc(this.docRef("pages", pageId));
     if (!page.exists()) return;
     const data = page.data();
-    const blocks = parseBlocksFromData(data);
-    const blocksJson = data.blocksJson || JSON.stringify(blocks);
     const versionPayload: Record<string, unknown> = {
       pageId,
       title: data.title,
-      blocksJson,
+      blocksJson: data.blocksJson || JSON.stringify(parseBlocksFromData(data)),
       authorId: this.userId,
       label: label ?? null,
       createdAt: serverTimestamp(),
     };
-    if (!hasUnsupportedFirestoreArrays(blocks)) {
-      versionPayload.blocks = blocks;
-    }
-    try {
-      await addDoc(collection(this.docRef("pages", pageId), "versions"), versionPayload);
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      if (
-        errMsg.includes("invalid nested entity") ||
-        errMsg.includes("nested array") ||
-        errMsg.includes("INVALID_ARGUMENT")
-      ) {
-        delete versionPayload.blocks;
-        await addDoc(collection(this.docRef("pages", pageId), "versions"), versionPayload);
-      } else {
-        throw err;
-      }
-    }
+    assertPageFits(versionPayload);
+    await addDoc(collection(this.docRef("pages", pageId), "versions"), versionPayload);
   }
 
   async restoreVersion(pageId: string, versionId: string) {
@@ -1265,7 +1262,7 @@ export class FirestoreAdapter implements DataAdapter {
     await this.updatePage(pageId, {
       title: data.title,
       blocks: parseBlocksFromData(data),
-    });
+    }, { overwrite: true });
   }
 
 
@@ -1805,7 +1802,7 @@ export class FirestoreAdapter implements DataAdapter {
     }
   }
 
-  subscribeFlashcards(cb: (cards: Flashcard[]) => void): Unsubscribe {
+  subscribeFlashcards(cb: (cards: Flashcard[]) => void, onError?: (error: Error) => void): Unsubscribe {
     const q = query(this.col("flashcards"), orderBy("createdAt", "desc"));
     return onSnapshot(
       q,
@@ -1814,7 +1811,7 @@ export class FirestoreAdapter implements DataAdapter {
       },
       (err) => {
         console.error("Falha ao escutar flashcards:", err);
-        cb([]);
+        onError?.(err);
       }
     );
   }
