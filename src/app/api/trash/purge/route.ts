@@ -1,11 +1,15 @@
 import "server-only";
 
-import { Timestamp } from "firebase-admin/firestore";
 import { requireWorkspaceEditor } from "@/lib/api/session";
 import { ApiError, jsonError } from "@/lib/api/errors";
 import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { adminDb } from "@/lib/firebase/admin";
-import { TRASH_RETENTION_MS, purgeExpiredQuarantine, purgeItems } from "@/lib/trash/purge-server";
+import {
+  TRASH_RETENTION_MS,
+  expiredTrashOf,
+  purgeExpiredQuarantine,
+  purgeItems,
+} from "@/lib/trash/purge-server";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -42,19 +46,8 @@ export async function POST(request: Request) {
     const notebooks = ws.collection("notebooks");
 
     if (body.purgeExpired) {
-      // `deletedAt` e gravado com serverTimestamp(): a comparacao precisa ser
-      // com Timestamp, porque o Firestore nao compara Timestamp com numero.
-      const cutoff = Timestamp.fromMillis(Date.now() - TRASH_RETENTION_MS);
-      const [expiredPages, expiredDatabases, expiredNotebooks] = await Promise.all([
-        pages.where("deletedAt", "<=", cutoff).get(),
-        databases.where("deletedAt", "<=", cutoff).get(),
-        notebooks.where("deletedAt", "<=", cutoff).get(),
-      ]);
-      const purged = await purgeItems(workspaceId, {
-        pages: expiredPages.docs,
-        databases: expiredDatabases.docs,
-        notebooks: expiredNotebooks.docs,
-      });
+      const expired = await expiredTrashOf(workspaceId, new Date(Date.now() - TRASH_RETENTION_MS));
+      const purged = await purgeItems(workspaceId, expired);
       const quarantined = await purgeExpiredQuarantine(workspaceId);
       return Response.json({ ok: true, purged, quarantined });
     }

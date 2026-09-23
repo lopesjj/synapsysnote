@@ -45,7 +45,7 @@ env:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_REGION
-    value: us-central1
+    value: southamerica-east1
     availability:
       - BUILD
       - RUNTIME

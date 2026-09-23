@@ -9,7 +9,7 @@
     "start": "next start --port 43127",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run verify:file-import && npm run verify:integrations-import && npm run verify:sidebar-dnd && npm run verify:page-tree && npm run verify:block-merge && npm run verify:notebook-tree && npm run verify:media-enrichment && npm run verify:attachment-compress && npm run verify:notion-database-notebook && npm run verify:toggle && npm run verify:image-lightbox && npm run verify:document-title && npm run verify:table-multi && npm run verify:login-attempts && npm run verify:mention-scope && npm run verify:search-scope && npm run verify:language && npm run verify:locale-routing && npm run verify:legal && npm run verify:media-deletion && npm run verify:media-proxy && npm run verify:user-avatar && npm run verify:firebase-admin && npm run verify:flashcards && npm run verify:transcription",
+    "verify": "npm run verify:shared && npm run verify:file-import && npm run verify:integrations-import && npm run verify:sidebar-dnd && npm run verify:page-tree && npm run verify:block-merge && npm run verify:notebook-tree && npm run verify:media-enrichment && npm run verify:attachment-compress && npm run verify:notion-database-notebook && npm run verify:toggle && npm run verify:image-lightbox && npm run verify:document-title && npm run verify:table-multi && npm run verify:login-attempts && npm run verify:mention-scope && npm run verify:search-scope && npm run verify:language && npm run verify:locale-routing && npm run verify:legal && npm run verify:media-deletion && npm run verify:media-proxy && npm run verify:user-avatar && npm run verify:firebase-admin && npm run verify:flashcards && npm run verify:transcription",
     "verify:file-import": "tsx scripts/verify-file-import.mts",
     "verify:integrations-import": "tsx scripts/verify-integrations-import.mts",
     "verify:flashcards": "tsx scripts/verify-flashcards.mts",
@@ -46,7 +46,8 @@
     "account:delete": "tsx --conditions=react-server scripts/account-ops.mts delete",
     "account:suspend": "tsx --conditions=react-server scripts/account-ops.mts suspend",
     "deploy:secrets:admin": "firebase apphosting:secrets:set FIREBASE_SERVICE_ACCOUNT_JSON --data-file synapsysnote-firebase-adminsdk-fbsvc-b29e1e849c.json --force && firebase apphosting:secrets:grantaccess FIREBASE_SERVICE_ACCOUNT_JSON --backend synapsysnote",
-    "verify:block-merge": "tsx scripts/verify-block-merge.mts"
+    "verify:block-merge": "tsx scripts/verify-block-merge.mts",
+    "verify:shared": "node scripts/sync-functions-shared.mjs --check"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

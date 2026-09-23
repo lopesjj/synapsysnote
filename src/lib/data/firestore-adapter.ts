@@ -23,7 +23,7 @@ import {
   type QueryDocumentSnapshot,
   type Timestamp,
 } from "firebase/firestore";
-import { deleteObject, getDownloadURL, ref, uploadBytes, uploadBytesResumable } from "firebase/storage";
+import { getDownloadURL, ref, uploadBytes, uploadBytesResumable } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";
 import { nanoid } from "nanoid";
 import type {
@@ -1626,16 +1626,6 @@ export class FirestoreAdapter implements DataAdapter {
     }
     const url = await getDownloadURL(storageRef);
 
-    await addDoc(this.col("attachments"), {
-      pageId,
-      storagePath: path,
-      url,
-      name: file.name,
-      mimeType: file.type,
-      sizeBytes: file.size,
-      uploadedBy: this.userId,
-      createdAt: serverTimestamp(),
-    });
 
     return { url, storagePath: path };
   }
@@ -1720,29 +1710,16 @@ export class FirestoreAdapter implements DataAdapter {
     return getDownloadURL(storageRef);
   }
 
-  async deleteMedia(storagePaths: string[], pageId?: string): Promise<void> {
+  async deleteMedia(storagePaths: string[]): Promise<void> {
     if (!storagePaths || storagePaths.length === 0) return;
-    void pageId;
     try {
       await firebaseJson("/api/media/delete", {
         method: "POST",
-        body: JSON.stringify({
-          workspaceId: this.workspaceId,
-          storagePaths,
-        }),
+        body: JSON.stringify({ workspaceId: this.workspaceId, storagePaths }),
       });
     } catch (err) {
       console.error("Falha ao excluir mídia do storage:", err);
     }
-    try {
-      const storage = getFirebaseStorage();
-      await Promise.allSettled(
-        storagePaths.map((p) => {
-          const path = extractStoragePathFromValue(p) ?? p;
-          return deleteObject(ref(storage, path)).catch(() => {});
-        })
-      );
-    } catch {}
   }
 
   async copyMedia(target: MediaCopyTarget, sources: string[]): Promise<Record<string, CopiedMedia>> {

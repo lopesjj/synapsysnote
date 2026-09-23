@@ -3,28 +3,10 @@ import "server-only";
 import { requireWorkspaceEditor } from "@/lib/api/session";
 import { jsonError } from "@/lib/api/errors";
 import { adminBucket, adminDb, isAdminConfigured } from "@/lib/firebase/admin";
+import { extractStoragePath } from "@/lib/trash/purge-core";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-function extractStoragePath(input: unknown): string | null {
-  if (typeof input !== "string" || !input.trim()) return null;
-  const val = input.trim();
-  if (val.startsWith("workspaces/") || val.startsWith("users/")) {
-    return val;
-  }
-  if (val.includes("firebasestorage.googleapis.com") || val.includes("firebasestorage.app")) {
-    const match = val.match(/\/o\/([^?]+)/);
-    if (match && match[1]) {
-      try {
-        return decodeURIComponent(match[1]);
-      } catch {
-        return match[1];
-      }
-    }
-  }
-  return null;
-}
 
 export async function POST(request: Request) {
   try {
@@ -50,11 +32,7 @@ export async function POST(request: Request) {
     for (const item of rawList) {
       const parsed = extractStoragePath(item);
       if (!parsed) continue;
-
-      const isWorkspaceFile = parsed.startsWith(`workspaces/${workspaceId}/`);
-      const isUserFile = parsed.startsWith(`users/${user.uid}/`);
-
-      if (isWorkspaceFile || isUserFile) {
+      if (parsed.startsWith(`workspaces/${workspaceId}/`) || parsed.startsWith(`users/${user.uid}/`)) {
         pathsToDelete.add(parsed);
       }
     }
@@ -66,25 +44,23 @@ export async function POST(request: Request) {
     if (isAdminConfigured()) {
       const bucket = adminBucket();
       await Promise.allSettled(
-        Array.from(pathsToDelete).map((p) =>
+        Array.from(pathsToDelete).map((path) =>
           bucket
-            .file(p)
-            .delete()
+            .file(path)
+            .delete({ ignoreNotFound: true })
             .catch(() => {})
         )
       );
 
       const db = adminDb();
       const attachmentsCol = db.collection("workspaces").doc(workspaceId).collection("attachments");
-      for (const p of pathsToDelete) {
-        const snap = await attachmentsCol.where("storagePath", "==", p).get();
-        if (!snap.empty) {
-          const batch = db.batch();
-          for (const doc of snap.docs) {
-            batch.delete(doc.ref);
-          }
-          await batch.commit();
-        }
+      const paths = [...pathsToDelete];
+      for (let start = 0; start < paths.length; start += 30) {
+        const snap = await attachmentsCol.where("storagePath", "in", paths.slice(start, start + 30)).get();
+        if (snap.empty) continue;
+        const batch = db.batch();
+        for (const doc of snap.docs) batch.delete(doc.ref);
+        await batch.commit();
       }
     }
 

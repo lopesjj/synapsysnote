@@ -1,4 +1,5 @@
 import { REMEMBER_DAYS } from "@/lib/auth/remember";
+import { TRASH_RETENTION_DAYS } from "@/lib/trash/retention";
 
 /**
  * Quem responde pelo serviço. Os documentos legais leem daqui, então trocar um
@@ -26,7 +27,7 @@ export const LEGAL_UPDATED_AT = "2026-09-23";
 export const LEGAL_FACTS = {
   rememberDays: REMEMBER_DAYS,
   shortSessionHours: 12,
-  trashDays: 30,
+  trashDays: TRASH_RETENTION_DAYS,
   geoDays: 30,
   consentMonths: 12,
   accessLogMonths: 6,

@@ -1,29 +1,27 @@
 {
   "name": "synapsys-note-functions",
   "version": "1.0.0",
-  "description": "Cloud Functions for Synapsys Note: Notion import pipeline, transcription and embeddings.",
+  "description": "Cloud Functions do Synapsys Note: limpeza agendada da lixeira e da quarentena de mídia e exclusão definitiva de notas.",
   "private": true,
   "main": "lib/index.js",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node ../scripts/sync-functions-shared.mjs && tsc",
     "build:watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions,firestore,storage,auth",
     "shell": "npm run build && firebase functions:shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "node ../scripts/sync-functions-shared.mjs --check && tsc --noEmit"
   },
   "dependencies": {
-    "@google/genai": "^1.31.0",
-    "@notionhq/client": "^5.9.0",
     "firebase-admin": "^13.6.0",
     "firebase-functions": "^6.6.0"
   },
   "devDependencies": {
-    "@types/node": "^20.19.9",
+    "@types/node": "^22.10.0",
     "typescript": "^5.9.2"
   }
 }

@@ -125,7 +125,7 @@ function stripHeavyFlashcardFields(cards: Flashcard[]): Flashcard[] {
   }));
 }
 
-export const TRASH_RETENTION_DAYS: number = 30;
+export { TRASH_RETENTION_DAYS } from "@/lib/trash/retention";
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
