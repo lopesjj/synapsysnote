@@ -50,3 +50,4 @@ functions/lib/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+/public/vendor/

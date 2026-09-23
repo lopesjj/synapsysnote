@@ -34,8 +34,6 @@ export async function requireUser(request: Request): Promise<AuthedUser> {
 }
 
 export function workspaceIdFor(uid: string): string {
-  const envId = process.env.NEXT_PUBLIC_DEFAULT_WORKSPACE_ID;
-  if (envId && envId !== "primary") return envId;
   return `ws_${uid}`;
 }
 

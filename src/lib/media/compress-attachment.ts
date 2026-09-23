@@ -1,3 +1,5 @@
+import { PDF_WORKER_PATH, vendorUrl } from "@/lib/vendor-assets";
+
 export const IMAGE_SIZE_LIMIT = 1 * 1024 * 1024;
 export const PDF_SIZE_LIMIT = 3 * 1024 * 1024;
 export const AUDIO_SIZE_LIMIT = 3 * 1024 * 1024;
@@ -257,7 +259,7 @@ async function rasterizePdf(bytes: Uint8Array, scale: number, quality: number): 
   const { PDFDocument } = await import("pdf-lib");
 
   if (!pdfjs.GlobalWorkerOptions.workerSrc) {
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+    pdfjs.GlobalWorkerOptions.workerSrc = vendorUrl(PDF_WORKER_PATH);
   }
 
   const loading = pdfjs.getDocument({ data: bytes.slice() });

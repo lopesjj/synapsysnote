@@ -2,6 +2,7 @@
 
 
 import { getApp, getApps, initializeApp, type FirebaseApp, type FirebaseOptions } from "firebase/app";
+import { ReCaptchaEnterpriseProvider, initializeAppCheck } from "firebase/app-check";
 import {
   browserLocalPersistence,
   browserSessionPersistence,
@@ -47,8 +48,22 @@ export function getFirebaseApp(): FirebaseApp {
   }
   if (!app) {
     app = getApps().length ? getApp() : initializeApp(getFirebaseWebConfig() as FirebaseOptions);
+    startAppCheck(app);
   }
   return app;
+}
+
+function startAppCheck(instance: FirebaseApp) {
+  const siteKey = process.env.NEXT_PUBLIC_APPCHECK_SITE_KEY;
+  if (!siteKey || typeof window === "undefined" || firebaseEmulatorsEnabled()) return;
+  try {
+    initializeAppCheck(instance, {
+      provider: new ReCaptchaEnterpriseProvider(siteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (error) {
+    console.warn("App Check indisponível:", error);
+  }
 }
 
 export function getDb(): Firestore {

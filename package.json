@@ -47,7 +47,9 @@
     "account:suspend": "tsx --conditions=react-server scripts/account-ops.mts suspend",
     "deploy:secrets:admin": "firebase apphosting:secrets:set FIREBASE_SERVICE_ACCOUNT_JSON --data-file synapsysnote-firebase-adminsdk-fbsvc-b29e1e849c.json --force && firebase apphosting:secrets:grantaccess FIREBASE_SERVICE_ACCOUNT_JSON --backend synapsysnote",
     "verify:block-merge": "tsx scripts/verify-block-merge.mts",
-    "verify:shared": "node scripts/sync-functions-shared.mjs --check"
+    "verify:shared": "node scripts/sync-functions-shared.mjs --check",
+    "predev": "node scripts/copy-vendor.mjs",
+    "prebuild": "node scripts/copy-vendor.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

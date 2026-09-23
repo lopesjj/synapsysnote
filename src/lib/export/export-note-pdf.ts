@@ -4,6 +4,7 @@ import { isIconUrl } from "@/lib/icons/workspace-icon";
 import { coverPresetById } from "@/lib/covers/presets";
 import type { TranslationKey } from "@/lib/i18n/translations";
 import katex from "katex";
+import { KATEX_CSS_PATH, PDF_WORKER_PATH, vendorUrl } from "@/lib/vendor-assets";
 
 export interface ExportPdfOptions {
   notebookName?: string;
@@ -708,7 +709,7 @@ async function renderPdfPagesToDataUrls(bytes: Uint8Array, scale = 2): Promise<s
   try {
     const pdfjs = await import("pdfjs-dist");
     if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerSrc) {
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+      pdfjs.GlobalWorkerOptions.workerSrc = vendorUrl(PDF_WORKER_PATH);
     }
 
     const loading = pdfjs.getDocument({
@@ -871,7 +872,7 @@ export async function exportNoteToPdf(page: Page, options: ExportPdfOptions = {}
     .filter(Boolean)
     .join("\n");
 
-  const katexCssUrl = `https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css`;
+  const katexCssUrl = vendorUrl(KATEX_CSS_PATH);
 
   const fullHtml = `<!DOCTYPE html>
 <html lang="pt-BR">

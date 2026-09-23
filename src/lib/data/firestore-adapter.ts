@@ -810,7 +810,7 @@ export class FirestoreAdapter implements DataAdapter {
     }
     for (const snap of pages.docs) {
       ops.push((batch) =>
-        batch.update(snap.ref, { notebookId: null, updatedAt: serverTimestamp() })
+        batch.update(snap.ref, { notebookId: null, updatedBy: this.userId, updatedAt: serverTimestamp() })
       );
     }
     ops.push((batch) => batch.delete(this.docRef("notebooks", "nb_inbox")));

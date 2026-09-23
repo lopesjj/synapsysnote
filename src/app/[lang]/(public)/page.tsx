@@ -353,7 +353,7 @@ export default function LandingPage() {
                 type="password"
                 dir="ltr"
                 required
-                minLength={6}
+                minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"

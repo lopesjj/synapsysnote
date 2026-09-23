@@ -70,8 +70,6 @@ interface WorkspaceContextValue {
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
 function workspaceIdFor(uid: string): string {
-  const envId = process.env.NEXT_PUBLIC_DEFAULT_WORKSPACE_ID;
-  if (envId && envId !== "primary") return envId;
   return `ws_${uid}`;
 }
 

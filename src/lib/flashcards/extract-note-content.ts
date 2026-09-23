@@ -1,5 +1,6 @@
 import type { AppBlock, Page } from "@/types/models";
 import { blocksToPlainText } from "@/components/editor/serializer";
+import { PDF_WORKER_PATH, vendorUrl } from "@/lib/vendor-assets";
 
 export const EXTRACTION_LIMITS = {
   maxPdfDocuments: 10,
@@ -118,7 +119,7 @@ async function extractTextFromPdfBlob(
     let loading: ReturnType<typeof pdfjs.getDocument>;
     try {
       if (pdfjs.GlobalWorkerOptions && !pdfjs.GlobalWorkerOptions.workerSrc) {
-        pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+        pdfjs.GlobalWorkerOptions.workerSrc = vendorUrl(PDF_WORKER_PATH);
       }
       loading = pdfjs.getDocument({ data: new Uint8Array(buf) });
     } catch {

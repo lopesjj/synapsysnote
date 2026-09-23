@@ -68,7 +68,7 @@ async function firebaseAuth() {
   return getFirebaseAuth();
 }
 
-export type OAuthProviderId = "google" | "github";
+export type OAuthProviderId = "google";
 
 export interface AppUser {
   uid: string;
@@ -364,17 +364,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         interactiveSignIn.current = true;
 
         const [
-          { GoogleAuthProvider, GithubAuthProvider, signInWithPopup, getAdditionalUserInfo, deleteUser, signOut },
+          { GoogleAuthProvider, signInWithPopup, getAdditionalUserInfo, deleteUser, signOut },
           auth,
         ] = await Promise.all([import("firebase/auth"), firebaseAuth()]);
 
-        const provider =
-          providerId === "github" ? new GithubAuthProvider() : new GoogleAuthProvider();
-        if (providerId === "google") {
-          provider.setCustomParameters({ prompt: "select_account" });
-        } else {
-          provider.addScope("user:email");
-        }
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: "select_account" });
 
         let authenticated = false;
         try {
