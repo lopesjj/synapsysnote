@@ -176,51 +176,37 @@ lixeira), que exige leitura em massa dos dados dos usuários.
 
 ---
 
-## 2. Implementações para correção
+## 2. Implementações para correção (revisão 2)
 
-Ordem sugerida: primeiro o que perde dados ou contradiz a Política, depois custo e
-escala, por fim qualidade.
+Ordem por prioridade. A Fase 0 é só configuração em produção, sem mudar código, e
+fecha os riscos que já estão expostos. Cada item cita os achados que resolve.
 
-### Fase 1 — Perda de dados e conformidade (imediato)
+### Fase 0 — Configuração em produção (sem código, imediato)
 
-**1. P1 — parar de gravar `blocks` em dobro** (`firestore-adapter.ts`, `updatePage`)
+**0.1 Rotacionar a chave da conta de serviço** `firebase-adminsdk-fbsvc`
+(IAM → Contas de serviço → Chaves): a chave `32dae18…` foi compartilhada fora do cofre.
+Excluí-la e, se ela for a mesma usada no segredo `FIREBASE_SERVICE_ACCOUNT_JSON` do App
+Hosting, gravar a nova no segredo antes (o script `deploy:secrets:admin` cita outra
+chave, `b29e1e8…`).
 
-```ts
-const { blocks: _raw, ...rest } = patch;
-const payload: Record<string, unknown> = stripUndefined({
-  ...rest,
-  ...(blocks ? { blocksJson: JSON.stringify(blocks), blocks: deleteField() } : {}),
-  updatedBy: this.userId,
-  updatedAt: serverTimestamp(),
-});
+**0.2 Publicar regras e índices corrigidos — FB1, FB2, X1, X3, L1**
+
+Um único `npm run deploy:rules`, depois de aplicar no repositório:
+
+- `storage.rules` (X1): na regra genérica de uploads, `pageId != 'icons'`:
+
+```
+match /workspaces/{workspaceId}/uploads/{pageId}/{fileName} {
+  allow read: if isMember(workspaceId);
+  allow create, update: if pageId != 'icons'
+    && canWrite(workspaceId)
+    && isAllowedUploadType()
+    && withinSizeLimit(request.resource.contentType.matches('video/.*') ? 150 : 50);
+  allow delete: if canWrite(workspaceId);
+}
 ```
 
-- `deleteField()` limpa o campo legado aos poucos; um script Admin único pode limpar o resto
-  (`FieldValue.delete()` em `blocks` de todas as páginas e versões).
-- Corrigir `hasUnsupportedFirestoreArrays`: o Firestore só proíbe array **diretamente**
-  dentro de array; objeto com array dentro de array é permitido. (Com o item acima o
-  campo `blocks` deixa de ser necessário, então a função pode sair.)
-- Medir tamanho com o payload já sem duplicação e aplicar a mesma checagem em
-  `createPage`, `snapshotVersion` e importações (P2).
-
-**2. C1 — concorrência na edição de notas**
-
-Curto prazo (otimista, por revisão):
-
-- Campo `rev: number` na página; o editor guarda o `rev` da última versão aplicada.
-- Salvar em `runTransaction`: ler, comparar `rev` com o `baseRev`; se igual, gravar
-  `rev + 1`; se diferente, fazer *merge* de 3 vias por `block.id` (base = última
-  versão confirmada, local = editor, remoto = servidor) e regravar; blocos alterados
-  dos dois lados viram conflito visível (manter os dois e avisar).
-- Liberar `rev` nas regras e exigir `incoming().rev == existing().rev + 1` no update
-  de páginas.
-- Observação: transação não funciona offline; manter o caminho atual como fallback
-  offline e reconciliar ao voltar a rede.
-
-Longo prazo: CRDT (Yjs + `y-prosemirror`) com log de atualizações em
-`pages/{id}/updates` e compactação periódica.
-
-**3. L1 — proteger campos de aceite** (`firestore.rules`)
+- `firestore.rules` (L1): campos de aceite só pelo servidor:
 
 ```
 match /users/{userId} {
@@ -236,126 +222,190 @@ match /users/{userId} {
 }
 ```
 
-Melhor ainda: histórico imutável em `users/{uid}/legal_acceptances/{version}`
-(somente Admin), com data do servidor, IP e user agent.
+- `firestore.rules` (X3): em `members`, `role == 'owner'` só com `isOwner(workspaceId)`,
+  e um admin não altera o próprio papel.
+- `firestore.indexes.json` (FB2): manter as exceções de `blocks`, `blocksJson`,
+  `plainText`, `extractedOCRText`; remover o índice vetorial enquanto não houver
+  embeddings (F4).
 
-**4. L2 — reaceite obrigatório** (`registration-gate.tsx`)
+O app não grava os campos de aceite pelo navegador, e o único membro que ele cria é
+o próprio dono no workspace pessoal (caminho que continua permitido), então essas
+regras não quebram nada.
 
-Depois do `profileNeedsCompletion`, se `legalAcceptanceRequired(user, profile)`,
-exibir um diálogo com checkbox e links para Termos/Política que chama
-`recordLegalAcceptance(uid)` e recarrega o perfil. No cadastro, não engolir o erro
-do aceite: mostrar aviso e deixar o gate pedir de novo.
-
-**5. L3/L4 — provedores de IA e tradução**
-
-- Usar a Gemini API só em projeto **com faturamento** (ou migrar para Vertex AI) e
-  remover do `.env.example` a orientação de plano gratuito; citar a condição na Política.
-- Trocar o endpoint `translate_a/single` pela **Cloud Translation API v3**
-  (`projects/{id}/locations/global:translateText`) com a service account do projeto,
-  ou retirar o recurso.
-
-**6. L5/L6 — exclusão e exportação de conta**
-
-- Exclusão: para cada workspace do usuário (consulta
-  `where('memberIds', 'array-contains', uid)`), revogar tokens (Notion/Google/Evernote
-  via `integration-disconnect.ts` e `evernote/store.ts`), depois
-  `adminDb().recursiveDelete(wsRef)` (apaga todas as subcoleções, inclusive
-  `integrations/*/secure`, `attachments`, `import_jobs/*/logs`), `bucket.deleteFiles`
-  dos prefixos e `auth.deleteUser`.
-- Exportação: ZIP com JSON por coleção + os arquivos do Storage + registros de acesso
-  do titular.
-- Oferecer as duas ações também no app (Preferências → "Baixar meus dados" /
-  "Excluir conta", com reautenticação), mantendo o e-mail como canal alternativo.
-
-**7. L7 — TTL dos registros de acesso**
+**0.3 TTL dos registros de acesso — L7, FB3** (antes de publicar o commit `ed419b2`)
 
 ```
 gcloud firestore fields ttls update expiresAt \
   --collection-group=access_logs --enable-ttl --project=synapsysnote
 ```
 
-Documentar em `docs/07-setup-e-deploy.md`.
+**0.4 Recuperação de desastre — FB4**
 
-**8. F6/F7 — exclusões de arquivos sem checagem**
+```
+gcloud firestore databases update --database='(default)' --enable-pitr --delete-protection
+gcloud firestore backups schedules create --database='(default)' --recurrence=daily --retention=14d
+```
+
+**0.5 Proteção de login — X2, FB5**
+
+- Ativar a integração reCAPTCHA do Auth para e-mail/senha
+  (`emailPasswordEnforcementState: ENFORCE`; as chaves já existem). Começar em `AUDIT`
+  por alguns dias e depois `ENFORCE`.
+- Política de senha do Auth (mínimo 8 caracteres) e MFA opcional.
+- Ativar o App Check (reCAPTCHA Enterprise) em modo monitoramento; o código entra no item 5.1.
+
+**0.6 CORS do bucket — FB6**
+
+Restringir `origin` a `https://synapsysnt.com.br` e `https://app.synapsysnt.com.br`
+(`gsutil cors set cors.json gs://synapsysnote.firebasestorage.app`).
+
+**0.7 Chave do Gemini — L3**
+
+Confirmar no Google AI Studio que a `GEMINI_API_KEY` pertence a um projeto com
+faturamento (o `synapsysnote` tem), ou migrar para o Vertex AI. Remover do
+`.env.example` a orientação sobre o plano gratuito.
+
+### Fase 1 — Perda de dados e conformidade legal
+
+**1.1 Parar de gravar `blocks` em dobro — P1, P2** (`firestore-adapter.ts`, `updatePage`)
+
+```ts
+const { blocks: _raw, ...rest } = patch;
+const payload: Record<string, unknown> = stripUndefined({
+  ...rest,
+  ...(blocks ? { blocksJson: JSON.stringify(blocks), blocks: deleteField() } : {}),
+  updatedBy: this.userId,
+  updatedAt: serverTimestamp(),
+});
+```
+
+- Script Admin único: `FieldValue.delete()` em `blocks` de páginas e versões.
+- Remover `hasUnsupportedFirestoreArrays` e os caminhos de fallback que dependem dela.
+- Checagem de tamanho única (`assertPageFits`) usada em `createPage`, `updatePage`,
+  `snapshotVersion` e importações.
+
+**1.2 Concorrência na edição de notas — C1**
+
+- Campo `rev: number` na página; o editor guarda o `rev` da versão aplicada.
+- Salvar conteúdo em `runTransaction`: se `rev` do servidor == `baseRev`, grava
+  `rev + 1`; se não, *merge* de 3 vias por `block.id` (base = última versão
+  confirmada, local = editor, remoto = servidor); blocos alterados dos dois lados
+  viram conflito visível.
+- Regra de update de páginas: exigir incremento só quando o conteúdo muda, para não
+  afetar favoritar/mover/lixeira:
+
+```
+&& (!incoming().diff(existing()).affectedKeys().hasAny(['blocksJson'])
+    || incoming().rev == existing().get('rev', 0) + 1)
+```
+
+- Offline a transação não roda: manter a gravação atual como fallback e reconciliar ao
+  voltar a rede. Longo prazo: Yjs + `y-prosemirror`.
+
+**1.3 Reaceite dos Termos — L2** (`registration-gate.tsx`)
+
+Se `legalAcceptanceRequired(user, profile)`, exibir diálogo com checkbox e links que
+chama `recordLegalAcceptance(uid)` e recarrega o perfil. No cadastro, não engolir o
+erro do aceite. Opcional: histórico imutável em `users/{uid}/legal_acceptances/{version}`
+(só Admin) com data do servidor, IP e user agent.
+
+**1.4 Exclusão e exportação de conta — L5, L6, S7** (`scripts/account-ops.mts`)
+
+- Buscar workspaces com `where('memberIds', 'array-contains', uid)`.
+- Antes de apagar: revogar tokens do Notion/Google/Evernote (`integration-disconnect.ts`,
+  `evernote/store.ts`).
+- Apagar com `adminDb().recursiveDelete(wsRef)` (inclui `integrations/*/secure`,
+  `attachments`, `import_jobs/*/logs`), depois `bucket.deleteFiles` e `auth.deleteUser`.
+- Exportação em ZIP: JSON por coleção + arquivos do Storage + registros de acesso do titular.
+- Oferecer "Baixar meus dados" e "Excluir conta" nas Preferências, com reautenticação.
+
+**1.5 Tradução por API oficial — L4**
+
+Trocar `translate.googleapis.com/translate_a/single` pela Cloud Translation API v3
+(`projects/synapsysnote/locations/global:translateText`) com a conta de serviço do
+projeto, ou retirar o recurso.
+
+**1.6 Logout e cópia local — L8** (`use-auth.tsx`, `firebase/client.ts`)
+
+- No ramo `hasLogoutIntent()`: `writeCachedUser(null)` e `clearSignedOutStorage()`.
+- `memoryLocalCache()` quando "Manter conectado" estiver desmarcado.
+- `await terminate(db); await clearIndexedDbPersistence(db)` e zerar o singleton.
+- Limpar também `synapsys.bootstrapped.*`, `synapsys.trash_purge_cooldown.*`,
+  `synapsys.profile.v1.*`.
+- Ajustar a Política de Cookies ("cópia dos dados do workspace, apagada ao sair").
+
+**1.7 Mídia privada — L9**
+
+Servir arquivos por rota autenticada ou URL assinada de curta duração em vez do token
+permanente; no mínimo, revogar o `firebaseStorageDownloadTokens` quando o arquivo
+entra em quarentena.
+
+**1.8 Textos legais — L10, L11, FB6**
+
+Preencher controlador (razão social/CNPJ) e Encarregado (ou declarar a dispensa de
+agente de pequeno porte, Resolução CD/ANPD nº 2/2022); citar o registro de IP nos
+logs do servidor e o *soft delete* de 7 dias do Storage na seção de retenção.
+
+### Fase 2 — Cloud Functions e exclusão de arquivos
+
+**2.1 Runtime, região e limites — F1, F2, F3, FB7**
+
+- `firebase.json`: `"runtime": "nodejs22"`; `functions/package.json`:
+  `"engines": { "node": "22" }`; atualizar `firebase-functions`/`firebase-admin`.
+- Região: `functions/.env` com `FUNCTIONS_REGION=southamerica-east1` (mesma do
+  Firestore) e `NEXT_PUBLIC_FIREBASE_REGION` igual no `apphosting.yaml`. Trocar de
+  região exige apagar as funções antigas. O bucket continua em `US-EAST1` (região de
+  bucket não muda; só migrando para outro bucket).
+- Agendadas: `timeoutSeconds: 1800`, `memory: "1GiB"`, `retryCount: 1`.
+
+**2.2 Exclusões sem checagem — F6, F7, F8**
 
 - Remover a ação `purge_expired` de `/api/media/quarantine` (ou fazê-la chamar
-  `purgeExpiredQuarantine`, que confere referências).
-- Em `deleteMedia`, remover o `deleteObject` redundante do cliente; o servidor decide.
-- Para mídia removida do editor e cards, preferir quarentena com checagem na limpeza.
+  `purgeExpiredQuarantine`).
+- Remover o `deleteObject` redundante do cliente em `deleteMedia`.
+- Em `/api/media/delete`, apagar `attachments` com `where('storagePath', 'in', lote)`.
 
-**8b. FB1/FB2 — publicar regras e índices do repositório**
+**2.3 Limpeza da lixeira escalável — S2, F5, C4**
 
-`npm run deploy:rules` (Firestore rules + indexes + Storage). Antes, aplicar a
-correção X1 no `storage.rules` para publicar tudo de uma vez. Isso fecha a leitura
-pública dos ícones e a leitura de avatares por terceiros, e aplica as exceções de
-índice de `blocks`/`blocksJson`/`plainText`/`extractedOCRText`.
+- Campo `mediaPaths: string[]` em páginas, cards e linhas, gravado no salvamento;
+  backfill com script Admin.
+- Checagem "em uso" com `where('mediaPaths', 'array-contains-any', lote de 30)`.
+- Uma só implementação da limpeza (Functions); a rota Next só enfileira.
+- Agendada com `collectionGroup('pages').where('deletedAt', '<=', cutoff)` paginado,
+  ou fan-out por workspace via Cloud Tasks.
+- Rechecar a referência logo antes de apagar cada arquivo.
 
-**8c. FB4 — recuperação de desastre**
+**2.4 Código morto e documentação — F4, Q4, L13**
 
-Ativar PITR (`gcloud firestore databases update --enable-pitr`), proteção contra
-exclusão (`--delete-protection`) e um agendamento de backup diário
-(`gcloud firestore backups schedules create --recurrence=daily --retention=14d`).
+Decidir OCR/embeddings (implementar e exportar, ou remover `functions/src/ai`,
+`functions/src/notion`, `lib/crypto.ts` e as menções); remover o login GitHub do
+código; atualizar `docs/03`, `docs/04` e `docs/08` (regras atuais, App Hosting).
 
-**9. F1/F2/F3 — Functions**
+### Fase 3 — Concorrência, custo e escala
 
-- Alinhar região: criar `functions/.env` com `FUNCTIONS_REGION=<região>` e usar a mesma
-  em `NEXT_PUBLIC_FIREBASE_REGION` (de preferência a do Firestore; para usuários no
-  Brasil, `southamerica-east1`). Trocar de região exige apagar as funções antigas.
-- `firebase.json`: `"runtime": "nodejs22"`; `functions/package.json`:
-  `"engines": { "node": "22" }` e atualizar `firebase-functions`/`firebase-admin`.
-- Nas agendadas: `timeoutSeconds: 1800`, `memory: "1GiB"`, `retryCount: 1`.
+**3.1 Autosave mais barato — P3**
 
-**10. L8 — cache local e logout**
+Desquarentenar só caminhos novos (`newPaths.filter((p) => !oldPaths.has(p))`) e usar o
+último snapshot como base, sem `getDoc` a cada salvamento.
 
-- No ramo `hasLogoutIntent()` de `use-auth.tsx`, chamar `writeCachedUser(null)` e
-  `clearSignedOutStorage()` (hoje só o logout pelo menu limpa).
-- Usar `memoryLocalCache()` quando "Manter conectado" estiver desmarcado.
-- Preferir `await terminate(db); await clearIndexedDbPersistence(db)` e zerar o
-  singleton de `client.ts`, em vez de apagar bases por nome.
-- Limpar também `synapsys.bootstrapped.*`, `synapsys.trash_purge_cooldown.*` e
-  `synapsys.profile.v1.*`.
-- Ajustar o texto da Política de Cookies ("cópia dos dados do workspace no
-  IndexedDB, apagada ao sair").
+**3.2 Separar metadados de conteúdo — S1**
 
-### Fase 2 — Concorrência, custo e escala
+- `blocksJson` em `pages/{id}/content/main` (regras iguais às da página).
+- Lista, barra lateral e busca assinam só metadados (com `plainText` truncado); a nota
+  aberta assina o próprio conteúdo.
+- `docChanges()` para atualizar incrementalmente; debounce no cache do `localStorage`.
+- Atualizar junto: limpeza da lixeira, importação, versões e exclusão/exportação de
+  conta, que hoje leem `blocksJson` do documento da página.
 
-**11. P3 — autosave mais barato**
+**3.3 Importação do Notion robusta — C2, S4, P7**
 
-- Desquarentenar só caminhos **novos**:
-  `added = newPaths.filter((p) => !oldPaths.has(p))`.
-- Usar como base o último snapshot recebido (o editor já o tem), sem `getDoc` a cada
-  salvamento.
+- Lease no job em transação (`leaseUntil`, `leaseOwner`); itens marcados `processing`
+  na mesma transação.
+- `items` e `treeMetadata` em subcoleções.
+- Execução no servidor (Cloud Tasks ou trigger nas Functions), sem depender da aba;
+  limpar jobs concluídos após N dias.
 
-**12. S1 — separar metadados de conteúdo**
-
-- Mover `blocksJson` para `pages/{id}/content/main` (regras iguais às da página).
-- A barra lateral e a busca assinam só metadados (`title`, `icon`, `notebookId`,
-  `parentPageId`, `path`, `order`, `tags`, `updatedAt`, `deletedAt` e um `plainText`
-  truncado para busca); a nota aberta assina o próprio conteúdo.
-- Usar `snap.docChanges()` para atualizar incrementalmente; aplicar debounce na escrita
-  do cache do `localStorage`.
-
-**13. S2/F3/F5/C4 — índice de mídia para a limpeza**
-
-- Gravar em cada página/card/linha um campo `mediaPaths: string[]` (normalizado) no
-  salvamento.
-- Checagem "em uso" vira `where('mediaPaths', 'array-contains-any', lote de até 30)` →
-  custo proporcional aos candidatos, não ao workspace. Fazer backfill com script Admin.
-- Uma única implementação da limpeza (pacote compartilhado ou só nas Functions, com a
-  rota Next apenas enfileirando).
-- Agendada: `collectionGroup('pages').where('deletedAt', '<=', cutoff)` em páginas de
-  500, ou fan-out por workspace via Cloud Tasks.
-- Rechecar a referência imediatamente antes de apagar cada arquivo.
-
-**14. C2/S4/P7 — importação do Notion robusta**
-
-- Lease no job em transação (`leaseUntil`, `leaseOwner`); o step só roda se conseguir
-  o lease e o libera ao final; itens marcados `processing` dentro da transação.
-- Itens e `treeMetadata` em subcoleção (`import_jobs/{id}/items`, `…/tree`).
-- Execução no servidor (Cloud Tasks ou trigger `onDocumentWritten` em Functions),
-  sem depender da aba aberta; limpar jobs concluídos após N dias.
-
-**15. C3 — revisão de flashcard em transação**
+**3.4 Revisão de flashcard em transação — C3**
 
 ```ts
 await runTransaction(getDb(), async (tx) => {
@@ -366,73 +416,54 @@ await runTransaction(getDb(), async (tx) => {
 });
 ```
 
-**16. P4/P5 — operações de árvore**
+**3.5 Operações de árvore — P4, P5**
 
-- `movePage` em lotes (como `commitWrites`) e checagem de ciclo também no adapter.
-- Consultas direcionadas (`where('notebookId', 'in', ids)` em lotes de 30,
-  `path array-contains`) em vez de `getDocs` da coleção inteira.
-- Para exclusões grandes, rota no servidor com `BulkWriter` e marcador idempotente da
-  operação.
+`movePage` em lotes com checagem de ciclo no adapter; consultas direcionadas
+(`where('notebookId', 'in', ids)` em lotes de 30, `path array-contains`) em vez de
+baixar a coleção inteira; exclusões grandes no servidor com `BulkWriter` e marcador
+idempotente.
 
-**17. S3 — transcrição fora do servidor web**
+**3.6 Transcrição fora do servidor web — S3**
 
-Mover o Whisper para um serviço Cloud Run dedicado (concorrência 1, 2–4 GiB, modelo
-embutido na imagem) ou remover o fallback. Separar rotas pesadas de IA do SSR
-(backend próprio ou fila).
+Whisper em serviço Cloud Run dedicado (concorrência 1, 2–4 GiB, modelo na imagem) ou
+remover o fallback; separar rotas pesadas de IA do SSR.
 
-**18. C5 — rate limit por usuário**
+**3.7 Rate limit por usuário — C5**
 
-Usar o `uid` do token já verificado como chave; para teto global, contador no
-Firestore/Redis ou Cloud Armor na borda.
+Chave pelo `uid` do token verificado; teto global em Firestore/Redis ou Cloud Armor.
 
-### Fase 3 — Segurança complementar
+**3.8 Desempenho no cliente — S5, S6**
 
-**19. X1 — Storage:** na regra genérica, `allow create, update: if pageId != 'icons' && …`.
+Carregar `rows` só quando a base é aberta (em vez de um listener por base); `treeFor`
+e `pageById` com `Map`.
 
-**20. X2/FB5:** ativar a integração reCAPTCHA do Auth para e-mail/senha
-(`emailPasswordEnforcementState: ENFORCE`, as chaves já existem no projeto) e o
-**App Check** (reCAPTCHA Enterprise) para Firestore/Storage; definir política de
-senha (mínimo 8, com verificação no cliente) e oferecer MFA; captcha também no cadastro.
+### Fase 4 — Segurança complementar
 
-**20b. FB6:** restringir o CORS do bucket a `https://synapsysnt.com.br` e
-`https://app.synapsysnt.com.br` (`gsutil cors set`), e citar o *soft delete* de 7 dias
-na seção de retenção da Política.
+**4.1 App Check no código — X2**: `initializeAppCheck` com reCAPTCHA Enterprise no
+`client.ts`; após alguns dias em monitoramento, ativar a exigência no console.
 
-**21. X3:** em `members`, exigir `isOwner(workspaceId)` quando `incoming().role == 'owner'`
-e impedir que um admin altere o próprio papel.
+**4.2 Cabeçalhos — X4**: `headers()` no `next.config.ts` com CSP, `frame-ancestors 'none'`,
+HSTS, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`.
 
-**22. X4:** `headers()` no `next.config.ts` com CSP, `frame-ancestors 'none'`, HSTS,
-`Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`.
+**4.3 Sessão — X5**: "sair de todos os aparelhos" com `revokeRefreshTokens(uid)` e
+`verifySessionCookie(cookie, true)` nas rotas que usam cookie.
 
-**23. X5:** opção "sair de todos os aparelhos" com `adminAuth().revokeRefreshTokens(uid)`
-e `verifySessionCookie(cookie, true)` nas rotas que usam cookie.
+**4.4 Dependências externas — X6**: worker do pdf.js e CSS do KaTeX pelo bundler, na
+versão do pacote (0.18.5).
 
-**24. X6:** servir worker do pdf.js e CSS do KaTeX pelo bundler (mesma versão do pacote).
+### Fase 5 — Qualidade e pendências menores
 
-**25. L9:** para mídia privada, servir por rota autenticada (URL assinada de curta
-duração) em vez de token permanente; ao menos revogar o token (`firebaseStorageDownloadTokens`)
-quando o arquivo vai para a quarentena.
+**5.1 Lint — Q1**: corrigir os 77 erros (primeiro `static-components` em
+`app-shell.tsx:594-606` e `purity` em `trash/page.tsx:71`) e tornar o lint obrigatório.
 
-### Fase 4 — Qualidade e documentação
-
-**26. Q1:** corrigir os 77 erros de lint (prioridade: `static-components` em `app-shell.tsx`,
-`purity` em `trash/page.tsx`, `set-state-in-effect`) e tornar o lint obrigatório.
-
-**27. Q2/Q3:** atualizar `verify-page-tree.mts` para a lixeira com `trashedWith`; tirar
-`verify:firebase-admin` do `verify`; criar CI (GitHub Actions) com `typecheck`,
+**5.2 Testes e CI — Q2, Q3**: atualizar `verify-page-tree.mts` para a lixeira com
+`trashedWith`; tirar `verify:firebase-admin` do `verify`; criar CI com `typecheck`,
 `functions:typecheck`, `lint`, `verify` e `build`.
 
-**28. F4/Q4:** decidir OCR/embeddings (implementar e exportar, ou remover o código, o
-índice vetorial do `firestore.indexes.json` e as menções); atualizar `docs/03`,
-`docs/04`, `docs/08`.
+**5.3 Pendências — P6, P9, P10, P11, P12**
 
-**29. P6/P9/P10/P11/P12/L10/L11/L13:**
-
-- Remover `attachments` (ou apagá-la na limpeza).
-- Expor erro de assinatura sem apagar o cache.
+- Remover a coleção `attachments` (579 documentos sem uso) ou apagá-la na limpeza.
+- Mostrar erro das assinaturas sem sobrescrever o cache com lista vazia.
 - Incluir `updatedBy` no `purgeLegacyInbox`.
-- Centralizar a constante de retenção.
+- Centralizar o prazo de 30 dias numa constante compartilhada.
 - Remover a opção de workspace compartilhado ou implementar convites.
-- Completar controlador/Encarregado.
-- Mencionar logs de IP.
-- Remover o código do login com GitHub (provedor desativado).
