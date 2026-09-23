@@ -150,6 +150,7 @@ const LOCAL_TIMESTAMPS = { serverTimestamps: "estimate" } as const;
 interface PreparedPageWrite {
   payload: Record<string, unknown>;
   blocks: AppBlock[] | undefined;
+  localBlocks: AppBlock[] | undefined;
   removed: string[];
   added: string[];
   conflict: boolean;
@@ -945,7 +946,7 @@ export class FirestoreAdapter implements DataAdapter {
       }
     }
 
-    return { payload, blocks, removed, added, conflict, merged };
+    return { payload, blocks, localBlocks: requested, removed, added, conflict, merged };
   }
 
   async updatePage(id: string, patch: Partial<Page>, options: UpdatePageOptions = {}): Promise<UpdatePageResult> {
@@ -955,7 +956,7 @@ export class FirestoreAdapter implements DataAdapter {
       const prepared = this.preparePageWrite(id, patch, undefined, options);
       if (!prepared) return {};
       await updateDoc(ref, prepared.payload);
-      if (prepared.blocks) this.lastWritten.set(id, { blocks: prepared.blocks, at: Date.now() });
+      if (prepared.localBlocks) this.lastWritten.set(id, { blocks: prepared.localBlocks, at: Date.now() });
       return {};
     }
 
@@ -976,7 +977,7 @@ export class FirestoreAdapter implements DataAdapter {
     }
 
     if (!prepared) return {};
-    if (prepared.blocks) this.lastWritten.set(id, { blocks: prepared.blocks, at: Date.now() });
+    if (prepared.localBlocks) this.lastWritten.set(id, { blocks: prepared.localBlocks, at: Date.now() });
     if (prepared.removed.length) void this.quarantineMedia(prepared.removed, id);
     if (prepared.added.length) void this.unquarantineMedia(prepared.added);
     return prepared.merged ? { merged: true, conflict: prepared.conflict, blocks: prepared.blocks } : {};

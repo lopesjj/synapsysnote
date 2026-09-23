@@ -7,14 +7,11 @@ Arquivos:
 [`api/notion/import`](../src/app/api/notion/import/route.ts) ·
 [`api/notion/disconnect`](../src/app/api/notion/disconnect/route.ts) ·
 [`src/lib/notion/server/`](../src/lib/notion/server/) ·
-[`src/lib/notion/classify-import.ts`](../src/lib/notion/classify-import.ts) ·
-[`functions/src/notion/`](../functions/src/notion/)
+[`src/lib/notion/classify-import.ts`](../src/lib/notion/classify-import.ts)
 
 O cliente autenticado chama as rotas Next.js. O Admin SDK lê o token
-criptografado e fala com a API do Notion. As Cloud Functions
-(`listNotionTree`, `startNotionImport`, `processNotionImportJob`) continuam
-no repo como rede de segurança: o App Router limita o worker a ~5 minutos;
-o gatilho de documento nas Functions aceita 60.
+criptografado e fala com a API do Notion. Não há Cloud Function de importação:
+todo o pipeline roda nas rotas do Next.js, em passos curtos.
 
 ## 1. OAuth 2.0
 
@@ -151,26 +148,26 @@ tabela ou equação, vira **nota**. Bases / CSV nunca viram caderno.
 caderno mais próximo, aninhando só sob outra nota. É o que impede a sidebar
 de encher de “notas vazias” que no Notion eram só pastas.
 
-## 7. Worker em background
-
-Caminho principal — rotas Next.js:
+## 7. Worker em passos
 
 ```
 cliente  POST /api/notion/import
              └─ cria /workspaces/{ws}/import_jobs/{jobId}  status=pending
-             └─ after(() => runNotionImportJob)            (até ~5 min)
-             └─ PUT  /api/notion/import  { jobId }         backup se after() falhar
-                        status=discovering  → lê a árvore
+         PUT  /api/notion/import  { jobId }   (repetido pelo cliente até terminar)
+             └─ pega o lease do job em transação (leaseUntil/leaseOwner, 2 min)
+                        status=discovering  → lê a árvore e grava em import_jobs/{id}/meta/tree
                         status=running      → classifica → converte → rehospeda
                                               grava página / caderno / nota / base
                         reconstrói backlinks
                         status=completed | completed_with_errors | failed
+             └─ libera o lease
 ```
 
-Rede de segurança — Cloud Function `processNotionImportJob` (60 min, 1 GiB)
-no mesmo documento. A implementação mora em
-[`src/lib/notion/server/run-import.ts`](../src/lib/notion/server/run-import.ts)
-e o espelho em [`functions/src/notion/import-job.ts`](../functions/src/notion/import-job.ts).
+Cada `PUT` processa itens por até ~32 s e devolve o progresso. Se outra aba (ou um
+retry do cliente) chamar enquanto o lease está com alguém, a resposta vem com
+`busy: true` e o cliente espera 5 s — dois processos nunca trabalham no mesmo job.
+Ao abrir o app, o provider retoma sozinho os jobs `pending`/`running` do usuário, então
+fechar a aba só pausa a importação.
 
 Por que o progresso mora no documento e não na resposta HTTP: importar milhares
 de itens não cabe no tempo de uma requisição, e o cliente não pode ficar preso.
@@ -178,8 +175,9 @@ de itens não cabe no tempo de uma requisição, e o cliente não pode ficar pre
 Detalhes que importam:
 
 - **Progresso a cada item.** `ProgressReporter` usa `FieldValue.increment` nos
-  contadores (correto sob concorrência) e atualiza `currentStep` com texto legível.
-  O wizard só escuta o documento.
+  contadores e atualiza `currentStep` com texto legível. O wizard só escuta o documento.
+- **Árvore fora do documento principal.** `parents`, `orderedNodes` e `roles` ficam em
+  `import_jobs/{id}/meta/tree`, para o job de um workspace grande não passar de 1 MiB.
 - **Falha isolada.** Um item quebrado vira uma entrada em `errors[]` e o job
   segue; ao final, o status é `completed_with_errors`.
 - **Cancelamento cooperativo.** O cliente só pode gravar `status: 'canceled'`; o

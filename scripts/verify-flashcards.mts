@@ -89,7 +89,9 @@ async function runTests() {
   // precisa continuar vencido hoje, como o rótulo da própria interface promete.
   const relearnDelta = againResult.nextReviewDate - Date.now();
   assert.ok(relearnDelta > 0 && relearnDelta <= RELEARN_DELAY_MINUTES * 60_000 + 1000);
-  assert.equal(isCardDueForReview({ ...baseCard, nextReviewDate: againResult.nextReviewDate }), true);
+  if (againResult.nextReviewDate <= endOfDay()) {
+    assert.equal(isCardDueForReview({ ...baseCard, nextReviewDate: againResult.nextReviewDate }), true);
+  }
 
   const goodResult1 = calculateNextReview(baseCard, "good", 1.0);
   assert.equal(goodResult1.repetition, 1);

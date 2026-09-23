@@ -97,18 +97,21 @@ TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
 > integração só enxerga o que foi explicitamente selecionado — se algo não
 > aparece no wizard, é isso.
 
-## 5. Segredos das Cloud Functions
+## 5. Segredos (App Hosting)
 
 ```bash
-firebase functions:secrets:set TOKEN_ENCRYPTION_KEY   # MESMO valor do .env.local
-firebase functions:secrets:set GEMINI_API_KEY         # https://aistudio.google.com/apikey
-
-gcloud services enable vision.googleapis.com
+firebase apphosting:secrets:set TOKEN_ENCRYPTION_KEY           # openssl rand -base64 32
+firebase apphosting:secrets:set GEMINI_API_KEY                 # chave de projeto COM faturamento
+firebase apphosting:secrets:set NOTION_CLIENT_SECRET
+firebase apphosting:secrets:set RECAPTCHA_SECRET_KEY
+npm run deploy:secrets:admin                                   # FIREBASE_SERVICE_ACCOUNT_JSON
 ```
 
-Se `TOKEN_ENCRYPTION_KEY` divergir entre o Next.js e as Functions, o worker não
-consegue descriptografar o token e o job falha com
-`failed-precondition: stored Notion token is missing`.
+As Cloud Functions atuais (limpeza da lixeira) não usam segredos.
+
+A tradução usa a Cloud Translation API: ative `translate.googleapis.com` no projeto e
+dê à conta de serviço do app o papel "Cloud Translation API User". Enquanto isso não
+for feito, a rota usa a Gemini API.
 
 ## 6. Desenvolvimento com emuladores
 
@@ -118,41 +121,30 @@ NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true npm run dev
 ```
 
 Interface dos emuladores em <http://localhost:4000>. Auth, Firestore, Functions e
-Storage rodam localmente; Vision e Gemini continuam remotos (precisam de chave).
+Storage rodam localmente; Gemini continua remoto (precisa de chave).
 
 ## 7. Deploy
 
-**Frontend — Vercel**
-
-1. Importe o repositório.
-2. Defina as variáveis de `.env.local` no painel do projeto.
-3. Ajuste `NOTION_REDIRECT_URI` para o domínio de produção e cadastre a mesma URL
-   no Notion. A importação OAuth roda nas rotas `/api/notion/*` (até ~5 minutos
-   por job no App Router).
-
-**Backend**
+A ordem completa, com as configurações do console e a migração de dados, está em
+[`10-deploy-e-migracao.md`](10-deploy-e-migracao.md).
 
 ```bash
-npm run deploy:rules
-npm run deploy:functions
+npm run deploy:rules        # regras do Firestore e do Storage + índices e TTL
+npm run deploy:functions    # Node 22, southamerica-east1
+npm run deploy:web          # App Hosting (backend synapsysnote)
 ```
 
 ## 8. Verificação
 
 ```bash
-# regras
-firebase deploy --only firestore:rules --dry-run
-
-# funções
+npm run typecheck && npm run functions:typecheck && npm run lint && npm run verify && npm run build
 firebase functions:list
-firebase functions:log --only processNotionImportJob
-
-# app
-npm run typecheck && npm run functions:typecheck && npm run verify && npm run build
+firebase functions:log --only purgeExpiredTrash
 ```
 
-`npm run verify` cobre sidebar-dnd, page-tree, notebook-tree
-(hierarquia de cadernos aninhados) e media-enrichment.
+O CI (`.github/workflows/ci.yml`) roda a mesma sequência em cada pull request.
+`npm run check:firebase-admin` testa a credencial do Admin SDK localmente (fica fora
+do `verify` porque exige a chave).
 
 ## 9. Problemas comuns
 
@@ -160,8 +152,8 @@ npm run typecheck && npm run functions:typecheck && npm run verify && npm run bu
 | --- | --- |
 | Banner "Modo demonstração local" persiste | `NEXT_PUBLIC_FIREBASE_*` ausente ou build sem reiniciar |
 | `redirect_uri_mismatch` no Notion | a URI no `.env` difere da cadastrada, inclusive por barra final |
-| Job trava em `discovering` | segredo `TOKEN_ENCRYPTION_KEY` diferente entre runtimes |
+| Job do Notion falha em "autenticação" | `TOKEN_ENCRYPTION_KEY` trocado depois da conexão; reconecte a integração |
 | Imagens importadas não carregam | `downloadMedia` desligado no wizard — as URLs presigned expiraram |
-| Busca semântica vazia | índice vetorial ainda em construção, ou `GEMINI_API_KEY` ausente |
 | `permission-denied` ao criar página | falta o documento em `/workspaces/{id}/members/{uid}` |
 | Wizard não carrega a árvore do Notion | `FIREBASE_SERVICE_ACCOUNT_JSON` ausente ou `TOKEN_ENCRYPTION_KEY` divergente |
+| Limpeza da lixeira não roda | functions não publicadas em `southamerica-east1` ou índice de grupo de `deletedAt` ainda em construção |

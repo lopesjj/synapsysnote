@@ -915,6 +915,7 @@ async function runLeasedImportStep(
       return { done: true, status: "canceled" };
     }
 
+    await jobRef.update({ leaseUntil: Date.now() + LEASE_MS });
     await progress.itemStatus(item.notionId, "processing");
     await progress.patch({
       currentStep: `(${processedCount + 1}/${items.length}) Convertendo “${item.title}”…`,

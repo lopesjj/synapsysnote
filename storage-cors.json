@@ -1,0 +1,15 @@
+[
+  {
+    "origin": [
+      "https://synapsysnt.com.br",
+      "https://www.synapsysnt.com.br",
+      "https://app.synapsysnt.com.br",
+      "https://synapsysnote.web.app",
+      "https://synapsysnote.firebaseapp.com",
+      "http://localhost:43127"
+    ],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin", "Range", "x-goog-resumable"],
+    "maxAgeSeconds": 3600
+  }
+]

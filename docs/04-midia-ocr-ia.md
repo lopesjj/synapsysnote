@@ -1,25 +1,15 @@
 # ETAPA 4 — Mídia, OCR e IA
 
-Arquivos: [`functions/src/ai/`](../functions/src/ai/) ·
+Arquivos: [`src/app/api/ai/`](../src/app/api/ai/) ·
+[`src/lib/trash/purge-core.ts`](../src/lib/trash/purge-core.ts) ·
 [`functions/src/maintenance/trash.ts`](../functions/src/maintenance/trash.ts)
 
-## 1. OCR com Cloud Vision
+## 1. OCR
 
-[`ocr.ts`](../functions/src/ai/ocr.ts) — `runOcrOnUpload` é um gatilho
-`onObjectFinalized`, então cobre os dois caminhos de entrada de arquivo: upload
-do usuário e rehospedagem vinda do Notion.
-
-- **Imagens** → `documentTextDetection` direto na URI `gs://`.
-- **PDFs** → `asyncBatchAnnotateFiles`, que escreve JSON de volta no Storage; a
-  função aguarda a operação, concatena as páginas e apaga os arquivos
-  intermediários.
-
-O texto extraído é gravado em dois lugares: no bloco de mídia (para o leitor
-expandir "texto OCR" inline) e em `page.extractedOCRText`, que é o campo lido
-pela busca. Como o caminho do Storage está no bloco, a função localiza a página
-mesmo quando não existe registro em `/attachments` — caso das mídias importadas.
-
-`reprocessOcr` expõe a mesma rotina como callable, para reprocessamento manual.
+Não há OCR automático. O campo `page.extractedOCRText` continua no modelo (é
+somente do servidor nas regras) e a geração de flashcards o lê quando existir, mas
+nenhuma rotina o preenche hoje. Para ligar OCR, o caminho previsto é uma função
+`onObjectFinalized` que grave o texto nesse campo.
 
 ## 2. Transcrição com Gemini
 
@@ -194,52 +184,42 @@ de vídeo buscar posição sem baixar o arquivo inteiro. A rota de transcrição
 mesma verificação de sessão ([`app-session.ts`](../src/lib/api/app-session.ts)),
 porque gasta quota paga do Gemini.
 
-## 3. Embeddings e busca semântica
+## 3. Busca
 
-[`embeddings.ts`](../functions/src/ai/embeddings.ts)
+O Command Palette faz busca léxica local ([`src/lib/search.ts`](../src/lib/search.ts))
+sobre as notas já sincronizadas: instantânea, funciona sem rede e cobre título,
+corpo, tags e transcrições, com pesos diferentes e um leve bônus de recência. Não
+há embeddings nem busca vetorial.
 
-`embedPageOnWrite` recalcula o vetor quando o texto pesquisável muda — e só
-então, comparando o texto anterior com o novo para não entrar em laço com a
-própria escrita do embedding.
+## 4. Lixeira de 30 dias e quarentena de mídia
 
-O vetor (768 dimensões) é gravado como `FieldValue.vector(...)` e consultado por
-`semanticSearch` com `findNearest`, distância COSINE, filtrando `deletedAt == null`.
+A exclusão definitiva tem um núcleo único, [`src/lib/trash/purge-core.ts`](../src/lib/trash/purge-core.ts),
+usado pela rota `POST /api/trash/purge` e copiado para `functions/src/shared/` no build
+das Functions (`scripts/sync-functions-shared.mjs`; o `verify:shared` confere a cópia).
+O prazo vem de [`src/lib/trash/retention.ts`](../src/lib/trash/retention.ts) e é o mesmo
+citado nos documentos legais.
 
-**A busca é híbrida por composição:** o Command Palette roda a passada léxica
-localmente ([`src/lib/search.ts`](../src/lib/search.ts)) contra o cache offline —
-instantânea, funciona sem rede, cobre título, corpo, tags, OCR e transcrição com
-pesos diferentes e um leve bônus de recência — e mistura com os vizinhos
-vetoriais devolvidos pela função. Resultados que casaram por OCR ou transcrição
-recebem um selo na interface, porque "por que isto apareceu?" é a primeira
-pergunta de quem busca dentro de imagens.
+- Antes de apagar um arquivo, confere se alguma nota, card, caderno ou linha de base
+  ainda o usa; logo antes da exclusão, confere de novo o que foi gravado durante a
+  varredura, para não apagar uma mídia colada em outra nota nesse meio-tempo.
+- Mídia removida de uma nota vai para `trashed_media` (quarentena de 30 dias) e só
+  é apagada se continuar sem uso quando vencer.
+- `purgeExpiredTrash` (diária, 03:30 America/Sao_Paulo) acha os workspaces com itens
+  vencidos por consulta de grupo e processa cada um com orçamento de tempo
+  (timeout de 30 min). `purgeExpiredQuarantineMedia` faz o mesmo aos domingos.
+- `purgePage` é a callable usada como alternativa quando a rota não responde.
 
-## 4. Lixeira de 30 dias
+## 5. Inventário
 
-[`trash.ts`](../functions/src/maintenance/trash.ts)
-
-`purgeExpiredTrash` roda diariamente às 03:30 (America/Sao_Paulo): remove páginas
-com `deletedAt` anterior ao corte, apaga as versões e os objetos do Storage
-referenciados pelos blocos. `purgePage` faz o mesmo sob demanda a partir da tela
-de lixeira — e apaga também os descendentes (`path` array-contains).
-`restorePage` limpa `deletedAt`.
-
-## 5. Inventário de funções
-
-| Função | Tipo | Gatilho / uso |
+| Função / rota | Tipo | Uso |
 | --- | --- | --- |
-| `listNotionTree` | callable | árvore do wizard (o app usa `GET /api/notion/tree`) |
-| `startNotionImport` | callable | enfileira o job (o app usa `POST /api/notion/import`) |
-| `processNotionImportJob` | Firestore | worker longo (60 min, 1 GiB) no mesmo documento do job |
-| `disconnectNotion` | callable | revoga e apaga o token (o app usa `POST /api/notion/disconnect`) |
-| `runOcrOnUpload` | Storage | OCR de imagens e PDFs |
-| `reprocessOcr` | callable | reprocessamento manual |
-| `transcribeAudio` | callable | transcrição imediata |
-| `transcribeOnUpload` | Storage | rede de segurança |
-| `POST /api/ai/transcribe` | Next.js | fallback local / se a function falhar |
-| `embedPageOnWrite` | Firestore | mantém vetores atualizados |
-| `semanticSearch` | callable | `findNearest` |
-| `purgeExpiredTrash` | agendada | retenção de 30 dias |
-| `purgePage` / `restorePage` | callable | ações da lixeira |
+| `POST /api/ai/transcribe` | Next.js | transcrição via Gemini; Whisper local (uma inferência por instância) como alternativa |
+| `POST /api/ai/flashcards/generate` | Next.js | geração de flashcards |
+| `POST /api/ai/translate` | Next.js | Cloud Translation API; Gemini enquanto ela não estiver ativa |
+| `POST /api/trash/purge` | Next.js | exclusão definitiva e limpeza vencida |
+| `purgeExpiredTrash` | Function agendada | retenção de 30 dias |
+| `purgeExpiredQuarantineMedia` | Function agendada | quarentena de mídia |
+| `purgePage` | Function callable | alternativa à rota de exclusão |
 
-Segredos usados: `TOKEN_ENCRYPTION_KEY` (Notion) e `GEMINI_API_KEY` (IA),
-definidos via `firebase functions:secrets:set`.
+Região das Functions: `southamerica-east1` (a mesma do Firestore), definida em
+`functions/src/region.ts` e em `NEXT_PUBLIC_FIREBASE_REGION`. Runtime Node.js 22.

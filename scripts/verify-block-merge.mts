@@ -68,6 +68,17 @@ const base = [p("a"), p("b"), p("c")];
   console.log("  media enriched remotely is matched by file, not duplicated");
 }
 
+{
+  const local1 = [p("a"), p("b local"), p("c")];
+  const remote = [p("a"), p("b"), p("c"), p("d remote")];
+  const first = mergeBlocks(base, local1, remote);
+  const local2 = [p("a"), p("b local and more"), p("c")];
+  const second = mergeBlocks(local1, local2, first.blocks);
+  assert.deepEqual(texts(second.blocks), ["a", "b local and more", "c", "d remote"]);
+  assert.equal(second.conflict, false);
+  console.log("  typing after a merged save keeps what came from the other device");
+}
+
 assert.ok(sameBlocks([p("a")], [p("a")]));
 assert.ok(!sameBlocks([p("a")], [p("b")]));
 console.log("all block merge checks passed");

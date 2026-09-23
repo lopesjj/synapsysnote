@@ -2,6 +2,12 @@
 
 Data: 2026-09-23 · Versão analisada: `1.16.13` (commit `ed419b2`) · Revisão 2: correções e estado do Firebase em produção
 
+> **Status:** as correções da seção 2 foram implementadas no código (branch
+> `claude/gracious-pascal-8xslu0`), exceto a identificação do controlador/CNPJ
+> (pendente por decisão) e a rotação da chave (feita pelo responsável). A
+> publicação em produção e a migração de dados seguem a ordem de
+> [`10-deploy-e-migracao.md`](10-deploy-e-migracao.md).
+
 ## 0. Escopo e método
 
 Foram lidos e cruzados entre si:

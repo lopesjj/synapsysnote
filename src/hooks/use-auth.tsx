@@ -214,6 +214,7 @@ function clearSignedOutStorage(): void {
     }
   } catch {}
   forgetAccessSession();
+  window.dispatchEvent(new Event("synapsys:signed-out"));
 }
 
 export function hasActiveSessionHint(): boolean {

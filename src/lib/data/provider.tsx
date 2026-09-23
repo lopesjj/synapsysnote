@@ -84,6 +84,14 @@ function readLocalStore<T>(key: string, fallback: T): T {
 }
 
 const pendingLocalWrites = new Map<string, { timer: ReturnType<typeof setTimeout>; value: () => unknown }>();
+export const SIGNED_OUT_EVENT = "synapsys:signed-out";
+
+if (typeof window !== "undefined") {
+  window.addEventListener(SIGNED_OUT_EVENT, () => {
+    for (const pending of pendingLocalWrites.values()) clearTimeout(pending.timer);
+    pendingLocalWrites.clear();
+  });
+}
 
 function writeLocalStore(key: string, value: () => unknown) {
   if (typeof window === "undefined") return;
@@ -177,7 +185,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const unsubs: Array<() => void> = [];
 
     const reportSyncError = (error: Error) => {
-      if (cancelled) return;
+      const code = (error as { code?: string }).code;
+      if (cancelled || code === "cancelled" || /terminated/i.test(error.message)) return;
       console.error("Falha ao sincronizar o workspace:", error);
       toast.error(translate(useUiStore.getState().language, "sync_error"), { id: "workspace-sync-error" });
     };
