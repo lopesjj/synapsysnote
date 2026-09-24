@@ -2,10 +2,10 @@
 
 ## 1. Pré-requisitos
 
-- Node.js 20+ (o app usa 22 localmente; as Functions rodam em 20)
+- Node.js 22 (app e Cloud Functions)
 - `firebase-tools` (`npm i -g firebase-tools`)
 - Projeto no Firebase com faturamento Blaze — necessário para Cloud Functions de
-  2ª geração, Cloud Vision e chamadas externas (a API do Notion)
+  2ª geração, App Hosting e chamadas externas (Notion, Gemini, Cloud Translation)
 - Conta no Notion com permissão para criar integrações
 
 ## 2. Instalação
@@ -38,11 +38,11 @@ No console (https://console.firebase.google.com/project/synapsysnote):
 
 | Serviço | Ação |
 | --- | --- |
-| Authentication | habilite **E-mail/senha** e **Google**. Em *Authorized domains* deixe `localhost` e, em produção, o domínio da Vercel |
-| Firestore | crie o banco em **modo produção** (região `nam5` / `us-central` de preferência) |
+| Authentication | habilite **E-mail/senha** e **Google**. Em *Authorized domains* deixe `localhost` e, em produção, `synapsysnt.com.br` e `app.synapsysnt.com.br` |
+| Firestore | banco `(default)` em **modo produção**, região `southamerica-east1` (a das Functions) |
 | Storage | crie o bucket padrão `synapsysnote.firebasestorage.app` |
 | Regras | cole [`firestore.rules`](../firestore.rules) e [`storage.rules`](../storage.rules) — ver [guia de copiar e colar](08-firebase-console.md) |
-| Contas de serviço | gere a chave privada; cole o JSON em uma linha em `FIREBASE_SERVICE_ACCOUNT_JSON` (bootstrap, OAuth e importação do Notion no Next.js) |
+| Contas de serviço | gere a chave privada; cole o JSON em uma linha em `FIREBASE_SERVICE_ACCOUNT_JSON` (rotas `/api/*` do Next.js). Não deixe o arquivo `.json` da chave no projeto |
 
 Publique regras e índices:
 
@@ -57,17 +57,9 @@ Por padrão o app **não** usa um workspace compartilhado `primary`. Cada conta
 ganha `ws_{uid}` na primeira sessão (via `/api/workspace/bootstrap` ou, se o
 Admin não estiver configurado, via `setDoc` no cliente — as regras permitem).
 
-Só defina `NEXT_PUBLIC_DEFAULT_WORKSPACE_ID` se quiser um workspace compartilhado
-entre contas; nesse caso crie o documento com o Admin SDK:
-
-```js
-// Console do Firestore ou script com o Admin SDK
-/workspaces/<id-fixo>
-  { name: "Meu workspace", ownerId: "<uid>", memberIds: ["<uid>"], plan: "free" }
-
-/workspaces/<id-fixo>/members/<uid>
-  { userId: "<uid>", email: "…", displayName: "…", role: "owner", joinedAt: <ts> }
-```
+Workspaces compartilhados entre contas não são criados pela interface: as
+regras só deixam o cliente criar `ws_{uid}`, e a tela de membros ainda não
+existe.
 
 ## 4. Notion Integration Dashboard
 
@@ -107,7 +99,11 @@ firebase apphosting:secrets:set RECAPTCHA_SECRET_KEY
 npm run deploy:secrets:admin                                   # FIREBASE_SERVICE_ACCOUNT_JSON
 ```
 
-As Cloud Functions atuais (limpeza da lixeira) não usam segredos.
+As Cloud Functions atuais (limpeza da lixeira, da quarentena e das versões) não
+usam segredos. A integração com o Google Docs funciona sem configuração (popup do
+Google, token de 1 hora); para conexão persistente, crie o cliente OAuth e
+cadastre `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (segredo) e
+`GOOGLE_REDIRECT_URI` no `apphosting.yaml`.
 
 A tradução usa a Cloud Translation API: ative `translate.googleapis.com` no projeto e
 dê à conta de serviço do app o papel "Cloud Translation API User". Enquanto isso não

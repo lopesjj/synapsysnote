@@ -13,17 +13,22 @@ nenhuma rotina o preenche hoje. Para ligar OCR, o caminho previsto é uma funç�
 
 ## 2. Transcrição com Gemini
 
-[`transcribe.ts`](../functions/src/ai/transcribe.ts) — o áudio vai inline para o
-Gemini com `responseMimeType: application/json`, e uma única chamada devolve:
+[`POST /api/ai/transcribe`](../src/app/api/ai/transcribe/route.ts) — a única
+porta de entrada; não há Cloud Function de transcrição. O áudio vai para o
+Gemini (embutido ou pela Files API) com `responseMimeType: application/json`, e
+uma única chamada devolve:
 
 ```json
 { "transcript": "…", "summary": "…", "actionItems": ["…"] }
 ```
 
-Três portas de entrada, a mesma gravação no bloco: o callable `transcribeAudio`,
-o gatilho `transcribeOnUpload` e `POST /api/ai/transcribe` no Next.js (usado
-quando a Cloud Function falha ou não está implantada). O MIME enviado ao Gemini
-é só `audio/webm` — `codecs=opus` no `Content-Type` faz a API recusar o arquivo.
+Quando o Gemini não transcreve (sem chave, sem fala ou recusa do modelo), o
+cliente pode reenviar o áudio como PCM cru para a mesma rota, que roda o Whisper
+no servidor (`Xenova/whisper-base` quantizado), limitado a uma inferência por
+instância — um segundo pedido simultâneo recebe `SERVICE_BUSY` em vez de
+disputar a memória. O MIME enviado ao
+Gemini é só `audio/webm` — `codecs=opus` no `Content-Type` faz a API recusar o
+arquivo.
 
 O editor não substitui o documento quando só a transcrição muda (o caret
 ficaria no fim da nota). A atualização entra por merge no bloco de mídia, e o
@@ -157,7 +162,8 @@ allowlist de hosts. A defesa está em
 | Memória | corpo repassado como stream com teto de 160 MB, em vez de `arrayBuffer()` — um vídeo de 150 MB por requisição derrubava a instância de 1 GiB |
 | Abuso anônimo | sessão Firebase exigida (cookie), `Sec-Fetch-Site: cross-site` recusado, `Cache-Control: private`, sem CORS aberto |
 
-Limite de uso ([`rate-limit.ts`](../src/lib/api/rate-limit.ts)): por IP, 240
+Limite de uso ([`rate-limit.ts`](../src/lib/api/rate-limit.ts)): por usuário
+logado (uid; o IP só quando não há sessão), 240
 requisições/min, 8 simultâneas e **2 GiB/min de banda** no proxy; 60
 requisições/10 min e 3 simultâneas na transcrição. O teto de banda é o que
 importa: contar requisições punia quem abre uma nota cheia de imagens ou arrasta
@@ -170,7 +176,7 @@ e o Firebase App Hosting não expõe nenhum — o balanceador e o CDN são
 infraestrutura gerenciada. Política do tipo `CLOUD_ARMOR_EDGE` não suporta rate
 limiting.
 
-Por isso a chave do limite é crítica: [`client-ip.ts`](../src/lib/api/client-ip.ts)
+Por isso, quando a chave cai no IP, ela é crítica: [`client-ip.ts`](../src/lib/api/client-ip.ts)
 pega o **penúltimo** elemento do `X-Forwarded-For`, porque atrás do balanceador
 do Google o header chega como `<valor-do-cliente>,<client-ip>,<lb-ip>` e nada
 antes dos dois últimos é validado. Usar o primeiro elemento — o reflexo comum —
@@ -194,7 +200,7 @@ há embeddings nem busca vetorial.
 ## 4. Lixeira de 30 dias e quarentena de mídia
 
 A exclusão definitiva tem um núcleo único, [`src/lib/trash/purge-core.ts`](../src/lib/trash/purge-core.ts),
-usado pela rota `POST /api/trash/purge` e copiado para `functions/src/shared/` no build
+usado pela rota `POST /api/trash/purge` e copiado para `functions/src/shared/` antes do deploy
 das Functions (`scripts/sync-functions-shared.mjs`; o `verify:shared` confere a cópia).
 O prazo vem de [`src/lib/trash/retention.ts`](../src/lib/trash/retention.ts) e é o mesmo
 citado nos documentos legais.
@@ -202,8 +208,12 @@ citado nos documentos legais.
 - Antes de apagar um arquivo, confere se alguma nota, card, caderno ou linha de base
   ainda o usa; logo antes da exclusão, confere de novo o que foi gravado durante a
   varredura, para não apagar uma mídia colada em outra nota nesse meio-tempo.
-- Mídia removida de uma nota vai para `trashed_media` (quarentena de 30 dias) e só
-  é apagada se continuar sem uso quando vencer.
+- Mídia removida de uma nota, de um registro de base ou substituída numa
+  reimportação do Notion vai para `trashed_media` (quarentena de 30 dias) e só é
+  apagada se continuar sem uso quando vencer — contando também as versões salvas
+  da nota de onde saiu.
+- Versões de nota ficam 30 dias: a mesma função agendada apaga as mais antigas
+  (consulta de grupo em `versions.createdAt`) e o histórico já não as mostra.
 - `purgeExpiredTrash` (diária, 03:30 America/Sao_Paulo) acha os workspaces com itens
   vencidos por consulta de grupo e processa cada um com orçamento de tempo
   (timeout de 30 min). `purgeExpiredQuarantineMedia` faz o mesmo aos domingos.
@@ -217,7 +227,7 @@ citado nos documentos legais.
 | `POST /api/ai/flashcards/generate` | Next.js | geração de flashcards |
 | `POST /api/ai/translate` | Next.js | Cloud Translation API; Gemini enquanto ela não estiver ativa |
 | `POST /api/trash/purge` | Next.js | exclusão definitiva e limpeza vencida |
-| `purgeExpiredTrash` | Function agendada | retenção de 30 dias |
+| `purgeExpiredTrash` | Function agendada | retenção de 30 dias (lixeira e versões) |
 | `purgeExpiredQuarantineMedia` | Function agendada | quarentena de mídia |
 | `purgePage` | Function callable | alternativa à rota de exclusão |
 

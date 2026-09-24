@@ -16,8 +16,8 @@ Publica `firestore.rules`, `storage.rules` e `firestore.indexes.json`:
 - fecha a leitura pública dos ícones (`uploads/icons`) e a leitura de avatares por
   outros usuários, que estão abertas nas regras publicadas hoje;
 - campos de aceite dos Termos só pelo servidor; papel de dono só pelo dono;
-- exceções de índice para o conteúdo das notas e índices de grupo de `deletedAt` e
-  `expiresAt` (a função de limpeza depende deles);
+- exceções de índice para o conteúdo das notas e índices de grupo de `deletedAt`,
+  `expiresAt` e `versions.createdAt` (a função de limpeza depende deles);
 - TTL em `access_logs.expiresAt` (6 meses do Marco Civil).
 
 O CLI pode perguntar se deve apagar índices que existem no console e não no
@@ -42,6 +42,10 @@ gcloud storage buckets update gs://synapsysnote.firebasestorage.app --cors-file=
 npm --prefix functions ci
 npm run deploy:functions
 ```
+
+O `predeploy` do `firebase.json` copia o núcleo de limpeza de `src/lib/trash/` para
+`functions/src/shared/` e compila; a função diária passa a apagar também as versões
+de nota com mais de 30 dias (o histórico já dizia "30 dias").
 
 As funções mudam de `us-east1` para `southamerica-east1`: o CLI cria as novas e
 pergunta se apaga as antigas — confirme. O código novo do app chama a callable em
@@ -76,7 +80,9 @@ npm run migrate:2026-09 -- --confirm # aplica
 - remove o campo `blocks` duplicado das páginas e versões (o conteúdo fica em
   `blocksJson`, que já é o que o app lê);
 - apaga os documentos da coleção `attachments`, que o app não usa mais;
-- move a árvore dos jobs de importação em andamento para `import_jobs/{id}/meta/tree`.
+- move a árvore dos jobs de importação em andamento para `import_jobs/{id}/meta/tree`;
+- troca, nas notas importadas do Notion, as menções que ficaram com o id do Notion
+  pelo id da nota no app e recalcula `outgoingLinks` (os backlinks dependem disso).
 
 Rode depois do deploy do app para que nenhuma aba com a versão antiga volte a gravar
 o campo `blocks`. Se isso acontecer, rodar a migração de novo resolve.

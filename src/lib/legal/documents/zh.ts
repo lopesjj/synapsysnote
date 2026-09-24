@@ -245,7 +245,7 @@ const zh: LegalBundle = {
                 ["Google reCAPTCHA", "在登录和密码重置时防范机器人"],
                 ["Google Gemini API 和 Google Cloud Translation", "由你主动使用的 AI 和翻译功能"],
                 ["浏览器语音识别与语音引擎（Google、Microsoft 或 Apple）", "如你开启则用于实时转录，以及浏览器使用在线语音时的朗读"],
-                ["country.is（IP 地理定位）", "识别国家/地区以推荐语言，不保存 IP 地址"],
+                ["country.is（IP 地理定位）", "仅在你同意时识别国家/地区以推荐语言，不保存 IP 地址"],
                 ["jsDelivr、Unsplash 和 flagcdn", "加载界面库、字体和公开图像；仅接收 IP 和浏览器等技术连接数据"],
                 ["Notion、Evernote 和 Google Docs", "仅在你连接集成时使用，用于导入你选择的内容"],
               ],

@@ -70,12 +70,18 @@ indicador pode ser desligado nas preferências.
 
 O documento do TipTap é criado uma vez por `page.id`. Atualizações remotas da
 *mesma* página não são forçadas de volta enquanto o usuário digita — isso brigaria
-com o cursor. A exceção é o caso aditivo (upload de anexo ou nota de voz
-adicionando um bloco ao fim), detectado por contagem de blocos.
+com o cursor. Cada gravação leva a base da edição (o último conteúdo que o
+editor viu do banco) e um `writeId`. Se outra aba ou outro dispositivo gravou
+nesse intervalo, o adaptador mescla em transação as duas versões por bloco
+([`block-merge.ts`](../src/lib/data/block-merge.ts)); quando o eco da gravação
+volta com `lastWriteId` igual ao `writeId` e conteúdo diferente, o editor adota
+o resultado mesclado preservando a seleção. Inserções diferentes no mesmo ponto
+ficam as duas e o aviso `page_merge_conflict` aparece.
 
-`collectMentionIds` extrai os ids mencionados e grava em `outgoingLinks`; o
-adaptador mantém `backlinks` como o inverso exato, que é o que a seção de
-backlinks da página lê.
+`collectMentionIds` extrai os ids mencionados e grava em `outgoingLinks`; a seção
+de backlinks de uma nota lista as notas que têm o id dela em `outgoingLinks`.
+Menções com id do Notion (de importações antigas) são resolvidas pelo
+`notionPageId` ao clicar.
 
 ## 4. Comandos disponíveis (`/`)
 

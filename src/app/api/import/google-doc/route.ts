@@ -1,4 +1,4 @@
-import { hasValidAppSession } from "@/lib/api/app-session";
+import { appRequestUser, rateLimitKey } from "@/lib/api/app-session";
 import { isSameOriginRequest } from "@/lib/api/request-origin";
 import { createRateLimiter } from "@/lib/api/rate-limit";
 import { clientIpOf } from "@/lib/api/client-ip";
@@ -50,9 +50,10 @@ function fail(code: string, status: number) {
 
 export async function POST(request: Request) {
   if (!isSameOriginRequest(request)) return fail("forbidden", 403);
-  if (!(await hasValidAppSession())) return fail("unauthorized", 401);
+  const uid = await appRequestUser(request);
+  if (!uid) return fail("unauthorized", 401);
 
-  const key = clientIpOf(request);
+  const key = rateLimitKey(uid, clientIpOf(request));
   if (!limiter.take(key)) return fail("rate_limited", 429);
   let transferred = 0;
 

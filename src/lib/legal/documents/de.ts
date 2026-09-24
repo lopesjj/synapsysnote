@@ -245,7 +245,7 @@ const de: LegalBundle = {
                 ["Google reCAPTCHA", "Bot-Schutz bei Anmeldung und Passwortzurücksetzung"],
                 ["Google Gemini API und Google Cloud Translation", "Von dir ausgelöste KI- und Übersetzungsfunktionen"],
                 ["Spracherkennung und Stimmen des Browsers (Google, Microsoft oder Apple)", "Live-Transkription, sofern aktiviert, und Vorlesen, wenn der Browser Online-Stimmen verwendet"],
-                ["country.is (IP-Geolokalisierung)", "Dein Land ermitteln, um eine Sprache vorzuschlagen, ohne deine IP-Adresse zu speichern"],
+                ["country.is (IP-Geolokalisierung)", "Dein Land ermitteln, um eine Sprache vorzuschlagen, nur mit deiner Einwilligung und ohne deine IP-Adresse zu speichern"],
                 ["jsDelivr, Unsplash und flagcdn", "Laden von Schnittstellenbibliotheken, Schriftarten und öffentlichen Bildern; erhalten nur technische Verbindungsdaten wie IP und Browser"],
                 ["Notion, Evernote und Google Docs", "Nur wenn du die Integration verbindest, um die von dir ausgewählten Inhalte zu importieren"],
               ],

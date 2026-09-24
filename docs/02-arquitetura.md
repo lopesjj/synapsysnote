@@ -11,7 +11,8 @@ descreve tudo que a UI pode fazer com dados. Duas implementações a satisfazem.
 | Leituras | `onSnapshot` com `includeMetadataChanges` | pub/sub em memória |
 | Persistência | Firestore + cache offline IndexedDB | `localStorage` |
 | Importação do Notion | `/api/notion/*` (Admin SDK) → job em background | worker simulado no browser |
-| OCR / transcrição | Cloud Functions | simulados com atraso realista |
+| Transcrição / IA | rotas `/api/ai/*` (Next.js) | simuladas com atraso realista |
+| Limpeza da lixeira | `/api/trash/purge` + Cloud Function agendada | remoção em memória |
 | Quando é usado | há credenciais e usuário autenticado | qualquer outro caso |
 
 `WorkspaceProvider` ([`provider.tsx`](../src/lib/data/provider.tsx)) escolhe o
@@ -55,20 +56,14 @@ em vez de quebrar. `NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true` conecta os quatro
 emuladores.
 
 **Admin** ([`lib/firebase/admin.ts`](../src/lib/firebase/admin.ts)) — marcado com
-`server-only`. Resolve credenciais em três níveis: JSON inline (ideal para
-Vercel), caminho de arquivo, ou Application Default Credentials. Usado pelas
-rotas `/api/workspace/bootstrap` e `/api/notion/{authorize,callback,tree,import,disconnect}`,
-que precisam escrever em caminhos fechados às regras do cliente.
+`server-only`. Resolve credenciais em três níveis: JSON inline (segredo do App
+Hosting), caminho de arquivo, ou Application Default Credentials (a conta de
+serviço do próprio Cloud Run em produção). Usado por todas as rotas `/api/*` que
+precisam escrever em caminhos fechados às regras do cliente: bootstrap do
+workspace, integrações e importações, mídia, lixeira, aceite legal e conta
+(exportação, exclusão e encerramento de sessões).
 
 ## 3. Hooks customizados
-
-### `useFirestoreLiveDoc`
-[`src/hooks/use-firestore-live-doc.ts`](../src/hooks/use-firestore-live-doc.ts)
-
-Envelope de `onSnapshot` para um documento que também devolve
-`fromCache` e `hasPendingWrites`. É o que permite ao cabeçalho do editor
-distinguir "Salvo", "Sincronizando" e "Offline — será sincronizado" sem
-heurística.
 
 ### `useDebounceAutoSave`
 [`src/hooks/use-debounce-auto-save.ts`](../src/hooks/use-debounce-auto-save.ts)

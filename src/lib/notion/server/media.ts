@@ -57,7 +57,7 @@ export async function rehostNotionFile(input: {
       mimeType: contentType,
       sizeBytes: declaredLength || undefined,
       bytes: declaredLength || 0,
-      pending: contentType.startsWith("image/") || contentType === "application/pdf",
+      pending: false,
     };
   }
 
@@ -113,7 +113,7 @@ export async function rehostNotionFile(input: {
       mimeType: contentType,
       sizeBytes: bytes,
       bytes,
-      pending: contentType.startsWith("image/") || contentType === "application/pdf",
+      pending: false,
     };
   } catch {
     return {

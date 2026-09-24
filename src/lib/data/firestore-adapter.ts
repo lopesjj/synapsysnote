@@ -1399,7 +1399,20 @@ export class FirestoreAdapter implements DataAdapter {
   }
 
   async deleteRow(databaseId: string, rowId: string) {
-    await deleteDoc(doc(this.docRef("databases", databaseId), "rows", rowId));
+    const rowRef = doc(this.docRef("databases", databaseId), "rows", rowId);
+    const snap = await getDoc(rowRef).catch(() => null);
+    await deleteDoc(rowRef);
+    const files: string[] = [];
+    for (const value of Object.values((snap?.data()?.values ?? {}) as Record<string, unknown>)) {
+      if (!Array.isArray(value)) continue;
+      for (const item of value) {
+        const entry = (item ?? {}) as { url?: unknown; storagePath?: unknown };
+        for (const candidate of [entry.storagePath, entry.url]) {
+          if (typeof candidate === "string" && isStorageFile(candidate, this.workspaceId)) files.push(candidate);
+        }
+      }
+    }
+    if (files.length) void this.quarantineMedia(files);
   }
 
 

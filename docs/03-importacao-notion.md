@@ -31,26 +31,24 @@ Usuário clica "Conectar" (logado no Synapsys)
         grava no workspace daquela conta Synapsys:
           /workspaces/{id}/integrations/notion          ← metadados (connectedBy = uid)
           /workspaces/{id}/integrations/notion/secure/token ← ciphertext
-   → 302 /app/integrations?connected=notion
+   → 302 /home/integrations?connected=notion
 ```
 
 A integração pública no portal do Notion precisa de escopo **Any workspace**.
 Com *Selected workspaces only* só os espaços do desenvolvedor autorizam.
 
 O envelope de criptografia é versionado (`v1.<iv>.<tag>.<ciphertext>`) para
-permitir rotação de chave sem adivinhar o formato — mesma implementação nos dois
-runtimes ([`token-cipher.ts`](../src/lib/crypto/token-cipher.ts) e
-[`functions/src/lib/crypto.ts`](../functions/src/lib/crypto.ts)).
+permitir rotação de chave sem adivinhar o formato
+([`token-cipher.ts`](../src/lib/crypto/token-cipher.ts)).
 
 Reconexão é apenas repetir o fluxo (grava por cima). Revogação
-(`disconnectNotion`) marca `connected: false`, grava `revokedAt` e **apaga** o
+(`POST /api/notion/disconnect`) revoga o token no Notion, marca `connected: false`, grava `revokedAt` e **apaga** o
 documento do token.
 
 ## 2. Leitura da árvore
 
 `GET /api/notion/tree` delega a
-[`src/lib/notion/server/tree.ts`](../src/lib/notion/server/tree.ts)
-(espelho em [`functions/src/notion/tree.ts`](../functions/src/notion/tree.ts)).
+[`src/lib/notion/server/tree.ts`](../src/lib/notion/server/tree.ts).
 `POST /v1/search` devolve uma lista plana com ponteiro `parent`; a hierarquia é
 remontada localmente. Itens cujo pai não foi compartilhado com a integração
 viram raízes em vez de sumirem — o usuário compartilhou aquela página, então
@@ -61,7 +59,7 @@ e faz retry exponencial com jitter em 429/409/5xx.
 
 ## 3. Conversor recursivo
 
-[`block-converter.ts`](../functions/src/notion/block-converter.ts) —
+[`block-converter.ts`](../src/lib/notion/server/block-converter.ts) —
 `notionBlockToAppBlock(block, ctx, depth)`.
 
 Mapeamento:
@@ -85,14 +83,17 @@ Mapeamento:
 
 O rich text preserva negrito, itálico, sublinhado, tachado, código, cor e link.
 Menções de página viram `mention` apontando para o **id local** quando a página
-já foi importada (via `resolvePageLink`), o que reconstrói os links internos.
+já foi importada (via `resolvePageLink`). As que apontam para páginas importadas
+depois são reescritas no fim do job (`relinkImportedPages`), que também recalcula
+`outgoingLinks`; o editor ainda resolve pelo `notionPageId` qualquer menção antiga
+que tenha ficado com o id do Notion.
 
 Proteções: profundidade máxima de 12 níveis (blocos sincronizados podem formar
 ciclos) e paginação completa de `blocks.children.list`.
 
 ## 4. Bases de dados
 
-[`property-mapper.ts`](../functions/src/notion/property-mapper.ts)
+[`property-mapper.ts`](../src/lib/notion/server/property-mapper.ts)
 
 | Notion | App |
 | --- | --- |
@@ -116,7 +117,7 @@ até 400 escritas, abaixo do teto de 500 do Firestore.
 
 ## 5. Pipeline de mídia — o ponto crítico
 
-[`media-pipeline.ts`](../functions/src/notion/media-pipeline.ts)
+[`media.ts`](../src/lib/notion/server/media.ts)
 
 A API do Notion entrega arquivos como **URLs presigned do S3 que expiram em ~1
 hora**. Persistir esses links produz uma base inteira de imagens quebradas no dia
@@ -127,17 +128,16 @@ seguinte. Por isso, para cada arquivo:
    puro, memória constante mesmo em vídeos grandes;
 3. metadados com `firebaseStorageDownloadTokens` (URL permanente sem expiração)
    e `cacheControl: immutable`;
-4. o bloco é reescrito com `url`, `storagePath`, `mimeType` e `sizeBytes`;
-5. imagens e PDFs saem marcados como `pending: true` — o gatilho de OCR limpa
-   essa flag quando o texto chega.
+4. o bloco é reescrito com `url`, `storagePath`, `mimeType` e `sizeBytes`.
+
+O download passa pela mesma validação do proxy de mídia (sem rede interna).
 
 Limite configurável por `IMPORT_MAX_FILE_BYTES` (padrão 250 MB), aplicado tanto
 pelo `content-length` quanto durante o stream.
 
 ## 6. Classificação: página, caderno ou nota
 
-[`classify-import.ts`](../src/lib/notion/classify-import.ts) — compartilhado
-pelo worker OAuth e pelo importador `.zip`.
+[`classify-import.ts`](../src/lib/notion/classify-import.ts).
 
 Um item do Notion com filhos e **sem** corpo substantivo (só `child_page`,
 divisores, sumário, breadcrumb) vira **notebook**: raiz → página na UI,
@@ -158,7 +158,7 @@ cliente  POST /api/notion/import
                         status=discovering  → lê a árvore e grava em import_jobs/{id}/meta/tree
                         status=running      → classifica → converte → rehospeda
                                               grava página / caderno / nota / base
-                        reconstrói backlinks
+                        reescreve menções e outgoingLinks
                         status=completed | completed_with_errors | failed
              └─ libera o lease
 ```
@@ -183,7 +183,19 @@ Detalhes que importam:
 - **Cancelamento cooperativo.** O cliente só pode gravar `status: 'canceled'`; o
   worker verifica antes de cada item.
 - **Idempotência.** Páginas são buscadas por `notionPageId` e bases por
-  `notionDatabaseId`; reimportar atualiza no lugar em vez de duplicar.
+  `notionDatabaseId`; reimportar atualiza no lugar em vez de duplicar. Título,
+  ícone, conteúdo e posição vêm do Notion; favorito, tags, cor e ordem definidos
+  no app são mantidos.
+- **Reimportação não perde edição.** Se o texto da nota mudou desde a última
+  importação, o conteúdo anterior vira uma versão ("antes de reimportar do
+  Notion") antes de ser substituído. Arquivos que saíram vão para a quarentena.
+- **Troca de papel.** Quando um item muda de papel (página que ganhou subpáginas
+  vira caderno, caderno que perdeu os filhos vira nota), o documento antigo vai
+  para a lixeira desvinculado do Notion — nada é apagado na hora. As subnotas de
+  uma página que virou caderno passam para o novo caderno; o conteúdo de um
+  caderno que virou nota vai para a lixeira junto com ele.
+- **Limite de tamanho.** Uma página acima de ~900 KB de conteúdo vira erro do
+  item (com orientação para dividi-la no Notion) em vez de derrubar o job.
 - **Hierarquia.** A ordem é *depth-first*. O mapa de papéis (notebook / page /
   database) + `Map<notionId, appId>` alimenta `parentId` do caderno,
   `notebookId` / `parentPageId` da nota e a reescrita de links internos.

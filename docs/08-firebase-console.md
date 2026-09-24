@@ -56,8 +56,8 @@ documento.
 | Visitante anônimo | nada |
 | Usuário autenticado | ler/escrever só `users/{seuUid}` (sem os campos de aceite dos Termos, gravados só pelo servidor); criar o workspace pessoal `ws_{uid}` |
 | Membro `viewer` | ler o workspace e os arquivos |
-| Membro `editor` / `admin` / `owner` | criar notas, páginas, cadernos, ícones, anexos, importar `.zip` |
-| Cliente | **não** cria job OAuth, **não** grava token Notion, **não** escreve OCR / embedding / `notionPageId`, **não** concede o papel de dono |
+| Membro `editor` / `admin` / `owner` | criar notas, páginas, cadernos, ícones, anexos e flashcards; importar arquivos no navegador |
+| Cliente | **não** cria job OAuth, **não** grava token de integração, **não** escreve OCR / transcrição do servidor / `notionPageId`, **não** mexe na quarentena, **não** concede o papel de dono |
 | Admin SDK (Functions / Next) | tudo — as regras não se aplicam |
 
 ## 5. Publicar pelo CLI

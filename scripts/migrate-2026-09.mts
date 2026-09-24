@@ -1,5 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb, isAdminConfigured } from "../src/lib/firebase/admin";
+import { relinkImportedPages } from "../src/lib/notion/server/run-import";
 
 const confirm = process.argv.includes("--confirm");
 const BATCH_LIMIT = 400;
@@ -53,6 +54,15 @@ async function moveImportTrees() {
   }
 }
 
+async function relinkNotionMentions() {
+  const workspaces = await adminDb().collection("workspaces").select().get();
+  let pages = 0;
+  for (const workspace of workspaces.docs) {
+    pages += await relinkImportedPages(workspace.id, new Map(), true, confirm);
+  }
+  console.log(`pages: ${pages} nota(s) importada(s) com menção ao id do Notion ou links a recalcular`);
+}
+
 async function main() {
   if (!isAdminConfigured()) {
     console.error("Erro: Firebase Admin não configurado no ambiente local.");
@@ -63,6 +73,7 @@ async function main() {
   await dropNativeBlocks("versions");
   await dropAttachments();
   await moveImportTrees();
+  await relinkNotionMentions();
   console.log(confirm ? "Migração concluída." : "Fim da simulação.");
 }
 

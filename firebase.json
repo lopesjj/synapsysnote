@@ -8,7 +8,9 @@
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log",
-        "functions"
+        "functions",
+        "*firebase-adminsdk*.json",
+        "*-service-account.json"
       ],
       "alwaysDeployFromSource": true
     }

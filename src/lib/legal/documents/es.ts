@@ -244,7 +244,7 @@ const es: LegalBundle = {
                 ["Google Cloud y Firebase", "Alojamiento, base de datos, archivos, autenticación y correos del sistema"],
                 ["Google reCAPTCHA", "Protección contra bots al iniciar sesión y restablecer la contraseña"],
                 ["Google Gemini API y Google Cloud Translation", "Funciones de IA y traducción que activas"],
-                ["country.is (geolocalización por IP)", "Identificar el país para sugerir el idioma, sin guardar la dirección IP"],
+                ["country.is (geolocalización por IP)", "Identificar el país para sugerir el idioma, solo con tu consentimiento y sin guardar la dirección IP"],
                 ["Notion, Evernote y Google Docs", "Solo cuando conectas la integración, para importar lo que elijas"],
                 ["Reconocimiento de voz y voces del navegador (Google, Microsoft o Apple)", "Transcripción en vivo, si la activas, y lectura en voz alta cuando el navegador usa voces en línea"],
                 ["jsDelivr, Unsplash y flagcdn", "Cargar bibliotecas, fuentes e imágenes públicas de la interfaz; solo reciben datos técnicos de conexión como IP y navegador"],

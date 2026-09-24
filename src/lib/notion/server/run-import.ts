@@ -108,6 +108,7 @@ async function retirePage(snap: Snapshot, uid: string) {
   await snap.ref.update({
     ...(snap.get("deletedAt") ? {} : { deletedAt: FieldValue.serverTimestamp(), trashedWith: null }),
     notionPageId: FieldValue.delete(),
+    retiredNotionId: snap.get("notionPageId") ?? null,
     updatedBy: uid,
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -117,6 +118,7 @@ async function retireDatabase(snap: Snapshot) {
   await snap.ref.update({
     ...(snap.get("deletedAt") ? {} : { deletedAt: FieldValue.serverTimestamp(), trashedWith: null }),
     notionDatabaseId: FieldValue.delete(),
+    retiredNotionId: snap.get("notionDatabaseId") ?? null,
     updatedAt: FieldValue.serverTimestamp(),
   });
 }
@@ -179,6 +181,7 @@ async function retireNotebook(workspaceId: string, snap: Snapshot, uid: string, 
     batch.update(snap.ref, {
       ...(snap.get("deletedAt") ? {} : { deletedAt: FieldValue.serverTimestamp(), trashedWith: null }),
       notionPageId: FieldValue.delete(),
+      retiredNotionId: snap.get("notionPageId") ?? null,
       updatedAt: FieldValue.serverTimestamp(),
     })
   );
@@ -427,6 +430,8 @@ async function importPage(args: ImportArgs): Promise<string> {
   if (!cachedTopLevel) await progress.addFiles(countMediaBlocks(topLevel));
 
   let blocks: AppBlock[];
+  let converted = true;
+  const rehosted: string[] = [];
   try {
     blocks = await notionBlocksToAppBlocks(topLevel, {
       fetchChildren: (blockId) => fetchAllChildren(notion, blockId),
@@ -434,12 +439,17 @@ async function importPage(args: ImportArgs): Promise<string> {
       rehostMedia: progress.options.downloadMedia
         ? async ({ url, suggestedName }) => {
             const result = await rehostNotionFile({ workspaceId, jobId, url, suggestedName });
+            if (result.storagePath) rehosted.push(result.storagePath);
             await progress.fileDone(result.bytes);
             return result;
           }
         : undefined,
     });
   } catch (error) {
+    converted = false;
+    if (rehosted.length) {
+      await quarantinePaths(adminDb(), workspaceId, rehosted, { pageId: null, userId: progress.requestedBy });
+    }
     blocks = [
       {
         id: randomUUID(),
@@ -495,9 +505,10 @@ async function importPage(args: ImportArgs): Promise<string> {
   const existing = await pagesRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
   const previous = existing.empty ? null : existing.docs[0];
   const ref = previous ? previous.ref : pagesRef(workspaceId).doc(`page_${randomUUID().slice(0, 10)}`);
+  const replaceContent = converted || !previous;
 
   let oldMedia: string[] = [];
-  if (previous) {
+  if (previous && replaceContent) {
     const oldBlocks = storedBlocks(previous);
     oldMedia = blockMediaPaths(oldBlocks);
     const previousText = String(previous.get("plainText") ?? "");
@@ -521,10 +532,14 @@ async function importPage(args: ImportArgs): Promise<string> {
       notebookId,
       parentPageId,
       path,
-      blocksJson,
-      plainText,
-      ...(previous?.get("blocks") !== undefined ? { blocks: FieldValue.delete() } : {}),
-      outgoingLinks: [],
+      ...(replaceContent
+        ? {
+            blocksJson,
+            plainText,
+            outgoingLinks: [],
+            ...(previous?.get("blocks") !== undefined ? { blocks: FieldValue.delete() } : {}),
+          }
+        : {}),
       deletedAt: null,
       trashedWith: null,
       notionPageId: node.id,
@@ -807,13 +822,34 @@ async function notionTargets(workspaceId: string, idMap: Map<string, string>) {
   for (const doc of databases.docs) add(doc.get("notionDatabaseId"), doc.id, doc.get("deletedAt"));
   const targets = new Map<string, string>([...trashed, ...live]);
   for (const [notionId, appId] of idMap) targets.set(normalizeNotionId(notionId), appId);
-  return targets;
+
+  const retired = await Promise.all(
+    [pagesRef(workspaceId), notebooksRef(workspaceId), databasesRef(workspaceId)].map((collection) =>
+      collection.where("retiredNotionId", "!=", null).select("retiredNotionId").get()
+    )
+  );
+  const replaced = new Map<string, string>();
+  for (const snap of retired) {
+    for (const doc of snap.docs) {
+      const successor = targets.get(normalizeNotionId(String(doc.get("retiredNotionId") ?? "")));
+      if (successor && successor !== doc.id) replaced.set(doc.id, successor);
+    }
+  }
+  return { targets, replaced };
 }
 
-async function relinkImportedPages(workspaceId: string, idMap: Map<string, string>, outgoing: boolean) {
-  const targets = await notionTargets(workspaceId, idMap);
-  if (!targets.size) return;
+export async function relinkImportedPages(
+  workspaceId: string,
+  idMap: Map<string, string>,
+  outgoing: boolean,
+  apply = true
+): Promise<number> {
+  const { targets, replaced } = await notionTargets(workspaceId, idMap);
+  if (!targets.size) return 0;
+  let changed = 0;
   const resolve = (id: string) => {
+    const successor = replaced.get(id);
+    if (successor) return successor;
     const key = normalizeNotionId(id);
     return /^[0-9a-f]{32}$/.test(key) ? targets.get(key) : undefined;
   };
@@ -826,7 +862,7 @@ async function relinkImportedPages(workspaceId: string, idMap: Map<string, strin
     const page = await (last ? query.startAfter(last) : query).limit(200).get();
     if (page.empty) break;
     last = page.docs[page.docs.length - 1];
-    const updates: Promise<unknown>[] = [];
+    const updates: Array<() => Promise<unknown>> = [];
     for (const doc of page.docs) {
       const blocks = storedBlocks(doc);
       const links = new Set<string>();
@@ -836,7 +872,9 @@ async function relinkImportedPages(workspaceId: string, idMap: Map<string, strin
       const linksChanged =
         outgoing && (current.length !== nextLinks.length || nextLinks.some((id) => !current.includes(id)));
       if (!rewritten && !linksChanged) continue;
-      updates.push(
+      changed += 1;
+      if (!apply) continue;
+      updates.push(() =>
         doc.ref
           .update(
             {
@@ -851,10 +889,11 @@ async function relinkImportedPages(workspaceId: string, idMap: Map<string, strin
       );
     }
     for (let start = 0; start < updates.length; start += 20) {
-      await Promise.all(updates.slice(start, start + 20));
+      await Promise.all(updates.slice(start, start + 20).map((run) => run()));
     }
     if (page.size < 200) break;
   }
+  return changed;
 }
 
 export interface CreateImportInput {
