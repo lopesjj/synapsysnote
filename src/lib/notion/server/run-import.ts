@@ -856,7 +856,7 @@ export async function relinkImportedPages(
 
   const query = pagesRef(workspaceId)
     .where("importJobId", "!=", null)
-    .select("blocksJson", "blocks", "outgoingLinks");
+    .select("importJobId", "blocksJson", "blocks", "outgoingLinks");
   let last: FirebaseFirestore.QueryDocumentSnapshot | undefined;
   for (;;) {
     const page = await (last ? query.startAfter(last) : query).limit(200).get();
