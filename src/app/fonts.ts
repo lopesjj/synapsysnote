@@ -4,6 +4,7 @@ import {
   Geist,
   IBM_Plex_Mono,
   IBM_Plex_Sans,
+  IBM_Plex_Sans_Arabic,
   Inter,
   JetBrains_Mono,
   Literata,
@@ -96,10 +97,18 @@ export const ibmPlexMono = IBM_Plex_Mono({
   weight: ["400", "500"],
 });
 
+export const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
+  variable: "--font-ibm-plex-sans-arabic",
+  subsets: ["arabic"],
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
+});
+
 export const fontVariables = [
   geistSans.variable,
   inter.variable,
   ibmPlexSans.variable,
+  ibmPlexSansArabic.variable,
   workSans.variable,
   nunitoSans.variable,
   literata.variable,

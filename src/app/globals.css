@@ -1555,7 +1555,7 @@ body {
 }
 
 html:lang(ar) {
-  --font-sans: "IBM Plex Sans Arabic", var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-ibm-plex-sans-arabic), "IBM Plex Sans Arabic", var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 :where(html:lang(ar)) * {

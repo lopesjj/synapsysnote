@@ -6,10 +6,6 @@ import { ThemeProvider, themeScript } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/primitives";
 import { HTML_LANG } from "@/lib/i18n/locale";
 import { fontVariables } from "./fonts";
-import "@fontsource/ibm-plex-sans-arabic/arabic-400.css";
-import "@fontsource/ibm-plex-sans-arabic/arabic-500.css";
-import "@fontsource/ibm-plex-sans-arabic/arabic-600.css";
-import "@fontsource/ibm-plex-sans-arabic/arabic-700.css";
 import "./globals.css";
 
 const documentLanguageScript = `
