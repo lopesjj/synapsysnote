@@ -30,6 +30,15 @@ disputar a memória. O MIME enviado ao
 Gemini é só `audio/webm` — `codecs=opus` no `Content-Type` faz a API recusar o
 arquivo.
 
+**Idioma da transcrição.** O idioma escolhido no bloco é o idioma do texto
+final, não uma dica de reconhecimento. Os modelos dedicados de transcrição e o
+Whisper devolvem a fala no idioma em que ela foi dita, e o modelo com prompt nem
+sempre traduz. Por isso a rota confere o resultado
+([`language-detect.ts`](../src/lib/ai/language-detect.ts)) e, quando ele não está
+no idioma escolhido, traduz pelo mesmo caminho de `/api/ai/translate` (Cloud
+Translation, com a Gemini API como reserva). Se a tradução falhar, a transcrição
+volta no idioma original em vez de se perder.
+
 O editor não substitui o documento quando só a transcrição muda (o caret
 ficaria no fim da nota). A atualização entra por merge no bloco de mídia, e o
 autosave recusa sobrescrever um `pending: false` com o rascunho ainda

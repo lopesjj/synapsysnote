@@ -5,6 +5,8 @@ import { createRateLimiter } from "@/lib/api/rate-limit";
 import { clientIpOf } from "@/lib/api/client-ip";
 import { safeFetchBuffer } from "@/lib/media/safe-fetch";
 import { transcribeModelChain } from "@/lib/ai/transcribe-models";
+import { detectLanguage } from "@/lib/ai/language-detect";
+import { SUPPORTED_TARGETS, translateText } from "@/lib/ai/translate-server";
 import {
   isModelResting,
   noteModelRefused,
@@ -575,10 +577,21 @@ async function runGemini(
 ): Promise<GeminiResult> {
   const deadline = Date.now() + MODEL_CHAIN_DEADLINE_MS;
   const result = await transcribeWithGemini(buffer, mimeType, lang, deadline);
-  // O proprio Gemini ja devolve no idioma pedido (ver o prompt): nenhum
-  // tradutor externo recebe o audio transcrito.
   if (result.text) result.text = cleanTranscriptText(result.text);
+  if (result.text && result.reason !== "TRUNCATED") result.text = await inTargetLanguage(result.text, lang);
   return result;
+}
+
+async function inTargetLanguage(text: string, lang: string): Promise<string> {
+  if (!text || !SUPPORTED_TARGETS.has(lang) || detectLanguage(text) === lang) return text;
+  try {
+    const translated = await translateText(text, lang);
+    if (!translated.chunks.length || translated.failed === translated.chunks.length) return text;
+    return cleanTranscriptText(translated.text);
+  } catch (error) {
+    console.warn("[transcribe] falha ao levar a transcrição para o idioma escolhido", error);
+    return text;
+  }
 }
 
 let localTranscriptionRunning = false;
@@ -586,7 +599,8 @@ let localTranscriptionRunning = false;
 async function transcribeLocally(
   audioSamples: Float32Array,
   whisperLanguage: string,
-  promptContext: string
+  promptContext: string,
+  targetLang: string
 ) {
   if (localTranscriptionRunning) return reasonResponse("SERVICE_BUSY");
   localTranscriptionRunning = true;
@@ -605,7 +619,7 @@ async function transcribeLocally(
     localTranscriptionRunning = false;
   }
 
-  const resultText = cleanTranscriptText((output?.text || "").trim());
+  const resultText = await inTargetLanguage(cleanTranscriptText((output?.text || "").trim()), targetLang);
 
   return NextResponse.json({ transcript: resultText, reason: resultText ? "OK" : "NO_SPEECH" });
 }
@@ -649,7 +663,7 @@ export async function POST(req: NextRequest) {
       if (arrayBuffer.byteLength === 0 || arrayBuffer.byteLength % 4 !== 0) {
         return NextResponse.json({ transcript: "", reason: "INVALID_PCM" }, { status: 400 });
       }
-      return await transcribeLocally(new Float32Array(arrayBuffer), whisperLanguage, promptContext);
+      return await transcribeLocally(new Float32Array(arrayBuffer), whisperLanguage, promptContext, targetLang);
     }
 
     // --- URL de mídia: o servidor baixa e manda para o Gemini -------------
