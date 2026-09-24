@@ -9,6 +9,7 @@ import type {
   ImportJobItem,
   ImportJobStatus,
   NotionTreeNode,
+  RichTextSpan,
 } from "@/types/models";
 import {
   databasesRef,
@@ -36,76 +37,166 @@ import {
 } from "@/lib/notion/classify-import";
 import { defaultViews, mapDatabaseSchema, mapPropertyValues } from "./property-mapper";
 import { rehostNotionFile, rehostNotionIcon } from "./media";
-import { adminBucket, isAdminConfigured } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
+import {
+  blockMediaPaths,
+  extractStoragePath,
+  parseStoredBlocks,
+  quarantinePaths,
+} from "@/lib/trash/purge-core";
+import { NOTION_REIMPORT_LABEL } from "@/lib/data/version-labels";
 
-function extractStoragePathsFromBlocks(blocks: unknown[], workspaceId: string): string[] {
-  const paths = new Set<string>();
-  const prefix = `workspaces/${workspaceId}/`;
+const LEASE_MS = 120_000;
+const MAX_PAGE_BYTES = 900_000;
+const WRITE_BATCH = 400;
 
-  const checkAndAdd = (val: unknown) => {
-    if (typeof val !== "string" || !val.trim()) return;
-    const trimmed = val.trim();
-    if (trimmed.startsWith(prefix)) {
-      paths.add(trimmed);
-      return;
+type Snapshot = FirebaseFirestore.DocumentSnapshot;
+type BatchOp = (batch: FirebaseFirestore.WriteBatch) => void;
+
+async function commitOps(db: FirebaseFirestore.Firestore, ops: BatchOp[]) {
+  for (let start = 0; start < ops.length; start += WRITE_BATCH) {
+    const batch = db.batch();
+    for (const op of ops.slice(start, start + WRITE_BATCH)) op(batch);
+    await batch.commit();
+  }
+}
+
+function storedBlocks(doc: Snapshot): AppBlock[] {
+  return parseStoredBlocks(doc.data()) as unknown as AppBlock[];
+}
+
+async function docsWhereIn(
+  collection: FirebaseFirestore.CollectionReference,
+  field: string,
+  values: string[]
+): Promise<FirebaseFirestore.QueryDocumentSnapshot[]> {
+  const docs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+  for (let start = 0; start < values.length; start += 30) {
+    const snap = await collection.where(field, "in", values.slice(start, start + 30)).get();
+    docs.push(...snap.docs);
+  }
+  return docs;
+}
+
+async function adoptChildPages(workspaceId: string, oldPageId: string, notebookId: string, uid: string) {
+  const pages = pagesRef(workspaceId);
+  const [descendants, children] = await Promise.all([
+    pages.where("path", "array-contains", oldPageId).get(),
+    pages.where("parentPageId", "==", oldPageId).get(),
+  ]);
+  const docs = new Map<string, Snapshot>();
+  for (const doc of [...descendants.docs, ...children.docs]) docs.set(doc.id, doc);
+  const ops: BatchOp[] = [];
+  for (const doc of docs.values()) {
+    const path = (doc.get("path") as string[] | undefined) ?? [];
+    const index = path.indexOf(oldPageId);
+    const direct = doc.get("parentPageId") === oldPageId;
+    ops.push((batch) =>
+      batch.update(doc.ref, {
+        notebookId,
+        path: index >= 0 ? path.slice(index + 1) : [],
+        ...(direct ? { parentPageId: null } : {}),
+        updatedBy: uid,
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+    );
+  }
+  await commitOps(pages.firestore, ops);
+}
+
+async function retirePage(snap: Snapshot, uid: string) {
+  await snap.ref.update({
+    ...(snap.get("deletedAt") ? {} : { deletedAt: FieldValue.serverTimestamp(), trashedWith: null }),
+    notionPageId: FieldValue.delete(),
+    updatedBy: uid,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+}
+
+async function retireDatabase(snap: Snapshot) {
+  await snap.ref.update({
+    ...(snap.get("deletedAt") ? {} : { deletedAt: FieldValue.serverTimestamp(), trashedWith: null }),
+    notionDatabaseId: FieldValue.delete(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+}
+
+async function retireNotebook(workspaceId: string, snap: Snapshot, uid: string, keep: string) {
+  const ops: BatchOp[] = [];
+  if (!snap.get("deletedAt")) {
+    const all = await notebooksRef(workspaceId).select("parentId", "deletedAt").get();
+    const childrenOf = new Map<string, string[]>();
+    for (const doc of all.docs) {
+      const parentId = doc.get("parentId");
+      if (doc.get("deletedAt") || typeof parentId !== "string" || !parentId) continue;
+      childrenOf.set(parentId, [...(childrenOf.get(parentId) ?? []), doc.id]);
     }
-    if (trimmed.includes("firebasestorage.googleapis.com") || trimmed.includes("firebasestorage.app")) {
-      const match = trimmed.match(/\/o\/([^?]+)/);
-      if (match && match[1]) {
-        try {
-          const decoded = decodeURIComponent(match[1]);
-          if (decoded.startsWith(prefix)) paths.add(decoded);
-        } catch {
-          if (match[1].startsWith(prefix)) paths.add(match[1]);
-        }
+    const ids = [snap.id];
+    const seen = new Set(ids);
+    for (let index = 0; index < ids.length; index += 1) {
+      for (const child of childrenOf.get(ids[index]) ?? []) {
+        if (seen.has(child) || child === keep) continue;
+        seen.add(child);
+        ids.push(child);
       }
     }
-  };
-
-  const walk = (item: unknown) => {
-    if (!item || typeof item !== "object") return;
-    if (Array.isArray(item)) {
-      for (const child of item) walk(child);
-      return;
+    const [pageDocs, databaseDocs] = await Promise.all([
+      docsWhereIn(pagesRef(workspaceId), "notebookId", ids),
+      docsWhereIn(databasesRef(workspaceId), "notebookId", ids),
+    ]);
+    for (const doc of pageDocs) {
+      if (doc.get("deletedAt") || doc.id === keep) continue;
+      ops.push((batch) =>
+        batch.update(doc.ref, {
+          deletedAt: FieldValue.serverTimestamp(),
+          trashedWith: snap.id,
+          updatedBy: uid,
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+      );
     }
-    const record = item as Record<string, unknown>;
-    if (record.storagePath) checkAndAdd(record.storagePath);
-    if (record.url) checkAndAdd(record.url);
-    if (record.media && typeof record.media === "object") {
-      const media = record.media as Record<string, unknown>;
-      if (media.storagePath) checkAndAdd(media.storagePath);
-      if (media.url) checkAndAdd(media.url);
+    for (const doc of databaseDocs) {
+      if (doc.get("deletedAt") || doc.id === keep) continue;
+      ops.push((batch) =>
+        batch.update(doc.ref, {
+          deletedAt: FieldValue.serverTimestamp(),
+          trashedWith: snap.id,
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+      );
     }
-    if (record.props && typeof record.props === "object") {
-      const props = record.props as Record<string, unknown>;
-      if (props.storagePath) checkAndAdd(props.storagePath);
-      if (props.url) checkAndAdd(props.url);
+    for (const id of ids.slice(1)) {
+      ops.push((batch) =>
+        batch.update(notebooksRef(workspaceId).doc(id), {
+          deletedAt: FieldValue.serverTimestamp(),
+          trashedWith: snap.id,
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+      );
     }
-    if (Array.isArray(record.children)) walk(record.children);
-    if (Array.isArray(record.content)) walk(record.content);
-  };
-
-  walk(blocks);
-  return Array.from(paths);
-}
-
-function parseBlocksFromSnapshot(doc: FirebaseFirestore.DocumentSnapshot): unknown[] {
-  const blocksJsonRaw = doc.get("blocksJson");
-  if (typeof blocksJsonRaw === "string" && blocksJsonRaw.trim().length > 0) {
-    try {
-      const parsed = JSON.parse(blocksJsonRaw);
-      if (Array.isArray(parsed)) return parsed;
-    } catch {}
   }
-  const blocksRaw = doc.get("blocks");
-  if (Array.isArray(blocksRaw)) return blocksRaw;
-  return [];
+  ops.push((batch) =>
+    batch.update(snap.ref, {
+      ...(snap.get("deletedAt") ? {} : { deletedAt: FieldValue.serverTimestamp(), trashedWith: null }),
+      notionPageId: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+  );
+  await commitOps(notebooksRef(workspaceId).firestore, ops);
 }
 
-async function deleteStorageFilesSafe(paths: string[]) {
-  if (!paths.length || !isAdminConfigured()) return;
-  const bucket = adminBucket();
-  await Promise.allSettled(paths.map((p) => bucket.file(p).delete({ ignoreNotFound: true })));
+async function restoreTrashedWith(workspaceId: string, notebookId: string, uid: string) {
+  const [pages, databases, notebooks] = await Promise.all([
+    pagesRef(workspaceId).where("trashedWith", "==", notebookId).get(),
+    databasesRef(workspaceId).where("trashedWith", "==", notebookId).get(),
+    notebooksRef(workspaceId).where("trashedWith", "==", notebookId).get(),
+  ]);
+  const restored = { deletedAt: null, trashedWith: null, updatedAt: FieldValue.serverTimestamp() };
+  await commitOps(notebooksRef(workspaceId).firestore, [
+    ...pages.docs.map((doc) => (batch: FirebaseFirestore.WriteBatch) => batch.update(doc.ref, { ...restored, updatedBy: uid })),
+    ...databases.docs.map((doc) => (batch: FirebaseFirestore.WriteBatch) => batch.update(doc.ref, restored)),
+    ...notebooks.docs.map((doc) => (batch: FirebaseFirestore.WriteBatch) => batch.update(doc.ref, restored)),
+  ]);
 }
 
 type JobOptions = ImportJob["options"];
@@ -170,7 +261,7 @@ class ProgressReporter {
 
   async patch(data: FirebaseFirestore.UpdateData<Record<string, unknown>>) {
     if (Array.isArray(data.items)) this.items = data.items as ImportJobItem[];
-    await this.ref.update({ ...data, updatedAt: FieldValue.serverTimestamp() });
+    await this.ref.update({ ...data, leaseUntil: Date.now() + LEASE_MS, updatedAt: FieldValue.serverTimestamp() });
   }
 
   async addFiles(count: number) {
@@ -193,6 +284,7 @@ class ProgressReporter {
       processedFiles: FieldValue.increment(1),
       ...(extraTotal > 0 ? { totalFiles: FieldValue.increment(extraTotal) } : {}),
       totalBytes: FieldValue.increment(bytes),
+      leaseUntil: Date.now() + LEASE_MS,
       updatedAt: FieldValue.serverTimestamp(),
     });
   }
@@ -276,7 +368,7 @@ interface ImportArgs {
 }
 
 async function importNotebook(args: ImportArgs): Promise<string> {
-  const { workspaceId, jobId, node, parents, idMap, roles, progress } = args;
+  const { workspaceId, node, parents, idMap, roles, progress } = args;
   const parentId = resolveNotebookParentId({
     notionId: node.id,
     parents,
@@ -293,43 +385,37 @@ async function importNotebook(args: ImportArgs): Promise<string> {
     }
   }
 
-  const oldPage = await pagesRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
-  if (!oldPage.empty) {
-    const oldBlocks = parseBlocksFromSnapshot(oldPage.docs[0]);
-    const oldPaths = extractStoragePathsFromBlocks(oldBlocks, workspaceId);
-    await oldPage.docs[0].ref.delete();
-    if (oldPaths.length > 0) {
-      await deleteStorageFilesSafe(oldPaths);
-    }
-  }
-
-  const oldDb = await databasesRef(workspaceId).where("notionDatabaseId", "==", node.id).limit(1).get();
-  if (!oldDb.empty) {
-    await oldDb.docs[0].ref.delete();
-  }
-
   const existing = await notebooksRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
-  const ref = existing.empty
-    ? notebooksRef(workspaceId).doc(`nb_${randomUUID().slice(0, 8)}`)
-    : existing.docs[0].ref;
+  const previous = existing.empty ? null : existing.docs[0];
+  const ref = previous ? previous.ref : notebooksRef(workspaceId).doc(`nb_${randomUUID().slice(0, 8)}`);
 
   await ref.set(
     {
       id: ref.id,
       name: node.title,
       emoji: icon,
-      color: "#0E7490",
       parentId,
       notionPageId: node.id,
-      // Como as notas, o caderno reimportado sai da lixeira.
       deletedAt: null,
       trashedWith: null,
-      order: Date.now(),
-      createdAt: existing.empty ? FieldValue.serverTimestamp() : existing.docs[0].get("createdAt"),
       updatedAt: FieldValue.serverTimestamp(),
+      ...(previous
+        ? {}
+        : { color: "#0E7490", order: Date.now(), createdAt: FieldValue.serverTimestamp() }),
     },
     { merge: true }
   );
+  if (previous?.get("deletedAt")) await restoreTrashedWith(workspaceId, ref.id, progress.requestedBy);
+
+  const [oldPages, oldDatabases] = await Promise.all([
+    pagesRef(workspaceId).where("notionPageId", "==", node.id).get(),
+    databasesRef(workspaceId).where("notionDatabaseId", "==", node.id).get(),
+  ]);
+  for (const oldPage of oldPages.docs) {
+    await adoptChildPages(workspaceId, oldPage.id, ref.id, progress.requestedBy);
+    await retirePage(oldPage, progress.requestedBy);
+  }
+  for (const oldDatabase of oldDatabases.docs) await retireDatabase(oldDatabase);
 
   return ref.id;
 }
@@ -373,6 +459,15 @@ async function importPage(args: ImportArgs): Promise<string> {
     });
   }
 
+  const cleanBlocks = omitUndefined(blocks);
+  const blocksJson = JSON.stringify(cleanBlocks);
+  const plainText = blocksToPlainText(cleanBlocks);
+  const newMedia = blockMediaPaths(cleanBlocks);
+  if (Buffer.byteLength(blocksJson) + Buffer.byteLength(plainText) > MAX_PAGE_BYTES) {
+    await quarantinePaths(adminDb(), workspaceId, newMedia, { pageId: null, userId: progress.requestedBy });
+    throw new Error("A página passa do limite de 1 MB por nota. Divida-a em páginas menores no Notion e importe de novo.");
+  }
+
   const { notebookId, parentPageId } = resolveImportPlacement({
     notionId: node.id,
     parents,
@@ -397,23 +492,25 @@ async function importPage(args: ImportArgs): Promise<string> {
     }
   }
 
-  const oldNotebook = await notebooksRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
-  if (!oldNotebook.empty) {
-    await oldNotebook.docs[0].ref.delete();
-  }
-
-  const oldDb = await databasesRef(workspaceId).where("notionDatabaseId", "==", node.id).limit(1).get();
-  if (!oldDb.empty) {
-    await oldDb.docs[0].ref.delete();
-  }
-
   const existing = await pagesRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
-  const ref = existing.empty ? pagesRef(workspaceId).doc(`page_${randomUUID().slice(0, 10)}`) : existing.docs[0].ref;
+  const previous = existing.empty ? null : existing.docs[0];
+  const ref = previous ? previous.ref : pagesRef(workspaceId).doc(`page_${randomUUID().slice(0, 10)}`);
 
-  let oldMediaPaths: string[] = [];
-  if (!existing.empty) {
-    const oldBlocks = parseBlocksFromSnapshot(existing.docs[0]);
-    oldMediaPaths = extractStoragePathsFromBlocks(oldBlocks, workspaceId);
+  let oldMedia: string[] = [];
+  if (previous) {
+    const oldBlocks = storedBlocks(previous);
+    oldMedia = blockMediaPaths(oldBlocks);
+    const previousText = String(previous.get("plainText") ?? "");
+    if (previousText.trim() && previousText !== plainText) {
+      await ref.collection("versions").add({
+        pageId: ref.id,
+        title: previous.get("title") ?? "",
+        blocksJson: JSON.stringify(oldBlocks),
+        authorId: progress.requestedBy,
+        label: NOTION_REIMPORT_LABEL,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
   }
 
   await ref.set(
@@ -424,35 +521,46 @@ async function importPage(args: ImportArgs): Promise<string> {
       notebookId,
       parentPageId,
       path,
-      blocks: omitUndefined(blocks),
-      blocksJson: JSON.stringify(omitUndefined(blocks)),
-      plainText: blocksToPlainText(blocks),
-      transcriptText: existing.empty ? "" : (existing.docs[0].get("transcriptText") ?? ""),
-      tags: ["notion"],
+      blocksJson,
+      plainText,
+      ...(previous?.get("blocks") !== undefined ? { blocks: FieldValue.delete() } : {}),
       outgoingLinks: [],
-      backlinks: [],
-      favorite: false,
-      archived: false,
       deletedAt: null,
       trashedWith: null,
       notionPageId: node.id,
       notionUrl: `https://www.notion.so/${node.id.replace(/-/g, "")}`,
       importJobId: jobId,
-      createdBy: progress.requestedBy,
       updatedBy: progress.requestedBy,
-      order: Date.now(),
-      createdAt: existing.empty ? FieldValue.serverTimestamp() : existing.docs[0].get("createdAt"),
       updatedAt: FieldValue.serverTimestamp(),
+      ...(previous
+        ? {}
+        : {
+            transcriptText: "",
+            tags: ["notion"],
+            backlinks: [],
+            favorite: false,
+            archived: false,
+            createdBy: progress.requestedBy,
+            order: Date.now(),
+            createdAt: FieldValue.serverTimestamp(),
+          }),
     },
     { merge: true }
   );
 
-  if (oldMediaPaths.length > 0) {
-    const currentMediaPaths = new Set(extractStoragePathsFromBlocks(blocks, workspaceId));
-    const pathsToDelete = oldMediaPaths.filter((p) => !currentMediaPaths.has(p));
-    if (pathsToDelete.length > 0) {
-      await deleteStorageFilesSafe(pathsToDelete);
-    }
+  const [oldNotebooks, oldDatabases] = await Promise.all([
+    notebooksRef(workspaceId).where("notionPageId", "==", node.id).get(),
+    databasesRef(workspaceId).where("notionDatabaseId", "==", node.id).get(),
+  ]);
+  for (const oldNotebook of oldNotebooks.docs) {
+    await retireNotebook(workspaceId, oldNotebook, progress.requestedBy, ref.id);
+  }
+  for (const oldDatabase of oldDatabases.docs) await retireDatabase(oldDatabase);
+
+  const kept = new Set(newMedia);
+  const removed = oldMedia.filter((path) => !kept.has(path));
+  if (removed.length) {
+    await quarantinePaths(adminDb(), workspaceId, removed, { pageId: ref.id, userId: progress.requestedBy });
   }
 
   return ref.id;
@@ -472,6 +580,22 @@ interface NotionQueryable {
       start_cursor?: string;
     }) => Promise<NotionQueryResponse>;
   };
+}
+
+function rowFilePaths(values: Record<string, unknown> | undefined): string[] {
+  const out: string[] = [];
+  for (const value of Object.values(values ?? {})) {
+    if (!Array.isArray(value)) continue;
+    for (const item of value) {
+      if (!item || typeof item !== "object") continue;
+      const entry = item as { storagePath?: unknown; url?: unknown };
+      for (const candidate of [entry.storagePath, entry.url]) {
+        const path = extractStoragePath(candidate);
+        if (path) out.push(path);
+      }
+    }
+  }
+  return out;
 }
 
 async function importDatabase(args: ImportArgs): Promise<string> {
@@ -500,35 +624,18 @@ async function importDatabase(args: ImportArgs): Promise<string> {
     }
   }
 
-  const oldPage = await pagesRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
-  if (!oldPage.empty) {
-    const oldBlocks = parseBlocksFromSnapshot(oldPage.docs[0]);
-    const oldPaths = extractStoragePathsFromBlocks(oldBlocks, workspaceId);
-    await oldPage.docs[0].ref.delete();
-    if (oldPaths.length > 0) {
-      await deleteStorageFilesSafe(oldPaths);
-    }
-  }
-
-  const oldNotebook = await notebooksRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
-  if (!oldNotebook.empty) {
-    await oldNotebook.docs[0].ref.delete();
-  }
-
   const existing = await databasesRef(workspaceId)
     .where("notionDatabaseId", "==", node.id)
     .limit(1)
     .get();
-  const ref = existing.empty
-    ? databasesRef(workspaceId).doc(`db_${randomUUID().slice(0, 8)}`)
-    : existing.docs[0].ref;
+  const previous = existing.empty ? null : existing.docs[0];
+  const ref = previous ? previous.ref : databasesRef(workspaceId).doc(`db_${randomUUID().slice(0, 8)}`);
 
   await ref.set(
     {
       name: node.title,
       icon,
       id: ref.id,
-      description: "Importada do Notion.",
       notebookId,
       parentPageId,
       properties,
@@ -536,11 +643,29 @@ async function importDatabase(args: ImportArgs): Promise<string> {
       notionDatabaseId: node.id,
       deletedAt: null,
       trashedWith: null,
-      createdAt: existing.empty ? FieldValue.serverTimestamp() : existing.docs[0].get("createdAt"),
       updatedAt: FieldValue.serverTimestamp(),
+      ...(previous
+        ? {}
+        : { description: "Importada do Notion.", createdAt: FieldValue.serverTimestamp() }),
     },
     { merge: true }
   );
+
+  const [oldPages, oldNotebooks] = await Promise.all([
+    pagesRef(workspaceId).where("notionPageId", "==", node.id).get(),
+    notebooksRef(workspaceId).where("notionPageId", "==", node.id).get(),
+  ]);
+  for (const oldPage of oldPages.docs) await retirePage(oldPage, progress.requestedBy);
+  for (const oldNotebook of oldNotebooks.docs) {
+    await retireNotebook(workspaceId, oldNotebook, progress.requestedBy, ref.id);
+  }
+
+  const previousRows = new Map<string, string[]>();
+  if (previous) {
+    const rows = await ref.collection("rows").select("values").get();
+    for (const row of rows.docs) previousRows.set(row.id, rowFilePaths(row.get("values")));
+  }
+  const replacedFiles: string[] = [];
 
   let cursor: string | undefined;
   let order = 0;
@@ -592,6 +717,12 @@ async function importDatabase(args: ImportArgs): Promise<string> {
         }
       }
 
+      const earlier = previousRows.get(rowId);
+      if (earlier?.length) {
+        const current = new Set(rowFilePaths(values));
+        replacedFiles.push(...earlier.filter((path) => !current.has(path)));
+      }
+
       batch.set(
         ref.collection("rows").doc(rowId),
         {
@@ -599,8 +730,8 @@ async function importDatabase(args: ImportArgs): Promise<string> {
           order: order++,
           pageId: null,
           notionPageId: row.id,
-          createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
+          ...(earlier ? {} : { createdAt: FieldValue.serverTimestamp() }),
         },
         { merge: true }
       );
@@ -611,46 +742,119 @@ async function importDatabase(args: ImportArgs): Promise<string> {
     await progress.patch({ currentStep: `Importando registros de “${node.title}” (${order})…` });
   } while (cursor);
 
+  if (replacedFiles.length) {
+    await quarantinePaths(adminDb(), workspaceId, replacedFiles, { pageId: null, userId: progress.requestedBy });
+  }
+
   idMap.set(node.id, ref.id);
   return ref.id;
 }
 
-async function rebuildBacklinks(workspaceId: string, idMap: Map<string, string>) {
-  const appIds = new Set(idMap.values());
-  if (!appIds.size) return;
-
-  const incoming = new Map<string, Set<string>>();
-  const pages = await pagesRef(workspaceId).where("importJobId", "!=", null).get();
-
-  for (const doc of pages.docs) {
-    const blocks = (doc.get("blocks") ?? []) as AppBlock[];
-    const links = new Set<string>();
-    const walk = (list: AppBlock[]) => {
-      for (const block of list) {
-        for (const span of block.richText ?? []) {
-          if (span.mention?.kind === "page") {
-            const mapped = idMap.get(span.mention.pageId) ?? span.mention.pageId;
-            if (appIds.has(mapped) || mapped.startsWith("page_")) links.add(mapped);
-          }
-        }
-        if (block.children?.length) walk(block.children);
-      }
-    };
-    walk(blocks);
-
-    for (const target of links) {
-      if (!incoming.has(target)) incoming.set(target, new Set());
-      incoming.get(target)!.add(doc.id);
+function remapSpans(
+  spans: RichTextSpan[] | undefined,
+  resolve: (id: string) => string | undefined,
+  links: Set<string> | null
+): boolean {
+  let changed = false;
+  for (const span of spans ?? []) {
+    const mention = span.mention;
+    if (mention?.kind !== "page" || !mention.pageId) continue;
+    const mapped = resolve(mention.pageId);
+    if (mapped && mapped !== mention.pageId) {
+      mention.pageId = mapped;
+      changed = true;
     }
-
-    if (links.size) await doc.ref.update({ outgoingLinks: [...links] });
+    links?.add(mention.pageId);
   }
+  return changed;
+}
 
-  const writer = pagesRef(workspaceId).firestore.batch();
-  for (const [pageId, sources] of incoming) {
-    writer.update(pagesRef(workspaceId).doc(pageId), { backlinks: [...sources] });
+function remapBlocks(
+  blocks: AppBlock[],
+  resolve: (id: string) => string | undefined,
+  links: Set<string>
+): boolean {
+  let changed = false;
+  for (const block of blocks) {
+    if (remapSpans(block.richText, resolve, links)) changed = true;
+    if (remapSpans(block.media?.caption, resolve, null)) changed = true;
+    for (const row of block.props?.tableRows ?? []) {
+      for (const cell of row.cells ?? []) {
+        if (remapSpans(cell.spans, resolve, null)) changed = true;
+      }
+    }
+    if (block.children?.length && remapBlocks(block.children, resolve, links)) changed = true;
   }
-  await writer.commit();
+  return changed;
+}
+
+async function notionTargets(workspaceId: string, idMap: Map<string, string>) {
+  const [pages, notebooks, databases] = await Promise.all([
+    pagesRef(workspaceId).where("notionPageId", "!=", null).select("notionPageId", "deletedAt").get(),
+    notebooksRef(workspaceId).where("notionPageId", "!=", null).select("notionPageId", "deletedAt").get(),
+    databasesRef(workspaceId).where("notionDatabaseId", "!=", null).select("notionDatabaseId", "deletedAt").get(),
+  ]);
+  const live = new Map<string, string>();
+  const trashed = new Map<string, string>();
+  const add = (notionId: unknown, appId: string, deleted: unknown) => {
+    if (typeof notionId !== "string" || !notionId) return;
+    const key = normalizeNotionId(notionId);
+    const target = deleted ? trashed : live;
+    if (!target.has(key)) target.set(key, appId);
+  };
+  for (const doc of pages.docs) add(doc.get("notionPageId"), doc.id, doc.get("deletedAt"));
+  for (const doc of notebooks.docs) add(doc.get("notionPageId"), doc.id, doc.get("deletedAt"));
+  for (const doc of databases.docs) add(doc.get("notionDatabaseId"), doc.id, doc.get("deletedAt"));
+  const targets = new Map<string, string>([...trashed, ...live]);
+  for (const [notionId, appId] of idMap) targets.set(normalizeNotionId(notionId), appId);
+  return targets;
+}
+
+async function relinkImportedPages(workspaceId: string, idMap: Map<string, string>, outgoing: boolean) {
+  const targets = await notionTargets(workspaceId, idMap);
+  if (!targets.size) return;
+  const resolve = (id: string) => {
+    const key = normalizeNotionId(id);
+    return /^[0-9a-f]{32}$/.test(key) ? targets.get(key) : undefined;
+  };
+
+  const query = pagesRef(workspaceId)
+    .where("importJobId", "!=", null)
+    .select("blocksJson", "blocks", "outgoingLinks");
+  let last: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+  for (;;) {
+    const page = await (last ? query.startAfter(last) : query).limit(200).get();
+    if (page.empty) break;
+    last = page.docs[page.docs.length - 1];
+    const updates: Promise<unknown>[] = [];
+    for (const doc of page.docs) {
+      const blocks = storedBlocks(doc);
+      const links = new Set<string>();
+      const rewritten = remapBlocks(blocks, resolve, links);
+      const current = (doc.get("outgoingLinks") as string[] | undefined) ?? [];
+      const nextLinks = [...links];
+      const linksChanged =
+        outgoing && (current.length !== nextLinks.length || nextLinks.some((id) => !current.includes(id)));
+      if (!rewritten && !linksChanged) continue;
+      updates.push(
+        doc.ref
+          .update(
+            {
+              ...(rewritten ? { blocksJson: JSON.stringify(blocks) } : {}),
+              ...(doc.get("blocks") !== undefined ? { blocks: FieldValue.delete() } : {}),
+              ...(linksChanged ? { outgoingLinks: nextLinks } : {}),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { lastUpdateTime: doc.updateTime }
+          )
+          .catch(() => undefined)
+      );
+    }
+    for (let start = 0; start < updates.length; start += 20) {
+      await Promise.all(updates.slice(start, start + 20));
+    }
+    if (page.size < 200) break;
+  }
 }
 
 export interface CreateImportInput {
@@ -700,8 +904,6 @@ export interface ImportStepResult {
   totalPages?: number;
   busy?: boolean;
 }
-
-const LEASE_MS = 120_000;
 
 function treeRef(jobRef: FirebaseFirestore.DocumentReference) {
   return jobRef.collection("meta").doc("tree");
@@ -1001,10 +1203,8 @@ async function runLeasedImportStep(
   );
 
   if (remaining.length === 0) {
-    if (jobData.options.createBacklinks) {
-      await progress.patch({ currentStep: "Reconstruindo backlinks…" });
-      await rebuildBacklinks(workspaceId, idMap);
-    }
+    await progress.patch({ currentStep: "Reconstruindo links entre as páginas…" });
+    await relinkImportedPages(workspaceId, idMap, jobData.options.createBacklinks !== false);
 
     await progress.finish();
     await integrationRef(workspaceId).set(

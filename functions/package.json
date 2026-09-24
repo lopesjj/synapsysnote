@@ -8,10 +8,11 @@
     "node": "22"
   },
   "scripts": {
-    "build": "node ../scripts/sync-functions-shared.mjs && tsc",
+    "sync": "node ../scripts/sync-functions-shared.mjs",
+    "build": "tsc",
     "build:watch": "tsc --watch",
-    "serve": "npm run build && firebase emulators:start --only functions,firestore,storage,auth",
-    "shell": "npm run build && firebase functions:shell",
+    "serve": "npm run sync && npm run build && firebase emulators:start --only functions,firestore,storage,auth",
+    "shell": "npm run sync && npm run build && firebase functions:shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
     "typecheck": "node ../scripts/sync-functions-shared.mjs --check && tsc --noEmit"

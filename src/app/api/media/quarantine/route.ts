@@ -3,15 +3,11 @@ import "server-only";
 import { requireWorkspaceEditor } from "@/lib/api/session";
 import { jsonError } from "@/lib/api/errors";
 import { adminDb, isAdminConfigured } from "@/lib/firebase/admin";
-import { extractStoragePath } from "@/lib/trash/purge-core";
+import { extractStoragePath, quarantineDocId } from "@/lib/trash/purge-core";
 import { QUARANTINE_RETENTION_MS } from "@/lib/trash/retention";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-function docIdForPath(path: string): string {
-  return Buffer.from(path).toString("base64url");
-}
 
 export async function POST(request: Request) {
   try {
@@ -59,7 +55,7 @@ export async function POST(request: Request) {
     for (let start = 0; start < validPaths.length; start += 400) {
       const batch = db.batch();
       for (const path of validPaths.slice(start, start + 400)) {
-        const docRef = trashedCol.doc(docIdForPath(path));
+        const docRef = trashedCol.doc(quarantineDocId(path));
         if (action === "restore" || action === "unquarantine") {
           batch.delete(docRef);
         } else {

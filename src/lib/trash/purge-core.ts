@@ -5,6 +5,7 @@ import type {
   Firestore,
   Query,
 } from "firebase-admin/firestore";
+import { QUARANTINE_RETENTION_MS } from "./retention";
 
 export interface BucketLike {
   getFiles(options: { prefix: string }): Promise<[Array<{ name: string }>, ...unknown[]]>;
@@ -69,6 +70,49 @@ function addBlockPaths(blocks: MediaBlock[], into: Set<string>) {
     addPath(block.media?.url, into);
     if (block.children?.length) addBlockPaths(block.children, into);
   }
+}
+
+export function blockMediaPaths(blocks: MediaBlock[]): string[] {
+  const out = new Set<string>();
+  addBlockPaths(blocks, out);
+  return [...out];
+}
+
+export function quarantineDocId(path: string): string {
+  return Buffer.from(path).toString("base64url");
+}
+
+export async function quarantinePaths(
+  db: Firestore,
+  workspaceId: string,
+  paths: string[],
+  meta: { pageId?: string | null; userId?: string | null },
+  now = Date.now()
+): Promise<number> {
+  const prefix = `workspaces/${workspaceId}/`;
+  const valid = [...new Set(paths.map(extractStoragePath))].filter(
+    (path): path is string => Boolean(path && path.startsWith(prefix))
+  );
+  if (!valid.length) return 0;
+  const trashed = db.collection("workspaces").doc(workspaceId).collection("trashed_media");
+  for (const group of chunk(valid, BATCH_LIMIT)) {
+    const batch = db.batch();
+    for (const path of group) {
+      batch.set(
+        trashed.doc(quarantineDocId(path)),
+        {
+          storagePath: path,
+          pageId: meta.pageId ?? null,
+          markedForDeletionAt: now,
+          expiresAt: now + QUARANTINE_RETENTION_MS,
+          userId: meta.userId ?? null,
+        },
+        { merge: true }
+      );
+    }
+    await batch.commit();
+  }
+  return valid.length;
 }
 
 function addRowPaths(values: Record<string, unknown> | undefined, into: Set<string>) {
@@ -285,11 +329,38 @@ export async function purgeExpiredQuarantine(
 
   const scanStartedAt = new Date();
   const inUse = await referencedPaths(db, workspaceId, { pages: [], databases: [], notebooks: [] });
+  const pages = db.collection("workspaces").doc(workspaceId).collection("pages");
+  const pageIds = new Set(
+    expired.docs.map((doc) => doc.get("pageId")).filter((id): id is string => typeof id === "string" && Boolean(id))
+  );
+  const versionSets = await Promise.all(
+    [...pageIds].map((pageId) => pages.doc(pageId).collection("versions").select("blocksJson", "blocks").get())
+  );
+  for (const versions of versionSets) {
+    for (const version of versions.docs) addBlockPaths(parseStoredBlocks(version.data()), inUse);
+  }
   const candidates = new Set<string>();
   for (const doc of expired.docs) addPath(doc.get("storagePath"), candidates);
   await deleteStorage(db, bucket, workspaceId, candidates, inUse, scanStartedAt, new Set());
   await deleteRefs(db, expired.docs.map((doc) => doc.ref));
   return expired.size;
+}
+
+export async function purgeExpiredVersions(db: Firestore, cutoff: Date, deadline: number): Promise<number> {
+  let total = 0;
+  while (Date.now() < deadline) {
+    const snap = await db
+      .collectionGroup("versions")
+      .where("createdAt", "<=", cutoff)
+      .limit(BATCH_LIMIT)
+      .select()
+      .get();
+    if (snap.empty) break;
+    await deleteRefs(db, snap.docs.map((doc) => doc.ref));
+    total += snap.size;
+    if (snap.size < BATCH_LIMIT) break;
+  }
+  return total;
 }
 
 export async function expiredTrash(db: Firestore, workspaceId: string, cutoff: Date): Promise<PurgeSet> {

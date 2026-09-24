@@ -7,10 +7,11 @@ import { REGION } from "../region";
 import {
   expiredTrash,
   purgeExpiredQuarantine,
+  purgeExpiredVersions,
   purgeItems,
   workspacesWithExpiredTrash,
 } from "../shared/purge-core";
-import { TRASH_RETENTION_MS } from "../shared/retention";
+import { TRASH_RETENTION_MS, VERSION_RETENTION_MS } from "../shared/retention";
 
 const SCHEDULE_TIMEOUT_SECONDS = 1800;
 const TIME_BUDGET_MS = (SCHEDULE_TIMEOUT_SECONDS - 120) * 1000;
@@ -27,6 +28,16 @@ export const purgeExpiredTrash = onSchedule(
   async () => {
     const startedAt = Date.now();
     const cutoff = new Date(startedAt - TRASH_RETENTION_MS);
+    let versions = 0;
+    try {
+      versions = await purgeExpiredVersions(
+        db,
+        new Date(startedAt - VERSION_RETENTION_MS),
+        startedAt + TIME_BUDGET_MS / 3
+      );
+    } catch (error) {
+      logger.error("version purge failed", { error });
+    }
     const workspaceIds = await workspacesWithExpiredTrash(db, cutoff, startedAt);
     let purged = 0;
     let quarantined = 0;
@@ -45,7 +56,7 @@ export const purgeExpiredTrash = onSchedule(
       }
     }
 
-    logger.info("trash purge finished", { workspaces: workspaceIds.length, purged, quarantined, pending });
+    logger.info("trash purge finished", { workspaces: workspaceIds.length, purged, quarantined, versions, pending });
   }
 );
 

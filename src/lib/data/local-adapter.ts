@@ -44,6 +44,7 @@ import { extractAggregatedTranscripts, mergeMediaEnrichment } from "./media-enri
 import { pagePatchIsNoop } from "./page-write";
 import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
 import { calculateNextReview } from "@/lib/flashcards/srs";
+import { TRASH_RETENTION_MS, VERSION_RETENTION_MS } from "@/lib/trash/retention";
 import {
   resolveImportPlacement,
   resolveNotebookParentId,
@@ -525,8 +526,7 @@ export class LocalAdapter implements DataAdapter {
   }
 
   async purgeExpiredTrash() {
-    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-    const threshold = nowMs() - THIRTY_DAYS_MS;
+    const threshold = nowMs() - TRASH_RETENTION_MS;
     const expired = (value: number | null | undefined) => Boolean(value && value <= threshold);
     const expiredPageIds = new Set(this.state.pages.filter((page) => expired(page.deletedAt)).map((p) => p.id));
     const hasExpired =
@@ -544,6 +544,8 @@ export class LocalAdapter implements DataAdapter {
 
 
   async listVersions(pageId: string): Promise<PageVersion[]> {
+    const oldest = nowMs() - VERSION_RETENTION_MS;
+    this.state.versions = this.state.versions.filter((v) => v.createdAt >= oldest);
     return this.state.versions
       .filter((v) => v.pageId === pageId)
       .sort((a, b) => b.createdAt - a.createdAt);

@@ -35,7 +35,7 @@
     "verify:media-deletion": "tsx scripts/verify-media-deletion.mts",
     "verify:media-proxy": "tsx scripts/verify-media-proxy.mts",
     "verify:user-avatar": "tsx scripts/verify-user-avatar.mts",
-    "functions:build": "npm --prefix functions run build",
+    "functions:build": "npm --prefix functions run sync && npm --prefix functions run build",
     "functions:typecheck": "npm --prefix functions run typecheck",
     "emulators": "firebase emulators:start --only auth,firestore,functions,storage",
     "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes,storage",

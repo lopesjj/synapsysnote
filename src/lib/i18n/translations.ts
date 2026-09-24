@@ -1211,7 +1211,9 @@ export type TranslationKey =
   | "account_delete_google_hint"
   | "account_delete_confirm_button"
   | "account_delete_failed"
-  | "account_deleted";
+  | "account_deleted"
+  | "version_manual"
+  | "version_notion_reimport";
 
 export const TRANSLATIONS: Record<string, Record<string, string>> & Record<SupportedLanguage, Partial<Record<TranslationKey, string>>> & { pt: Record<TranslationKey, string>; en: Record<TranslationKey, string> } = {
   ar: {} as Record<TranslationKey, string>,
@@ -2420,6 +2422,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_delete_confirm_button: "Excluir definitivamente",
     account_delete_failed: "Não foi possível excluir a conta. Tente de novo.",
     account_deleted: "Sua conta foi excluída.",
+    version_manual: "manual",
+    version_notion_reimport: "antes de reimportar do Notion",
   },
   en: {
     evernote_paid_plan_notice: "The direct connection uses Evernote MCP, which Evernote only allows on paid plans. On a free account, export your notes as .enex and use the file import below.",
@@ -3626,6 +3630,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_delete_confirm_button: "Delete permanently",
     account_delete_failed: "We couldn't delete the account. Please try again.",
     account_deleted: "Your account has been deleted.",
+    version_manual: "manual",
+    version_notion_reimport: "before re-importing from Notion",
   },
 
   es: {
@@ -4833,6 +4839,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_delete_confirm_button: "Eliminar definitivamente",
     account_delete_failed: "No se pudo eliminar la cuenta. Inténtalo de nuevo.",
     account_deleted: "Tu cuenta fue eliminada.",
+    version_manual: "manual",
+    version_notion_reimport: "antes de reimportar desde Notion",
   },
 
   fr: {
@@ -6040,6 +6048,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_delete_confirm_button: "Supprimer définitivement",
     account_delete_failed: "Impossible de supprimer le compte. Réessayez.",
     account_deleted: "Votre compte a été supprimé.",
+    version_manual: "manuelle",
+    version_notion_reimport: "avant la réimportation depuis Notion",
   },
 
   it: {
@@ -7247,6 +7257,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_delete_confirm_button: "Elimina definitivamente",
     account_delete_failed: "Non è stato possibile eliminare l'account. Riprova.",
     account_deleted: "Il tuo account è stato eliminato.",
+    version_manual: "manuale",
+    version_notion_reimport: "prima della reimportazione da Notion",
   },
 
   de: {
@@ -8454,6 +8466,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_delete_confirm_button: "Endgültig löschen",
     account_delete_failed: "Das Konto konnte nicht gelöscht werden. Versuche es erneut.",
     account_deleted: "Dein Konto wurde gelöscht.",
+    version_manual: "manuell",
+    version_notion_reimport: "vor dem erneuten Import aus Notion",
   },
 
   ru: {
@@ -9661,6 +9675,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_delete_confirm_button: "Удалить навсегда",
     account_delete_failed: "Не удалось удалить аккаунт. Попробуйте ещё раз.",
     account_deleted: "Ваш аккаунт удалён.",
+    version_manual: "вручную",
+    version_notion_reimport: "до повторного импорта из Notion",
   },
 
   ja: {
@@ -10868,6 +10884,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_delete_confirm_button: "完全に削除",
     account_delete_failed: "アカウントを削除できませんでした。もう一度お試しください。",
     account_deleted: "アカウントを削除しました。",
+    version_manual: "手動",
+    version_notion_reimport: "Notion から再インポートする前",
   },
 
   zh: {
@@ -12075,6 +12093,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_delete_confirm_button: "永久删除",
     account_delete_failed: "无法删除账户，请重试。",
     account_deleted: "你的账户已删除。",
+    version_manual: "手动",
+    version_notion_reimport: "从 Notion 重新导入之前",
   },
 };
 
@@ -13284,6 +13304,8 @@ TRANSLATIONS.ar = {
   account_delete_confirm_button: "حذف نهائي",
   account_delete_failed: "تعذّر حذف الحساب. حاول مرة أخرى.",
   account_deleted: "تم حذف حسابك.",
+  version_manual: "يدوي",
+  version_notion_reimport: "قبل إعادة الاستيراد من Notion",
 };
 
 /**

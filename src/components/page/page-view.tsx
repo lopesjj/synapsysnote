@@ -70,6 +70,7 @@ import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/
 import { useLibrasStore } from "@/lib/store/libras-store";
 import { FlashcardsIcon } from "@/lib/icons/flashcard-icon";
 import { NoteFlashcardsModal } from "@/components/flashcards/note-flashcards-modal";
+import { MANUAL_VERSION_LABEL, NOTION_REIMPORT_LABEL } from "@/lib/data/version-labels";
 
 type MediaBlockKind = "audio" | "video";
 
@@ -811,7 +812,7 @@ export function PageView({ pageId }: { pageId: string }) {
             <MenuItem
               onSelect={async () => {
                 await flushNow();
-                await adapter.snapshotVersion(pageId, "Manual");
+                await adapter.snapshotVersion(pageId, MANUAL_VERSION_LABEL);
                 toast.success(`${t("save_version")} - ${t("saved")}`);
               }}
             >
@@ -1186,7 +1187,12 @@ export function PageView({ pageId }: { pageId: string }) {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[12px] text-ink">{version.title || t("untitled")}</p>
                     <p className="text-[11px] text-faint">
-                      {formatRelative(version.createdAt, language)} · {version.label ?? t("version_automatic")}
+                      {formatRelative(version.createdAt, language)} ·{" "}
+                      {version.label === MANUAL_VERSION_LABEL
+                        ? t("version_manual")
+                        : version.label === NOTION_REIMPORT_LABEL
+                          ? t("version_notion_reimport")
+                          : (version.label ?? t("version_automatic"))}
                     </p>
                   </div>
                   <Button

@@ -78,14 +78,31 @@ export interface BlockEditorProps {
   onRegisterInsertAudio?: (fn: (blob: Blob, durationSeconds: number, transcript?: string) => Promise<void>) => void;
 }
 
+function notionKey(value: string | null | undefined): string {
+  return value ? value.replace(/-/g, "").toLowerCase() : "";
+}
+
 function mentionHref(
   id: string,
-  pages: { id: string }[],
-  notebooks: { id: string }[]
+  pages: { id: string; notionPageId?: string | null }[],
+  notebooks: { id: string; notionPageId?: string | null }[],
+  databases: { id: string; notionDatabaseId?: string | null; deletedAt?: number | null }[]
 ): string | null {
   if (!id) return null;
   if (notebooks.some((notebook) => notebook.id === id)) return `/home/n/${id}`;
   if (pages.some((page) => page.id === id)) return `/home/p/${id}`;
+  if (databases.some((database) => database.id === id)) return `/home/db/${id}`;
+  const key = notionKey(id);
+  if (/^[0-9a-f]{32}$/.test(key)) {
+    const page = pages.find((candidate) => notionKey(candidate.notionPageId) === key);
+    if (page) return `/home/p/${page.id}`;
+    const notebook = notebooks.find((candidate) => notionKey(candidate.notionPageId) === key);
+    if (notebook) return `/home/n/${notebook.id}`;
+    const database = databases.find(
+      (candidate) => !candidate.deletedAt && notionKey(candidate.notionDatabaseId) === key
+    );
+    if (database) return `/home/db/${database.id}`;
+  }
   return `/home/p/${id}`;
 }
 
@@ -191,7 +208,7 @@ export function BlockEditor({
   tRef.current = t;
   const languageRef = useRef(language);
   languageRef.current = language;
-  const { livePages, notebooks, adapter } = useWorkspace();
+  const { livePages, notebooks, databases, adapter } = useWorkspace();
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   const trackedPageId = useRef(page.id);
   const onChangeRef = useRef(onChange);
@@ -226,8 +243,8 @@ export function BlockEditor({
 
   const candidatesRef = useRef(effectiveCandidates);
   const locale = useLocale();
-  const mentionNavRef = useRef({ router, livePages, notebooks, locale });
-  mentionNavRef.current = { router, livePages, notebooks, locale };
+  const mentionNavRef = useRef({ router, livePages, notebooks, databases, locale });
+  mentionNavRef.current = { router, livePages, notebooks, databases, locale };
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
 
   const openMention = useCallback((event: React.MouseEvent | MouseEvent) => {
@@ -238,7 +255,8 @@ export function BlockEditor({
     const href = mentionHref(
       mention.getAttribute("data-id") ?? "",
       mentionNavRef.current.livePages,
-      mentionNavRef.current.notebooks
+      mentionNavRef.current.notebooks,
+      mentionNavRef.current.databases
     );
     if (!href) return false;
     event.preventDefault();

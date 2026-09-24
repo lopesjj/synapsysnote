@@ -54,6 +54,7 @@ import { mergeBlocks, sameBlocks } from "./block-merge";
 import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
 import { calculateNextReview } from "@/lib/flashcards/srs";
 import { cardStoragePaths } from "@/lib/flashcards/card-images";
+import { VERSION_RETENTION_MS } from "@/lib/trash/retention";
 import type {
   CopiedMedia,
   CreateFlashcardInput,
@@ -660,7 +661,7 @@ export class FirestoreAdapter implements DataAdapter {
         })
       );
     }
-    for (const notebookId of ids) {
+    for (const notebookId of [...[...ids].filter((notebookId) => notebookId !== id), id]) {
       ops.push((batch) =>
         batch.update(this.docRef("notebooks", notebookId), {
           deletedAt: serverTimestamp(),
@@ -1249,15 +1250,18 @@ export class FirestoreAdapter implements DataAdapter {
     const snap = await getDocs(
       query(collection(this.docRef("pages", pageId), "versions"), orderBy("createdAt", "desc"))
     );
-    return snap.docs.map((d) => {
-      const data = d.data();
-      return {
-        ...(data as PageVersion),
-        id: d.id,
-        blocks: parseBlocksFromData(data),
-        createdAt: ms(data.createdAt),
-      };
-    });
+    const oldest = Date.now() - VERSION_RETENTION_MS;
+    return snap.docs
+      .map((d) => {
+        const data = d.data();
+        return {
+          ...(data as PageVersion),
+          id: d.id,
+          blocks: parseBlocksFromData(data),
+          createdAt: ms(data.createdAt),
+        };
+      })
+      .filter((version) => !version.createdAt || version.createdAt >= oldest);
   }
 
   async snapshotVersion(pageId: string, label?: string) {
