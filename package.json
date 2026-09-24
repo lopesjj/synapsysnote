@@ -1,6 +1,6 @@
 {
   "name": "synapsys-note",
-  "version": "1.16.15",
+  "version": "1.16.16",
   "private": true,
   "description": "Plataforma de produtividade e gestão de conhecimento (PKM) com editor de blocos, bases de dados flexíveis, notas de voz e importação nativa do Notion sobre Firebase.",
   "scripts": {

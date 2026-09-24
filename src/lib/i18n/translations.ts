@@ -1055,6 +1055,8 @@ export type TranslationKey =
   | "field_name"
   | "field_email"
   | "field_password"
+  | "show_password"
+  | "hide_password"
   | "field_phone"
   | "email_placeholder"
   | "or_sign_in_with"
@@ -2266,6 +2268,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     field_name: "Nome",
     field_email: "E-mail",
     field_password: "Senha",
+    show_password: "Mostrar senha",
+    hide_password: "Ocultar senha",
     field_phone: "Telefone",
     email_placeholder: "seu@email.com",
     or_sign_in_with: "ou entre com",
@@ -3475,6 +3479,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     field_name: "Name",
     field_email: "Email",
     field_password: "Password",
+    show_password: "Show password",
+    hide_password: "Hide password",
     field_phone: "Phone",
     email_placeholder: "you@email.com",
     or_sign_in_with: "or continue with",
@@ -4685,6 +4691,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     field_name: "Nombre",
     field_email: "Correo electrónico",
     field_password: "Contraseña",
+    show_password: "Mostrar contraseña",
+    hide_password: "Ocultar contraseña",
     field_phone: "Teléfono",
     email_placeholder: "tu@correo.com",
     or_sign_in_with: "o continúa con",
@@ -5895,6 +5903,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     field_name: "Nom",
     field_email: "E-mail",
     field_password: "Mot de passe",
+    show_password: "Afficher le mot de passe",
+    hide_password: "Masquer le mot de passe",
     field_phone: "Téléphone",
     email_placeholder: "vous@email.com",
     or_sign_in_with: "ou continuer avec",
@@ -7105,6 +7115,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     field_name: "Nome",
     field_email: "Email",
     field_password: "Password",
+    show_password: "Mostra password",
+    hide_password: "Nascondi password",
     field_phone: "Telefono",
     email_placeholder: "tu@email.com",
     or_sign_in_with: "oppure continua con",
@@ -8315,6 +8327,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     field_name: "Name",
     field_email: "E-Mail",
     field_password: "Passwort",
+    show_password: "Passwort anzeigen",
+    hide_password: "Passwort ausblenden",
     field_phone: "Telefon",
     email_placeholder: "du@email.de",
     or_sign_in_with: "oder weiter mit",
@@ -9525,6 +9539,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     field_name: "Имя",
     field_email: "E-mail",
     field_password: "Пароль",
+    show_password: "Показать пароль",
+    hide_password: "Скрыть пароль",
     field_phone: "Телефон",
     email_placeholder: "vy@email.com",
     or_sign_in_with: "или войдите через",
@@ -10735,6 +10751,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     field_name: "名前",
     field_email: "メールアドレス",
     field_password: "パスワード",
+    show_password: "パスワードを表示",
+    hide_password: "パスワードを非表示",
     field_phone: "電話番号",
     email_placeholder: "you@email.com",
     or_sign_in_with: "または次の方法で続行",
@@ -11945,6 +11963,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     field_name: "姓名",
     field_email: "邮箱",
     field_password: "密码",
+    show_password: "显示密码",
+    hide_password: "隐藏密码",
     field_phone: "电话",
     email_placeholder: "you@email.com",
     or_sign_in_with: "或使用以下方式继续",
@@ -13157,6 +13177,8 @@ TRANSLATIONS.ar = {
   field_name: "الاسم",
   field_email: "البريد الإلكتروني",
   field_password: "كلمة المرور",
+  show_password: "إظهار كلمة المرور",
+  hide_password: "إخفاء كلمة المرور",
   field_phone: "الهاتف",
   email_placeholder: "you@email.com",
   or_sign_in_with: "أو تابع باستخدام",

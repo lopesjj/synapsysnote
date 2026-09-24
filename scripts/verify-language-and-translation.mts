@@ -56,6 +56,8 @@ for (const code of expectedCodes) {
   assert.ok(dict.delete_selected_cards.length > 0);
   assert.ok(dict.confirm_delete_selected_cards.length > 0);
   assert.ok(dict.filter_placeholder.length > 0);
+  assert.ok(dict.show_password.length > 0);
+  assert.ok(dict.hide_password.length > 0);
   assert.ok(dict.note_duplicated.length > 0);
   assert.ok(dict.account.length > 0);
   assert.ok(dict.align_left.length > 0);

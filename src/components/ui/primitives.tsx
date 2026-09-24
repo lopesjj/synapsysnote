@@ -7,22 +7,109 @@ import * as SeparatorPrimitive from "@radix-ui/react-separator";
 import * as SwitchPrimitive from "@radix-ui/react-switch";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
-import { Check, Minus } from "lucide-react";
+import { Check, Minus, Eye, EyeOff } from "lucide-react";
+import { useTranslation } from "@/lib/i18n/translations";
 import { cn } from "@/lib/utils";
 
+export interface PasswordInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {
+  containerClassName?: string;
+  disableToggle?: boolean;
+}
 
-export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
-  ({ className, ...props }, ref) => (
-    <input
-      ref={ref}
-      className={cn(
-        "h-9 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-ink outline-none transition placeholder:text-faint",
-        "focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)]",
-        className
-      )}
-      {...props}
-    />
-  )
+export const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
+  ({ className, containerClassName, disableToggle, dir, disabled, ...props }, ref) => {
+    const [visible, setVisible] = React.useState(false);
+    const { t } = useTranslation();
+    const toggleLabel = visible ? t("hide_password") : t("show_password");
+
+    if (disableToggle) {
+      return (
+        <input
+          ref={ref}
+          type="password"
+          dir={dir}
+          disabled={disabled}
+          className={cn(
+            "h-9 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-ink outline-none transition placeholder:text-faint",
+            "focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)]",
+            className
+          )}
+          {...props}
+        />
+      );
+    }
+
+    return (
+      <div className={cn("relative flex items-center w-full", containerClassName)} dir={dir}>
+        <input
+          ref={ref}
+          type={visible ? "text" : "password"}
+          dir={dir}
+          disabled={disabled}
+          className={cn(
+            "h-9 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] ps-3 pe-9 text-[13px] text-ink outline-none transition placeholder:text-faint",
+            "focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)]",
+            className
+          )}
+          {...props}
+        />
+        <button
+          type="button"
+          disabled={disabled}
+          tabIndex={disabled ? -1 : 0}
+          onClick={() => setVisible((prev) => !prev)}
+          onMouseDown={(e) => e.preventDefault()}
+          aria-label={toggleLabel}
+          title={toggleLabel}
+          className={cn(
+            "absolute end-1 top-1/2 -translate-y-1/2 z-[1] flex size-7 items-center justify-center rounded-[var(--radius-xs)] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]",
+            disabled && "pointer-events-none opacity-40"
+          )}
+        >
+          {visible ? (
+            <EyeOff className="size-4" aria-hidden="true" />
+          ) : (
+            <Eye className="size-4" aria-hidden="true" />
+          )}
+        </button>
+      </div>
+    );
+  }
+);
+PasswordInput.displayName = "PasswordInput";
+
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  containerClassName?: string;
+  disableToggle?: boolean;
+}
+
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, containerClassName, disableToggle, ...props }, ref) => {
+    if (type === "password" && !disableToggle) {
+      return (
+        <PasswordInput
+          ref={ref}
+          className={className}
+          containerClassName={containerClassName}
+          disableToggle={disableToggle}
+          {...props}
+        />
+      );
+    }
+
+    return (
+      <input
+        ref={ref}
+        type={type}
+        className={cn(
+          "h-9 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-ink outline-none transition placeholder:text-faint",
+          "focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)]",
+          className
+        )}
+        {...props}
+      />
+    );
+  }
 );
 Input.displayName = "Input";
 
