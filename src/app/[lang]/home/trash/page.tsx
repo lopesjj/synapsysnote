@@ -23,6 +23,7 @@ interface TrashRow {
   restoredMessage: string;
   purge: () => Promise<void>;
   purgeLabel: string;
+  purgedMessage: string;
 }
 
 export default function TrashPage() {
@@ -175,7 +176,7 @@ export default function TrashPage() {
                   disabled={isItemBusy}
                   onClick={() => {
                     if (!window.confirm(t("purge_confirm", { name: row.title || t("untitled") }))) return;
-                    void runAction(row.id, row.purge, t("trash_emptied_success"), t("trash_empty_failed"));
+                    void runAction(row.id, row.purge, row.purgedMessage, t("purge_failed"));
                   }}
                 >
                   <TrashCanIcon className="size-3.5 text-[var(--danger)]" />
@@ -199,6 +200,7 @@ export default function TrashPage() {
     restoredMessage: t("notebook_restored"),
     purge: () => adapter.purgeNotebook(notebook.id),
     purgeLabel: t("delete_permanently"),
+    purgedMessage: t("notebook_purged"),
   }));
 
   const pageSection: TrashRow[] = visiblePages.map((page) => ({
@@ -211,6 +213,7 @@ export default function TrashPage() {
     restoredMessage: t("page_restored"),
     purge: () => adapter.purgePage(page.id),
     purgeLabel: t("delete_permanently"),
+    purgedMessage: t("page_purged"),
   }));
 
   const databaseSection: TrashRow[] = visibleDatabases.map((database) => ({
@@ -223,6 +226,7 @@ export default function TrashPage() {
     restoredMessage: t("database_restored"),
     purge: () => adapter.purgeDatabase(database.id),
     purgeLabel: t("delete_permanently"),
+    purgedMessage: t("database_purged"),
   }));
 
   return (

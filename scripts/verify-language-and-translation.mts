@@ -58,6 +58,10 @@ for (const code of expectedCodes) {
   assert.ok(dict.filter_placeholder.length > 0);
   assert.ok(dict.show_password.length > 0);
   assert.ok(dict.hide_password.length > 0);
+  assert.ok(dict.page_purged.length > 0);
+  assert.ok(dict.database_purged.length > 0);
+  assert.ok(dict.notebook_purged.length > 0);
+  assert.ok(dict.purge_failed.length > 0);
   assert.ok(dict.note_duplicated.length > 0);
   assert.ok(dict.account.length > 0);
   assert.ok(dict.align_left.length > 0);
