@@ -10684,7 +10684,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     audio_save_error: "音声を保存できませんでした。",
     no_speech_detected: "音声内に発話が検出されませんでした。",
     no_speech_detected_libras: "Libras用の発話が検出されませんでした。",
-    audio_transcribed_success: "音声の文字起こしが完了しました！" ,
+    audio_transcribed_success: "音声の文字起こしが完了しました！",
     audio_transcribe_error: "音声の文字起こし中にエラーが発生しました。",
     transcription_quota_exceeded: "文字起こしの制限に達しました！",
     transcription_service_busy: "文字起こしサービスが混雑しています。数分後にもう一度お試しください。",

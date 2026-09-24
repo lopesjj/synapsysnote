@@ -109,6 +109,8 @@ for (const code of expectedCodes) {
   assert.ok(dict.video_removed.length > 0);
   assert.ok(dict.video_attached.length > 0);
   assert.ok(dict.video_too_large.length > 0);
+  assert.ok(dict.video_transcribed_success.length > 0);
+  assert.ok(dict.audio_transcribed_success.length > 0);
   assert.ok(dict.slash_attachment_desc.length > 0);
   // O menu de anexo precisa citar vídeo em todos os idiomas.
   assert.ok(/vídeo|video|vidéo|видео|動画|视频|فيديو/i.test(dict.slash_attachment_desc));
