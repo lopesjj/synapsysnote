@@ -124,6 +124,8 @@ assert.equal(
 assert.equal(await locationOf("https://app.synapsysnt.com.br/de/home/p/abc"), null, "Rota já localizada segue direto");
 assert.equal(await locationOf("https://synapsysnt.com.br/zh"), null);
 assert.equal(await locationOf("https://synapsysnt.com.br/brand/logo.png"), null, "Arquivos estáticos não recebem sigla");
+assert.equal(await locationOf("https://synapsysnt.com.br/__/auth/handler"), null);
+assert.equal(await locationOf("https://synapsysnt.com.br/pt/__/auth/handler"), null);
 assert.equal(
   await locationOf("http://localhost:43127/home", { cookies: { synapsys_lang: "fr" } }),
   "http://localhost:43127/fr/home"

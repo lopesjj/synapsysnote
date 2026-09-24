@@ -15,7 +15,7 @@ env:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: synapsysnote.firebaseapp.com
+    value: synapsysnt.com.br
     availability:
       - BUILD
       - RUNTIME

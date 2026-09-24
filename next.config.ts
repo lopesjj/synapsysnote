@@ -15,7 +15,21 @@ const SECURITY_HEADERS = [
 const nextConfig: NextConfig = {
   serverExternalPackages: ["firebase-admin", "@google-cloud/firestore", "google-auth-library"],
   async headers() {
-    return [{ source: "/:path*", headers: SECURITY_HEADERS }];
+    return [{ source: "/((?!(?:[a-z]{2}/)?__/auth).*)", headers: SECURITY_HEADERS }];
+  },
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: "/__/auth/:path*",
+          destination: "https://synapsysnote.firebaseapp.com/__/auth/:path*",
+        },
+        {
+          source: "/:locale([a-z]{2})/__/auth/:path*",
+          destination: "https://synapsysnote.firebaseapp.com/__/auth/:path*",
+        },
+      ],
+    };
   },
   async redirects() {
     return [

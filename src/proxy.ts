@@ -175,9 +175,10 @@ export async function proxy(request: NextRequest) {
 async function route(request: NextRequest, geoCookieAllowed: boolean) {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith("/api/") || pathname.startsWith("/.well-known/")) return NextResponse.next();
+  if (pathname.startsWith("/api/") || pathname.startsWith("/.well-known/") || pathname.startsWith("/__/")) return NextResponse.next();
 
   const { locale, path: rawPath } = splitLocale(pathname);
+  if (rawPath.startsWith("/__/")) return NextResponse.next();
   const path = legacyAppPath(rawPath);
   const appRoute = isAppPath(path);
 
@@ -231,6 +232,6 @@ export default proxy;
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|icons/|brand/|manifest.webmanifest|robots.txt|sitemap.xml).*)",
+    "/((?!api|__/|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|icons/|brand/|manifest.webmanifest|robots.txt|sitemap.xml).*)",
   ],
 };

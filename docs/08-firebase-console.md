@@ -13,7 +13,7 @@ Já está no código (`src/lib/firebase/config.ts`) e no `.env.example`:
 ```js
 const firebaseConfig = {
   apiKey: "AIzaSyCohAmoFuvjw-OXao3a_9yn0b-H22reprw",
-  authDomain: "synapsysnote.firebaseapp.com",
+  authDomain: "synapsysnt.com.br",
   projectId: "synapsysnote",
   storageBucket: "synapsysnote.firebasestorage.app",
   messagingSenderId: "391599702512",
