@@ -1,5 +1,6 @@
 import { createWriteStream } from "node:fs";
 import { resolve } from "node:path";
+import type { DocumentReference } from "firebase-admin/firestore";
 import { adminAuth, adminBucket, adminDb, isAdminConfigured } from "../src/lib/firebase/admin";
 import { deleteAccount, workspacesOf } from "../src/lib/account/account-server";
 import { writeAccountExport } from "../src/lib/account/export-core";
@@ -86,7 +87,7 @@ async function runDelete(user: Awaited<ReturnType<typeof resolveUser>>, confirm:
   if (!confirm) {
     const { owned, member } = await workspacesOf(user.uid);
     console.log(`[SIMULAÇÃO] Exclusão da conta ${user.email} (${user.uid}):`);
-    console.log(`- Workspaces exclusivos apagados por inteiro (com subcoleções e arquivos): ${owned.map((ref) => ref.id).join(", ") || "nenhum"}`);
+    console.log(`- Workspaces exclusivos apagados por inteiro (com subcoleções e arquivos): ${owned.map((ref: DocumentReference) => ref.id).join(", ") || "nenhum"}`);
     console.log(`- Participações como membro removidas: ${member.length}`);
     console.log("- Tokens do Notion, Google Docs e Evernote revogados antes da exclusão.");
     console.log(`- Perfil users/${user.uid}, arquivos users/${user.uid}/ e a conta no Firebase Authentication.`);
