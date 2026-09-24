@@ -38,7 +38,7 @@ const TRIGGER_CLASS = cn(
 
 export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { theme, toggle } = useTheme();
   const { user, signOut, mode } = useAuth();
   const { profile } = useUserProfile();
@@ -89,14 +89,14 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
           <button
             type="button"
             aria-label={t("open_account_menu")}
-            className={cn("flex h-9 w-full items-center gap-2.5 text-left", TRIGGER_CLASS)}
+            className={cn("flex min-h-10 w-full items-center gap-2.5 text-left", TRIGGER_CLASS)}
           >
             {avatar}
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13px] font-semibold leading-tight text-ink">
+            <span className="flex min-w-0 flex-1 flex-col items-start">
+              <span className="block max-w-full truncate text-[13px] font-semibold leading-tight text-ink">
                 {displayName}
               </span>
-              <span className="mt-0.5 block truncate text-[12px] leading-tight text-muted">
+              <span className="mt-1 inline-flex max-w-full items-center truncate rounded-full bg-[var(--accent-soft)] px-1.5 py-px text-[9.5px] font-semibold uppercase leading-[14px] tracking-[0.06em] text-[var(--accent)]">
                 {planLabel}
               </span>
             </span>
@@ -191,7 +191,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
                   await saveUserPreferences(user.uid, prefs).catch(() => {});
                 }
                 await signOut();
-                navigateTo(loginHref("/?logout=1"), undefined, "replace");
+                navigateTo(loginHref("/?logout=1", language), undefined, "replace");
               } catch (error) {
                 toast.error(error instanceof Error ? error.message : t("logout"));
               }

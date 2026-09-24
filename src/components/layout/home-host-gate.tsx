@@ -18,7 +18,7 @@ export function HomeHostGate({ children }: { children: React.ReactNode }) {
     if (user) {
       navigateTo(appHref(pathname || "/home", locale), router, "replace");
     } else if (!loading) {
-      navigateTo(loginHref("/"), undefined, "replace");
+      navigateTo(loginHref("/", locale), undefined, "replace");
     }
   }, [loading, locale, pathname, router, shouldRedirect, user]);
 

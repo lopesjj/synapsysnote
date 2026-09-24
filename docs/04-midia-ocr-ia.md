@@ -239,6 +239,7 @@ citado nos documentos legais.
 | `purgeExpiredTrash` | Function agendada | retenção de 30 dias (lixeira e versões) |
 | `purgeExpiredQuarantineMedia` | Function agendada | quarentena de mídia |
 | `purgePage` | Function callable | alternativa à rota de exclusão |
+| `exportAccountData` | Function callable | cópia completa dos dados da conta (até 60 min) |
 
 Região das Functions: `southamerica-east1` (a mesma do Firestore), definida em
 `functions/src/region.ts` e em `NEXT_PUBLIC_FIREBASE_REGION`. Runtime Node.js 22.

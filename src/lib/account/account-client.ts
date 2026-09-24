@@ -37,21 +37,26 @@ async function failure(response: Response): Promise<Error> {
   return new Error(payload.error || `Falha na API (${response.status})`);
 }
 
+const EXPORT_TIMEOUT_MS = 60 * 60 * 1000;
+
 export async function downloadAccountData(): Promise<void> {
-  const headers = await firebaseAuthHeaders();
-  const response = await fetch("/api/account/export", { headers });
-  if (!response.ok) throw await failure(response);
-  const blob = await response.blob();
-  const disposition = response.headers.get("content-disposition") ?? "";
-  const name = disposition.match(/filename="([^"]+)"/)?.[1] ?? "synapsys-note-dados.zip";
-  const url = URL.createObjectURL(blob);
+  const [{ httpsCallable }, { getDownloadURL, ref }, { getFirebaseFunctions, getFirebaseStorage }] = await Promise.all([
+    import("firebase/functions"),
+    import("firebase/storage"),
+    import("@/lib/firebase/client"),
+  ]);
+  await currentUser();
+  const exportAccount = httpsCallable<void, { path: string }>(getFirebaseFunctions(), "exportAccountData", {
+    timeout: EXPORT_TIMEOUT_MS,
+  });
+  const { data } = await exportAccount();
+  const url = await getDownloadURL(ref(getFirebaseStorage(), data.path));
   const link = document.createElement("a");
   link.href = url;
-  link.download = name;
+  link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
   link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 export async function revokeAllSessions(): Promise<void> {

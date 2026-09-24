@@ -437,7 +437,7 @@ function ResizablePdf({
           aria-label={name || "PDF"}
         >
           <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-4 text-center text-sm text-muted">
-            <p>Não foi possível exibir a prévia do PDF diretamente.</p>
+            <p>{t("pdf_preview_unavailable")}</p>
             <div className="flex items-center gap-2">
               <a
                 href={url}
@@ -446,7 +446,7 @@ function ResizablePdf({
                 className="inline-flex items-center gap-1.5 rounded-md bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-ink hover:bg-[var(--surface-hover)]"
               >
                 <ExternalLink className="size-3.5" />
-                Abrir PDF
+                {t("open_pdf")}
               </a>
               <a
                 href={url}
@@ -454,7 +454,7 @@ function ResizablePdf({
                 className="inline-flex items-center gap-1.5 rounded-md bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-ink hover:bg-[var(--surface-hover)]"
               >
                 <Download className="size-3.5" />
-                Baixar PDF
+                {t("download_pdf")}
               </a>
             </div>
           </div>

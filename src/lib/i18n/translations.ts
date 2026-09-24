@@ -1214,7 +1214,9 @@ export type TranslationKey =
   | "account_deleted"
   | "version_manual"
   | "version_notion_reimport"
-  | "cookies_menu";
+  | "cookies_menu"
+  | "pdf_preview_unavailable"
+  | "open_pdf";
 
 export const TRANSLATIONS: Record<string, Record<string, string>> & Record<SupportedLanguage, Partial<Record<TranslationKey, string>>> & { pt: Record<TranslationKey, string>; en: Record<TranslationKey, string> } = {
   ar: {} as Record<TranslationKey, string>,
@@ -2406,7 +2408,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     privacy_data: "Privacidade e dados",
     privacy_data_description: "Baixe uma cópia dos seus dados, encerre sessões abertas ou exclua sua conta.",
     account_export_title: "Baixar meus dados",
-    account_export_hint: "Arquivo .zip com suas notas, cadernos, flashcards, preferências, registros de acesso e todos os arquivos enviados.",
+    account_export_hint: "Arquivo .zip com suas notas, cadernos, flashcards, preferências, registros de acesso e todos os arquivos enviados. Contas grandes podem levar alguns minutos; o arquivo fica disponível para download por 2 dias.",
     account_export_button: "Baixar",
     account_export_running: "Preparando…",
     account_export_failed: "Não foi possível gerar o arquivo com seus dados. Tente de novo em alguns minutos.",
@@ -2426,6 +2428,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     version_manual: "manual",
     version_notion_reimport: "antes de reimportar do Notion",
     cookies_menu: "Cookies",
+    pdf_preview_unavailable: "Não foi possível exibir a prévia do PDF aqui.",
+    open_pdf: "Abrir PDF",
   },
   en: {
     evernote_paid_plan_notice: "The direct connection uses Evernote MCP, which Evernote only allows on paid plans. On a free account, export your notes as .enex and use the file import below.",
@@ -3615,7 +3619,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     privacy_data: "Privacy & data",
     privacy_data_description: "Download a copy of your data, end open sessions or delete your account.",
     account_export_title: "Download my data",
-    account_export_hint: "A .zip file with your notes, notebooks, flashcards, preferences, access logs and every uploaded file.",
+    account_export_hint: "A .zip file with your notes, notebooks, flashcards, preferences, access logs and every uploaded file. Large accounts may take a few minutes; the file stays available for download for 2 days.",
     account_export_button: "Download",
     account_export_running: "Preparing…",
     account_export_failed: "We couldn't build your data file. Try again in a few minutes.",
@@ -3635,6 +3639,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     version_manual: "manual",
     version_notion_reimport: "before re-importing from Notion",
     cookies_menu: "Cookies",
+    pdf_preview_unavailable: "The PDF preview couldn't be shown here.",
+    open_pdf: "Open PDF",
   },
 
   es: {
@@ -4825,7 +4831,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     privacy_data: "Privacidad y datos",
     privacy_data_description: "Descarga una copia de tus datos, cierra las sesiones abiertas o elimina tu cuenta.",
     account_export_title: "Descargar mis datos",
-    account_export_hint: "Archivo .zip con tus notas, cuadernos, flashcards, preferencias, registros de acceso y todos los archivos subidos.",
+    account_export_hint: "Archivo .zip con tus notas, cuadernos, flashcards, preferencias, registros de acceso y todos los archivos subidos. Las cuentas grandes pueden tardar unos minutos; el archivo queda disponible para descargar durante 2 días.",
     account_export_button: "Descargar",
     account_export_running: "Preparando…",
     account_export_failed: "No se pudo generar el archivo con tus datos. Inténtalo de nuevo en unos minutos.",
@@ -4845,6 +4851,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     version_manual: "manual",
     version_notion_reimport: "antes de reimportar desde Notion",
     cookies_menu: "Cookies",
+    pdf_preview_unavailable: "No se pudo mostrar la vista previa del PDF aquí.",
+    open_pdf: "Abrir PDF",
   },
 
   fr: {
@@ -6035,7 +6043,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     privacy_data: "Confidentialité et données",
     privacy_data_description: "Téléchargez une copie de vos données, fermez les sessions ouvertes ou supprimez votre compte.",
     account_export_title: "Télécharger mes données",
-    account_export_hint: "Fichier .zip avec vos notes, carnets, flashcards, préférences, journaux d'accès et tous les fichiers envoyés.",
+    account_export_hint: "Fichier .zip avec vos notes, carnets, flashcards, préférences, journaux d'accès et tous les fichiers envoyés. Les comptes volumineux peuvent prendre quelques minutes ; le fichier reste disponible au téléchargement pendant 2 jours.",
     account_export_button: "Télécharger",
     account_export_running: "Préparation…",
     account_export_failed: "Impossible de générer le fichier de vos données. Réessayez dans quelques minutes.",
@@ -6055,6 +6063,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     version_manual: "manuelle",
     version_notion_reimport: "avant la réimportation depuis Notion",
     cookies_menu: "Cookies",
+    pdf_preview_unavailable: "Impossible d'afficher l'aperçu du PDF ici.",
+    open_pdf: "Ouvrir le PDF",
   },
 
   it: {
@@ -7245,7 +7255,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     privacy_data: "Privacy e dati",
     privacy_data_description: "Scarica una copia dei tuoi dati, chiudi le sessioni aperte o elimina il tuo account.",
     account_export_title: "Scarica i miei dati",
-    account_export_hint: "File .zip con note, quaderni, flashcard, preferenze, registri di accesso e tutti i file caricati.",
+    account_export_hint: "File .zip con note, quaderni, flashcard, preferenze, registri di accesso e tutti i file caricati. Gli account grandi possono richiedere alcuni minuti; il file resta disponibile per il download per 2 giorni.",
     account_export_button: "Scarica",
     account_export_running: "Preparazione…",
     account_export_failed: "Non è stato possibile creare il file con i tuoi dati. Riprova tra qualche minuto.",
@@ -7265,6 +7275,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     version_manual: "manuale",
     version_notion_reimport: "prima della reimportazione da Notion",
     cookies_menu: "Cookie",
+    pdf_preview_unavailable: "Non è stato possibile mostrare l'anteprima del PDF qui.",
+    open_pdf: "Apri PDF",
   },
 
   de: {
@@ -8455,7 +8467,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     privacy_data: "Datenschutz & Daten",
     privacy_data_description: "Lade eine Kopie deiner Daten herunter, beende offene Sitzungen oder lösche dein Konto.",
     account_export_title: "Meine Daten herunterladen",
-    account_export_hint: "ZIP-Datei mit deinen Notizen, Notizbüchern, Karteikarten, Einstellungen, Zugriffsprotokollen und allen hochgeladenen Dateien.",
+    account_export_hint: "ZIP-Datei mit deinen Notizen, Notizbüchern, Karteikarten, Einstellungen, Zugriffsprotokollen und allen hochgeladenen Dateien. Bei großen Konten kann das einige Minuten dauern; die Datei bleibt 2 Tage lang zum Download verfügbar.",
     account_export_button: "Herunterladen",
     account_export_running: "Wird vorbereitet…",
     account_export_failed: "Die Datei mit deinen Daten konnte nicht erstellt werden. Versuche es in ein paar Minuten erneut.",
@@ -8475,6 +8487,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     version_manual: "manuell",
     version_notion_reimport: "vor dem erneuten Import aus Notion",
     cookies_menu: "Cookies",
+    pdf_preview_unavailable: "Die PDF-Vorschau kann hier nicht angezeigt werden.",
+    open_pdf: "PDF öffnen",
   },
 
   ru: {
@@ -9665,7 +9679,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     privacy_data: "Конфиденциальность и данные",
     privacy_data_description: "Скачайте копию своих данных, завершите открытые сеансы или удалите аккаунт.",
     account_export_title: "Скачать мои данные",
-    account_export_hint: "Архив .zip с заметками, блокнотами, карточками, настройками, журналами входа и всеми загруженными файлами.",
+    account_export_hint: "Архив .zip с заметками, блокнотами, карточками, настройками, журналами входа и всеми загруженными файлами. Для больших аккаунтов это может занять несколько минут; файл доступен для скачивания 2 дня.",
     account_export_button: "Скачать",
     account_export_running: "Подготовка…",
     account_export_failed: "Не удалось сформировать файл с данными. Попробуйте через несколько минут.",
@@ -9685,6 +9699,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     version_manual: "вручную",
     version_notion_reimport: "до повторного импорта из Notion",
     cookies_menu: "Файлы cookie",
+    pdf_preview_unavailable: "Не удалось показать предпросмотр PDF здесь.",
+    open_pdf: "Открыть PDF",
   },
 
   ja: {
@@ -10875,7 +10891,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     privacy_data: "プライバシーとデータ",
     privacy_data_description: "データのコピーをダウンロードしたり、開いているセッションを終了したり、アカウントを削除したりできます。",
     account_export_title: "データをダウンロード",
-    account_export_hint: "ノート、ノートブック、フラッシュカード、設定、アクセス記録、アップロードしたすべてのファイルを含む .zip ファイルです。",
+    account_export_hint: "ノート、ノートブック、フラッシュカード、設定、アクセス記録、アップロードしたすべてのファイルを含む .zip ファイルです。データが多い場合は数分かかることがあります。ファイルは 2 日間ダウンロードできます。",
     account_export_button: "ダウンロード",
     account_export_running: "準備中…",
     account_export_failed: "データファイルを作成できませんでした。数分後にもう一度お試しください。",
@@ -10895,6 +10911,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     version_manual: "手動",
     version_notion_reimport: "Notion から再インポートする前",
     cookies_menu: "Cookie",
+    pdf_preview_unavailable: "ここでは PDF のプレビューを表示できませんでした。",
+    open_pdf: "PDF を開く",
   },
 
   zh: {
@@ -12085,7 +12103,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     privacy_data: "隐私与数据",
     privacy_data_description: "下载你的数据副本、结束已打开的会话或删除账户。",
     account_export_title: "下载我的数据",
-    account_export_hint: "包含笔记、笔记本、闪卡、偏好设置、访问记录和所有已上传文件的 .zip 文件。",
+    account_export_hint: "包含笔记、笔记本、闪卡、偏好设置、访问记录和所有已上传文件的 .zip 文件。数据较多时可能需要几分钟；文件可在 2 天内下载。",
     account_export_button: "下载",
     account_export_running: "正在准备…",
     account_export_failed: "无法生成数据文件，请几分钟后重试。",
@@ -12105,6 +12123,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     version_manual: "手动",
     version_notion_reimport: "从 Notion 重新导入之前",
     cookies_menu: "Cookie",
+    pdf_preview_unavailable: "无法在此显示 PDF 预览。",
+    open_pdf: "打开 PDF",
   },
 };
 
@@ -13297,7 +13317,7 @@ TRANSLATIONS.ar = {
   privacy_data: "الخصوصية والبيانات",
   privacy_data_description: "نزّل نسخة من بياناتك، أو أنهِ الجلسات المفتوحة، أو احذف حسابك.",
   account_export_title: "تنزيل بياناتي",
-  account_export_hint: "ملف ‎.zip‎ يضم ملاحظاتك ودفاترك وبطاقاتك التعليمية وتفضيلاتك وسجلات الدخول وكل الملفات المرفوعة.",
+  account_export_hint: "ملف ‎.zip‎ يضم ملاحظاتك ودفاترك وبطاقاتك التعليمية وتفضيلاتك وسجلات الدخول وكل الملفات المرفوعة. قد تستغرق الحسابات الكبيرة بضع دقائق، ويبقى الملف متاحًا للتنزيل لمدة يومين.",
   account_export_button: "تنزيل",
   account_export_running: "جارٍ التحضير…",
   account_export_failed: "تعذّر إنشاء ملف بياناتك. حاول مرة أخرى بعد بضع دقائق.",
@@ -13317,6 +13337,8 @@ TRANSLATIONS.ar = {
   version_manual: "يدوي",
   version_notion_reimport: "قبل إعادة الاستيراد من Notion",
   cookies_menu: "ملفات تعريف الارتباط",
+  pdf_preview_unavailable: "تعذّر عرض معاينة ملف PDF هنا.",
+  open_pdf: "فتح ملف PDF",
 };
 
 /**

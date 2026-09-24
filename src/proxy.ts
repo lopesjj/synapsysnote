@@ -214,7 +214,9 @@ async function route(request: NextRequest, geoCookieAllowed: boolean) {
     return NextResponse.next();
   }
 
-  const language = locale ?? (await siteLanguage()).language;
+  const siteCookie = request.cookies.get(SITE_LANG_COOKIE)?.value;
+  const chosenSiteLanguage = isSupportedLanguage(siteCookie) ? siteCookie : null;
+  const language = locale ?? chosenSiteLanguage ?? userLanguage ?? (await siteLanguage()).language;
   const target = localizePath(path, language);
 
   if (hostname === WWW_LOGIN_HOST || (isAppHost && (path === "/" || path.startsWith("/auth/")))) {

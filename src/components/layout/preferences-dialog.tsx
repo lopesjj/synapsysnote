@@ -997,7 +997,7 @@ function Avatar({
 }
 
 function PrivacySection() {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { mode, signOut } = useAuth();
   const [busy, setBusy] = useState<"export" | "sessions" | "delete" | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -1026,7 +1026,7 @@ function PrivacySection() {
 
   const leave = async () => {
     await signOut();
-    navigateTo(loginHref("/?logout=1"), undefined, "replace");
+    navigateTo(loginHref("/?logout=1", language), undefined, "replace");
   };
 
   const exportData = async () => {

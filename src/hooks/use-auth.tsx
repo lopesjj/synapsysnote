@@ -43,7 +43,7 @@ import {
 } from "@/lib/auth/cross-host-session";
 import { isSplitHosts, loginHref, resolveUrl } from "@/lib/domains";
 import { isCustomAvatar } from "@/lib/data/user-avatar";
-import { forgetUserLanguage } from "@/lib/i18n/locale-cookies";
+import { forgetUserLanguage, readUserLanguage, rememberSiteLanguage } from "@/lib/i18n/locale-cookies";
 import { forgetAccessSession, reportAccess } from "@/lib/auth/access-log-client";
 import type { SupportedLanguage } from "@/types/models";
 
@@ -652,6 +652,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setFirebaseUser(null);
           clearRemembered();
           queryClient.clear();
+          const leavingLanguage = readUserLanguage();
+          if (leavingLanguage) rememberSiteLanguage(leavingLanguage);
           forgetUserLanguage();
           clearSignedOutStorage();
         } finally {

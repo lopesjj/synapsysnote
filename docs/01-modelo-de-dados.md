@@ -16,6 +16,9 @@ Arquivos: [`firestore.rules`](../firestore.rules) ·
                   acessibilidade…, flashcardSettings }
     createdAt, updatedAt, lastSeenAt
 
+/export_locks/{uid}                             ← só Admin SDK: uma exportação por vez
+    until
+
 /access_logs/{logId}                            ← só Admin SDK
     uid, email, ip, userAgent, event, createdAt
     expiresAt                                   ← TTL: apagado após 190 dias
@@ -191,6 +194,7 @@ Mesma primitiva de membro, lida via `firestore.get()`. Além disso:
 | `workspaces/{ws}/notion/{jobId}/` | **negada** (só Admin SDK) | — | rehospedagem do Notion |
 | `workspaces/{ws}/exports/` | **negada** | — | gerado no servidor |
 | `users/{uid}/` | o próprio usuário | 5 MB | `image/*` (avatar) |
+| `exports/{uid}/` | **negada** (só a função de exportação) | — | `.zip` da cópia dos dados; só o dono lê; apagado em 2 dias |
 
 Arquivo removido de uma nota vai para a quarentena (`trashed_media`) e só é
 apagado 30 dias depois, se nenhuma nota, versão, base, caderno ou flashcard o

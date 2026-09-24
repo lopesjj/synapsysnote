@@ -91,8 +91,29 @@ assert.equal(
     cookies: { synapsys_session: "x", synapsys_lang: "ja" },
     headers: { "x-gclb-country": "FR" },
   }),
-  "https://synapsysnt.com.br/fr?logout=1",
-  "No logout a tela de login usa o idioma detectado, não o do usuário"
+  "https://synapsysnt.com.br/ja?logout=1",
+  "No logout a tela de login continua no idioma do usuário"
+);
+assert.equal(
+  await locationOf("https://synapsysnt.com.br/pt?logout=1", { headers: { "accept-language": "en-US,en;q=0.9" } }),
+  null,
+  "Logout já localizado pelo app segue direto"
+);
+assert.equal(
+  await locationOf("https://synapsysnt.com.br/", {
+    cookies: { synapsys_lang: "pt" },
+    headers: { "accept-language": "en-US,en;q=0.9" },
+  }),
+  "https://synapsysnt.com.br/pt",
+  "Sem sessão, o idioma da conta vence o do navegador"
+);
+assert.equal(
+  await locationOf("https://synapsysnt.com.br/", {
+    cookies: { synapsys_site_lang: "it", synapsys_lang: "ja" },
+    headers: { "accept-language": "en-US" },
+  }),
+  "https://synapsysnt.com.br/it",
+  "A escolha feita no seletor do site vence o idioma da conta"
 );
 assert.equal(
   await locationOf("https://synapsysnt.com.br/", { cookies: { synapsys_session: "x", synapsys_lang: "ja" } }),

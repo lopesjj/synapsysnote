@@ -43,8 +43,11 @@ npm --prefix functions ci
 npm run deploy:functions
 ```
 
-O `predeploy` do `firebase.json` copia o núcleo de limpeza de `src/lib/trash/` para
-`functions/src/shared/` e compila; a função diária passa a apagar também as versões
+O `predeploy` do `firebase.json` copia os núcleos compartilhados (limpeza em
+`src/lib/trash/` e exportação da conta em `src/lib/account/`) para
+`functions/src/shared/` e compila. A função `exportAccountData` gera a cópia dos
+dados direto no Storage (`exports/{uid}/`), e a regra do Storage para esse prefixo
+precisa estar publicada (`npm run deploy:rules`) antes do app novo; a função diária passa a apagar também as versões
 de nota com mais de 30 dias (o histórico já dizia "30 dias").
 
 As funções mudam de `us-east1` para `southamerica-east1`: o CLI cria as novas e
@@ -79,7 +82,8 @@ npm run migrate:2026-09 -- --confirm # aplica
 
 - remove o campo `blocks` duplicado das páginas e versões (o conteúdo fica em
   `blocksJson`, que já é o que o app lê);
-- apaga os documentos da coleção `attachments`, que o app não usa mais;
+- apaga os documentos da coleção `attachments`, que o app não usa mais (os
+  arquivos no Storage continuam);
 - move a árvore dos jobs de importação em andamento para `import_jobs/{id}/meta/tree`;
 - troca, nas notas importadas do Notion, as menções que ficaram com o id do Notion
   pelo id da nota no app e recalcula `outgoingLinks` (os backlinks dependem disso).

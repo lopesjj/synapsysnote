@@ -207,12 +207,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       if (user) {
         navigateTo(appHref(pathname || "/home", locale), router, "replace");
       } else if (!loading && !loggingOut) {
-        navigateTo(loginHref("/"), undefined, "replace");
+        navigateTo(loginHref("/", locale), undefined, "replace");
       }
       return;
     }
     if (!loading && !user && !loggingOut) {
-      navigateTo(loginHref("/?session=sync_failed"), undefined, "replace");
+      navigateTo(loginHref("/?session=sync_failed", locale), undefined, "replace");
     }
   }, [loading, locale, loggingOut, pathname, router, user]);
 

@@ -7,3 +7,4 @@ setGlobalOptions({
 });
 
 export { purgeExpiredTrash, purgeExpiredQuarantineMedia, purgePage } from "./maintenance/trash";
+export { exportAccountData } from "./account/export";

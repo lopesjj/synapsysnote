@@ -92,6 +92,11 @@ service firebase.storage {
       allow write: if false;
     }
 
+    match /exports/{userId}/{fileName} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if false;
+    }
+
     match /users/{userId}/{fileName} {
       allow read: if isSignedIn() && request.auth.uid == userId;
       allow create, update: if isSignedIn()

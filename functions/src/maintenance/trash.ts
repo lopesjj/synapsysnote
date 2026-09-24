@@ -12,6 +12,7 @@ import {
   workspacesWithExpiredTrash,
 } from "../shared/purge-core";
 import { TRASH_RETENTION_MS, VERSION_RETENTION_MS } from "../shared/retention";
+import { purgeOldExports } from "../shared/export-core";
 
 const SCHEDULE_TIMEOUT_SECONDS = 1800;
 const TIME_BUDGET_MS = (SCHEDULE_TIMEOUT_SECONDS - 120) * 1000;
@@ -38,6 +39,12 @@ export const purgeExpiredTrash = onSchedule(
     } catch (error) {
       logger.error("version purge failed", { error });
     }
+    let exports = 0;
+    try {
+      exports = await purgeOldExports(bucket(), startedAt);
+    } catch (error) {
+      logger.error("export cleanup failed", { error });
+    }
     const workspaceIds = await workspacesWithExpiredTrash(db, cutoff, startedAt);
     let purged = 0;
     let quarantined = 0;
@@ -56,7 +63,7 @@ export const purgeExpiredTrash = onSchedule(
       }
     }
 
-    logger.info("trash purge finished", { workspaces: workspaceIds.length, purged, quarantined, versions, pending });
+    logger.info("trash purge finished", { workspaces: workspaceIds.length, purged, quarantined, versions, exports, pending });
   }
 );
 

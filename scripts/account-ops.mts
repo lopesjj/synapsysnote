@@ -1,7 +1,8 @@
 import { createWriteStream } from "node:fs";
 import { resolve } from "node:path";
-import { adminAuth, isAdminConfigured } from "../src/lib/firebase/admin";
-import { accountExportStream, deleteAccount, workspacesOf } from "../src/lib/account/account-server";
+import { adminAuth, adminBucket, adminDb, isAdminConfigured } from "../src/lib/firebase/admin";
+import { deleteAccount, workspacesOf } from "../src/lib/account/account-server";
+import { writeAccountExport } from "../src/lib/account/export-core";
 
 interface ParsedArgs {
   command: "export" | "delete" | "suspend" | null;
@@ -53,15 +54,12 @@ async function resolveUser(email?: string, uid?: string) {
 async function runExport(user: Awaited<ReturnType<typeof resolveUser>>, outputPath?: string) {
   const finalPath =
     outputPath || resolve(process.cwd(), `account-export-${user.uid}-${Date.now()}.zip`);
-  const reader = accountExportStream(user.uid).getReader();
-  const out = createWriteStream(finalPath);
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!out.write(value)) await new Promise((resolveDrain) => out.once("drain", resolveDrain));
-  }
-  await new Promise<void>((resolveEnd, reject) => out.end((error?: Error | null) => (error ? reject(error) : resolveEnd())));
-  console.log(`Exportação concluída com sucesso para o arquivo: ${finalPath}`);
+  const summary = await writeAccountExport(
+    { db: adminDb(), auth: adminAuth(), bucket: adminBucket() },
+    user.uid,
+    createWriteStream(finalPath)
+  );
+  console.log(`Exportação concluída com sucesso para o arquivo: ${finalPath} (${summary.files} arquivo(s))`);
 }
 
 async function runSuspend(user: Awaited<ReturnType<typeof resolveUser>>, unsuspend: boolean, confirm: boolean) {

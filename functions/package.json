@@ -18,10 +18,12 @@
     "typecheck": "node ../scripts/sync-functions-shared.mjs --check && tsc --noEmit"
   },
   "dependencies": {
+    "archiver": "^7.0.1",
     "firebase-admin": "^13.6.0",
     "firebase-functions": "^6.6.0"
   },
   "devDependencies": {
+    "@types/archiver": "^6.0.4",
     "@types/node": "^22.10.0",
     "typescript": "^5.9.2"
   }
