@@ -9,7 +9,6 @@ import {
   Minimize2,
   Moon,
   Plug,
-  Scale,
   Settings,
   Sun,
 } from "lucide-react";
@@ -156,6 +155,14 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
           <MenuItem
             onSelect={() => {
               useUiStore.getState().setMobileSidebarOpen(false);
+              useLegalStore.getState().openDoc("cookies", COOKIE_PREFERENCES_SECTION);
+            }}
+          >
+            <Cookie /> {t("cookies_menu")}
+          </MenuItem>
+          <MenuItem
+            onSelect={() => {
+              useUiStore.getState().setMobileSidebarOpen(false);
               useUiStore.getState().setChangePasswordOpen(true);
             }}
           >
@@ -171,22 +178,6 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
           <MenuItem onSelect={() => useUiStore.getState().toggleZenMode()}>
             <Minimize2 /> {t("focus_mode")}
             <MenuShortcut>{isMac() ? "⌘⇧F" : "Ctrl ⇧ F"}</MenuShortcut>
-          </MenuItem>
-          <MenuItem
-            onSelect={() => {
-              useUiStore.getState().setMobileSidebarOpen(false);
-              useLegalStore.getState().openDoc("terms");
-            }}
-          >
-            <Scale /> {t("legal_center")}
-          </MenuItem>
-          <MenuItem
-            onSelect={() => {
-              useUiStore.getState().setMobileSidebarOpen(false);
-              useLegalStore.getState().openDoc("cookies", COOKIE_PREFERENCES_SECTION);
-            }}
-          >
-            <Cookie /> {t("cookie_preferences")}
           </MenuItem>
         </div>
 

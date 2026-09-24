@@ -25,6 +25,15 @@ export type ListSortScope = "notebooks" | "notebookNotes" | "subnotes";
 
 export type UiPreferences = Required<Omit<UserPreferences, "theme" | "flashcardSettings">>;
 
+export type PreferencesTab =
+  | "appearance"
+  | "accessibility"
+  | "language"
+  | "typography"
+  | "profile"
+  | "privacy"
+  | "shortcuts";
+
 interface UiState extends UiPreferences {
   zenMode: boolean;
   mobileSidebarOpen: boolean;
@@ -35,6 +44,7 @@ interface UiState extends UiPreferences {
   googleDocsImportOpen: boolean;
   fileImportProvider: ImportProvider | null;
   preferencesOpen: boolean;
+  preferencesTab: PreferencesTab;
   changePasswordOpen: boolean;
 
   toggleSidebar: () => void;
@@ -52,6 +62,7 @@ interface UiState extends UiPreferences {
   setGoogleDocsImportOpen: (value: boolean) => void;
   setFileImportProvider: (value: ImportProvider | null) => void;
   setPreferencesOpen: (value: boolean) => void;
+  setPreferencesTab: (value: PreferencesTab) => void;
   setChangePasswordOpen: (value: boolean) => void;
   setNotesLayout: (value: NotesLayout) => void;
   setNotesSort: (value: NotesSortKey) => void;
@@ -146,6 +157,7 @@ export const useUiStore = create<UiState>()(
       googleDocsImportOpen: false,
       fileImportProvider: null,
       preferencesOpen: false,
+      preferencesTab: "appearance",
       changePasswordOpen: false,
 
       toggleSidebar: () => set({ sidebarCollapsed: !get().sidebarCollapsed }),
@@ -171,6 +183,7 @@ export const useUiStore = create<UiState>()(
       setGoogleDocsImportOpen: (value) => set({ googleDocsImportOpen: value }),
       setFileImportProvider: (value) => set({ fileImportProvider: value }),
       setPreferencesOpen: (value) => set({ preferencesOpen: value }),
+      setPreferencesTab: (value) => set({ preferencesTab: value }),
       setChangePasswordOpen: (value) => set({ changePasswordOpen: value }),
       setNotesLayout: (value) => set({ notesLayout: value }),
       setNotesSort: (value) => set({ notesSort: value }),

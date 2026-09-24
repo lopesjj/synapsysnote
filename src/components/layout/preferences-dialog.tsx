@@ -43,6 +43,7 @@ import {
   type NotesDensity,
   type NotesLayout,
   type NotesSortKey,
+  type PreferencesTab,
 } from "@/lib/store/ui-store";
 import { fontById, fontsByCategory } from "@/lib/typography";
 import { cn, isMac } from "@/lib/utils";
@@ -60,15 +61,6 @@ import { authErrorText } from "@/lib/auth/error-message";
 import { AuthError } from "@/lib/auth/errors";
 import { loginHref, navigateTo } from "@/lib/domains";
 
-type PreferenceTab =
-  | "appearance"
-  | "accessibility"
-  | "language"
-  | "typography"
-  | "profile"
-  | "privacy"
-  | "shortcuts";
-
 export function PreferencesDialog({
   open,
   onOpenChange,
@@ -77,9 +69,10 @@ export function PreferencesDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<PreferenceTab>("appearance");
+  const activeTab = useUiStore((state) => state.preferencesTab);
+  const setActiveTab = useUiStore((state) => state.setPreferencesTab);
 
-  const navItems: { id: PreferenceTab; label: string; icon: React.ReactNode }[] = [
+  const navItems: { id: PreferencesTab; label: string; icon: React.ReactNode }[] = [
     { id: "appearance", label: t("appearance"), icon: <Palette className="size-4" /> },
     { id: "accessibility", label: t("accessibility"), icon: <Accessibility className="size-4" /> },
     { id: "language", label: t("language"), icon: <Globe className="size-4" /> },

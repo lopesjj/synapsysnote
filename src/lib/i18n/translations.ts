@@ -1213,7 +1213,8 @@ export type TranslationKey =
   | "account_delete_failed"
   | "account_deleted"
   | "version_manual"
-  | "version_notion_reimport";
+  | "version_notion_reimport"
+  | "cookies_menu";
 
 export const TRANSLATIONS: Record<string, Record<string, string>> & Record<SupportedLanguage, Partial<Record<TranslationKey, string>>> & { pt: Record<TranslationKey, string>; en: Record<TranslationKey, string> } = {
   ar: {} as Record<TranslationKey, string>,
@@ -2424,6 +2425,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_deleted: "Sua conta foi excluída.",
     version_manual: "manual",
     version_notion_reimport: "antes de reimportar do Notion",
+    cookies_menu: "Cookies",
   },
   en: {
     evernote_paid_plan_notice: "The direct connection uses Evernote MCP, which Evernote only allows on paid plans. On a free account, export your notes as .enex and use the file import below.",
@@ -3632,6 +3634,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_deleted: "Your account has been deleted.",
     version_manual: "manual",
     version_notion_reimport: "before re-importing from Notion",
+    cookies_menu: "Cookies",
   },
 
   es: {
@@ -4841,6 +4844,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_deleted: "Tu cuenta fue eliminada.",
     version_manual: "manual",
     version_notion_reimport: "antes de reimportar desde Notion",
+    cookies_menu: "Cookies",
   },
 
   fr: {
@@ -6050,6 +6054,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_deleted: "Votre compte a été supprimé.",
     version_manual: "manuelle",
     version_notion_reimport: "avant la réimportation depuis Notion",
+    cookies_menu: "Cookies",
   },
 
   it: {
@@ -7259,6 +7264,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_deleted: "Il tuo account è stato eliminato.",
     version_manual: "manuale",
     version_notion_reimport: "prima della reimportazione da Notion",
+    cookies_menu: "Cookie",
   },
 
   de: {
@@ -8468,6 +8474,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_deleted: "Dein Konto wurde gelöscht.",
     version_manual: "manuell",
     version_notion_reimport: "vor dem erneuten Import aus Notion",
+    cookies_menu: "Cookies",
   },
 
   ru: {
@@ -9677,6 +9684,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_deleted: "Ваш аккаунт удалён.",
     version_manual: "вручную",
     version_notion_reimport: "до повторного импорта из Notion",
+    cookies_menu: "Файлы cookie",
   },
 
   ja: {
@@ -10886,6 +10894,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_deleted: "アカウントを削除しました。",
     version_manual: "手動",
     version_notion_reimport: "Notion から再インポートする前",
+    cookies_menu: "Cookie",
   },
 
   zh: {
@@ -12095,6 +12104,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     account_deleted: "你的账户已删除。",
     version_manual: "手动",
     version_notion_reimport: "从 Notion 重新导入之前",
+    cookies_menu: "Cookie",
   },
 };
 
@@ -13306,6 +13316,7 @@ TRANSLATIONS.ar = {
   account_deleted: "تم حذف حسابك.",
   version_manual: "يدوي",
   version_notion_reimport: "قبل إعادة الاستيراد من Notion",
+  cookies_menu: "ملفات تعريف الارتباط",
 };
 
 /**
