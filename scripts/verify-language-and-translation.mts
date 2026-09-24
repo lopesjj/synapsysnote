@@ -314,6 +314,11 @@ import {
   formatRecordsProperties,
   isPlanningName,
 } from "../src/components/database/database-i18n";
+import { textDirection } from "../src/lib/i18n/locale";
+
+for (const code of expectedCodes) {
+  assert.equal(textDirection(code), "ltr");
+}
 
 assert.equal(formatRecordsProperties(1, 3, "ar"), "1 سجل · 3 خصائص");
 assert.equal(formatRecordsProperties(2, 4, "ar"), "2 سجلات · 4 خصائص");
@@ -324,8 +329,17 @@ assert.equal(translateDatabaseText("sem status", "ar"), "بدون حالة");
 assert.equal(translateDatabaseText("Nome", "ar"), "الاسم");
 assert.equal(translateDatabaseText("Status", "ar"), "الحالة");
 assert.equal(translateDatabaseText("Data", "ar"), "التاريخ");
+for (const code of expectedCodes) {
+  const planningTranslation = (TRANSLATIONS[code] as Record<TranslationKey, string>).planning;
+  assert.ok(planningTranslation && planningTranslation.length > 0);
+  assert.equal(isPlanningName(planningTranslation), true);
+}
+
 assert.equal(isPlanningName("التخطيط"), true);
 assert.equal(isPlanningName("تخطيط"), true);
 assert.equal(isPlanningName("Planejamento"), true);
+assert.equal(isPlanningName("planificacion"), true);
+assert.equal(isPlanningName(""), false);
 
 console.log("all language and translation verification tests passed");
+

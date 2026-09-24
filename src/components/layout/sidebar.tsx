@@ -61,6 +61,7 @@ import { childrenOf, isNestedNotebook, parentIdOf } from "@/lib/data/notebook-tr
 import { sortNotebooks, sortPageTree } from "@/lib/data/list-sort";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
 import { MoveItemDialog, type MoveItemTarget } from "./move-dialog";
+import { isPlanningName } from "@/components/database/database-i18n";
 import {
   ORDER_STEP,
   decodeId,
@@ -637,7 +638,9 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                           : "text-muted hover:text-ink"
                       )}
                     >
-                      <span className="truncate">{database.name}</span>
+                      <span className="truncate">
+                        {isPlanningName(database.name) ? t("planning") : (database.name || t("untitled"))}
+                      </span>
                     </Link>
                   ))}
                   {empty ? (
@@ -892,7 +895,9 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                   )}
                 >
                   <SidebarItemIcon icon={database.icon} fallback="🗂️" />
-                  <span className="truncate">{database.name || t("untitled")}</span>
+                  <span className="truncate">
+                    {isPlanningName(database.name) ? t("planning") : (database.name || t("untitled"))}
+                  </span>
                 </Link>
               ))}
             </Section>

@@ -1,18 +1,22 @@
 export function isPlanningName(name: string): boolean {
+  if (!name) return false;
   const lower = name.trim().toLowerCase();
+  const normalized = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   return [
     "planejamento",
     "planning",
     "planificación",
+    "planificacion",
     "planification",
     "pianificazione",
     "planung",
     "планирование",
     "計画",
     "计划",
+    "計劃",
     "التخطيط",
     "تخطيط",
-  ].includes(lower);
+  ].some((candidate) => lower === candidate || normalized === candidate.normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
 }
 
 const CANONICAL_MAP: Record<string, string> = {

@@ -34,6 +34,7 @@ import { EmptyState, Tooltip } from "@/components/ui/primitives";
 import { ListSortControl } from "@/components/ui/list-sort-control";
 import { sortNotebooks, sortPageTree } from "@/lib/data/list-sort";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
+import { isPlanningName } from "@/components/database/database-i18n";
 import { WorkspaceCrumbs } from "./workspace-crumbs";
 import { cn, compareNatural, formatRelative } from "@/lib/utils";
 import { localizeErrorMessage, useTranslation } from "@/lib/i18n/translations";
@@ -932,7 +933,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                           >
                             <WorkspaceIcon icon={database.icon} fallback="🗃️" size={16} />
                             <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">
-                              {database.name}
+                              {isPlanningName(database.name) ? t("planning") : (database.name || t("untitled"))}
                             </span>
                             <span className="text-[11px] text-faint">{t("database_badge")}</span>
                           </Link>

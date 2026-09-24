@@ -6,6 +6,7 @@ import { usePathname } from "@/lib/i18n/navigation";
 import { useWorkspace } from "@/lib/data/provider";
 import { formatTabTitle } from "@/lib/document-title";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
+import { isPlanningName } from "@/components/database/database-i18n";
 
 function pathSegment(pathname: string, prefix: string): string | null {
   if (!pathname.startsWith(prefix)) return null;
@@ -39,7 +40,11 @@ function titleForRoute(
   const databaseId = pathSegment(pathname, "/home/db/");
   if (databaseId) {
     const database = databases.find((candidate) => candidate.id === databaseId);
-    return database ? formatTabTitle(database.name || "Base") : null;
+    if (!database) return null;
+    const name = isPlanningName(database.name)
+      ? t("planning")
+      : database.name || t("database_badge");
+    return formatTabTitle(name);
   }
 
   const tag = pathSegment(pathname, "/home/tag/");

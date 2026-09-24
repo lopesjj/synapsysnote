@@ -11,6 +11,7 @@ import { formatRelative } from "@/lib/utils";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { TrashCanIcon } from "@/lib/icons/trash-icon";
 import { localizeErrorMessage, useTranslation } from "@/lib/i18n/translations";
+import { isPlanningName } from "@/components/database/database-i18n";
 
 interface TrashRow {
   id: string;
@@ -220,7 +221,7 @@ export default function TrashPage() {
     id: database.id,
     icon: database.icon,
     fallbackIcon: "🗂️",
-    title: database.name,
+    title: isPlanningName(database.name) ? t("planning") : (database.name || t("untitled")),
     deletedAt: database.deletedAt,
     restore: () => adapter.restoreDatabase(database.id),
     restoredMessage: t("database_restored"),

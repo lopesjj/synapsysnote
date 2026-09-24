@@ -25,7 +25,7 @@ export const HTML_LANG: Record<SupportedLanguage, string> = {
   ar: "ar",
 };
 
-export const RTL_LANGUAGES: readonly SupportedLanguage[] = ["ar"];
+export const RTL_LANGUAGES: readonly SupportedLanguage[] = [];
 
 export type TextDirection = "ltr" | "rtl";
 
