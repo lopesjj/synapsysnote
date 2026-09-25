@@ -226,7 +226,7 @@ const it: LegalBundle = {
               "**Trascrizione audio e video:** Google Gemini API; in alternativa, un modello open source (Whisper) eseguito sui nostri server.",
               "**Trascrizione in tempo reale delle note vocali:** il riconoscimento vocale del browser, che potrebbe inviare l'audio al produttore (Google, Microsoft o Apple). Rimane disattivato finché non lo attivi durante la registrazione.",
               "**Flashcard e rilevamento di card duplicate:** Google Gemini API.",
-              "**Traduzione:** Google Cloud Translation; finché non è disponibile, la stessa Google Gemini API.",
+              "**Traduzione:** Google Gemini API; finché non è disponibile, Google Cloud Translation.",
             ],
           },
           { note: "Non utilizziamo i tuoi contenuti per addestrare modelli di intelligenza artificiale, e nessuna funzionalità di AI viene eseguita senza una tua azione." },

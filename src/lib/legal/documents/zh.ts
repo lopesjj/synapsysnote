@@ -226,7 +226,7 @@ const zh: LegalBundle = {
               "**音频和视频转录：**Google Gemini API；作为备选，也可使用在我们自有服务器上运行的开源模型（Whisper）。",
               "**语音笔记实时转录：**浏览器的语音识别功能，可能会将音频发送给服务商（Google、Microsoft 或 Apple）。在录音中手动开启前保持关闭状态。",
               "**抽认卡及重复卡片检测：**Google Gemini API。",
-              "**翻译：**Google Cloud Translation；在其不可用期间，使用 Google Gemini API 本身。",
+              "**翻译：**Google Gemini API；在其不可用期间，使用 Google Cloud Translation。",
             ],
           },
           { note: "我们不会使用你的内容训练人工智能模型，任何 AI 功能都不会在你未操作的情况下运行。" },

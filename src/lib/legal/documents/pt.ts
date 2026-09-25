@@ -225,7 +225,7 @@ const pt: LegalBundle = {
             list: [
               "**Transcrição de áudio e vídeo:** Google Gemini API; como alternativa, um modelo de código aberto (Whisper) executado nos servidores do serviço, no Google Cloud.",
               "**Flashcards e detecção de cards repetidos:** Google Gemini API.",
-              "**Tradução:** Google Cloud Translation; enquanto ele estiver indisponível, a própria Google Gemini API.",
+              "**Tradução:** Google Gemini API; enquanto ela estiver indisponível, a Google Cloud Translation.",
               "**Transcrição ao vivo de notas de voz:** o reconhecimento de voz do seu navegador, que pode enviar o áudio ao fabricante (Google, Microsoft ou Apple). Fica desligada até você ativá-la na gravação.",
             ],
           },

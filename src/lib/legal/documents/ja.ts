@@ -226,7 +226,7 @@ const ja: LegalBundle = {
               "**音声・動画の文字起こし：** Google Gemini API。代替として、私たち自身のサーバーで実行するオープンソースモデル（Whisper）。",
               "**音声ノートのリアルタイム文字起こし：** ブラウザの音声認識機能。提供元（Google、Microsoft、Apple）に音声を送信する場合があります。録音時に有効にするまで無効のままです。",
               "**フラッシュカードと重複カードの検出：** Google Gemini API。",
-              "**翻訳：** Google Cloud Translation。利用できない間は Google Gemini API 自体を使用します。",
+              "**翻訳：** Google Gemini API。利用できない間は Google Cloud Translation を使用します。",
             ],
           },
           { note: "あなたのコンテンツをAIモデルの学習に使用することはなく、あなたの操作なしにAI機能が実行されることもありません。" },

@@ -226,7 +226,7 @@ const de: LegalBundle = {
               "**Audio- und Videotranskription:** Google Gemini API; alternativ ein Open-Source-Modell (Whisper), das auf unseren eigenen Servern ausgeführt wird.",
               "**Live-Transkription von Sprachnotizen:** die Spracherkennung deines Browsers, die Audio an den Hersteller (Google, Microsoft oder Apple) senden kann. Bleibt deaktiviert, bis du sie bei der Aufnahme einschaltest.",
               "**Lernkarten und Erkennung doppelter Karten:** Google Gemini API.",
-              "**Übersetzung:** Google Cloud Translation; solange es nicht verfügbar ist, die Google Gemini API selbst.",
+              "**Übersetzung:** Google Gemini API; solange sie nicht verfügbar ist, Google Cloud Translation.",
             ],
           },
           { note: "Wir verwenden deine Inhalte nicht zum Training von KI-Modellen, und keine KI-Funktion läuft ohne eine Aktion von dir." },

@@ -77,10 +77,25 @@ const LANGUAGE_NAMES: Record<string, string> = {
   ar: "Arabic",
 };
 
+const GEMINI_TRANSLATE_MODELS = [
+  "gemini-3.5-transcribe",
+  "gemini-3.5-flash-lite",
+  "gemini-3.5-flash",
+  "gemini-3.6-flash",
+  "gemini-3.8-flash",
+  "gemini-3.7-flash",
+  "gemini-flash-lite-latest",
+  "gemini-flash-latest",
+] as const;
+
 async function geminiTranslate(text: string, targetLang: string): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) return null;
-  const models = [...new Set([process.env.GEMINI_MODEL, "gemini-3.5-flash-lite", "gemini-2.5-flash"].filter(Boolean))];
+  const preferred = process.env.GEMINI_MODEL?.trim();
+  const models = [
+    ...(preferred && !GEMINI_TRANSLATE_MODELS.includes(preferred as (typeof GEMINI_TRANSLATE_MODELS)[number]) ? [preferred] : []),
+    ...GEMINI_TRANSLATE_MODELS,
+  ];
   for (const model of models) {
     try {
       const response = await fetch(
@@ -129,34 +144,52 @@ export async function translateChunks(chunks: string[], targetLang: string): Pro
   });
   if (!missing.length) return { chunks: results, failed };
 
-  const pending = missing.map((index) => chunks[index]);
-  const viaCloud: (string | undefined)[] = [];
-  let group: string[] = [];
-  let groupChars = 0;
-  const flush = async () => {
-    if (!group.length) return;
-    const translated = await cloudTranslate(group, targetLang);
-    viaCloud.push(...(translated ?? group.map(() => undefined)));
-    group = [];
-    groupChars = 0;
-  };
-  for (const chunk of pending) {
-    if (groupChars + chunk.length > CLOUD_REQUEST_CHARS) await flush();
-    group.push(chunk);
-    groupChars += chunk.length;
-  }
-  await flush();
-  for (let position = 0; position < missing.length; position += 1) {
-    const index = missing[position];
-    const produced = viaCloud?.[position] ?? (await geminiTranslate(chunks[index], targetLang));
-    if (produced === null || produced === undefined) failed += 1;
-    const translated = produced ?? chunks[index];
-    results[index] = translated;
-    if (translated !== chunks[index]) {
+  const needCloudFallback: number[] = [];
+
+  for (const index of missing) {
+    const text = chunks[index];
+    const geminiResult = await geminiTranslate(text, targetLang);
+    if (geminiResult) {
+      results[index] = geminiResult;
       if (translationCache.size > 500) translationCache.clear();
-      translationCache.set(`${targetLang}:${chunks[index]}`, translated);
+      translationCache.set(`${targetLang}:${text}`, geminiResult);
+    } else {
+      needCloudFallback.push(index);
     }
   }
+
+  if (needCloudFallback.length > 0) {
+    const pending = needCloudFallback.map((index) => chunks[index]);
+    const viaCloud: (string | undefined)[] = [];
+    let group: string[] = [];
+    let groupChars = 0;
+    const flush = async () => {
+      if (!group.length) return;
+      const translated = await cloudTranslate(group, targetLang);
+      viaCloud.push(...(translated ?? group.map(() => undefined)));
+      group = [];
+      groupChars = 0;
+    };
+    for (const chunk of pending) {
+      if (groupChars + chunk.length > CLOUD_REQUEST_CHARS) await flush();
+      group.push(chunk);
+      groupChars += chunk.length;
+    }
+    await flush();
+
+    for (let position = 0; position < needCloudFallback.length; position += 1) {
+      const index = needCloudFallback[position];
+      const produced = viaCloud?.[position];
+      if (produced === null || produced === undefined) failed += 1;
+      const translated = produced ?? chunks[index];
+      results[index] = translated;
+      if (translated !== chunks[index]) {
+        if (translationCache.size > 500) translationCache.clear();
+        translationCache.set(`${targetLang}:${chunks[index]}`, translated);
+      }
+    }
+  }
+
   return { chunks: results, failed };
 }
 
