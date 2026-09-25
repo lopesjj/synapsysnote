@@ -89,3 +89,5 @@ env:
     secret: GEMINI_API_KEY
   - variable: GEMINI_MODEL
     value: gemini-3.6-flash
+  - variable: GROQ_API_KEY
+    secret: GROQ_API_KEY
