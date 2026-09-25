@@ -4,21 +4,11 @@ import {
   transcribeInSegments,
 } from "../src/lib/accessibility/audio-transcriber";
 import {
-  DEFAULT_TRANSCRIBE_MODEL,
-  TRANSCRIBE_FALLBACK_MODELS,
-  transcribeModelChain,
-} from "../src/lib/ai/transcribe-models";
-import {
-  isModelResting,
-  noteModelRefused,
-  noteModelWorked,
-  orderByAvailability,
-  orderForRace,
-  parseRetryDelay,
-  resetModelCooldowns,
-  restingKindOf,
-} from "../src/lib/ai/model-cooldown";
-import { raceModels, raceTimingFor, type RaceResult } from "../src/lib/ai/model-race";
+  fileNameForMime,
+  parseGroqRetryAfter,
+  whisperLanguageCode,
+  whisperSegmentsToText,
+} from "../src/lib/ai/groq-whisper";
 import {
   ENERGY_FRAME_SECONDS,
   frameEnergies,
@@ -26,120 +16,62 @@ import {
   rangesFromCuts,
 } from "../src/lib/media/speech-cuts";
 
-// --- ordem em que os modelos são tentados --------------------------------
+// --- Whisper no Groq -------------------------------------------------------
 
-// O padrão de transcrição sai de medição (`scripts/check-gemini-audio.mts`):
-// o flash mais novo é o mais disputado em áudio, e o 3.5 é o que responde.
-assert.equal(transcribeModelChain()[0], DEFAULT_TRANSCRIBE_MODEL);
+// O 429 do Groq diz no texto quanto esperar; é o que separa "espere segundos"
+// de "a cota da hora acabou".
+assert.equal(parseGroqRetryAfter("Please try again in 3m20.5s. Need more tokens?"), 200_500);
+assert.equal(parseGroqRetryAfter("Please try again in 45s."), 45_000);
+assert.equal(parseGroqRetryAfter("Please try again in 1h2m."), 3_720_000);
+assert.equal(parseGroqRetryAfter("Please try again in 500ms"), 500);
+assert.equal(parseGroqRetryAfter("rate limit reached"), undefined);
 
-// Modelo aposentado não pode voltar para a lista: `gemini-2.5-flash-lite`
-// responde 404 "no longer available to new users".
-assert.ok(!transcribeModelChain().includes("gemini-2.5-flash-lite"));
+// O idioma FALADO vem do Whisper, em nome ou código.
+assert.equal(whisperLanguageCode("Portuguese"), "pt");
+assert.equal(whisperLanguageCode("english"), "en");
+assert.equal(whisperLanguageCode("pt"), "pt");
+assert.equal(whisperLanguageCode(""), undefined);
+assert.equal(whisperLanguageCode(undefined), undefined);
 
-const chain = transcribeModelChain("gemini-3.7-flash");
-assert.equal(chain[0], "gemini-3.7-flash");
-assert.equal(new Set(chain).size, chain.length);
+// O Groq deduz o formato pela extensão do nome do arquivo.
+assert.equal(fileNameForMime("audio/ogg; codecs=opus"), "audio.ogg");
+assert.equal(fileNameForMime("audio/mpeg"), "audio.mp3");
+assert.equal(fileNameForMime("video/mp4"), "audio.mp4");
+assert.equal(fileNameForMime("audio/mp4"), "audio.m4a");
+assert.equal(fileNameForMime("audio/webm"), "audio.webm");
 
-// O defeito que deixou uma aula de 50 min sem transcrição: a segunda tentativa
-// caía em `gemini-flash-latest`, apelido do mesmo flash mais novo, e voltava o
-// mesmo 503 cinquenta segundos depois. Apelido só depois dos modelos exatos.
-assert.ok(!chain[1].endsWith("-latest"));
-assert.ok(chain.findIndex((m) => m.endsWith("-latest")) > 2);
-
-// A ordem é estável: houve uma versão que girava a lista a cada tentativa e,
-// com a cota real, isso empurrava a retentativa para os modelos de 20/dia.
-assert.deepEqual(transcribeModelChain("gemini-3.7-flash"), chain);
-
-// Preferido que já está na lista de reserva não aparece duas vezes.
-const deduped = transcribeModelChain("gemini-3.5-flash");
-assert.equal(new Set(deduped).size, deduped.length);
-assert.equal(deduped.length, TRANSCRIBE_FALLBACK_MODELS.length);
-
-// --- cota por modelo: quem recusou sai da frente -------------------------
-
-// O plano gratuito dá 20 requisições por dia em cada flash e 500 no lite, e
-// uma aula de 50 min são ~18 trechos: o padrão precisa ser o de cota larga.
-assert.equal(DEFAULT_TRANSCRIBE_MODEL, "gemini-3.5-transcribe");
-
-{
-  resetModelCooldowns();
-  const now = 1_000_000;
-  const lista = transcribeModelChain();
-
-  // Cota do dia estourada: o modelo sai da lista das próximas chamadas. Sem
-  // isto, cada um dos 18 trechos recomeçava pelo mesmo modelo esgotado.
-  noteModelRefused(lista[0], "quota-day", undefined, now);
-  assert.ok(isModelResting(lista[0], now));
-  assert.ok(!orderByAvailability(lista, now).includes(lista[0]));
-  assert.equal(orderByAvailability(lista, now)[0], lista[1]);
-  assert.equal(restingKindOf(lista, now), "quota-day");
-
-  // Meia hora depois ele volta sozinho: a memória é atalho, não banimento.
-  assert.ok(!isModelResting(lista[0], now + 31 * 60_000));
-
-  // Um 503 curto não pode encurtar o descanso longo da cota diária.
-  noteModelRefused(lista[0], "busy", undefined, now + 1000);
-  assert.ok(isModelResting(lista[0], now + 5 * 60_000));
-
-  // Cota de minuto passa em pouco mais de um minuto.
-  noteModelRefused(lista[1], "quota-minute", undefined, now);
-  assert.ok(isModelResting(lista[1], now + 30_000));
-  assert.ok(!isModelResting(lista[1], now + 70_000));
-
-  // O Gemini manda a espera no 429; um pedido maior que o padrão é respeitado.
-  noteModelRefused(lista[2], "quota-minute", 5 * 60_000, now);
-  assert.ok(isModelResting(lista[2], now + 4 * 60_000));
-
-  // Deu certo: o modelo volta na hora, sem esperar o descanso vencer.
-  noteModelWorked(lista[1]);
-  assert.ok(!isModelResting(lista[1], now + 1000));
-}
-
-{
-  // Todos de molho: ainda assim sobra uma tentativa, a do que acorda primeiro.
-  resetModelCooldowns();
-  const now = 2_000_000;
-  const lista = transcribeModelChain();
-  lista.forEach((model, index) =>
-    noteModelRefused(model, "busy", (index + 2) * 60_000, now)
-  );
-  const restante = orderByAvailability(lista, now);
-  assert.equal(restante.length, 1);
-  assert.equal(restante[0], lista[0]);
-  resetModelCooldowns();
-}
-
-{
-  // Na corrida, congestionado vai para o fim em vez de sair: com trechos em
-  // paralelo, um 503 momentâneo encolhia a cadeia de todos os outros pedidos.
-  resetModelCooldowns();
-  const now = 3_000_000;
-  const lista = transcribeModelChain();
-  noteModelRefused(lista[0], "busy", undefined, now);
-  noteModelRefused(lista[1], "quota-day", undefined, now);
-  noteModelRefused(lista[2], "missing", undefined, now);
-  noteModelRefused(lista[3], "quota-minute", undefined, now);
-  const ordem = orderForRace(lista, now);
-  assert.ok(!ordem.includes(lista[1]));
-  assert.ok(!ordem.includes(lista[2]));
-  assert.equal(ordem[0], lista[4]);
-  // Os dois de molho curto ficam no fim, quem acorda antes primeiro.
-  assert.deepEqual(ordem.slice(-2), [lista[0], lista[3]]);
-  assert.equal(ordem.length, lista.length - 2);
-
-  // Todos sem cota do dia: ainda sobra uma tentativa.
-  lista.forEach((model) => noteModelRefused(model, "quota-day", undefined, now));
-  assert.equal(orderForRace(lista, now).length, 1);
-  resetModelCooldowns();
-}
-
-assert.equal(parseRetryDelay("27s"), 27_000);
-assert.equal(parseRetryDelay("1.5s"), 1_500);
-assert.equal(parseRetryDelay("0s"), undefined);
-assert.equal(parseRetryDelay("depois"), undefined);
-assert.equal(parseRetryDelay(undefined), undefined);
-// Um "volte em uma hora" não pode congelar a cadeia inteira.
-assert.equal(parseRetryDelay("3600s"), 5 * 60_000);
+// Alucinações do Whisper saem; fala real fica.
+assert.equal(
+  whisperSegmentsToText([
+    { text: " Bom dia, turma.", no_speech_prob: 0.01, avg_logprob: -0.2 },
+    // Silêncio que o modelo "preencheu": pouca chance de fala e baixa confiança.
+    { text: " Obrigado.", no_speech_prob: 0.9, avg_logprob: -1.4 },
+    { text: " Hoje vamos ver o Active Directory.", no_speech_prob: 0.02, avg_logprob: -0.3 },
+    { text: " Legendas pela comunidade Amara.org", no_speech_prob: 0.4, avg_logprob: -0.8 },
+  ]),
+  "Bom dia, turma. Hoje vamos ver o Active Directory."
+);
+// Frase curta com confiança baixa mas SEM indício de silêncio é fala: fica.
+assert.equal(
+  whisperSegmentsToText([{ text: "Tá.", no_speech_prob: 0.1, avg_logprob: -1.5 }]),
+  "Tá."
+);
+// Laço de repetição: duas ocorrências passam, da terceira em diante não.
+assert.equal(
+  whisperSegmentsToText([
+    { text: "Ok, ok." },
+    { text: "Ok, ok." },
+    { text: "Ok, ok." },
+    { text: "Ok, ok." },
+    { text: "Vamos lá." },
+  ]),
+  "Ok, ok. Ok, ok. Vamos lá."
+);
+// Em qualquer alfabeto.
+assert.equal(
+  whisperSegmentsToText([{ text: "Привет всем." }, { text: "今日は授業です。" }]),
+  "Привет всем. 今日は授業です。"
+);
 
 // --- junção dos trechos ---------------------------------------------------
 
@@ -489,155 +421,15 @@ globalThis.fetch = realFetch;
   assert.ok(energies[49] > 0.05);
 }
 
-// --- corrida escalonada entre modelos -------------------------------------
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function fakeModel(plan: Record<string, { ms: number; result: RaceResult }>) {
-  const started: string[] = [];
-  const aborted: string[] = [];
-  const run = async (model: string, signal: AbortSignal) => {
-    started.push(model);
-    const { ms, result } = plan[model];
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(resolve, ms);
-      signal.addEventListener("abort", () => {
-        clearTimeout(timer);
-        aborted.push(model);
-        resolve();
-      });
-    });
-    return result;
-  };
-  return { run, started, aborted };
-}
-
-// 1. Modelo congestionado: antes eram ~50 s até o 503 e só então o próximo.
-//    Agora o reforço entra no tempo de espera e o primeiro texto vence.
+// Aula de até ~78 min vai inteira numa chamada; três horas viram três partes
+// de ~1 h, cortadas em pausas.
 {
-  const fake = fakeModel({
-    lento: { ms: 400, result: { text: "", reason: "SERVICE_BUSY" } },
-    bom: { ms: 20, result: { text: "transcrito", reason: "OK" } },
-  });
-  const started = Date.now();
-  const outcome = await raceModels(["lento", "bom"], fake.run, {
-    hedgeDelayMs: 30,
-    callTimeoutMs: 1000,
-    deadline: Date.now() + 2000,
-    minAttemptMs: 1,
-  });
-  assert.equal(outcome.text, "transcrito");
-  assert.equal(outcome.model, "bom");
-  assert.ok(Date.now() - started < 200);
-  // Quem perdeu é cancelado, sem ficar gastando cota.
-  assert.deepEqual(fake.aborted, ["lento"]);
-}
-
-// 2. Recusa rápida (cota) chama o próximo na hora, sem esperar o reforço.
-{
-  const fake = fakeModel({
-    esgotado: { ms: 1, result: { text: "", reason: "QUOTA", quotaScope: "minute" } },
-    bom: { ms: 5, result: { text: "ok", reason: "OK" } },
-  });
-  const started = Date.now();
-  const settled: string[] = [];
-  const outcome = await raceModels(
-    ["esgotado", "bom"],
-    fake.run,
-    { hedgeDelayMs: 5_000, callTimeoutMs: 10_000, deadline: Date.now() + 10_000, minAttemptMs: 1 },
-    (model) => settled.push(model)
-  );
-  assert.equal(outcome.text, "ok");
-  assert.ok(Date.now() - started < 200);
-  assert.deepEqual(settled, ["esgotado", "bom"]);
-}
-
-// 3. Sem fala é veredito do arquivo: não percorre a lista inteira.
-{
-  const fake = fakeModel({
-    a: { ms: 1, result: { text: "", reason: "NO_SPEECH" } },
-    b: { ms: 1, result: { text: "", reason: "NO_SPEECH" } },
-  });
-  const outcome = await raceModels(["a", "b"], fake.run, {
-    hedgeDelayMs: 5_000,
-    callTimeoutMs: 10_000,
-    deadline: Date.now() + 10_000,
-    minAttemptMs: 1,
-  });
-  assert.equal(outcome.reason, "NO_SPEECH");
-  assert.deepEqual(fake.started, ["a"]);
-}
-
-// 4. Cota: só é "do dia" quando TODOS esgotaram o dia. Um que volta em um
-//    minuto faz a resposta ser "espere um minuto".
-{
-  const raceOf = (plan: Record<string, { ms: number; result: RaceResult }>) =>
-    raceModels(Object.keys(plan), fakeModel(plan).run, {
-      hedgeDelayMs: 5_000,
-      callTimeoutMs: 10_000,
-      deadline: Date.now() + 10_000,
-      minAttemptMs: 1,
-    });
-
-  const allDay = await raceOf({
-    a: { ms: 1, result: { text: "", reason: "QUOTA", quotaScope: "day" } },
-    b: { ms: 1, result: { text: "", reason: "QUOTA", quotaScope: "day" } },
-  });
-  assert.equal(allDay.reason, "QUOTA");
-  assert.equal(allDay.quotaScope, "day");
-
-  const mixed = await raceOf({
-    a: { ms: 1, result: { text: "", reason: "QUOTA", quotaScope: "minute" } },
-    b: { ms: 1, result: { text: "", reason: "QUOTA", quotaScope: "day" } },
-  });
-  assert.equal(mixed.reason, "QUOTA");
-  assert.equal(mixed.quotaScope, "minute");
-
-  // O defeito dos logs: o 3.8-flash sem cota do DIA no meio de modelos só
-  // congestionados virava 429 "cota do dia", e o navegador abandonava a aula
-  // inteira. Congestionamento passa — a resposta tem de ser "ocupado".
-  const busyAndDay = await raceOf({
-    transcribe: { ms: 1, result: { text: "", reason: "SERVICE_BUSY" } },
-    "flash-3.8": { ms: 1, result: { text: "", reason: "QUOTA", quotaScope: "day" } },
-    lite: { ms: 1, result: { text: "", reason: "SERVICE_BUSY" } },
-  });
-  assert.equal(busyAndDay.reason, "SERVICE_BUSY");
-  assert.equal(busyAndDay.quotaScope, undefined);
-}
-
-// 5. Nunca mais que duas chamadas em voo, e nunca o mesmo modelo duas vezes
-//    ao mesmo tempo (a segunda rodada repete os primeiros da lista).
-{
-  let inFlight = 0;
-  let peak = 0;
-  const concurrent = new Set<string>();
-  const outcome = await raceModels(
-    ["a", "b", "c", "a"],
-    async (model) => {
-      assert.ok(!concurrent.has(model), `${model} em dobro`);
-      concurrent.add(model);
-      inFlight += 1;
-      peak = Math.max(peak, inFlight);
-      await wait(15);
-      inFlight -= 1;
-      concurrent.delete(model);
-      return { text: "", reason: "SERVICE_BUSY" };
-    },
-    { hedgeDelayMs: 5, callTimeoutMs: 1000, deadline: Date.now() + 2000, minAttemptMs: 1 }
-  );
-  assert.equal(outcome.reason, "SERVICE_BUSY");
-  assert.ok(peak <= 2);
-}
-
-// Tempos proporcionais à duração: o trecho de 3 min ganha reforço perto dos
-// 20 s; uma hora inteira não é mais morta pelo teto fixo de 40 s.
-{
-  const segment = raceTimingFor(180);
-  assert.ok(segment.hedgeDelayMs >= 15_000 && segment.hedgeDelayMs <= 25_000);
-  // O lite congestionado ainda responde em ~70 s: cortar antes disso jogava
-  // fora a chamada que ia dar certo.
-  assert.ok(segment.callTimeoutMs >= 120_000 && segment.callTimeoutMs <= 180_000);
-  assert.ok(raceTimingFor(3600).callTimeoutMs >= 200_000);
+  const fps = 1 / ENERGY_FRAME_SECONDS;
+  assert.deepEqual(planSpeechCuts(new Float32Array(50 * 60 * fps).fill(0.1), { targetSeconds: 3600 }), []);
+  assert.deepEqual(planSpeechCuts(new Float32Array(75 * 60 * fps).fill(0.1), { targetSeconds: 3600 }), []);
+  const threeHours = planSpeechCuts(new Float32Array(3 * 3600 * fps).fill(0.1), { targetSeconds: 3600 });
+  assert.equal(threeHours.length, 2);
 }
 
 console.log("verify:transcription OK");

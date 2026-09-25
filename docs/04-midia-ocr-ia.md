@@ -11,33 +11,45 @@ somente do servidor nas regras) e a geração de flashcards o lê quando existir
 nenhuma rotina o preenche hoje. Para ligar OCR, o caminho previsto é uma função
 `onObjectFinalized` que grave o texto nesse campo.
 
-## 2. Transcrição com Gemini
+## 2. Transcrição com Whisper (Groq)
 
 [`POST /api/ai/transcribe`](../src/app/api/ai/transcribe/route.ts) — a única
 porta de entrada; não há Cloud Function de transcrição. O áudio vai para o
-Gemini (embutido ou pela Files API) com `responseMimeType: application/json`, e
-uma única chamada devolve:
+**Whisper hospedado no Groq** ([`groq-whisper.ts`](../src/lib/ai/groq-whisper.ts)),
+modelo `GROQ_TRANSCRIBE_MODEL` (padrão `whisper-large-v3-turbo`), com a chave
+`GROQ_API_KEY`. A resposta é `{ "transcript": "…", "language": "pt" }`.
 
-```json
-{ "transcript": "…", "summary": "…", "actionItems": ["…"] }
-```
+O Gemini transcrevia e traduzia na mesma chamada e, no plano gratuito, passava
+boa parte do tempo em "high demand": uma aula de 50 min ficava sem transcrição.
+O Whisper do Groq transcreve uma hora de áudio em ~15 s.
 
-Quando o Gemini não transcreve (sem chave, sem fala ou recusa do modelo), o
+**Cotas do plano gratuito do Groq** (da conta inteira, somando todos os
+usuários): 20 requisições/min, 2.000/dia, **7.200 s de áudio por hora** e
+**28.800 s por dia** (~8 h de aula), arquivo de até **25 MB** (100 MB no plano
+pago). Um 429 diz no texto quanto esperar: espera curta a rota repete sozinha;
+cota da hora ou do dia vira `QUOTA_EXCEEDED` no cliente, que para em vez de
+gravar meia aula. `npm run check:whisper`
+([script](../scripts/check-groq-whisper.mts)) confere a chave do `.env.local`
+e mostra a cota restante.
+
+**Alucinações.** A rota pede `verbose_json` e monta o texto pelos segmentos,
+descartando só o que o próprio Whisper marca como silêncio (`no_speech_prob`
+alto **e** `avg_logprob` baixo), laços de repetição (da terceira cópia seguida
+em diante) e créditos de legenda aprendidos da internet ("Legendas pela
+comunidade Amara.org").
+
+Sem `GROQ_API_KEY`, ou quando o Groq não transcreve um arquivo pequeno, o
 cliente pode reenviar o áudio como PCM cru para a mesma rota, que roda o Whisper
 no servidor (`Xenova/whisper-base` quantizado), limitado a uma inferência por
-instância — um segundo pedido simultâneo recebe `SERVICE_BUSY` em vez de
-disputar a memória. O MIME enviado ao
-Gemini é só `audio/webm` — `codecs=opus` no `Content-Type` faz a API recusar o
-arquivo.
+instância e a 15 min de áudio.
 
 **Idioma da transcrição.** O idioma escolhido no bloco é o idioma do texto
-final, não uma dica de reconhecimento. Os modelos dedicados de transcrição e o
-Whisper devolvem a fala no idioma em que ela foi dita, e o modelo com prompt nem
-sempre traduz. Por isso a rota confere o resultado
-([`language-detect.ts`](../src/lib/ai/language-detect.ts)) e, quando ele não está
-no idioma escolhido, traduz pelo mesmo caminho de `/api/ai/translate` (Cloud
-Translation, com a Gemini API como reserva). Se a tradução falhar, a transcrição
-volta no idioma original em vez de se perder.
+final, não uma dica de reconhecimento. O Whisper é chamado **sem** `language`:
+transcreve no idioma que foi falado — forçar o idioma escolhido fazia o modelo
+"traduzir" por conta própria, e mal. Quando o idioma falado (que o Whisper
+informa) difere do escolhido, a rota traduz o texto pronto pelo mesmo caminho
+de `/api/ai/translate`. Se a tradução falhar em qualquer pedaço, volta o
+original inteiro — nunca um texto metade traduzido.
 
 O editor não substitui o documento quando só a transcrição muda (o caret
 ficaria no fim da nota). A atualização entra por merge no bloco de mídia, e o
@@ -47,7 +59,7 @@ autosave recusa sobrescrever um `pending: false` com o rascunho ainda
 Resultado: `media.transcript`, `media.transcriptSummary` no bloco e
 `page.transcriptText` para a busca.
 
-## 2.1 Vídeo
+## 2.1 Vídeo e aulas longas
 
 Vídeo entra pelo mesmo bloco de mídia do áudio e vale o limite de 150 MB que
 [`storage.rules`](../storage.rules) reserva para `video/*` em
@@ -73,81 +85,28 @@ devolver uma imagem irreconhecível. Em vídeo longo o áudio cai para 64 kbps e
 captura para 24 quadros por segundo, deixando mais bits para a imagem.
 
 Para transcrever, [`audio-transcriber.ts`](../src/lib/accessibility/audio-transcriber.ts)
-extrai só a fala (`extractAudioForTranscription` → Opus mono) antes de chamar a
-API — vídeo inteiro estouraria o limite de arquivo embutido do Gemini. A
-trilha nunca é materializada inteira: a decodificação sai direto em 16 kHz
-(`TRANSCRIPTION_SAMPLE_RATE`), o encoder lê quadros de 20 ms sob demanda via
-`createMonoFrameReader` e o caminho local do Whisper monta um pedaço de 60 s por
-vez. Sem isso, uma aula de uma hora custaria mais de 1 GB de RAM só nos vetores
-intermediários — o suficiente para derrubar a aba no celular. O
-resultado é gravado em `media.transcript` do mesmo jeito que no áudio, e é o
-que os flashcards e a exportação em PDF leem.
+decodifica a mídia **uma vez** em 16 kHz (`TRANSCRIPTION_SAMPLE_RATE`) e
+extrai só a fala em Opus mono a 32 kbps (~14 MB por hora): um vídeo de 150 MB
+vira um arquivo que cabe nos 25 MB do Groq. O download mostra progresso real, e
+o encoder lê quadros de 20 ms sob demanda via `createMonoFrameReader`, sem
+materializar a trilha inteira.
 
-**Uma aula inteira vai em uma chamada só.** `transcribeWholeSpeech` extrai a
-fala do vídeo para um Opus mono (50 min ≈ 9 MB), manda numa única requisição, e
-a rota sobe o arquivo pela **Files API** do Gemini quando ele passa de 6 MB —
-o corpo embutido tem teto de ~20 MB, a referência por `fileUri` não tem. Medido
-com a chave do projeto: 50 min de áudio custam **75.012 tokens de entrada**
-(25 tokens por segundo), o upload de 22,9 MB leva 4,2 s e a resposta volta em
-6,0 s no `gemini-3.5-flash`.
-
-Isso importa por causa da cota, não da velocidade: no plano gratuito cada
-modelo flash tem **20 requisições por dia**. Fatiada em trechos de 3 min, uma
-aula de 50 min consumia 18 dessas 20 — quase o dia inteiro para um vídeo. Em
-uma chamada, consome uma.
-
-O caminho fatiado (`extractAudioSegments`, trechos de 3 min com 5 s de
-sobreposição) continua como reserva, e é acionado em dois casos: quando não dá
-para extrair a fala inteira, e quando a resposta única volta `TRUNCATED` — o
-teto de saída cortou a aula no meio, e só fatiado cada pedaço cabe. Quando o Gemini devolve 503 (modelo
-congestionado), a rota percorre a lista de modelos dentro de um orçamento de
-120 s e o cliente reenvia o trecho uma vez informando a rodada em
-`x-transcribe-attempt`; a rota então **começa a lista em outro ponto**, porque
-`gemini-flash-latest` é apelido do mesmo pool do flash mais novo e tentá-lo
-logo depois do preferido era entrar duas vezes na mesma fila. Os trechos que
-ficaram para trás ganham uma segunda passada no fim, quando o congestionamento
-costuma já ter passado.
-
-**Em áudio, a disponibilidade é outra.** A lista de
-[`transcribe-models.ts`](../src/lib/ai/transcribe-models.ts) veio de medição com
-a chave do projeto, no mesmo minuto: `gemini-3.7-flash` aceitava texto mas
-devolvia **429 de cota** em áudio, `gemini-3.8-flash` e
-`gemini-flash-lite-latest` davam 503 "high demand", `gemini-2.5-flash-lite`
-saiu do ar com 404 — e `gemini-3.5-flash` transcreveu 3 min de áudio em 5 s.
-Daí três regras. O padrão de transcrição é `GEMINI_TRANSCRIBE_MODEL`
-(`gemini-3.5-flash-lite`), e **não** o `GEMINI_MODEL` que vale para texto: o
-lite tem 500 requisições por dia e 15 por minuto, contra 20 e 5 dos flash.
-Um 429 é problema *daquele* modelo, não do pedido — a cadeia segue para o
-próximo em vez de abortar tudo; antes, o primeiro modelo sem cota matava a
-transcrição inteira em menos de um segundo. E o modelo que recusou entra em
-descanso ([`model-cooldown.ts`](../src/lib/ai/model-cooldown.ts)): 30 min para
-cota de dia, pouco mais de um minuto para cota de minuto, 90 s para 503 e 12 h
-para um nome que não existe, honrando o `retryDelay` que vem no próprio 429.
-Sem essa memória, cada trecho recomeçava pelo mesmo modelo morto.
-
-A cota do dia e a do minuto não são a mesma coisa, e o corpo do 429 diz qual
-estourou: a do minuto passa sozinha e vale reenviar; a do dia não volta hoje, e
-a transcrição falha com `QUOTA_EXCEEDED` em vez de gravar meia aula na nota
-como se fosse a transcrição inteira. Houve uma versão que girava a lista de
-modelos a cada tentativa para fugir de fila cheia — com a cota medida isso era
-nocivo, porque empurrava a retentativa para os modelos de 20/dia; quem evita
-repetir modelo morto agora é o descanso, que sabe qual recusou e por quanto
-tempo.
-
-`npm run check:gemini-audio`
-([script](../scripts/check-gemini-audio.mts)) refaz essa medição quando a
-transcrição parar de funcionar: manda texto, 3 s de áudio e 3 min de áudio para
-cada modelo e imprime status e tempo, usando a chave do `.env.local`.
-
-Nada disso pode virar espera infinita: o tempo gasto em trechos recusados tem
-teto de 5 min. Estourado o teto, vale o que já foi transcrito, e cada buraco
-aparece como `[…]` no texto — emendar calado entregaria uma aula com oito
-minutos faltando sem ninguém perceber. Só quando nenhum trecho passa é que a
-transcrição falha com `SERVICE_BUSY`; antes bastava o primeiro trecho voltar
-503 para o vídeo inteiro ser abandonado. Dentro da mesma sessão o texto obtido
-fica em memória (`reuseCache`), para que gerar flashcards de novo com outra
-quantidade não pague download, decodificação e chamadas outra vez. Coberto por
+**A aula inteira vai numa chamada só.** Até ~78 min não há corte nenhum, então
+não há emenda nem fala perdida. Gravações maiores são divididas em partes de
+~1 h ([`speech-cuts.ts`](../src/lib/media/speech-cuts.ts)), sempre na **pausa
+de fala** mais próxima de cada hora — nunca no meio de uma palavra, sem
+sobreposição, e a emenda é concatenação simples em qualquer idioma. Até duas
+partes sobem ao mesmo tempo (`TRANSCRIBE_CONCURRENCY`, um teto global da aba).
+Se alguma parte não voltar, a transcrição falha em vez de ser entregue com
+buraco. Enquanto a chamada única não volta, a barra avança por uma estimativa
+de tempo que nunca chega ao fim antes da resposta. Coberto por
 `npm run verify:transcription`.
+
+Libras e flashcards transcrevem **só em memória** quando a mídia não tem
+transcrição salva: nada é gravado na nota. O texto fica num cache da sessão
+(e um pedido simultâneo da mesma mídia é reaproveitado), para que gerar
+flashcards de novo ou abrir Libras depois não refaça a aula. Só o botão
+"Transcrever" do bloco grava `media.transcript`.
 
 Sem transcrição e sem mais nada na nota, a geração de flashcards **não roda**:
 [`generate/route.ts`](../src/app/api/ai/flashcards/generate/route.ts) recusa com
@@ -197,7 +156,7 @@ confirmação em produção.
 O `Range` recebido é repassado e o 206 volta com `Content-Range`, para o player
 de vídeo buscar posição sem baixar o arquivo inteiro. A rota de transcrição usa a
 mesma verificação de sessão ([`app-session.ts`](../src/lib/api/app-session.ts)),
-porque gasta quota paga do Gemini.
+porque gasta a cota do Groq (transcrição) e do Gemini.
 
 ## 3. Busca
 
@@ -232,7 +191,7 @@ citado nos documentos legais.
 
 | Função / rota | Tipo | Uso |
 | --- | --- | --- |
-| `POST /api/ai/transcribe` | Next.js | transcrição via Gemini; Whisper local (uma inferência por instância) como alternativa |
+| `POST /api/ai/transcribe` | Next.js | transcrição via Whisper no Groq; Whisper local (uma inferência por instância) como alternativa |
 | `POST /api/ai/flashcards/generate` | Next.js | geração de flashcards |
 | `POST /api/ai/translate` | Next.js | Cloud Translation API; Gemini enquanto ela não estiver ativa |
 | `POST /api/trash/purge` | Next.js | exclusão definitiva e limpeza vencida |

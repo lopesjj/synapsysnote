@@ -4,44 +4,33 @@ import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { createRateLimiter } from "@/lib/api/rate-limit";
 import { clientIpOf } from "@/lib/api/client-ip";
 import { safeFetchBuffer } from "@/lib/media/safe-fetch";
-import { transcribeModelChain } from "@/lib/ai/transcribe-models";
 import { detectLanguage } from "@/lib/ai/language-detect";
 import { SUPPORTED_TARGETS, translateText } from "@/lib/ai/translate-server";
 import {
-  isModelResting,
-  noteModelRefused,
-  noteModelWorked,
-  orderForRace,
-  parseRetryDelay,
-  restingKindOf,
-} from "@/lib/ai/model-cooldown";
-import { raceModels, raceTimingFor } from "@/lib/ai/model-race";
+  GROQ_MAX_UPLOAD_BYTES,
+  groqApiKey,
+  transcribeWithGroq,
+  type WhisperResult,
+} from "@/lib/ai/groq-whisper";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 /**
- * Transcrever custa quota paga e CPU. O navegador manda trechos de ~3 min, até
- * quatro de cada vez (`TRANSCRIBE_CONCURRENCY` em `audio-transcriber.ts`, que
- * precisa acompanhar o `maxConcurrent` daqui): uma aula de uma hora são ~20
- * chamadas, e o teto abaixo cabe umas três horas de mídia em dez minutos,
- * com folga para as retentativas.
+ * Transcrever gasta a cota do Groq (da conta inteira) e CPU. O navegador manda
+ * a aula inteira numa chamada, ou partes de ~1 h para gravações maiores, até
+ * duas de cada vez (`TRANSCRIBE_CONCURRENCY` em `audio-transcriber.ts`); o
+ * teto abaixo sobra para isso e segura quem tentasse torrar a cota.
  */
 const transcribeLimiter = createRateLimiter({
   windowMs: 10 * 60_000,
-  maxRequests: 120,
-  maxConcurrent: 4,
+  maxRequests: 40,
+  maxConcurrent: 3,
   maxBytes: 300 * 1024 * 1024,
 });
 
 
-/**
- * O teto de cada chamada ao Gemini sai de `raceTimingFor`, proporcional à
- * duração do áudio: medido, um trecho de 3 min transcreve em 5-8 s no modelo
- * bom, enquanto um modelo congestionado leva 50-90 s para desistir. O teto fixo
- * de 40 s de antes servia para o trecho e matava a aula inteira, que precisa de
- * minutos só para o texto sair.
- */
+/** Teto para baixar a mídia quando o cliente manda só a URL. */
 const FETCH_TIMEOUT_MS = 60_000;
 
 let transcriberPromise: Promise<unknown> | null = null;
@@ -108,127 +97,6 @@ function cleanTranscriptText(raw: string): string {
   return text;
 }
 
-const LANGUAGE_NAMES: Record<string, string> = {
-  pt: "Portuguese (Português)",
-  en: "English",
-  es: "Spanish (Español)",
-  fr: "French (Français)",
-  it: "Italian (Italiano)",
-  de: "German (Deutsch)",
-  ru: "Russian (Русский)",
-  ja: "Japanese (日本語)",
-  zh: "Chinese (简体中文)",
-  ar: "Arabic (العربية)",
-};
-
-export type TranscribeReason =
-  | "OK"
-  | "TRUNCATED"
-  | "NO_SPEECH"
-  | "SERVICE_BUSY"
-  | "MODEL_MISSING"
-  | "QUOTA"
-  | "NOT_CONFIGURED"
-  | "FAILED";
-
-interface GeminiResult {
-  text: string;
-  reason: TranscribeReason;
-  /** Cota de minuto volta logo; a do dia, não. Muda quanto tempo o modelo descansa. */
-  quotaScope?: "day" | "minute";
-  /** Espera que o próprio Gemini pediu no RetryInfo do 429. */
-  retryAfterMs?: number;
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
-}
-
-/**
- * Onde o áudio está para o Gemini: embutido no corpo do pedido, ou já enviado
- * à Files API e referenciado por URI.
- *
- * Medido: 50 min de áudio numa única chamada por `fileUri` custam 75.012
- * tokens de entrada e voltam em 6 s — contra 18 pedidos fatiados, que numa
- * conta gratuita de 20 requisições por dia consumiriam quase o dia inteiro. O
- * corpo embutido tem teto de ~20 MB por requisição; a referência não tem.
- */
-type AudioSource =
-  | { kind: "inline"; data: string; fileName?: undefined }
-  | { kind: "file"; uri: string; fileName: string };
-
-/** Acima disto vale o custo de subir o arquivo antes em vez de embutir. */
-const FILES_API_THRESHOLD_BYTES = 4 * 1024 * 1024;
-const FILES_UPLOAD_TIMEOUT_MS = 120_000;
-
-interface FilesApiUpload {
-  uri: string;
-  fileName: string;
-}
-
-async function uploadToFilesApi(
-  apiKey: string,
-  buffer: Buffer,
-  rawMimeType: string
-): Promise<FilesApiUpload | null> {
-  const mimeType = rawMimeType.split(";")[0]?.trim() || "audio/webm";
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`,
-      {
-        method: "POST",
-        signal: AbortSignal.timeout(FILES_UPLOAD_TIMEOUT_MS),
-        headers: {
-          "X-Goog-Upload-Protocol": "raw",
-          "X-Goog-Upload-Header-Content-Length": String(buffer.byteLength),
-          "X-Goog-Upload-Header-Content-Type": mimeType,
-          "Content-Type": mimeType,
-        },
-        body: new Uint8Array(buffer),
-      }
-    );
-    if (!res.ok) {
-      console.warn(`[transcribe] Files API recusou o upload (${res.status})`);
-      return null;
-    }
-    const data = await res.json();
-    let file = data?.file;
-    const name = typeof file?.name === "string" ? file.name : "";
-    const deadline = Date.now() + FILES_UPLOAD_TIMEOUT_MS;
-    while (file?.state === "PROCESSING" && name && Date.now() < deadline) {
-      await delay(2000);
-      const check = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/${name}?key=${apiKey}`,
-        { signal: AbortSignal.timeout(30_000) }
-      );
-      file = await check.json().catch(() => null);
-    }
-    if (file?.state !== "ACTIVE" || typeof file?.uri !== "string" || !name) {
-      console.warn(`[transcribe] arquivo não ficou pronto na Files API (${file?.state})`);
-      return null;
-    }
-    return { uri: file.uri, fileName: name };
-  } catch (error) {
-    if (isAbortError(error)) {
-      console.warn("[transcribe] upload para a Files API estourou o tempo");
-      return null;
-    }
-    throw error;
-  }
-}
-
-async function deleteFromFilesApi(apiKey: string, fileName: string): Promise<void> {
-  try {
-    await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`,
-      { method: "DELETE", signal: AbortSignal.timeout(15_000) }
-    );
-  } catch {
-    console.warn(`[transcribe] falha ao apagar ${fileName} da Files API`);
-  }
-}
-
-
 async function safeFetchAudioUrl(
   audioUrl: string,
   timeoutMs: number
@@ -246,352 +114,84 @@ async function safeFetchAudioUrl(
   return { buffer: fetched.buffer, mime: fetched.contentType || "audio/webm" };
 }
 
-async function callGemini(
-  model: string,
-  source: AudioSource,
-  rawMimeType: string,
-  targetLang: string,
-  timeoutMs: number,
-  signal?: AbortSignal
-): Promise<GeminiResult> {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) return { text: "", reason: "NOT_CONFIGURED" };
-  const mimeType = rawMimeType.split(";")[0]?.trim() || "audio/webm";
-  const isDedicatedTranscribe = model.includes("transcribe");
-  const langName = LANGUAGE_NAMES[targetLang] || targetLang || "Portuguese";
-  const prompt = `Transcribe all spoken content in this audio or video file. The transcription output must be strictly in ${langName} (${targetLang}). If the speech in the audio is in any language other than ${langName}, you must accurately translate the spoken content into ${langName}. Return only the final transcribed text in ${langName}, without commentary, quotes, markdown code fences, or explanations.`;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-    model
-  )}:generateContent?key=${apiKey}`;
-
-  const audioPart =
-    source.kind === "file"
-      ? { fileData: { mimeType, fileUri: source.uri } }
-      : {
-          inlineData: {
-            mimeType,
-            data: source.data,
-          },
-        };
-
-  const body = isDedicatedTranscribe
-    ? {
-        contents: [
-          {
-            role: "user",
-            parts: [audioPart],
-          },
-        ],
-        generationConfig: {
-          audioTranscriptionConfig: {
-            mode: "SMART",
-            languageCodes: targetLang ? [targetLang === "pt" ? "pt-BR" : targetLang] : [],
-          },
-        },
-      }
-    : {
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: prompt }, audioPart],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 65536,
-        },
-      };
-
-  const timeout = AbortSignal.timeout(timeoutMs);
-  const res = await fetch(url, {
-    method: "POST",
-    // O sinal externo é o da corrida: quem perdeu é cancelado na hora.
-    signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const errorBody = await res.json().catch(() => null);
-    const msg = String(errorBody?.error?.message || "");
-    const status = String(errorBody?.error?.status || "");
-    // A cota é por modelo: a chave que já gastou o `gemini-3.7-flash` em áudio
-    // ainda transcreve no 3.5. Derrubar a cadeia aqui condenava a transcrição
-    // inteira por causa de um único modelo esgotado.
-    if (res.status === 429 || status === "RESOURCE_EXHAUSTED" || /quota|exhausted|rate limit/i.test(msg)) {
-      // O corpo do 429 diz QUAL cota estourou. No plano gratuito são 5 por
-      // minuto e 20 por dia em cada flash: a primeira passa em um minuto, a
-      // segunda só amanhã, e tratar as duas igual faria a cadeia voltar a um
-      // modelo morto a cada trecho da aula.
-      const details: unknown[] = Array.isArray(errorBody?.error?.details)
-        ? errorBody.error.details
-        : [];
-      const quotaIds = details.flatMap((detail) => {
-        const list = (detail as { violations?: unknown })?.violations;
-        return Array.isArray(list)
-          ? list.map((v) => String((v as { quotaId?: unknown })?.quotaId || ""))
-          : [];
-      });
-      const perDay =
-        quotaIds.some((id) => /perday/i.test(id)) || /per day|daily|por dia/i.test(msg);
-      const retryAfterMs = details
-        .map((detail) => parseRetryDelay((detail as { retryDelay?: unknown })?.retryDelay))
-        .find((value) => typeof value === "number");
-      console.warn(
-        `[transcribe] ${model} sem cota (${perDay ? "dia" : "minuto"}): ${msg.slice(0, 120)}`
-      );
-      return {
-        text: "",
-        reason: "QUOTA",
-        quotaScope: perDay ? "day" : "minute",
-        retryAfterMs,
-      };
-    }
-    // 503/500: modelo congestionado. Não é erro do arquivo, então vale trocar de modelo.
-    if (res.status === 503 || res.status === 500 || status === "UNAVAILABLE") {
-      console.warn(`[transcribe] ${model} indisponível (${res.status}): ${msg.slice(0, 120)}`);
-      return { text: "", reason: "SERVICE_BUSY" };
-    }
-    // Nome de modelo que esta chave não enxerga (aposentado, ou um
-    // GEMINI_MODEL com erro de digitação). É problema do modelo, não do
-    // arquivo: parar aqui condenava a transcrição inteira por causa de um nome.
-    if (res.status === 404 || /not found|is not supported|does not exist/i.test(msg)) {
-      console.warn(`[transcribe] ${model} não disponível para esta chave: ${msg.slice(0, 120)}`);
-      return { text: "", reason: "MODEL_MISSING" };
-    }
-    console.warn(`[transcribe] ${model} recusou (${res.status}): ${msg.slice(0, 200)}`);
-    return { text: "", reason: "FAILED" };
-  }
-  const data = await res.json();
-  const candidate = data?.candidates?.[0];
-  const parts: unknown[] = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
-  const joined = parts
-    .map((part) => {
-      if (typeof (part as { text?: unknown })?.text === "string") {
-        return (part as { text: string }).text;
-      }
-      const audioText = (part as { audioTranscription?: { text?: unknown } })?.audioTranscription?.text;
-      if (typeof audioText === "string") {
-        return audioText;
-      }
-      return "";
-    })
-    .join("")
-    .trim();
-  const text = cleanTranscriptText(joined);
-
-  const blockReason = data?.promptFeedback?.blockReason;
-  if (!text && blockReason) {
-    console.warn(`[transcribe] ${model} bloqueou a resposta (${blockReason})`);
-    return { text: "", reason: "FAILED" };
-  }
-  if (candidate?.finishReason === "MAX_TOKENS") {
-    console.warn(`[transcribe] ${model} atingiu o teto de saída: transcrição truncada`);
-    return { text, reason: text ? "TRUNCATED" : "FAILED" };
-  }
-  return { text, reason: text ? "OK" : "NO_SPEECH" };
-}
-
-/** Abaixo disto não sobra tempo útil para mais uma chamada. */
-const MIN_ATTEMPT_MS = 12_000;
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function transcribeWithGemini(
-  buffer: Buffer,
-  rawMimeType: string,
-  targetLang: string,
-  audioSeconds: number,
-  deadline = Number.POSITIVE_INFINITY
-): Promise<GeminiResult> {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) return { text: "", reason: "NOT_CONFIGURED" };
-  const mimeType = rawMimeType.split(";")[0]?.trim() || "audio/webm";
-
-  // Arquivo grande sobe uma vez e é reusado por todos os modelos da cadeia:
-  // reenviar 9 MB embutidos a cada tentativa era o que fazia cada recusa
-  // custar quase um minuto.
-  let source: AudioSource | null = null;
-  let uploadedFileName: string | null = null;
-  if (buffer.byteLength > FILES_API_THRESHOLD_BYTES) {
-    const upload = await uploadToFilesApi(apiKey, buffer, mimeType);
-    if (upload) {
-      source = { kind: "file", uri: upload.uri, fileName: upload.fileName };
-      uploadedFileName = upload.fileName;
-    }
-  }
-  if (!source) {
-    if (buffer.byteLength > INLINE_LIMIT_BYTES) {
-      console.warn("[transcribe] arquivo grande e Files API indisponível");
-      return { text: "", reason: "SERVICE_BUSY" };
-    }
-    source = { kind: "inline", data: buffer.toString("base64") };
-  }
-  const audio = source;
-
-  // `GEMINI_MODEL` vale para os textos; áudio tem disponibilidade própria e
-  // escolha própria, senão um modelo sem cota de áudio trava a transcrição.
-  const fullChain = transcribeModelChain(process.env.GEMINI_TRANSCRIBE_MODEL);
-  // Sem cota do dia ou inexistente sai da lista; congestionado vai para o fim
-  // (ver `orderForRace`). Numa aula de 20 trechos, sem isto cada trecho
-  // recomeçava pelo mesmo esgotado.
-  const chain = orderForRace(fullChain);
-  if (chain.length < fullChain.length) {
-    console.warn(
-      `[transcribe] ${fullChain.length - chain.length} modelo(s) sem cota ou indisponíveis; tentando ${chain.join(", ")}`
-    );
-  }
-  // Congestionamento é passageiro. Varrida a lista, voltar ao começo aproveita o
-  // orçamento que sobrou em vez de devolver 503 com minutos na mão — o áudio já
-  // está no servidor, então a segunda rodada não custa upload nenhum.
-  const attempts = [...chain, ...chain.slice(0, 2)];
-  const timing = raceTimingFor(audioSeconds);
-
-  try {
-    const outcome = await raceModels(
-      attempts,
-      async (model, signal, timeoutMs) => {
-        try {
-          return await callGemini(model, audio, mimeType, targetLang, timeoutMs, signal);
-        } catch (error) {
-          // Cancelado por ter perdido a corrida: não é recusa do modelo.
-          if (signal.aborted) return { text: "", reason: "SERVICE_BUSY" };
-          if (isAbortError(error)) {
-            console.warn(`[transcribe] ${model} estourou o tempo limite`);
-          } else {
-            console.warn(`[transcribe] ${model} falhou na rede`, error);
-          }
-          return { text: "", reason: "SERVICE_BUSY" };
-        }
-      },
-      {
-        ...timing,
-        deadline,
-        // Com o teto longo, duas chamadas lentas ocupariam as duas vagas e
-        // nenhum reforço entraria; a terceira mantém a corrida viva.
-        maxInFlight: 3,
-        minAttemptMs: MIN_ATTEMPT_MS,
-      },
-      (model, result) => {
-        if (result.text) noteModelWorked(model);
-        else if (result.reason === "QUOTA") {
-          noteModelRefused(
-            model,
-            result.quotaScope === "day" ? "quota-day" : "quota-minute",
-            result.retryAfterMs
-          );
-        } else if (result.reason === "SERVICE_BUSY") noteModelRefused(model, "busy");
-        else if (result.reason === "MODEL_MISSING") noteModelRefused(model, "missing");
-      }
-    );
-
-    if (outcome.text) {
-      if (outcome.launched > 1) {
-        console.info(`[transcribe] ${outcome.model} venceu após ${outcome.launched} chamada(s)`);
-      }
-      return { text: outcome.text, reason: outcome.reason };
-    }
-    let quotaScope = outcome.reason === "QUOTA" ? outcome.quotaScope : undefined;
-    if (
-      !quotaScope &&
-      fullChain.every((m) => isModelResting(m) && restingKindOf([m]) === "quota-day")
-    ) {
-      quotaScope = "day";
-    }
-    if (quotaScope) return { text: "", reason: "QUOTA", quotaScope };
-    return { text: "", reason: outcome.reason };
-  } finally {
-    if (uploadedFileName) await deleteFromFilesApi(apiKey, uploadedFileName);
-  }
-}
-
-/** Teto do arquivo embutido na chamada do Gemini (o limite da API é ~20 MB). */
-const INLINE_LIMIT_BYTES = 14 * 1024 * 1024;
 /**
- * Teto do que a rota aceita receber. Acima do limite de embutido o arquivo sobe
- * pela Files API — 50 min de fala em Opus mono dão ~9 MB, e a aula inteira numa
- * chamada só custa 75 mil tokens de entrada, medidos. O teto não pode passar do
- * corpo máximo de requisição do Cloud Run (32 MiB), senão a recusa vem da
- * plataforma antes de a rota ver o pedido; 24 MB ainda cobrem mais de duas
- * horas de fala.
+ * Teto do que a rota aceita receber: o limite de arquivo do plano gratuito do
+ * Groq (25 MB), abaixo também do corpo máximo do Cloud Run (32 MiB). Uma hora
+ * de fala em Opus mono a 32 kbps dá ~14 MB.
  */
-const MAX_AUDIO_BYTES = 24 * 1024 * 1024;
+const MAX_AUDIO_BYTES = GROQ_MAX_UPLOAD_BYTES;
 /**
  * PCM float32 a 16 kHz: o navegador manda trechos de 60 s (~3,8 MB). Dois
  * minutos de folga bastam; o que passar disso nao veio do app.
  */
 const MAX_PCM_BYTES = 8 * 1024 * 1024;
-/**
- * Orçamento da cadeia inteira. Com a corrida escalonada, um trecho de 3 min
- * passa por vários modelos dentro disto; um arquivo inteiro de uma hora precisa
- * que o teto da própria chamada caiba, com folga para a tradução — sem passar
- * do `maxDuration` da rota.
- */
-const MODEL_CHAIN_DEADLINE_MS = 200_000;
-const MAX_CHAIN_DEADLINE_MS = 250_000;
 
-/**
- * Duração do áudio: o navegador informa a de cada trecho. Sem a dica, estima
- * pelo tamanho — Opus de fala anda perto de 24 kbps, o resto (MP3, AAC) perto
- * de 128 kbps.
- */
-function audioSecondsOf(hint: string | null, bytes: number, mimeType: string): number {
-  const informed = Number(hint);
-  if (Number.isFinite(informed) && informed > 0) return Math.min(6 * 3600, informed);
-  const bytesPerSecond = /ogg|opus|webm/i.test(mimeType) ? 3_000 : 16_000;
-  return Math.min(6 * 3600, Math.max(1, bytes / bytesPerSecond));
-}
-
-/** Espera sugerida ao cliente antes de reenviar o mesmo trecho. */
+/** Espera sugerida ao cliente antes de reenviar o mesmo arquivo. */
 const RETRY_AFTER_SECONDS = 15;
+/**
+ * Acima disto a espera pedida pelo Groq não cabe na paciência de quem olha a
+ * barra (a cota da hora pode pedir 20 min): o cliente para e avisa.
+ */
+const MAX_CLIENT_WAIT_MS = 90_000;
 
-function reasonResponse(reason: TranscribeReason, quotaScope?: "day" | "minute") {
-  if (reason === "QUOTA") {
-    // O cliente precisa saber QUAL cota: a do minuto passa sozinha e vale
-    // esperar, a do dia não volta hoje e insistir só gasta o tempo de quem
-    // está olhando a barra.
+function reasonResponse(result: Pick<WhisperResult, "reason" | "quotaScope" | "retryAfterMs">) {
+  if (result.reason === "QUOTA") {
+    // O cliente precisa saber se vale esperar: a cota do minuto passa sozinha,
+    // a da hora e a do dia não voltam enquanto a pessoa olha a barra.
+    const waitMs = result.retryAfterMs ?? 30_000;
+    const final = result.quotaScope === "day" || waitMs > MAX_CLIENT_WAIT_MS;
     return NextResponse.json(
-      { transcript: "", error: "QUOTA_EXCEEDED", reason, quotaScope: quotaScope || "minute" },
-      { status: 429, headers: quotaScope === "day" ? {} : { "Retry-After": "30" } }
+      {
+        transcript: "",
+        error: "QUOTA_EXCEEDED",
+        reason: "QUOTA",
+        quotaScope: final ? "day" : "minute",
+        retryAfterSeconds: Math.ceil(waitMs / 1000),
+      },
+      { status: 429, headers: final ? {} : { "Retry-After": String(Math.ceil(waitMs / 1000)) } }
     );
   }
-  if (reason === "SERVICE_BUSY") {
-    // Quem chama reenvia o trecho; sem esta dica escolheria o intervalo no
-    // escuro e voltaria cedo demais para a mesma fila.
+  if (result.reason === "SERVICE_BUSY") {
+    // Quem chama reenvia; sem esta dica escolheria o intervalo no escuro.
     return NextResponse.json(
-      { transcript: "", error: "SERVICE_BUSY", reason, retryAfterSeconds: RETRY_AFTER_SECONDS },
+      { transcript: "", error: "SERVICE_BUSY", reason: "SERVICE_BUSY", retryAfterSeconds: RETRY_AFTER_SECONDS },
       { status: 503, headers: { "Retry-After": String(RETRY_AFTER_SECONDS) } }
     );
   }
-  // Sem fala, sem chave ou recusa do modelo: o cliente decide se tenta o
+  if (result.reason === "TOO_LARGE") {
+    return NextResponse.json({ transcript: "", reason: "TOO_LARGE" }, { status: 413 });
+  }
+  // Sem fala, sem chave ou recusa do arquivo: o cliente decide se tenta o
   // caminho local. Não é erro de servidor, então não devolve 500.
-  return NextResponse.json({ transcript: "", reason });
+  return NextResponse.json({ transcript: "", reason: result.reason });
 }
 
-async function runGemini(
-  buffer: Buffer,
-  mimeType: string,
-  lang: string,
-  audioSeconds: number
-): Promise<GeminiResult> {
-  const { callTimeoutMs } = raceTimingFor(audioSeconds);
-  const budget = Math.min(
-    MAX_CHAIN_DEADLINE_MS,
-    Math.max(MODEL_CHAIN_DEADLINE_MS, callTimeoutMs + MIN_ATTEMPT_MS)
-  );
-  const deadline = Date.now() + budget;
-  const result = await transcribeWithGemini(buffer, mimeType, lang, audioSeconds, deadline);
-  if (result.text) result.text = cleanTranscriptText(result.text);
-  if (result.text && result.reason !== "TRUNCATED") result.text = await inTargetLanguage(result.text, lang);
-  return result;
+async function runWhisper(buffer: Buffer, mimeType: string, lang: string): Promise<WhisperResult> {
+  const result = await transcribeWithGroq(buffer, mimeType);
+  if (!result.text) return result;
+  const text = cleanTranscriptText(result.text);
+  if (!text) return { ...result, text: "", reason: "NO_SPEECH" };
+  return { ...result, text: await inTargetLanguage(text, lang, result.language) };
 }
 
-async function inTargetLanguage(text: string, lang: string): Promise<string> {
-  if (!text || !SUPPORTED_TARGETS.has(lang) || detectLanguage(text) === lang) return text;
+/**
+ * Leva o texto ao idioma escolhido só quando ele foi FALADO em outro. O
+ * idioma da fala vem do próprio Whisper, que ouviu o áudio; o detector de
+ * texto fica de reserva. Se a tradução falhar, volta o original completo —
+ * nunca um texto metade traduzido, metade não.
+ */
+async function inTargetLanguage(text: string, lang: string, spoken?: string): Promise<string> {
+  if (!text || !SUPPORTED_TARGETS.has(lang)) return text;
+  const source = spoken || detectLanguage(text);
+  if (source === lang) return text;
   try {
     const translated = await translateText(text, lang);
-    if (!translated.chunks.length || translated.failed === translated.chunks.length) return text;
+    if (!translated.chunks.length || translated.failed > 0) {
+      console.warn(
+        `[transcribe] tradução para ${lang} incompleta (${translated.failed}/${translated.chunks.length}); mantendo o original`
+      );
+      return text;
+    }
     return cleanTranscriptText(translated.text);
   } catch (error) {
     console.warn("[transcribe] falha ao levar a transcrição para o idioma escolhido", error);
@@ -607,7 +207,7 @@ async function transcribeLocally(
   promptContext: string,
   targetLang: string
 ) {
-  if (localTranscriptionRunning) return reasonResponse("SERVICE_BUSY");
+  if (localTranscriptionRunning) return reasonResponse({ reason: "SERVICE_BUSY" });
   localTranscriptionRunning = true;
   let output: { text?: string };
   try {
@@ -632,8 +232,8 @@ async function transcribeLocally(
 export async function POST(req: NextRequest) {
   let releaseLimit: (() => void) | null = null;
   try {
-    // A rota gasta quota paga do Gemini e CPU do servidor: sem sessao, qualquer
-    // um na internet poderia consumir os dois.
+    // A rota gasta a cota do Groq e CPU do servidor: sem sessao, qualquer um
+    // na internet poderia consumir os dois.
     if (isCrossSiteRequest(req)) {
       return NextResponse.json({ transcript: "", reason: "FORBIDDEN" }, { status: 403 });
     }
@@ -676,7 +276,7 @@ export async function POST(req: NextRequest) {
       return await transcribeLocally(new Float32Array(arrayBuffer), whisperLanguage, promptContext, targetLang);
     }
 
-    // --- URL de mídia: o servidor baixa e manda para o Gemini -------------
+    // --- URL de mídia: o servidor baixa e manda para o Whisper ------------
     if (contentType.includes("application/json")) {
       const json = await req.json().catch(() => ({}));
       const audioUrl = typeof json?.audioUrl === "string" ? json.audioUrl.trim() : "";
@@ -688,8 +288,8 @@ export async function POST(req: NextRequest) {
       if (!audioUrl) {
         return NextResponse.json({ transcript: "", reason: "NO_INPUT" }, { status: 400 });
       }
-      if (!process.env.GEMINI_API_KEY) {
-        return reasonResponse("NOT_CONFIGURED");
+      if (!groqApiKey()) {
+        return reasonResponse({ reason: "NOT_CONFIGURED" });
       }
 
       try {
@@ -699,16 +299,11 @@ export async function POST(req: NextRequest) {
         }
         bytesUsed = fetched.buffer.byteLength;
 
-        const result = await runGemini(
-          fetched.buffer,
-          fetched.mime,
-          reqTargetLang,
-          audioSecondsOf(req.headers.get("x-audio-seconds"), fetched.buffer.byteLength, fetched.mime)
-        );
+        const result = await runWhisper(fetched.buffer, fetched.mime, reqTargetLang);
         if (result.text) {
-          return NextResponse.json({ transcript: result.text, reason: result.reason });
+          return NextResponse.json({ transcript: result.text, reason: result.reason, language: result.language });
         }
-        return reasonResponse(result.reason, result.quotaScope);
+        return reasonResponse(result);
       } catch {
         return NextResponse.json({ transcript: "", reason: "FETCH_FAILED" });
       }
@@ -727,8 +322,8 @@ export async function POST(req: NextRequest) {
         ? formLang.trim().toLowerCase().split("-")[0]
         : targetLang;
 
-    if (!process.env.GEMINI_API_KEY) {
-      return reasonResponse("NOT_CONFIGURED");
+    if (!groqApiKey()) {
+      return reasonResponse({ reason: "NOT_CONFIGURED" });
     }
     if (file.size > MAX_AUDIO_BYTES) {
       return NextResponse.json({ transcript: "", reason: "TOO_LARGE" }, { status: 413 });
@@ -736,20 +331,14 @@ export async function POST(req: NextRequest) {
 
     const buf = Buffer.from(await file.arrayBuffer());
     bytesUsed = buf.byteLength;
-    const fileMime = file.type || "audio/webm";
-    const result = await runGemini(
-      buf,
-      fileMime,
-      effectiveLang,
-      audioSecondsOf(req.headers.get("x-audio-seconds"), buf.byteLength, fileMime)
-    );
+    const result = await runWhisper(buf, file.type || "audio/ogg", effectiveLang);
     if (result.text) {
-      return NextResponse.json({ transcript: result.text, reason: result.reason });
+      return NextResponse.json({ transcript: result.text, reason: result.reason, language: result.language });
     }
     // Um arquivo codificado (Ogg/WebM/MP4) NÃO é PCM: reinterpretar os bytes
     // aqui era o que estourava com "byte length ... multiple of 4". Quem sabe
     // decodificar é o navegador, que reenvia PCM por octet-stream.
-    return reasonResponse(result.reason, result.quotaScope);
+    return reasonResponse(result);
   } catch (err) {
     // Detalhe interno fica no log do servidor; o cliente recebe so o codigo.
     console.error("[transcribe] falha inesperada", err);

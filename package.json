@@ -16,6 +16,7 @@
     "verify:transcription": "tsx scripts/verify-transcription-resilience.mts",
     "verify:transcript-language": "tsx scripts/verify-transcript-language.mts",
     "check:gemini-audio": "tsx scripts/check-gemini-audio.mts",
+    "check:whisper": "tsx scripts/check-groq-whisper.mts",
     "verify:sidebar-dnd": "tsx scripts/verify-sidebar-dnd.mts",
     "verify:page-tree": "tsx scripts/verify-page-tree.mts",
     "verify:notebook-tree": "tsx scripts/verify-notebook-tree.mts",

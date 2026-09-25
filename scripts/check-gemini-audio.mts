@@ -4,11 +4,11 @@
  * Existe porque "não transcreve" tem causas diferentes que se parecem na tela:
  * cota esgotada (429) só naquele modelo, congestionamento (503), modelo
  * aposentado (404) ou arquivo pesado demais. O script manda texto, 3 s de
- * áudio e 3 min de áudio para cada modelo e imprime status e tempo — é o que
- * define a ordem de `src/lib/ai/transcribe-models.ts`.
+ * áudio e 3 min de áudio para cada modelo e imprime status e tempo. A
+ * transcrição do app não usa mais o Gemini (ver `check-groq-whisper.mts`).
  *
  * Gasta um punhado de requisições da chave em `.env.local`. Rode com
- * `npm run check:gemini-audio` quando a transcrição parar de funcionar.
+ * `npm run check:gemini-audio` quando o Gemini parar de responder.
  */
 import fs from "node:fs";
 

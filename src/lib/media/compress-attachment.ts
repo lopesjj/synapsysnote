@@ -619,7 +619,8 @@ export async function planAudioSegments(
   {
     segmentSeconds = 180,
     maxBytesPerSegment = 2 * 1024 * 1024,
-  }: { segmentSeconds?: number; maxBytesPerSegment?: number } = {}
+    maxBitrate = 24000,
+  }: { segmentSeconds?: number; maxBytesPerSegment?: number; maxBitrate?: number } = {}
 ): Promise<SegmentPlan | null> {
   if (typeof window === "undefined") return null;
   if (typeof AudioEncoder === "undefined" || typeof AudioData === "undefined") return null;
@@ -636,7 +637,7 @@ export async function planAudioSegments(
   const longest = Math.max(...ranges.map((range) => range.end - range.start));
   const bitrate = Math.max(
     12000,
-    Math.min(24000, Math.floor(((maxBytesPerSegment * 0.9) * 8) / Math.max(1, longest)))
+    Math.min(maxBitrate, Math.floor(((maxBytesPerSegment * 0.9) * 8) / Math.max(1, longest)))
   );
   const encodeRate = await opusEncodeRate(bitrate);
 

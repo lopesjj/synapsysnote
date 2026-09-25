@@ -11,8 +11,8 @@ export interface TranscribeProgressCallback {
   (currentText: string, percent: number, isInitialReady: boolean): void;
 }
 
-/** Acima disso o Gemini recusa o arquivo embutido na requisição. */
-const INLINE_UPLOAD_LIMIT = 14 * 1024 * 1024;
+/** Teto de um envio: o limite de arquivo do plano gratuito do Groq (25 MB), com margem. */
+const INLINE_UPLOAD_LIMIT = 24_000_000;
 /** Alvo da extração: menor que o teto, para subir rápido e com folga. */
 const TRANSCRIPTION_TARGET_BYTES = 8 * 1024 * 1024;
 const VIDEO_URL_REGEX = /\.(mp4|m4v|mov|mkv|avi|3gp|3g2|mpg|mpeg|ogv|wmv|flv|ts|hevc)($|\?)/i;
@@ -23,27 +23,29 @@ function looksLikeVideo(blob: Blob, sourceUrl?: string): boolean {
   return false;
 }
 
-/** Acima disso vale fatiar: uma chamada só ficaria pesada e lenta demais. */
+/**
+ * Acima disso (ou sendo vídeo) a fala é extraída para Opus antes de subir: um
+ * vídeo de 150 MB vira ~14 MB por hora de fala.
+ */
 const SEGMENT_THRESHOLD_BYTES = 2 * 1024 * 1024;
 /**
- * Duração alvo de cada trecho enviado (o corte cai na pausa de fala mais
- * próxima, ver `speech-cuts.ts`).
- *
- * Com 8 min por trecho, uma única chamada carregava ~1,4 MB de áudio e ficava
- * ~50 s em pé antes de a API desistir com 503 — e cada repetição custava os
- * mesmos 50 s. Em 3 min o pedido pesa um terço, responde em 5-15 s e uma
- * recusa sai barata. Mandar a aula inteira numa chamada só, como já foi feito,
- * nunca cabia no tempo de uma chamada: uma hora de fala leva minutos só para o
- * texto sair, e cada recusa jogava fora tudo.
+ * Duração alvo de cada parte enviada ao Whisper. Até ~78 min (a sobra de 30%
+ * de `planSpeechCuts`) a aula vai INTEIRA numa chamada só: o Whisper do Groq
+ * transcreve uma hora em ~15 s, e sem corte não há emenda nem fala perdida.
+ * Só gravações maiores são divididas, na pausa de fala mais próxima de cada
+ * hora (`speech-cuts.ts`), para cada parte caber nos 25 MB do plano gratuito.
  */
-const SEGMENT_SECONDS = 180;
+const SEGMENT_SECONDS = 3600;
+/** Opus mono 16 kHz a 32 kbps: fala limpa para o Whisper, ~14 MB por hora. */
+const SPEECH_BITRATE = 32_000;
+const SEGMENT_MAX_BYTES = 20_000_000;
 /**
- * Trechos em voo ao mesmo tempo, somando TODAS as transcrições da aba (vários
- * vídeos nos flashcards, Libras e o botão de transcrever). Precisa acompanhar
- * o `maxConcurrent` da rota: acima dele o servidor responde 429 e o trecho
- * espera à toa.
+ * Partes em voo ao mesmo tempo, somando TODAS as transcrições da aba (vários
+ * vídeos nos flashcards, Libras e o botão de transcrever). Fica abaixo do
+ * `maxConcurrent` da rota, e duas horas de áudio em paralelo já são a cota
+ * inteira de uma hora do plano gratuito do Groq (7.200 s).
  */
-const TRANSCRIBE_CONCURRENCY = 4;
+const TRANSCRIBE_CONCURRENCY = 2;
 
 let slotsInUse = 0;
 const slotWaiters: (() => void)[] = [];
@@ -192,11 +194,7 @@ async function readTranscribeResponse(res: Response): Promise<TranscribeResponse
 }
 
 /** Envia um arquivo de áudio e devolve o texto (ou o aviso de congestionamento). */
-async function postAudioFile(
-  blob: Blob,
-  targetLang: string,
-  audioSeconds?: number
-): Promise<TranscribeResponse> {
+async function postAudioFile(blob: Blob, targetLang: string): Promise<TranscribeResponse> {
   return withTranscribeSlot(async () => {
     const formData = new FormData();
     formData.append("audio", blob, "audio-file");
@@ -207,9 +205,6 @@ async function postAudioFile(
         method: "POST",
         headers: {
           "x-target-language": targetLang,
-          // O servidor dimensiona o tempo de cada modelo pela duração: sem a
-          // dica ele estima pelo tamanho do arquivo.
-          ...(audioSeconds ? { "x-audio-seconds": String(Math.ceil(audioSeconds)) } : {}),
           ...(await optionalAuthHeader()),
         },
         body: formData,
@@ -221,7 +216,7 @@ async function postAudioFile(
   });
 }
 
-async function tryGeminiTranscription(
+async function tryRemoteTranscription(
   blob: Blob,
   audioUrl: string | undefined,
   targetLang: string,
@@ -428,20 +423,16 @@ async function tryWhisperLocalTranscription(
 }
 
 /**
- * Espera antes de reenviar o mesmo trecho. O servidor já correu a cadeia de
- * modelos antes de dizer "ocupado", então reenviar na hora cairia na mesma fila.
+ * Espera antes de reenviar a mesma parte. O servidor já repetiu as falhas
+ * passageiras antes de dizer "ocupado", então reenviar na hora cairia na mesma.
  */
 const SEGMENT_RETRY_BACKOFF_MS = 8_000;
 /**
- * Tempo de relógio sem NENHUM trecho novo transcrito antes de desistir. Cada
- * trecho que volta renova o prazo: com o Gemini em "high demand" a aula anda
- * devagar mas anda, e desistir no meio jogaria fora o que ainda viria.
- *
- * Já foi a SOMA do tempo gasto em recusas — com quatro trechos em paralelo,
- * uma única rodada congestionada (4 × 2 min) estourava o teto e abandonava a
- * aula inteira na primeira tentativa.
+ * Tempo de relógio sem NENHUMA parte nova transcrita antes de desistir. Cada
+ * parte que volta renova o prazo. Não é a soma das recusas: com partes em
+ * paralelo, uma rodada ruim somaria o dobro e desistiria cedo demais.
  */
-const BUSY_TIME_BUDGET_MS = 8 * 60_000;
+const BUSY_TIME_BUDGET_MS = 5 * 60_000;
 /** Marca o trecho que ficou sem transcrição, em vez de emendar o buraco calado. */
 const GAP_MARKER = "[…]";
 
@@ -449,13 +440,12 @@ async function postSegmentWithRetry(
   segment: Blob,
   lang: string,
   allowRetry: boolean,
-  backoffMs: number,
-  audioSeconds?: number
+  backoffMs: number
 ): Promise<TranscribeResponse> {
-  const first = await postAudioFile(segment, lang, audioSeconds);
+  const first = await postAudioFile(segment, lang);
   if (first.text || first.fatalQuota || !first.busy || !allowRetry) return first;
   await delay(Math.max(backoffMs, first.retryAfterMs ?? 0));
-  return postAudioFile(segment, lang, audioSeconds);
+  return postAudioFile(segment, lang);
 }
 
 /**
@@ -603,8 +593,7 @@ export async function transcribeInSegments(
       blob,
       lang,
       allowRetry && !stalled(),
-      retryBackoffMs,
-      source.seconds?.(index)
+      retryBackoffMs
     );
     lastReason = attempt.reason || lastReason;
 
@@ -665,6 +654,43 @@ export async function transcribeInSegments(
     missing: texts.filter((text) => !text).length,
     quotaExhausted,
   };
+}
+
+/**
+ * A aula inteira vai numa chamada só, que não tem progresso para consultar.
+ * Enquanto ela não volta, a barra avança por uma estimativa do tempo (extração
+ * da fala + envio + ~15 s por hora de áudio no Groq), sempre devagar perto do
+ * fim para nunca "chegar" antes da resposta. O avanço real, quando vem, manda.
+ */
+async function withEstimatedProgress<T>(
+  durationSeconds: number,
+  from: number,
+  onProgress: TranscribeProgressCallback | undefined,
+  run: (report: TranscribeProgressCallback) => Promise<T>
+): Promise<T> {
+  if (!onProgress) return run(() => undefined);
+  const expectedMs = 8_000 + durationSeconds * 45;
+  const startedAt = Date.now();
+  let shown = from;
+  let lastText = "";
+  let reportedInitial = false;
+  const emit = (text: string, percent: number, initial: boolean) => {
+    shown = Math.max(shown, Math.min(99, percent));
+    if (text) lastText = text;
+    const isInitial = initial && !reportedInitial;
+    if (isInitial) reportedInitial = true;
+    onProgress(lastText, Math.round(shown), isInitial);
+  };
+  emit("", from, false);
+  const timer = setInterval(() => {
+    const fraction = 1 - Math.exp(-(Date.now() - startedAt) / expectedMs);
+    emit("", from + fraction * (95 - from), false);
+  }, 700);
+  try {
+    return await run(emit);
+  } finally {
+    clearInterval(timer);
+  }
 }
 
 /** Motivos que significam "a transcrição falhou", e não "o áudio não tem fala". */
@@ -754,32 +780,39 @@ async function runTranscription(
     if (heavy) {
       onProgress?.("", 10, false);
 
-      // Decodifica uma vez, corta nas pausas e manda os trechos em paralelo. É
-      // o caminho de toda mídia pesada, de 3 min ou de duas horas.
-      const plan = await planAudioSegments(blob, { segmentSeconds: SEGMENT_SECONDS });
+      // Decodifica uma vez e extrai só a fala. Até ~78 min é uma parte só (a
+      // aula inteira numa chamada); acima disso, partes de ~1 h cortadas em
+      // pausas de fala.
+      const plan = await planAudioSegments(blob, {
+        segmentSeconds: SEGMENT_SECONDS,
+        maxBytesPerSegment: SEGMENT_MAX_BYTES,
+        maxBitrate: SPEECH_BITRATE,
+      });
 
       if (plan && plan.ranges.length) {
-        onProgress?.("", 14, false);
-        const result = await transcribeInSegments(
-          {
-            count: plan.ranges.length,
-            load: (index) => plan.encode(index),
-            seconds: (index) => plan.ranges[index].end - plan.ranges[index].start,
-          },
-          lang,
+        const result = await withEstimatedProgress(
+          plan.durationSeconds,
+          14,
           onProgress,
-          { progressFrom: 14, progressTo: 99 }
+          (report) =>
+            transcribeInSegments(
+              { count: plan.ranges.length, load: (index) => plan.encode(index) },
+              lang,
+              report,
+              { progressFrom: 14, progressTo: 99 }
+            )
         );
-        // Cota do dia estourada no meio: o que voltou é um pedaço da aula, e
-        // gravar isso como "a transcrição" esconde o resto. Melhor dizer que
-        // acabou a cota — a retentativa custa uma requisição só.
+        // Cota esgotada no meio: o que voltou é um pedaço da aula, e gravar
+        // isso como "a transcrição" esconde o resto.
         if (result.quotaExhausted) throw new Error("QUOTA_EXCEEDED");
+        if (result.text && result.missing > 0) {
+          // Transcrição com buraco não é entregue: a aula tem de sair inteira.
+          console.warn(
+            `[transcribe] ${result.missing} de ${plan.ranges.length} partes ficaram sem transcrição`
+          );
+          throw new Error(result.busy ? "SERVICE_BUSY" : "TRANSCRIBE_FAILED");
+        }
         if (result.text) {
-          if (result.missing > 0) {
-            console.warn(
-              `[transcribe] ${result.missing} de ${plan.ranges.length} trechos ficaram sem transcrição`
-            );
-          }
           onProgress?.(result.text, 100, true);
           return result.text;
         }
@@ -805,7 +838,7 @@ async function runTranscription(
 
     let serviceBusy = false;
     if (sourceBlob.size <= INLINE_UPLOAD_LIMIT) {
-      const attempt = await tryGeminiTranscription(sourceBlob, urlFallback, lang, onProgress);
+      const attempt = await tryRemoteTranscription(sourceBlob, urlFallback, lang, onProgress);
       if (attempt.text) return attempt.text;
       serviceBusy = attempt.busy;
     }
