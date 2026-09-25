@@ -3,7 +3,7 @@ import { frameEnergies, planSpeechCuts, rangesFromCuts } from "@/lib/media/speec
 
 export const IMAGE_SIZE_LIMIT = 1 * 1024 * 1024;
 export const PDF_SIZE_LIMIT = 3 * 1024 * 1024;
-export const AUDIO_SIZE_LIMIT = 3 * 1024 * 1024;
+export const AUDIO_SIZE_LIMIT = 30 * 1024 * 1024;
 export const VIDEO_SIZE_LIMIT = 150 * 1024 * 1024;
 /**
  * `storage.rules` exige `size < 150 MB` para vídeo, então a compressão mira um
@@ -130,7 +130,7 @@ export async function prepareEditorAttachment(
     if (!needsCompression(file)) return file;
     const compressed = await compressAudioUntilFits(file);
     if (compressed.size > AUDIO_SIZE_LIMIT) {
-      throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+      throw new Error("Arquivo muito grande para ser comprimido. Limite de 30 MB.");
     }
     const targetType = compressed.type || (file.type && file.type.startsWith("audio/") ? file.type : "audio/ogg");
     const targetExt = targetType.includes("ogg") ? ".ogg" : targetType.includes("webm") ? ".webm" : "";
@@ -150,7 +150,7 @@ export async function prepareAudioAttachment(blob: Blob): Promise<Blob> {
   if (!needsAudioCompression(blob)) return blob;
   const compressed = await compressAudioUntilFits(blob);
   if (compressed.size > AUDIO_SIZE_LIMIT) {
-    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+    throw new Error("Arquivo muito grande para ser comprimido. Limite de 30 MB.");
   }
   return compressed;
 }
@@ -696,28 +696,28 @@ export async function compressAudioUntilFits(blob: Blob): Promise<Blob> {
   if (blob.size <= AUDIO_SIZE_LIMIT) return blob;
 
   if (typeof window === "undefined") {
-    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+    throw new Error("Arquivo muito grande para ser comprimido. Limite de 30 MB.");
   }
 
-  if (blob.size > 80 * 1024 * 1024) {
-    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+  if (blob.size > 250 * 1024 * 1024) {
+    throw new Error("Arquivo muito grande para ser comprimido. Limite de 30 MB.");
   }
 
   const audioBuffer = await decodeAudioBlob(blob);
 
   if (!audioBuffer) {
-    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+    throw new Error("Arquivo muito grande para ser comprimido. Limite de 30 MB.");
   }
 
   const duration = Math.max(1, audioBuffer.duration);
   const maxPossibleDuration = (AUDIO_SIZE_LIMIT * 8) / 6000;
   if (duration > maxPossibleDuration) {
-    throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+    throw new Error("Arquivo muito grande para ser comprimido. Limite de 30 MB.");
   }
 
   let targetBitrate = Math.max(
     8000,
-    Math.min(36000, Math.floor(((AUDIO_SIZE_LIMIT * 0.76) * 8) / duration))
+    Math.min(64000, Math.floor(((AUDIO_SIZE_LIMIT * 0.76) * 8) / duration))
   );
 
   try {
@@ -737,5 +737,5 @@ export async function compressAudioUntilFits(blob: Blob): Promise<Blob> {
     console.error("Erro na codificação de áudio:", err);
   }
 
-  throw new Error("Arquivo muito grande para ser comprimido. Limite de 3 MB.");
+  throw new Error("Arquivo muito grande para ser comprimido. Limite de 30 MB.");
 }

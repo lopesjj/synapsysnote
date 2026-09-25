@@ -66,7 +66,7 @@ assert.equal(needsCompression(hugeAudioFile), true);
 assert.equal(replaceExtension("Scan.PNG", ".jpg"), "Scan.jpg");
 assert.equal(IMAGE_SIZE_LIMIT, 1 * 1024 * 1024);
 assert.equal(PDF_SIZE_LIMIT, 3 * 1024 * 1024);
-assert.equal(AUDIO_SIZE_LIMIT, 3 * 1024 * 1024);
+assert.equal(AUDIO_SIZE_LIMIT, 30 * 1024 * 1024);
 
 // --- vídeo -------------------------------------------------------------
 
