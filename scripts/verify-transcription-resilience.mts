@@ -17,6 +17,13 @@ import {
   resetModelCooldowns,
   restingKindOf,
 } from "../src/lib/ai/model-cooldown";
+import { raceModels, raceTimingFor, type RaceResult } from "../src/lib/ai/model-race";
+import {
+  ENERGY_FRAME_SECONDS,
+  frameEnergies,
+  planSpeechCuts,
+  rangesFromCuts,
+} from "../src/lib/media/speech-cuts";
 
 // --- ordem em que os modelos são tentados --------------------------------
 
@@ -111,11 +118,25 @@ assert.equal(parseRetryDelay("3600s"), 5 * 60_000);
 
 // --- junção dos trechos ---------------------------------------------------
 
-// A sobreposição de 5 s entre trechos vizinhos não pode virar fala repetida.
+// Os trechos são cortados em pausas, sem sobreposição: a emenda é concatenação
+// e nada é descartado por "parecer repetido" — uma frase dita duas vezes de
+// verdade continua lá.
 assert.equal(
   joinSegmentTexts(["a aula começa agora mesmo", "agora mesmo vamos ver"]),
-  "a aula começa agora mesmo vamos ver"
+  "a aula começa agora mesmo agora mesmo vamos ver"
 );
+
+// O defeito antigo: a comparação só via a-z/0-9, então em árabe, russo ou
+// japonês toda palavra virava "" e o começo de cada trecho era apagado.
+assert.equal(
+  joinSegmentTexts(["Привет всем друзья сегодня", "мы изучаем новую тему урока"]),
+  "Привет всем друзья сегодня мы изучаем новую тему урока"
+);
+assert.equal(
+  joinSegmentTexts(["مرحبا بكم في الدرس", "اليوم نتعلم موضوعا جديدا"]),
+  "مرحبا بكم في الدرس اليوم نتعلم موضوعا جديدا"
+);
+assert.equal(joinSegmentTexts(["今日は授業です。", "新しいテーマを学びます。"]), "今日は授業です。 新しいテーマを学びます。");
 
 // Trecho perdido no meio vira marca visível: costurar calado entregaria uma
 // aula com oito minutos faltando sem ninguém perceber.
@@ -187,7 +208,8 @@ function installFetch(plan: Plan, delayMs = 0): StubCall[] {
 
 const segments = [new Blob(["S1"]), new Blob(["S2"]), new Blob(["S3"])];
 const TEXTS: Record<string, string> = { S1: "alpha um", S2: "beta dois", S3: "gama três" };
-const fast = { retryBackoffMs: 1, busyBudgetMs: 60_000 };
+// Estes cenários verificam a ordem exata das chamadas: um trecho por vez.
+const fast = { retryBackoffMs: 1, busyBudgetMs: 60_000, concurrency: 1 };
 
 // 1. Um 503 no primeiro trecho não pode abandonar o vídeo inteiro: era o que
 //    fazia a aula de 50 min chegar aos flashcards sem uma palavra.
@@ -224,6 +246,7 @@ const fast = { retryBackoffMs: 1, busyBudgetMs: 60_000 };
   const result = await transcribeInSegments(segments, "pt", undefined, {
     retryBackoffMs: 1,
     busyBudgetMs: 30,
+    concurrency: 1,
   });
 
   assert.equal(result.text, "");
@@ -301,6 +324,239 @@ const fast = { retryBackoffMs: 1, busyBudgetMs: 60_000 };
   assert.equal(calls.filter((c) => c.segment === "S2").length, 2);
 }
 
+// 7. Em paralelo: uma aula de uma hora (20 trechos) não pode custar 20 idas e
+//    voltas enfileiradas. Quatro de cada vez levam ~1/4 do tempo.
+{
+  const many = Array.from({ length: 12 }, (_, i) => new Blob([`P${i}`]));
+  installFetch((segment) => ({ status: 200, transcript: `texto ${segment}` }), 40);
+  const started = Date.now();
+  const updates: string[] = [];
+  const result = await transcribeInSegments(many, "pt", (text) => updates.push(text), {
+    retryBackoffMs: 1,
+    busyBudgetMs: 60_000,
+    concurrency: 4,
+  });
+  const took = Date.now() - started;
+  assert.equal(
+    result.text,
+    many.map((_, i) => `texto P${i}`).join(" ")
+  );
+  // Sequencial seriam ~480 ms; em quatro filas, ~120 ms.
+  assert.ok(took < 330, `paralelo demorou ${took} ms`);
+  // O texto parcial é sempre um começo contínuo: nunca um trecho do meio
+  // aparece antes dos anteriores (Libras lê em ordem).
+  for (const text of updates) {
+    assert.ok(result.text.startsWith(text), `parcial fora de ordem: ${text}`);
+  }
+}
+
+// 8. Trecho lento no começo: o parcial espera por ele, mas o resto não.
+{
+  const lazyCalls: number[] = [];
+  const source = {
+    count: 4,
+    load: async (index: number) => {
+      lazyCalls.push(index);
+      return new Blob([`L${index}`]);
+    },
+    seconds: () => 180,
+  };
+  let firstSeen = "";
+  installFetch((segment) => ({ status: 200, transcript: segment.toLowerCase() }), 5);
+  const result = await transcribeInSegments(
+    source,
+    "pt",
+    (text, _percent, initial) => {
+      if (initial) firstSeen = text;
+    },
+    { concurrency: 2, retryBackoffMs: 1 }
+  );
+  assert.equal(result.text, "l0 l1 l2 l3");
+  assert.ok(firstSeen.startsWith("l0"));
+  // Cada trecho é codificado uma vez só, sob demanda.
+  assert.deepEqual([...lazyCalls].sort(), [0, 1, 2, 3]);
+}
+
 globalThis.fetch = realFetch;
+
+// --- cortes nas pausas de fala -------------------------------------------
+
+{
+  const fps = 1 / ENERGY_FRAME_SECONDS;
+  const seconds = 10 * 60;
+  const energies = new Float32Array(seconds * fps).fill(0.2);
+  // Pausas de 0,6 s perto dos 2:50 e 5:56: o corte deve cair nelas, e não no
+  // relógio (3:00 / 5:50), partindo uma palavra ao meio.
+  for (const pause of [170, 356]) {
+    for (let f = pause * fps; f < (pause + 0.6) * fps; f++) energies[f] = 0.0001;
+  }
+  const cuts = planSpeechCuts(energies, { targetSeconds: 180 });
+  assert.ok(cuts.length >= 2);
+  assert.ok(Math.abs(cuts[0] - 170.3) < 0.3, `primeiro corte em ${cuts[0]}`);
+  assert.ok(Math.abs(cuts[1] - 356.3) < 0.3, `segundo corte em ${cuts[1]}`);
+
+  // As faixas cobrem a gravação inteira, sem buraco nem sobreposição.
+  const ranges = rangesFromCuts(cuts, seconds);
+  assert.equal(ranges[0].start, 0);
+  assert.equal(ranges[ranges.length - 1].end, seconds);
+  for (let i = 1; i < ranges.length; i++) assert.equal(ranges[i].start, ranges[i - 1].end);
+  // Nenhum trecho foge muito do alvo.
+  for (const range of ranges) assert.ok(range.end - range.start <= 180 * 1.3 + 1);
+
+  // Áudio curto é um trecho só; e um resto curto vai junto com o último.
+  assert.deepEqual(planSpeechCuts(new Float32Array(200 * fps), { targetSeconds: 180 }), []);
+
+  // Duas horas contínuas, sem pausa nenhuma: ainda assim cortes regulares.
+  const long = planSpeechCuts(new Float32Array(2 * 3600 * fps).fill(0.1), { targetSeconds: 180 });
+  assert.ok(long.length >= 38 && long.length <= 41, `${long.length} cortes`);
+}
+
+{
+  // Energia por quadro: silêncio é zero, tom é positivo.
+  const rate = 16000;
+  const samples = new Float32Array(rate);
+  for (let i = rate / 2; i < rate; i++) samples[i] = Math.sin(i / 10) * 0.5;
+  const energies = frameEnergies(
+    (start, out) => {
+      out.fill(0);
+      const slice = samples.subarray(start, start + out.length);
+      out.set(slice);
+      return slice.length;
+    },
+    samples.length,
+    rate
+  );
+  assert.equal(energies.length, 50);
+  assert.equal(energies[0], 0);
+  assert.ok(energies[49] > 0.05);
+}
+
+// --- corrida escalonada entre modelos -------------------------------------
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function fakeModel(plan: Record<string, { ms: number; result: RaceResult }>) {
+  const started: string[] = [];
+  const aborted: string[] = [];
+  const run = async (model: string, signal: AbortSignal) => {
+    started.push(model);
+    const { ms, result } = plan[model];
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, ms);
+      signal.addEventListener("abort", () => {
+        clearTimeout(timer);
+        aborted.push(model);
+        resolve();
+      });
+    });
+    return result;
+  };
+  return { run, started, aborted };
+}
+
+// 1. Modelo congestionado: antes eram ~50 s até o 503 e só então o próximo.
+//    Agora o reforço entra no tempo de espera e o primeiro texto vence.
+{
+  const fake = fakeModel({
+    lento: { ms: 400, result: { text: "", reason: "SERVICE_BUSY" } },
+    bom: { ms: 20, result: { text: "transcrito", reason: "OK" } },
+  });
+  const started = Date.now();
+  const outcome = await raceModels(["lento", "bom"], fake.run, {
+    hedgeDelayMs: 30,
+    callTimeoutMs: 1000,
+    deadline: Date.now() + 2000,
+    minAttemptMs: 1,
+  });
+  assert.equal(outcome.text, "transcrito");
+  assert.equal(outcome.model, "bom");
+  assert.ok(Date.now() - started < 200);
+  // Quem perdeu é cancelado, sem ficar gastando cota.
+  assert.deepEqual(fake.aborted, ["lento"]);
+}
+
+// 2. Recusa rápida (cota) chama o próximo na hora, sem esperar o reforço.
+{
+  const fake = fakeModel({
+    esgotado: { ms: 1, result: { text: "", reason: "QUOTA", quotaScope: "minute" } },
+    bom: { ms: 5, result: { text: "ok", reason: "OK" } },
+  });
+  const started = Date.now();
+  const settled: string[] = [];
+  const outcome = await raceModels(
+    ["esgotado", "bom"],
+    fake.run,
+    { hedgeDelayMs: 5_000, callTimeoutMs: 10_000, deadline: Date.now() + 10_000, minAttemptMs: 1 },
+    (model) => settled.push(model)
+  );
+  assert.equal(outcome.text, "ok");
+  assert.ok(Date.now() - started < 200);
+  assert.deepEqual(settled, ["esgotado", "bom"]);
+}
+
+// 3. Sem fala é veredito do arquivo: não percorre a lista inteira.
+{
+  const fake = fakeModel({
+    a: { ms: 1, result: { text: "", reason: "NO_SPEECH" } },
+    b: { ms: 1, result: { text: "", reason: "NO_SPEECH" } },
+  });
+  const outcome = await raceModels(["a", "b"], fake.run, {
+    hedgeDelayMs: 5_000,
+    callTimeoutMs: 10_000,
+    deadline: Date.now() + 10_000,
+    minAttemptMs: 1,
+  });
+  assert.equal(outcome.reason, "NO_SPEECH");
+  assert.deepEqual(fake.started, ["a"]);
+}
+
+// 4. Todos esgotados no dia: a resposta diz cota do DIA.
+{
+  const fake = fakeModel({
+    a: { ms: 1, result: { text: "", reason: "QUOTA", quotaScope: "minute" } },
+    b: { ms: 1, result: { text: "", reason: "QUOTA", quotaScope: "day" } },
+  });
+  const outcome = await raceModels(["a", "b"], fake.run, {
+    hedgeDelayMs: 5_000,
+    callTimeoutMs: 10_000,
+    deadline: Date.now() + 10_000,
+    minAttemptMs: 1,
+  });
+  assert.equal(outcome.reason, "QUOTA");
+  assert.equal(outcome.quotaScope, "day");
+}
+
+// 5. Nunca mais que duas chamadas em voo, e nunca o mesmo modelo duas vezes
+//    ao mesmo tempo (a segunda rodada repete os primeiros da lista).
+{
+  let inFlight = 0;
+  let peak = 0;
+  const concurrent = new Set<string>();
+  const outcome = await raceModels(
+    ["a", "b", "c", "a"],
+    async (model) => {
+      assert.ok(!concurrent.has(model), `${model} em dobro`);
+      concurrent.add(model);
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await wait(15);
+      inFlight -= 1;
+      concurrent.delete(model);
+      return { text: "", reason: "SERVICE_BUSY" };
+    },
+    { hedgeDelayMs: 5, callTimeoutMs: 1000, deadline: Date.now() + 2000, minAttemptMs: 1 }
+  );
+  assert.equal(outcome.reason, "SERVICE_BUSY");
+  assert.ok(peak <= 2);
+}
+
+// Tempos proporcionais à duração: o trecho de 3 min ganha reforço perto dos
+// 20 s; uma hora inteira não é mais morta pelo teto fixo de 40 s.
+{
+  const segment = raceTimingFor(180);
+  assert.ok(segment.hedgeDelayMs >= 15_000 && segment.hedgeDelayMs <= 25_000);
+  assert.ok(segment.callTimeoutMs >= 40_000 && segment.callTimeoutMs <= 60_000);
+  assert.ok(raceTimingFor(3600).callTimeoutMs >= 200_000);
+}
 
 console.log("verify:transcription OK");

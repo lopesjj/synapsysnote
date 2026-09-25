@@ -1619,7 +1619,10 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                                   useLibrasStore.getState().updateText(partialText);
                                 }
                               },
-                              effectiveTranscribeLang
+                              effectiveTranscribeLang,
+                              // A mesma aula acabou de ser transcrita (ou está
+                              // sendo, pelos flashcards): reaproveita.
+                              { reuseCache: true }
                             );
                             if (result) {
                               transcriptText = result;

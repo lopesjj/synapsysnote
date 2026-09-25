@@ -15,33 +15,33 @@ import {
   parseRetryDelay,
   restingKindOf,
 } from "@/lib/ai/model-cooldown";
+import { raceModels, raceTimingFor } from "@/lib/ai/model-race";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 /**
- * Transcrever custa quota paga e CPU. Uma aula de 50 min vira ~7 chamadas, entao
- * o teto abaixo cabe umas oito aulas em dez minutos — bem acima do uso real e
- * bem abaixo do que daria para torrar a conta.
+ * Transcrever custa quota paga e CPU. O navegador manda trechos de ~3 min, até
+ * quatro de cada vez (`TRANSCRIBE_CONCURRENCY` em `audio-transcriber.ts`, que
+ * precisa acompanhar o `maxConcurrent` daqui): uma aula de uma hora são ~20
+ * chamadas, e o teto abaixo cabe umas três horas de mídia em dez minutos,
+ * com folga para as retentativas.
  */
 const transcribeLimiter = createRateLimiter({
   windowMs: 10 * 60_000,
-  maxRequests: 60,
-  maxConcurrent: 3,
+  maxRequests: 120,
+  maxConcurrent: 4,
   maxBytes: 300 * 1024 * 1024,
 });
 
 
 /**
- * Teto de cada chamada externa: sem isso um destino lento trava a rota.
- *
- * Medido: um trecho de 3 min transcreve em 5-8 s no modelo bom, enquanto o
- * `gemini-flash-lite-latest` congestionado levou 72 s para 3 s de áudio e
- * estourou 90 s nos 3 min. Com o teto antigo, um único modelo lento consumia
- * o orçamento inteiro da cadeia; em 45 s sobra folga de sobra para o caminho
- * saudável e ainda dá tempo de tentar outros dois modelos.
+ * O teto de cada chamada ao Gemini sai de `raceTimingFor`, proporcional à
+ * duração do áudio: medido, um trecho de 3 min transcreve em 5-8 s no modelo
+ * bom, enquanto um modelo congestionado leva 50-90 s para desistir. O teto fixo
+ * de 40 s de antes servia para o trecho e matava a aula inteira, que precisa de
+ * minutos só para o texto sair.
  */
-const UPSTREAM_TIMEOUT_MS = 40_000;
 const FETCH_TIMEOUT_MS = 60_000;
 
 let transcriberPromise: Promise<unknown> | null = null;
@@ -251,7 +251,8 @@ async function callGemini(
   source: AudioSource,
   rawMimeType: string,
   targetLang: string,
-  timeoutMs: number = UPSTREAM_TIMEOUT_MS
+  timeoutMs: number,
+  signal?: AbortSignal
 ): Promise<GeminiResult> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) return { text: "", reason: "NOT_CONFIGURED" };
@@ -301,9 +302,11 @@ async function callGemini(
         },
       };
 
+  const timeout = AbortSignal.timeout(timeoutMs);
   const res = await fetch(url, {
     method: "POST",
-    signal: AbortSignal.timeout(timeoutMs),
+    // O sinal externo é o da corrida: quem perdeu é cancelado na hora.
+    signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -390,8 +393,6 @@ async function callGemini(
 
 /** Abaixo disto não sobra tempo útil para mais uma chamada. */
 const MIN_ATTEMPT_MS = 12_000;
-/** Respiro entre um 503 e a tentativa seguinte. */
-const BUSY_BACKOFF_MS = 1_500;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -401,6 +402,7 @@ async function transcribeWithGemini(
   buffer: Buffer,
   rawMimeType: string,
   targetLang: string,
+  audioSeconds: number,
   deadline = Number.POSITIVE_INFINITY
 ): Promise<GeminiResult> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -426,19 +428,12 @@ async function transcribeWithGemini(
     }
     source = { kind: "inline", data: buffer.toString("base64") };
   }
+  const audio = source;
 
-  const cleanupFile = async () => {
-    if (uploadedFileName) {
-      await deleteFromFilesApi(apiKey, uploadedFileName);
-    }
-  };
-
-  let lastReason: TranscribeReason = "NOT_CONFIGURED";
-  let quotaScope: "day" | "minute" | null = null;
   // `GEMINI_MODEL` vale para os textos; áudio tem disponibilidade própria e
   // escolha própria, senão um modelo sem cota de áudio trava a transcrição.
   const fullChain = transcribeModelChain(process.env.GEMINI_TRANSCRIBE_MODEL);
-  // Modelo que recusou há pouco sai da frente: numa aula de 18 trechos, sem
+  // Modelo que recusou há pouco sai da frente: numa aula de 20 trechos, sem
   // isto cada trecho recomeçava pelo mesmo esgotado.
   const chain = orderByAvailability(fullChain);
   if (chain.length < fullChain.length) {
@@ -450,73 +445,62 @@ async function transcribeWithGemini(
   // orçamento que sobrou em vez de devolver 503 com minutos na mão — o áudio já
   // está no servidor, então a segunda rodada não custa upload nenhum.
   const attempts = [...chain, ...chain.slice(0, 2)];
+  const timing = raceTimingFor(audioSeconds);
 
-  for (let i = 0; i < attempts.length; i++) {
-    // O corte de tempo vinha DEPOIS da chamada: o orçamento acabava na segunda
-    // tentativa e metade da lista nunca era tentada.
-    const remaining = deadline - Date.now();
-    if (remaining < MIN_ATTEMPT_MS) break;
-
-    const model = attempts[i];
-    let result: GeminiResult;
-    try {
-      result = await callGemini(
-        model,
-        source,
-        mimeType,
-        targetLang,
-        Math.min(UPSTREAM_TIMEOUT_MS, remaining)
-      );
-    } catch (error) {
-      if (!isAbortError(error)) throw error;
-      console.warn(`[transcribe] ${model} estourou o tempo limite`);
-      result = { text: "", reason: "SERVICE_BUSY" };
-    }
-    if (result.text) {
-      noteModelWorked(model);
-      await cleanupFile();
-      return result;
-    }
-    lastReason = result.reason;
-    if (result.reason === "QUOTA") {
-      // A do dia manda: se um modelo esgotou o dia, a mensagem não pode ser
-      // "espere um minuto".
-      if (result.quotaScope === "day" || quotaScope === null) {
-        quotaScope = result.quotaScope === "day" ? "day" : "minute";
+  try {
+    const outcome = await raceModels(
+      attempts,
+      async (model, signal, timeoutMs) => {
+        try {
+          return await callGemini(model, audio, mimeType, targetLang, timeoutMs, signal);
+        } catch (error) {
+          // Cancelado por ter perdido a corrida: não é recusa do modelo.
+          if (signal.aborted) return { text: "", reason: "SERVICE_BUSY" };
+          if (isAbortError(error)) {
+            console.warn(`[transcribe] ${model} estourou o tempo limite`);
+          } else {
+            console.warn(`[transcribe] ${model} falhou na rede`, error);
+          }
+          return { text: "", reason: "SERVICE_BUSY" };
+        }
+      },
+      {
+        ...timing,
+        deadline,
+        maxInFlight: 2,
+        minAttemptMs: MIN_ATTEMPT_MS,
+      },
+      (model, result) => {
+        if (result.text) noteModelWorked(model);
+        else if (result.reason === "QUOTA") {
+          noteModelRefused(
+            model,
+            result.quotaScope === "day" ? "quota-day" : "quota-minute",
+            result.retryAfterMs
+          );
+        } else if (result.reason === "SERVICE_BUSY") noteModelRefused(model, "busy");
+        else if (result.reason === "MODEL_MISSING") noteModelRefused(model, "missing");
       }
-      noteModelRefused(
-        model,
-        result.quotaScope === "day" ? "quota-day" : "quota-minute",
-        result.retryAfterMs
-      );
-    } else if (result.reason === "SERVICE_BUSY") {
-      noteModelRefused(model, "busy");
-    } else if (result.reason === "MODEL_MISSING") {
-      noteModelRefused(model, "missing");
+    );
+
+    if (outcome.text) {
+      if (outcome.launched > 1) {
+        console.info(`[transcribe] ${outcome.model} venceu após ${outcome.launched} chamada(s)`);
+      }
+      return { text: outcome.text, reason: outcome.reason };
     }
-    // Só vale a pena tentar outro modelo quando o problema foi do modelo: uma
-    // recusa do arquivo se repetiria igual na lista inteira.
+    let quotaScope = outcome.reason === "QUOTA" ? outcome.quotaScope : undefined;
     if (
-      result.reason !== "SERVICE_BUSY" &&
-      result.reason !== "MODEL_MISSING" &&
-      result.reason !== "QUOTA"
+      !quotaScope &&
+      fullChain.every((m) => isModelResting(m) && restingKindOf([m]) === "quota-day")
     ) {
-      return result;
+      quotaScope = "day";
     }
-    // Cota estourada e nome inexistente falham na hora e não congestionam
-    // nada: esperar antes do próximo só desperdiçaria o orçamento.
-    if (result.reason === "SERVICE_BUSY" && i + 1 < attempts.length) {
-      await delay(BUSY_BACKOFF_MS * (1 + Math.floor(i / chain.length)));
-    }
+    if (quotaScope) return { text: "", reason: "QUOTA", quotaScope };
+    return { text: "", reason: outcome.reason };
+  } finally {
+    if (uploadedFileName) await deleteFromFilesApi(apiKey, uploadedFileName);
   }
-  if (!quotaScope && fullChain.every((m) => isModelResting(m) && restingKindOf([m]) === "quota-day")) {
-    quotaScope = "day";
-  }
-  await cleanupFile();
-  if (quotaScope) {
-    return { text: "", reason: "QUOTA", quotaScope };
-  }
-  return { text: "", reason: lastReason };
 }
 
 /** Teto do arquivo embutido na chamada do Gemini (o limite da API é ~20 MB). */
@@ -536,13 +520,25 @@ const MAX_AUDIO_BYTES = 24 * 1024 * 1024;
  */
 const MAX_PCM_BYTES = 8 * 1024 * 1024;
 /**
- * Cada modelo congestionado gasta ~50 s até responder 503. Com 70 s o orçamento
- * acabava na segunda tentativa e metade da lista nunca era tentada; com muito
- * mais que isto, quem espera por uma aula inteira em trechos ficaria minutos
- * olhando a barra a cada trecho recusado. Este teto cabe dois ou três modelos
- * por chamada, e a rodada seguinte entra por outro ponto da lista.
+ * Orçamento da cadeia inteira. Com a corrida escalonada, um trecho de 3 min
+ * passa por vários modelos dentro disto; um arquivo inteiro de uma hora precisa
+ * que o teto da própria chamada caiba, com folga para a tradução — sem passar
+ * do `maxDuration` da rota.
  */
 const MODEL_CHAIN_DEADLINE_MS = 140_000;
+const MAX_CHAIN_DEADLINE_MS = 250_000;
+
+/**
+ * Duração do áudio: o navegador informa a de cada trecho. Sem a dica, estima
+ * pelo tamanho — Opus de fala anda perto de 24 kbps, o resto (MP3, AAC) perto
+ * de 128 kbps.
+ */
+function audioSecondsOf(hint: string | null, bytes: number, mimeType: string): number {
+  const informed = Number(hint);
+  if (Number.isFinite(informed) && informed > 0) return Math.min(6 * 3600, informed);
+  const bytesPerSecond = /ogg|opus|webm/i.test(mimeType) ? 3_000 : 16_000;
+  return Math.min(6 * 3600, Math.max(1, bytes / bytesPerSecond));
+}
 
 /** Espera sugerida ao cliente antes de reenviar o mesmo trecho. */
 const RETRY_AFTER_SECONDS = 15;
@@ -573,10 +569,16 @@ function reasonResponse(reason: TranscribeReason, quotaScope?: "day" | "minute")
 async function runGemini(
   buffer: Buffer,
   mimeType: string,
-  lang: string
+  lang: string,
+  audioSeconds: number
 ): Promise<GeminiResult> {
-  const deadline = Date.now() + MODEL_CHAIN_DEADLINE_MS;
-  const result = await transcribeWithGemini(buffer, mimeType, lang, deadline);
+  const { callTimeoutMs } = raceTimingFor(audioSeconds);
+  const budget = Math.min(
+    MAX_CHAIN_DEADLINE_MS,
+    Math.max(MODEL_CHAIN_DEADLINE_MS, callTimeoutMs + MIN_ATTEMPT_MS)
+  );
+  const deadline = Date.now() + budget;
+  const result = await transcribeWithGemini(buffer, mimeType, lang, audioSeconds, deadline);
   if (result.text) result.text = cleanTranscriptText(result.text);
   if (result.text && result.reason !== "TRUNCATED") result.text = await inTargetLanguage(result.text, lang);
   return result;
@@ -639,7 +641,12 @@ export async function POST(req: NextRequest) {
 
     const limitKey = rateLimitKey(uid, clientIpOf(req));
     if (!transcribeLimiter.take(limitKey)) {
-      return NextResponse.json({ transcript: "", reason: "RATE_LIMITED" }, { status: 429 });
+      // Quase sempre é a vaga de concorrência, que abre em segundos: sem a dica
+      // o cliente esperaria os 30 s pensados para a cota do minuto.
+      return NextResponse.json(
+        { transcript: "", reason: "RATE_LIMITED" },
+        { status: 429, headers: { "Retry-After": "5" } }
+      );
     }
     let bytesUsed = 0;
     releaseLimit = () => transcribeLimiter.release(limitKey, bytesUsed);
@@ -689,7 +696,12 @@ export async function POST(req: NextRequest) {
         }
         bytesUsed = fetched.buffer.byteLength;
 
-        const result = await runGemini(fetched.buffer, fetched.mime, reqTargetLang);
+        const result = await runGemini(
+          fetched.buffer,
+          fetched.mime,
+          reqTargetLang,
+          audioSecondsOf(req.headers.get("x-audio-seconds"), fetched.buffer.byteLength, fetched.mime)
+        );
         if (result.text) {
           return NextResponse.json({ transcript: result.text, reason: result.reason });
         }
@@ -721,7 +733,13 @@ export async function POST(req: NextRequest) {
 
     const buf = Buffer.from(await file.arrayBuffer());
     bytesUsed = buf.byteLength;
-    const result = await runGemini(buf, file.type || "audio/webm", effectiveLang);
+    const fileMime = file.type || "audio/webm";
+    const result = await runGemini(
+      buf,
+      fileMime,
+      effectiveLang,
+      audioSecondsOf(req.headers.get("x-audio-seconds"), buf.byteLength, fileMime)
+    );
     if (result.text) {
       return NextResponse.json({ transcript: result.text, reason: result.reason });
     }

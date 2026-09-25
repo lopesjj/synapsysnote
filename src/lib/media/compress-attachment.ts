@@ -1,4 +1,5 @@
 import { PDF_WORKER_PATH, vendorUrl } from "@/lib/vendor-assets";
+import { frameEnergies, planSpeechCuts, rangesFromCuts } from "@/lib/media/speech-cuts";
 
 export const IMAGE_SIZE_LIMIT = 1 * 1024 * 1024;
 export const PDF_SIZE_LIMIT = 3 * 1024 * 1024;
@@ -537,15 +538,17 @@ export async function decodeAudioBlob(
   if (!OfflineCtx && !AudioCtx) return null;
 
   let audioBuffer: AudioBuffer | null = null;
-  const arrayBuffer = await blob.arrayBuffer();
 
   if (OfflineCtx) {
     try {
       // Decodificar direto na taxa de destino evita guardar a trilha em 48 kHz
-      // só para reamostrar depois.
+      // só para reamostrar depois. O buffer vai sem cópia: `decodeAudioData`
+      // o consome, e copiar um vídeo de 150 MB "por garantia" dobrava o pico
+      // de memória justo na etapa mais pesada.
+      const arrayBuffer = await blob.arrayBuffer();
       const offCtx = new OfflineCtx(1, targetSampleRate, targetSampleRate);
       audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
-        const promise = offCtx.decodeAudioData(arrayBuffer.slice(0), resolve, reject);
+        const promise = offCtx.decodeAudioData(arrayBuffer, resolve, reject);
         if (promise && typeof promise.then === "function") {
           promise.then(resolve).catch(reject);
         }
@@ -555,10 +558,12 @@ export async function decodeAudioBlob(
 
   if (!audioBuffer && AudioCtx) {
     try {
+      // Só o caminho de reserva relê o arquivo: o primeiro buffer já foi consumido.
+      const arrayBuffer = await blob.arrayBuffer();
       const actx = new AudioCtx();
       try {
         audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
-          const promise = actx.decodeAudioData(arrayBuffer.slice(0), resolve, reject);
+          const promise = actx.decodeAudioData(arrayBuffer, resolve, reject);
           if (promise && typeof promise.then === "function") {
             promise.then(resolve).catch(reject);
           }
@@ -593,68 +598,59 @@ async function opusEncodeRate(bitrate: number): Promise<number> {
   return 48000;
 }
 
-export interface AudioSegments {
-  segments: Blob[];
+export interface SegmentPlan {
   durationSeconds: number;
+  /** Faixas [início, fim) em segundos, cortadas em pausas de fala, sem sobreposição. */
+  ranges: { start: number; end: number }[];
+  /** Codifica o trecho `index` em Opus. Sob demanda: a fila de envio puxa. */
+  encode(index: number): Promise<Blob>;
 }
 
 /**
- * Fatia a fala em trechos curtos, cada um em seu próprio arquivo Opus.
+ * Prepara a fala para ser transcrita em trechos paralelos.
  *
- * Mandar uma aula inteira numa única chamada é o pior caso: o arquivo fica
- * pesado, a API demora minutos e, se recusar, perde-se tudo. Em pedaços, cada
- * chamada é leve, o progresso é real e uma falha isolada custa só aquele trecho.
- * A sobreposição evita cortar palavra no meio da emenda.
+ * A trilha é decodificada UMA vez (antes eram duas: uma para o envio inteiro,
+ * outra para fatiar quando ele falhava) e os cortes caem em pausas de fala.
+ * Cada trecho só é codificado quando a fila de envio chega nele, então o
+ * primeiro já está sendo transcrito enquanto os outros ainda codificam.
  */
-export async function extractAudioSegments(
+export async function planAudioSegments(
   blob: Blob,
   {
-    segmentSeconds = 480,
-    overlapSeconds = 5,
+    segmentSeconds = 180,
     maxBytesPerSegment = 2 * 1024 * 1024,
-    onProgress,
-  }: {
-    segmentSeconds?: number;
-    overlapSeconds?: number;
-    maxBytesPerSegment?: number;
-    onProgress?: (done: number, total: number) => void;
-  } = {}
-): Promise<AudioSegments | null> {
+  }: { segmentSeconds?: number; maxBytesPerSegment?: number } = {}
+): Promise<SegmentPlan | null> {
   if (typeof window === "undefined") return null;
+  if (typeof AudioEncoder === "undefined" || typeof AudioData === "undefined") return null;
 
   const audioBuffer = await decodeAudioBlob(blob, TRANSCRIPTION_SAMPLE_RATE);
   if (!audioBuffer || !audioBuffer.duration) return null;
 
   const duration = audioBuffer.duration;
+  const analysis = createMonoFrameReader(audioBuffer, TRANSCRIPTION_SAMPLE_RATE);
+  const energies = frameEnergies(analysis.read, analysis.totalSamples, TRANSCRIPTION_SAMPLE_RATE);
+  const ranges = rangesFromCuts(planSpeechCuts(energies, { targetSeconds: segmentSeconds }), duration);
+  if (!ranges.length) return null;
+
+  const longest = Math.max(...ranges.map((range) => range.end - range.start));
   const bitrate = Math.max(
     12000,
-    Math.min(24000, Math.floor(((maxBytesPerSegment * 0.9) * 8) / Math.min(segmentSeconds, duration)))
+    Math.min(24000, Math.floor(((maxBytesPerSegment * 0.9) * 8) / Math.max(1, longest)))
   );
   const encodeRate = await opusEncodeRate(bitrate);
-  const totalSamples = Math.ceil(duration * encodeRate);
-  const step = Math.round((segmentSeconds - overlapSeconds) * encodeRate);
-  const span = Math.round(segmentSeconds * encodeRate);
 
-  const ranges: { startSample: number; endSample: number }[] = [];
-  for (let start = 0; start < totalSamples; start += step) {
-    const end = Math.min(totalSamples, start + span);
-    ranges.push({ startSample: start, endSample: end });
-    if (end >= totalSamples) break;
-  }
-
-  const segments: Blob[] = [];
-  for (let i = 0; i < ranges.length; i++) {
-    try {
-      const encoded = await encodeAudioBufferToOpus(audioBuffer, bitrate, encodeRate, ranges[i]);
-      if (encoded && encoded.size > 0) segments.push(encoded);
-    } catch {
-      return null;
-    }
-    onProgress?.(i + 1, ranges.length);
-  }
-
-  if (!segments.length) return null;
-  return { segments, durationSeconds: duration };
+  return {
+    durationSeconds: duration,
+    ranges,
+    encode: (index) => {
+      const range = ranges[index];
+      return encodeAudioBufferToOpus(audioBuffer, bitrate, encodeRate, {
+        startSample: Math.round(range.start * encodeRate),
+        endSample: Math.round(range.end * encodeRate),
+      });
+    },
+  };
 }
 
 export async function extractAudioForTranscription(

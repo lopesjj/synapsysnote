@@ -405,62 +405,85 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
       if (pending.length > 0) {
         setProgressStatus(t("ai_progress_transcribing"));
 
-        for (let index = 0; index < pending.length; index++) {
-          const item = pending[index];
-          const fallbackName = t(item.kind === "video" ? "media_video" : "media_audio");
-          setProgress(18 + Math.round((index / pending.length) * 30));
-          setProgressStatus(
-            t("ai_progress_transcribing_item", {
-              current: index + 1,
-              total: pending.length,
-              name: item.name || fallbackName,
-            })
-          );
-          let mediaUrl = item.url;
-          if (!mediaUrl && item.storagePath) {
-            mediaUrl = await resolveMediaUrl(item.url, item.storagePath);
-          }
-          if (!mediaUrl) continue;
+        const savedGlobalLang =
+          typeof window !== "undefined"
+            ? window.localStorage.getItem("synapsys_transcribe_language")
+            : null;
+        // Todas as mídias ao mesmo tempo: o teto de trechos em voo é global
+        // (`audio-transcriber.ts`), então uma aula não atropela a outra, mas
+        // um áudio curto também não espera o vídeo de uma hora terminar.
+        const percents = new Array<number>(pending.length).fill(0);
+        let started = 0;
+        const updateOverall = () => {
+          const mean = percents.reduce((sum, value) => sum + value, 0) / pending.length;
+          setProgress(Math.round(18 + (mean / 100) * 30));
+        };
+        const results = await Promise.all(
+          pending.map(async (item, index) => {
+            const fallbackName = t(item.kind === "video" ? "media_video" : "media_audio");
+            let mediaUrl = item.url;
+            if (!mediaUrl && item.storagePath) {
+              mediaUrl = await resolveMediaUrl(item.url, item.storagePath);
+            }
+            if (!mediaUrl) return null;
 
-          const savedGlobalLang =
-            typeof window !== "undefined"
-              ? window.localStorage.getItem("synapsys_transcribe_language")
-              : null;
-          const effectiveLang =
-            item.transcriptLanguage ||
-            savedGlobalLang ||
-            language ||
-            "pt";
-
-          try {
-            const transcript = await transcribeAudioSource(
-              mediaUrl,
-              null,
-              (_partial, percent) => {
-                const base = 18 + (index / pending.length) * 30;
-                const span = 30 / pending.length;
-                setProgress(Math.round(base + (percent / 100) * span));
-              },
-              effectiveLang
+            started += 1;
+            setProgressStatus(
+              t("ai_progress_transcribing_item", {
+                current: started,
+                total: pending.length,
+                name: item.name || fallbackName,
+              })
             );
-            if (transcript?.trim()) {
-              const trimmed = transcript.trim();
-              const bucket =
-                item.kind === "video"
-                  ? comprehensive.videoTranscripts
-                  : comprehensive.audioTranscripts;
-              bucket.push({ name: item.name || fallbackName, text: trimmed });
+            const effectiveLang = item.transcriptLanguage || savedGlobalLang || language || "pt";
+
+            try {
+              const transcript = await transcribeAudioSource(
+                mediaUrl,
+                null,
+                (_partial, percent) => {
+                  percents[index] = percent;
+                  updateOverall();
+                },
+                effectiveLang,
+                { reuseCache: true }
+              );
+              percents[index] = 100;
+              updateOverall();
+              const trimmed = transcript?.trim();
+              return trimmed ? { kind: item.kind, name: item.name || fallbackName, text: trimmed } : null;
+            } catch (err) {
+              percents[index] = 100;
+              updateOverall();
+              return { error: err };
             }
-          } catch (err) {
+          })
+        );
+
+        // Na ordem da nota, e um aviso por tipo de falha em vez de um por mídia.
+        const shown = new Set<string>();
+        for (const result of results) {
+          if (!result) continue;
+          if ("error" in result) {
             mediaFailures += 1;
-            if (err instanceof Error && err.message === "SERVICE_BUSY") {
-              toast.error(t("transcription_service_busy"));
-            } else if (err instanceof Error && err.message === "QUOTA_EXCEEDED") {
-              toast.error(t("transcription_quota_exceeded"));
-            } else if (err instanceof Error && err.message === "TRANSCRIBE_FAILED") {
-              toast.error(t("audio_transcribe_error"));
+            const err = result.error;
+            const key =
+              err instanceof Error && err.message === "SERVICE_BUSY"
+                ? "transcription_service_busy"
+                : err instanceof Error && err.message === "QUOTA_EXCEEDED"
+                  ? "transcription_quota_exceeded"
+                  : err instanceof Error && err.message === "TRANSCRIBE_FAILED"
+                    ? "audio_transcribe_error"
+                    : "";
+            if (key && !shown.has(key)) {
+              shown.add(key);
+              toast.error(t(key));
             }
+            continue;
           }
+          const bucket =
+            result.kind === "video" ? comprehensive.videoTranscripts : comprehensive.audioTranscripts;
+          bucket.push({ name: result.name, text: result.text });
         }
       }
 
