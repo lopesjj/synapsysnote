@@ -5,7 +5,7 @@ const WORDMARK_RATIO = 299 / 874;
 
 export type LogoOrientation = "horizontal" | "vertical";
 
-export const SIDEBAR_MARK_SIZE = 42;
+export const SIDEBAR_MARK_SIZE = 46;
 
 export function SynapsysMark({
   className,

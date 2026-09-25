@@ -486,7 +486,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 );
 }
 
-const COLLAPSED_SIDEBAR_WIDTH = 68;
+const COLLAPSED_SIDEBAR_WIDTH = 76;
 const SIDEBAR_SLIDE = { duration: 0.85, ease: [0.22, 1, 0.36, 1] as const };
 
 function DesktopSidebar() {
@@ -518,7 +518,7 @@ function DesktopSidebar() {
           initial={false}
           animate={{ opacity: collapsed ? 1 : 0 }}
           transition={reducedMotion ? { duration: 0 } : { duration: 0.45, ease: "easeOut", delay: collapsed ? 0.18 : 0 }}
-          className="absolute inset-y-0 left-0 w-[68px]"
+          className="absolute inset-y-0 left-0 w-[76px]"
           style={{ pointerEvents: collapsed ? "auto" : "none" }}
         >
           <SidebarRail />

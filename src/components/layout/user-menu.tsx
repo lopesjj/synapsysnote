@@ -81,25 +81,29 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
           <button
             type="button"
             aria-label={t("open_account_menu")}
-            className={cn("flex size-9 items-center justify-center", TRIGGER_CLASS)}
+            className={cn("flex h-10 w-[76px] items-center justify-center", TRIGGER_CLASS)}
           >
-            {avatar}
+            <span className="flex h-10 w-[76px] shrink-0 items-center justify-center">
+              {avatar}
+            </span>
           </button>
         ) : (
           <button
             type="button"
             aria-label={t("open_account_menu")}
-            className={cn("flex h-9 w-full items-center gap-2.5 text-left", TRIGGER_CLASS)}
+            className={cn("flex h-10 w-full items-center text-left", TRIGGER_CLASS)}
           >
-            {avatar}
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13px] font-semibold leading-tight text-ink">
+            <span className="flex h-10 w-[76px] shrink-0 items-center justify-center">
+              {avatar}
+            </span>
+            <div className="-ml-2 flex min-w-0 flex-1 flex-col items-start justify-center pr-2">
+              <span className="block max-w-full truncate text-[13px] font-semibold leading-tight text-ink">
                 {displayName}
               </span>
-              <span className="mt-0.5 block truncate text-[12px] leading-tight text-muted">
+              <span className="-ml-1.5 mt-0.5 inline-flex items-center rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.05em] text-[var(--accent)]">
                 {planLabel}
               </span>
-            </span>
+            </div>
             <Settings className="size-4 shrink-0 text-ink" strokeWidth={1.75} />
           </button>
         )}

@@ -88,7 +88,7 @@ interface UiState extends UiPreferences {
   hydratePreferences: (value: Partial<UiPreferences>) => void;
 }
 
-export const SIDEBAR_MIN_WIDTH = 232;
+export const SIDEBAR_MIN_WIDTH = 240;
 export const SIDEBAR_MAX_WIDTH = 420;
 export const EDITOR_FONT_SIZE_MIN = 14;
 export const EDITOR_FONT_SIZE_MAX = 22;
