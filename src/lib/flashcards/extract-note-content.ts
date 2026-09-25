@@ -39,6 +39,7 @@ export interface ExtractedPendingMedia {
   storagePath?: string;
   name: string;
   kind: PendingMediaKind;
+  transcriptLanguage?: string;
 }
 
 export interface ExtractedTranscript {
@@ -315,6 +316,14 @@ export async function extractComprehensiveNoteContent(
       const label = mediaName || "";
       const merged = summary && transcript ? `${transcript}\n\n${summary}` : transcript || summary;
 
+      const blockTranscriptLang =
+        String(
+          block.media?.transcriptLanguage ||
+            loose.transcriptLanguage ||
+            attrs.transcriptLanguage ||
+            ""
+        ).trim() || undefined;
+
       if (merged) {
         const bucket = kind === "video" ? videoTranscripts : audioTranscripts;
         bucket.push({ name: label, text: merged });
@@ -325,6 +334,7 @@ export async function extractComprehensiveNoteContent(
           storagePath: mediaStoragePath,
           name: label,
           kind,
+          transcriptLanguage: blockTranscriptLang,
         });
       }
       return;

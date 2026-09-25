@@ -19,6 +19,8 @@ export interface SemanticFilterResult {
   applied: boolean;
   comparedExisting: number;
   error?: string;
+  duplicatesExisting: number;
+  duplicatesInternal: number;
 }
 
 const DEFAULT_THRESHOLD = 0.92;
@@ -216,6 +218,8 @@ export async function filterSemanticDuplicates(
     duplicates: 0,
     applied: false,
     comparedExisting: 0,
+    duplicatesExisting: 0,
+    duplicatesInternal: 0,
   };
 
   if (!input.apiKey) return fallback;
@@ -252,6 +256,8 @@ export async function filterSemanticDuplicates(
 
   const keptVectors: number[][] = [];
   let duplicates = 0;
+  let duplicatesExisting = 0;
+  let duplicatesInternal = 0;
   let compared = 0;
 
   candidates.forEach((_card, index) => {
@@ -263,6 +269,7 @@ export async function filterSemanticDuplicates(
       if (cosineSimilarity(vector, reference) >= threshold) {
         keep[index] = false;
         duplicates += 1;
+        duplicatesExisting += 1;
         return;
       }
     }
@@ -271,6 +278,7 @@ export async function filterSemanticDuplicates(
       if (cosineSimilarity(vector, reference) >= threshold) {
         keep[index] = false;
         duplicates += 1;
+        duplicatesInternal += 1;
         return;
       }
     }
@@ -283,5 +291,7 @@ export async function filterSemanticDuplicates(
     duplicates,
     applied: compared > 0,
     comparedExisting: existingVectors.length,
+    duplicatesExisting,
+    duplicatesInternal,
   };
 }

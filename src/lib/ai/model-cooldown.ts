@@ -16,13 +16,9 @@
 export type CooldownKind = "quota-day" | "quota-minute" | "busy" | "missing";
 
 const DURATION_MS: Record<CooldownKind, number> = {
-  // A cota diária não volta hoje, mas meia hora já cobre a transcrição inteira
-  // e é curta o bastante para se recuperar sozinha se o plano mudar — ou se a
-  // classificação do erro estiver errada.
   "quota-day": 30 * 60_000,
   "quota-minute": 65_000,
-  busy: 90_000,
-  // Nome de modelo que não existe não volta a existir tão cedo.
+  busy: 30_000,
   missing: 12 * 60 * 60_000,
 };
 

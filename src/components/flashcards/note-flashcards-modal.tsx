@@ -404,6 +404,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
 
       if (pending.length > 0) {
         setProgressStatus(t("ai_progress_transcribing"));
+
         for (let index = 0; index < pending.length; index++) {
           const item = pending[index];
           const fallbackName = t(item.kind === "video" ? "media_video" : "media_audio");
@@ -420,6 +421,17 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
             mediaUrl = await resolveMediaUrl(item.url, item.storagePath);
           }
           if (!mediaUrl) continue;
+
+          const savedGlobalLang =
+            typeof window !== "undefined"
+              ? window.localStorage.getItem("synapsys_transcribe_language")
+              : null;
+          const effectiveLang =
+            item.transcriptLanguage ||
+            savedGlobalLang ||
+            language ||
+            "pt";
+
           try {
             const transcript = await transcribeAudioSource(
               mediaUrl,
@@ -429,15 +441,15 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                 const span = 30 / pending.length;
                 setProgress(Math.round(base + (percent / 100) * span));
               },
-              targetLanguage || language || "pt",
-              { reuseCache: true }
+              effectiveLang
             );
             if (transcript?.trim()) {
+              const trimmed = transcript.trim();
               const bucket =
                 item.kind === "video"
                   ? comprehensive.videoTranscripts
                   : comprehensive.audioTranscripts;
-              bucket.push({ name: item.name || fallbackName, text: transcript.trim() });
+              bucket.push({ name: item.name || fallbackName, text: trimmed });
             }
           } catch (err) {
             mediaFailures += 1;
@@ -525,17 +537,24 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
           }))
         : [];
       const skippedExisting = Number(data?.meta?.skippedExisting) || 0;
+      const requested = typeof aiCount === "number" ? aiCount : null;
+      const isExhausted =
+        data?.reason === "CONTENT_EXHAUSTED" ||
+        data?.reason === "ALL_DUPLICATES" ||
+        Boolean(data?.meta?.contentExhausted);
 
       setProgress(100);
 
       if (list.length === 0) {
-        if (data?.reason === "ALL_DUPLICATES" || skippedExisting > 0) {
-          toast.info(t("ai_all_duplicates"));
+        if (isExhausted || (noteCards.length > 0 && skippedExisting > 0)) {
+          toast.info(t("ai_content_exhausted"));
         } else {
           toast.error(t("ai_no_cards_generated"));
         }
       } else {
-        if (skippedExisting > 0) {
+        if (requested !== null && list.length < requested) {
+          toast.info(t("ai_insufficient_content_partial", { count: list.length, requested }));
+        } else if (skippedExisting > 0 && noteCards.length > 0) {
           toast.info(t("ai_duplicates_skipped", { count: skippedExisting }));
         }
         setGenerated(list);

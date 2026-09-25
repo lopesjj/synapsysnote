@@ -41,7 +41,7 @@ const transcribeLimiter = createRateLimiter({
  * o orçamento inteiro da cadeia; em 45 s sobra folga de sobra para o caminho
  * saudável e ainda dá tempo de tentar outros dois modelos.
  */
-const UPSTREAM_TIMEOUT_MS = 90_000;
+const UPSTREAM_TIMEOUT_MS = 40_000;
 const FETCH_TIMEOUT_MS = 60_000;
 
 let transcriberPromise: Promise<unknown> | null = null;
@@ -158,7 +158,7 @@ type AudioSource =
   | { kind: "file"; uri: string; fileName: string };
 
 /** Acima disto vale o custo de subir o arquivo antes em vez de embutir. */
-const FILES_API_THRESHOLD_BYTES = 6 * 1024 * 1024;
+const FILES_API_THRESHOLD_BYTES = 4 * 1024 * 1024;
 const FILES_UPLOAD_TIMEOUT_MS = 120_000;
 
 interface FilesApiUpload {
@@ -389,7 +389,7 @@ async function callGemini(
 }
 
 /** Abaixo disto não sobra tempo útil para mais uma chamada. */
-const MIN_ATTEMPT_MS = 20_000;
+const MIN_ATTEMPT_MS = 12_000;
 /** Respiro entre um 503 e a tentativa seguinte. */
 const BUSY_BACKOFF_MS = 1_500;
 
@@ -542,7 +542,7 @@ const MAX_PCM_BYTES = 8 * 1024 * 1024;
  * olhando a barra a cada trecho recusado. Este teto cabe dois ou três modelos
  * por chamada, e a rodada seguinte entra por outro ponto da lista.
  */
-const MODEL_CHAIN_DEADLINE_MS = 180_000;
+const MODEL_CHAIN_DEADLINE_MS = 140_000;
 
 /** Espera sugerida ao cliente antes de reenviar o mesmo trecho. */
 const RETRY_AFTER_SECONDS = 15;

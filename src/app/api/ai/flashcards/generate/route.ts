@@ -138,8 +138,8 @@ function buildExistingCardsBlock(cards: ExistingCard[]): string {
   return [
     "CARDS THAT ALREADY EXIST FOR THIS NOTE — NEVER REPEAT THEM",
     "The learner already owns the flashcards listed below for this exact note. Treat every one of them as ground already covered.",
-    "- Never produce a card that asks the same thing as one of them, not even reworded, split differently, translated, generalised, narrowed, or with question and answer swapped.",
-    "- Never produce a card whose answer is the same fact as the answer of one of them.",
+    "- NEVER produce a card that asks a similar question or induces almost the same or similar answer as one of them, even if rephrased, inverted, generalized, narrowed, or approached from an adjacent perspective.",
+    "- NEVER produce a card whose answer shares the same core conclusion, fact, or mechanism as any existing card.",
     "- Mine only what these cards do NOT cover yet. When a point is already covered, skip it and move on to the next uncovered point instead of paraphrasing what exists.",
     "- Producing fewer cards is correct and expected. If the material is already fully covered, return an empty \"flashcards\" array rather than inventing near-duplicates.",
     "",
@@ -209,9 +209,9 @@ HOW TO WRITE EACH CARD
 
 1. ATOMICITY (minimum information principle). One card tests exactly one fact, relation or decision. If an idea has four components, write four cards, not one card listing four items. The only exception is a short enumeration memorised as a unit with a fixed order or a mnemonic.
 
-2. FRONT. A precise, unambiguous active-recall question. Test causes, mechanisms, functions, exact definitions, contrasts between confusable terms, conditions of application, exceptions, numeric values, and applied problem solving. Forbidden: yes/no questions, true/false questions, questions containing their own answer, and vague prompts such as "what is important about X".
+2. FRONT. A precise, unambiguous active-recall question. Test causes, mechanisms, functions, exact definitions, contrasts between confusable terms, conditions of application, exceptions, numeric values, and applied problem solving. Forbidden: yes/no questions, true/false questions, questions containing their own answer, and vague prompts such as "what is important about X". Every question in the set MUST be distinct: never write two questions that sound similar or address the same premise.
 
-3. BACK. Answer first, in the opening clause, then at most one short sentence of mechanism or justification. No filler ("as we saw in the note", "it is important to remember"). Keep it under roughly 45 words unless a formula, a legal wording or a fixed list requires more.
+3. BACK. Answer first, in the opening clause, then at most one short sentence of mechanism or justification. No filler ("as we saw in the note", "it is important to remember"). Keep it under roughly 45 words unless a formula, a legal wording or a fixed list requires more. Every answer in the set MUST deliver unique information: never produce cards whose answers converge on the same fact, definition, or conclusion.
 
 4. HINT — read this rule twice; it is the one most often done badly.
 A hint is a retrieval cue: it helps someone who is stuck pull the answer out of their own memory. It is not a summary, not a definition and not a softer version of the answer.
@@ -238,11 +238,33 @@ OMITTING IS CORRECT. When no valid hint exists, leave the "hint" field out of th
 
 6. COVERAGE BY TYPE. From tables, turn each meaningful row or relation into its own card. From formulas, test both the formula and the meaning of each term. From processes, test order, trigger and outcome of each step. From classifications, test the criterion that separates the categories. From transcripts, extract the substance the speaker teaches and discard hesitations, greetings and off-topic remarks. From numbers, dates, limits and thresholds, make dedicated cards.
 
-7. NO DUPLICATES. Never write two cards answerable by the same sentence, and never restate one question in different words.
+7. STRICT DIVERSITY — NO SIMILAR QUESTIONS OR SIMILAR ANSWERS.
+- FORBIDDEN: SIMILAR QUESTIONS. You must NEVER generate two questions that tackle the same core fact, rephrase the same problem, or explore the same sentence from marginally different angles. Each question must target an entirely independent subject or phenomenon.
+- FORBIDDEN: SIMILAR OR CONVERGENT ANSWERS. You must NEVER generate questions that induce almost the same answer, similar answers, or answers that communicate the same underlying knowledge. If answering Card A already requires knowing the information that constitutes Card B's answer, Card B is strictly redundant and MUST NOT be produced.
+- FORBIDDEN: INVERTED PAIRS. Never create two cards that simply invert question and answer (e.g., asking for the term given the definition on Card 1, and asking for the definition given the term on Card 2; or asking "What does X produce?" on Card 1, and "What produces Y?" on Card 2). Choose ONLY the single most educationally effective direction and discard the other.
+- FORBIDDEN: SUB-QUESTION OVERLAP. If Card 1 tests a process or mechanism, do NOT create Card 2 testing a sub-step or detail that is already part of Card 1's answer or directly deducible from it.
+- ORTHOGONALITY RULE: Before writing any card, check every previously written card. If a human studying Card A would feel that Card B is asking virtually the same thing or testing the same memory, DELETE Card B and move to a completely untouched concept in the source material.
+- STRICT CAPACITY LIMIT: If the note has only 3 distinct, non-overlapping facts, produce ONLY 3 cards, even if the user requested more. Never generate similar questions or similar answers just to inflate the card count.
 
 8. FIDELITY. Use only information present in the material. Never invent, never extrapolate beyond what is stated, never fill gaps with general knowledge. If the material is contradictory, follow the most specific statement.
 
 WORKED EXAMPLES — these illustrate STRUCTURE ONLY and are written in English for clarity. Your own output must be entirely in ${langName}, and must never reuse this example content.
+
+Source sentence: "Mitochondria generate most of the chemical energy needed by the cell (ATP) through cellular respiration."
+REJECTED PAIR (SIMILAR QUESTIONS & CONVERGENT ANSWERS — FORBIDDEN):
+  Card 1: front "Which organelle generates ATP via cellular respiration?" / back "Mitochondria."
+  Card 2: front "What is the primary function of mitochondria in a cell?" / back "To generate ATP through cellular respiration."
+  -> Card 1 and Card 2 ask similar questions that induce almost the same answer. Keep ONLY ONE.
+ACCEPTED:
+  front "Which organelle produces the cell's ATP via cellular respiration?" / back "Mitochondria."
+
+Source sentence: "Newton's First Law states that an object remains at rest or in uniform motion unless acted upon by a net external force (the principle of inertia)."
+REJECTED PAIR (SIMILAR QUESTIONS & CONVERGENT ANSWERS — FORBIDDEN):
+  Card 1: front "What does Newton's First Law state?" / back "An object remains at rest or in uniform straight-line motion unless acted upon by a net external force."
+  Card 2: front "What is the principle of inertia?" / back "An object's tendency to maintain its state of rest or motion unless an external net force acts on it."
+  -> Both cards induce virtually the same answer and test the same concept under different titles.
+ACCEPTED:
+  front "Under what condition does an object's velocity change according to Newton's First Law?" / back "Only when acted upon by a non-zero net external force (principle of inertia)."
 
 Source sentence: "In C#, execution of an application always begins at the static void Main() method, its single entry point."
 REJECTED: front "What is the single entry point for running a C# application?" / back "The static void Main() method." / hint "The place where program execution always begins."
@@ -289,22 +311,24 @@ The written text of this note was already covered in previous passes. In this pa
         : `Cover the whole note exhaustively, from beginning to end.`;
     return `TASK — EXHAUSTIVE COVERAGE
 ${scope}
-- Produce as many cards as are needed to exhaust the teachable content: every concept, rule, definition, formula, numeric value, table relation, process step, exception and edge case becomes its own card.
-- Do not compress several facts into one card and do not skip a topic because it seems secondary.
+- Produce cards to cover each distinct teachable point in the material: every unique rule, definition, formula, numeric value, process, and exception.
+- STRICT DIVERSITY: Exhaustive coverage means covering different topics across the note, NOT generating multiple similar questions about the same topic. Never produce cards that induce similar or overlapping answers.
 - Order the cards from the most fundamental and structuring concept to the most peripheral detail.`;
   }
 
   const scope =
     segmentTotal > 1
-      ? `This is segment ${segmentIndex} of ${segmentTotal}. Produce about ${requestedCount} cards for THIS SEGMENT.`
-      : `CRITICAL: You MUST produce EXACTLY ${requestedCount} flashcards. Do not produce fewer than ${requestedCount} cards.`;
+      ? `This is segment ${segmentIndex} of ${segmentTotal}. Produce up to ${requestedCount} cards for THIS SEGMENT.`
+      : `TARGET COUNT: Up to ${requestedCount} flashcards.`;
 
   return `TASK — PRIORITY SELECTION
 ${scope}
 - Map the whole material first, then select only the highest-yield points: what a student must master to understand the subject.
 - Order them strictly from most vital to least: card 1 is the single most indispensable idea, card 2 the second, and so on.
-- Discard secondary detail rather than diluting the selection.
-- Ensure the final JSON array contains exactly ${requestedCount} items.`;
+- ABSOLUTE QUESTION & ANSWER DIVERSITY: Every card MUST test a completely distinct concept. NEVER generate questions that are similar to each other or that induce nearly the same or similar answers.
+- NO OVERLAPPING PAIRS: Avoid inversions (term -> definition vs definition -> term), rephrasings, or cards where one answer gives away or duplicates another.
+- CONTENT EXHAUSTION: If the material does not contain enough distinct concepts to reach ${requestedCount} cards without repetition or similar answers, produce ONLY the genuinely unique cards that the material supports (even if fewer than ${requestedCount}). Do NOT invent similar questions or filler to reach the target count.
+- IF FULLY COVERED: If the material has no uncoverable content or is already fully covered by existing cards, return an empty "flashcards" array: {"flashcards": []}.`;
 }
 
 async function callGemini(
@@ -680,7 +704,7 @@ async function generateFlashcards(req: NextRequest) {
     const acceptedSignatures: CardSignature[] = [];
     let lastError = "";
     let timedOut = false;
-    let skippedExisting = 0;
+    let skippedExistingLexical = 0;
 
     const pushCards = (cards: FlashcardItem[]) => {
       for (const card of cards) {
@@ -688,7 +712,7 @@ async function generateFlashcards(req: NextRequest) {
         const signature = cardSignature(card.front, card.back);
         if (!signature.front) continue;
         if (hasDuplicate(existingSignatures, signature)) {
-          skippedExisting += 1;
+          skippedExistingLexical += 1;
           continue;
         }
         if (hasDuplicate(acceptedSignatures, signature)) continue;
@@ -766,7 +790,8 @@ ${title || "(untitled)"}`;
       if (text) pushCards(parseFlashcards(text));
     }
 
-    let skippedSemantic = 0;
+    let skippedSemanticExisting = 0;
+    let skippedSemanticInternal = 0;
     let semanticApplied = false;
     let semanticError = "";
 
@@ -790,16 +815,27 @@ ${title || "(untitled)"}`;
       collected.forEach((card, index) => {
         if (semantic.keep[index]) survivors.push(card);
       });
-      skippedSemantic += collected.length - survivors.length;
+      skippedSemanticExisting += semantic.duplicatesExisting ?? 0;
+      skippedSemanticInternal += semantic.duplicatesInternal ?? 0;
       collected.length = 0;
       collected.push(...survivors);
     };
 
     await runSemanticPass();
 
+    const firstPassSingleSegmentExhausted =
+      effectiveSegments.length === 1 &&
+      collected.length > 0 &&
+      requestedCount !== null &&
+      collected.length < requestedCount &&
+      skippedExistingLexical === 0 &&
+      skippedSemanticExisting === 0 &&
+      skippedSemanticInternal === 0;
+
     if (
       requestedCount !== null &&
       collected.length < requestedCount &&
+      !firstPassSingleSegmentExhausted &&
       !timedOut &&
       Date.now() - startedAt <= TIME_BUDGET_MS
     ) {
@@ -807,9 +843,16 @@ ${title || "(untitled)"}`;
       const backfillPrompt = `${systemPrompt}
 
 TASK — ADDITIONAL CARDS
-You previously produced ${collected.length} flashcards, but the user requested ${requestedCount}.
-Generate ${remainingNeeded} MORE unique, high-yield flashcards from the material that do NOT duplicate any of the following questions:
+You previously produced ${collected.length} flashcards, towards a requested target of ${requestedCount}.
+If the material contains further distinct, high-yield teachable concepts that have NOT yet been covered, generate up to ${remainingNeeded} MORE unique flashcards.
+CRITICAL RULES FOR THIS PASS:
+- Do NOT produce questions similar to, rephrasing, or overlapping with any of the following already-covered questions:
 ${collected.map((c, i) => `${i + 1}. ${c.front}`).join("\n")}
+- Do NOT produce questions that elicit the same or similar answers to those already produced above.
+- Do NOT duplicate or overlap with any concept in the existing cards list.
+- Every new card must test an entirely separate, untouched fact or mechanism.
+- If all teachable concepts in the source material have already been exhausted, return an empty "flashcards" array: {"flashcards": []}.
+- Never invent redundant questions or questions with similar answers just to reach the requested count.
 
 RESPONSE FORMAT
 Return only a JSON object shaped as {"flashcards":[{"front":"...","back":"...","hint":"..."}]}. No prose, no markdown fences, nothing outside the JSON.
@@ -825,24 +868,29 @@ ${effectiveSegments[0] || consolidated}`;
       }
     }
 
-    const skippedDuplicates = skippedExisting + skippedSemantic;
+    const totalSkippedExisting =
+      existingCards.length > 0 ? skippedExistingLexical + skippedSemanticExisting : 0;
 
     if (collected.length === 0) {
-      if (skippedDuplicates > 0) {
+      const isExhausted = existingCards.length > 0 && (totalSkippedExisting > 0 || requestedCount !== null);
+      if (isExhausted || totalSkippedExisting > 0) {
         return NextResponse.json({
           flashcards: [],
-          reason: "ALL_DUPLICATES",
+          reason: "CONTENT_EXHAUSTED",
           meta: {
             segments: effectiveSegments.length,
             attachmentPass: runAttachmentPass,
             inlineImages: inlineImageCount,
             inlinePdfs: inlinePdfCount,
             generated: 0,
+            requested: requestedCount,
             partial: timedOut,
             existingConsidered: existingCards.length,
-            skippedExisting: skippedDuplicates,
-            skippedLexical: skippedExisting,
-            skippedSemantic,
+            skippedExisting: totalSkippedExisting,
+            skippedLexical: skippedExistingLexical,
+            skippedSemantic: skippedSemanticExisting,
+            skippedInternal: skippedSemanticInternal,
+            contentExhausted: true,
             semanticApplied,
             ...(semanticError ? { semanticError } : {}),
           },
@@ -867,12 +915,15 @@ ${effectiveSegments[0] || consolidated}`;
         attachmentPass: runAttachmentPass,
         inlineImages: inlineImageCount,
         inlinePdfs: inlinePdfCount,
-        generated: collected.length,
+        generated: flashcards.length,
+        requested: requestedCount,
+        insufficientContent: requestedCount !== null && flashcards.length < requestedCount,
         partial: timedOut,
         existingConsidered: existingCards.length,
-        skippedExisting: skippedDuplicates,
-        skippedLexical: skippedExisting,
-        skippedSemantic,
+        skippedExisting: totalSkippedExisting,
+        skippedLexical: skippedExistingLexical,
+        skippedSemantic: skippedSemanticExisting,
+        skippedInternal: skippedSemanticInternal,
         semanticApplied,
         ...(semanticError ? { semanticError } : {}),
       },

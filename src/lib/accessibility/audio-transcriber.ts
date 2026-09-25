@@ -415,6 +415,9 @@ async function transcribeWholeSpeech(
   }, 1500);
 
   try {
+    const first = await postAudioFile(speech, lang);
+    if (first.text || first.fatalQuota || !first.busy) return first;
+    await delay(Math.max(2500, first.retryAfterMs ?? 0));
     return await postAudioFile(speech, lang);
   } finally {
     clearInterval(timer);

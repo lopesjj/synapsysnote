@@ -958,6 +958,8 @@ export type TranslationKey =
   | "ai_no_cards_generated"
   | "ai_duplicates_skipped"
   | "ai_all_duplicates"
+  | "ai_content_exhausted"
+  | "ai_insufficient_content_partial"
   | "ai_avoid_duplicates_notice"
   | "ai_no_content_for_cards"
   | "ai_no_content_after_media_error"
@@ -1410,6 +1412,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     ai_no_cards_generated: "A IA não conseguiu gerar cards com este conteúdo",
     ai_duplicates_skipped: "{count} {count|card duplicado descartado|cards duplicados descartados}",
     ai_all_duplicates: "Todos os cards gerados já existem nesta nota.",
+    ai_content_exhausted: "Todo o conteúdo desta nota já foi coberto pelos flashcards existentes. Não há novos tópicos disponíveis para geração.",
+    ai_insufficient_content_partial: "Foram gerados {count} {count|flashcard|flashcards}. O conteúdo disponível na nota foi insuficiente para atingir a meta de {requested} cards sem repetição de conceitos.",
     ai_avoid_duplicates_notice: "A IA vai analisar {count} {count|card já existente|cards já existentes} nesta nota e gerar apenas conteúdo novo.",
     ai_no_content_for_cards: "Esta nota não tem conteúdo para gerar flashcards",
     ai_no_content_after_media_error: "Sem a transcrição da mídia, esta nota fica sem conteúdo para gerar flashcards. Tente de novo em alguns minutos.",
@@ -2625,6 +2629,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     ai_no_cards_generated: "The AI could not generate cards from this content",
     ai_duplicates_skipped: "{count} duplicate {count|card|cards} discarded",
     ai_all_duplicates: "Every generated card already exists in this note.",
+    ai_content_exhausted: "All content in this note is already covered by existing flashcards. There are no new topics available to generate.",
+    ai_insufficient_content_partial: "{count} {count|flashcard was|flashcards were} generated. The available content in this note was insufficient to reach the target of {requested} cards without repeating concepts.",
     ai_avoid_duplicates_notice: "The AI will review {count} {count|card|cards} already in this note and generate only new content.",
     ai_no_content_for_cards: "This note has no content to generate flashcards from",
     ai_no_content_after_media_error: "Without the media transcript, this note has no content to generate flashcards from. Try again in a few minutes.",
@@ -3841,6 +3847,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     ai_no_cards_generated: "La IA no pudo generar tarjetas con este contenido",
     ai_duplicates_skipped: "{count} {count|tarjeta duplicada descartada|tarjetas duplicadas descartadas}",
     ai_all_duplicates: "Todas las tarjetas generadas ya existen en esta nota.",
+    ai_content_exhausted: "Todo el contenido de esta nota ya está cubierto por las tarjetas existentes. No hay nuevos temas disponibles para generar.",
+    ai_insufficient_content_partial: "Se {count|generó|generaron} {count} {count|tarjeta|tarjetas}. El contenido disponible en la nota fue insuficiente para alcanzar la meta de {requested} tarjetas sin repetir conceptos.",
     ai_avoid_duplicates_notice: "La IA analizará {count} {count|tarjeta ya existente|tarjetas ya existentes} en esta nota y generará solo contenido nuevo.",
     ai_no_content_for_cards: "Esta nota no tiene contenido para generar tarjetas",
     ai_no_content_after_media_error: "Sin la transcripción del archivo, esta nota se queda sin contenido para generar tarjetas. Inténtalo de nuevo en unos minutos.",
@@ -5057,6 +5065,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     ai_no_cards_generated: "L'IA n'a pas pu générer de cartes à partir de ce contenu",
     ai_duplicates_skipped: "{count} {count|carte en double ignorée|cartes en double ignorées}",
     ai_all_duplicates: "Toutes les cartes générées existent déjà dans cette note.",
+    ai_content_exhausted: "Tout le contenu de cette note est déjà couvert par les cartes existantes. Aucun nouveau sujet n'est disponible pour la génération.",
+    ai_insufficient_content_partial: "{count} {count|carte a été générée|cartes ont été générées}. Le contenu disponible dans la note était insuffisant pour atteindre l'objectif de {requested} cartes sans répéter de concepts.",
     ai_avoid_duplicates_notice: "L'IA analysera {count} {count|carte déjà présente|cartes déjà présentes} dans cette note et ne générera que du contenu nouveau.",
     ai_no_content_for_cards: "Cette note n'a aucun contenu pour générer des flashcards",
     ai_no_content_after_media_error: "Sans la transcription du média, cette note n'a aucun contenu pour générer des flashcards. Réessayez dans quelques minutes.",
@@ -6273,6 +6283,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     ai_no_cards_generated: "L'IA non è riuscita a generare schede da questo contenuto",
     ai_duplicates_skipped: "{count} {count|scheda duplicata scartata|schede duplicate scartate}",
     ai_all_duplicates: "Tutte le schede generate esistono già in questa nota.",
+    ai_content_exhausted: "Tutto il contenuto di questa nota è già coperto dalle schede esistenti. Non ci sono nuovi argomenti disponibili da generare.",
+    ai_insufficient_content_partial: "{count|È stata generata|Sono state generate} {count} {count|scheda|schede}. Il contenuto disponibile nella nota è risultato insufficiente per raggiungere l'obiettivo di {requested} schede senza ripetere concetti.",
     ai_avoid_duplicates_notice: "L'IA analizzerà {count} {count|scheda già presente|schede già presenti} in questa nota e genererà solo contenuti nuovi.",
     ai_no_content_for_cards: "Questa nota non ha contenuti per generare flashcard",
     ai_no_content_after_media_error: "Senza la trascrizione del file, questa nota resta senza contenuti per generare flashcard. Riprova tra qualche minuto.",
@@ -7489,6 +7501,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     ai_no_cards_generated: "Die KI konnte aus diesem Inhalt keine Karten erzeugen",
     ai_duplicates_skipped: "{count} doppelte {count|Karte|Karten} verworfen",
     ai_all_duplicates: "Alle erzeugten Karten sind in dieser Notiz bereits vorhanden.",
+    ai_content_exhausted: "Der gesamte Inhalt dieser Notiz ist bereits durch vorhandene Lernkarten abgedeckt. Es sind keine neuen Themen verfügbar.",
+    ai_insufficient_content_partial: "Es {count|wurde|wurden} {count} {count|Karte|Karten} generiert. Der verfügbare Inhalt der Notiz reichte nicht aus, um das Ziel von {requested} Karten ohne Konzeptwiederholungen zu erreichen.",
     ai_avoid_duplicates_notice: "Die KI prüft {count} bereits {count|vorhandene Karte|vorhandene Karten} in dieser Notiz und erzeugt nur neue Inhalte.",
     ai_no_content_for_cards: "Diese Notiz enthält keine Inhalte für Lernkarten",
     ai_no_content_after_media_error: "Ohne die Transkription der Medien bleibt in dieser Notiz kein Inhalt für Lernkarten. Versuchen Sie es in ein paar Minuten erneut.",
@@ -8713,6 +8727,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     ai_no_cards_generated: "ИИ не смог создать карточки из этого содержимого",
     ai_duplicates_skipped: "Отброшено дубликатов: {count}",
     ai_all_duplicates: "Все созданные карточки уже есть в этой заметке.",
+    ai_content_exhausted: "Все материалы этой заметки уже охвачены существующими карточками. Нет новых тем для создания.",
+    ai_insufficient_content_partial: "Создано карточек: {count}. Доступного материала в заметке оказалось недостаточно для достижения цели в {requested} карточек без повторения понятий.",
     ai_avoid_duplicates_notice: "ИИ проанализирует {count} {count|карточку|карточки|карточек} этой заметки и создаст только новый материал.",
     ai_no_content_for_cards: "В этой заметке нет содержимого для создания карточек",
     ai_no_content_after_media_error: "Без расшифровки медиафайла в заметке не остаётся содержимого для карточек. Попробуйте снова через несколько минут.",
@@ -9929,6 +9945,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     ai_no_cards_generated: "この内容からカードを生成できませんでした",
     ai_duplicates_skipped: "重複した {count} 枚のカードを除外しました",
     ai_all_duplicates: "生成されたカードはすべて、このノートに既に存在します。",
+    ai_content_exhausted: "このノートの内容はすべて既存のフラッシュカードで網羅されています。新しく生成できるトピックはありません。",
+    ai_insufficient_content_partial: "{count} 枚のカードを生成しました。概念の重複を避けた結果、ノートの利用可能な内容では目標の {requested} 枚に届きませんでした。",
     ai_avoid_duplicates_notice: "AI はこのノートにある {count} 枚のカードを分析し、新しい内容だけを生成します。",
     ai_no_content_for_cards: "このノートにはフラッシュカードを作成できる内容がありません",
     ai_no_content_after_media_error: "メディアの文字起こしがないと、このノートにはカードを作成できる内容が残りません。数分後にもう一度お試しください。",
@@ -11145,6 +11163,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     ai_no_cards_generated: "AI 无法根据此内容生成卡片",
     ai_duplicates_skipped: "已排除 {count} 张重复卡片",
     ai_all_duplicates: "生成的卡片在这条笔记中都已存在。",
+    ai_content_exhausted: "此笔记的所有内容已被现有的闪卡覆盖。没有可供生成的新主题。",
+    ai_insufficient_content_partial: "已生成 {count} 张卡片。在不重复概念的前提下，笔记中的可用内容不足以达到 {requested} 张卡片的目标。",
     ai_avoid_duplicates_notice: "AI 会分析这条笔记中已有的 {count} 张卡片，只生成新内容。",
     ai_no_content_for_cards: "这条笔记没有可用于生成记忆卡片的内容",
     ai_no_content_after_media_error: "没有媒体转写，这条笔记就没有可用于生成卡片的内容。请过几分钟再试。",
@@ -12280,6 +12300,8 @@ TRANSLATIONS.ar = {
     ai_no_cards_generated: "تعذّر على الذكاء الاصطناعي إنشاء بطاقات من هذا المحتوى",
     ai_duplicates_skipped: "تم تجاهل {count} بطاقة مكررة",
     ai_all_duplicates: "كل البطاقات المولَّدة موجودة بالفعل في هذه الملاحظة.",
+    ai_content_exhausted: "تمت تغطية جميع محتويات هذه الملاحظة بالفعل بالبطاقات التعليمية الحالية. لا توجد مواضيع جديدة متاحة للإنشاء.",
+    ai_insufficient_content_partial: "تم إنشاء {count} {count|بطاقة|بطاقات}. كان المحتوى المتاح في الملاحظة غير كافٍ للوصول إلى الهدف المطلوب وهو {requested} بطاقة دون تكرار المفاهيم.",
     ai_avoid_duplicates_notice: "سيحلّل الذكاء الاصطناعي البطاقات الموجودة في هذه الملاحظة ({count}) وينشئ محتوى جديدًا فقط.",
     ai_no_content_for_cards: "لا تحتوي هذه الملاحظة على محتوى لإنشاء البطاقات",
     ai_no_content_after_media_error: "بدون تفريغ الوسائط، لا يتبقى في هذه الملاحظة محتوى لإنشاء البطاقات. حاول مرة أخرى بعد بضع دقائق.",
