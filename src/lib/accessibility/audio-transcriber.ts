@@ -433,12 +433,15 @@ async function tryWhisperLocalTranscription(
  */
 const SEGMENT_RETRY_BACKOFF_MS = 8_000;
 /**
- * Teto do tempo gasto em trechos recusados. Cada recusa custa até ~2 min, e uma
- * aula tem vários trechos: sem esse limite, um serviço fora do ar deixaria a
- * barra girando por meia hora antes de admitir a falha. O que já foi
- * transcrito até aqui é aproveitado.
+ * Tempo de relógio sem NENHUM trecho novo transcrito antes de desistir. Cada
+ * trecho que volta renova o prazo: com o Gemini em "high demand" a aula anda
+ * devagar mas anda, e desistir no meio jogaria fora o que ainda viria.
+ *
+ * Já foi a SOMA do tempo gasto em recusas — com quatro trechos em paralelo,
+ * uma única rodada congestionada (4 × 2 min) estourava o teto e abandonava a
+ * aula inteira na primeira tentativa.
  */
-const BUSY_TIME_BUDGET_MS = 5 * 60_000;
+const BUSY_TIME_BUDGET_MS = 8 * 60_000;
 /** Marca o trecho que ficou sem transcrição, em vez de emendar o buraco calado. */
 const GAP_MARKER = "[…]";
 
@@ -498,7 +501,7 @@ function contiguousPrefix(texts: (string | null | undefined)[], settled: boolean
 export interface SegmentRunTuning {
   /** Espera antes de reenviar um trecho recusado. */
   retryBackoffMs?: number;
-  /** Teto do tempo gasto em trechos recusados antes de desistir. */
+  /** Tempo de relógio sem trecho novo transcrito antes de desistir. */
   busyBudgetMs?: number;
   /** Trechos em voo ao mesmo tempo (o teto global da aba vale por cima). */
   concurrency?: number;
@@ -570,10 +573,10 @@ export async function transcribeInSegments(
     onProgress?.(soFar, Math.min(99, percent), initial);
   };
 
-  // Tempo queimado em trechos recusados. É o que decide quando parar: antes,
-  // bastava o primeiro trecho voltar ocupado para o vídeo inteiro ser
-  // abandonado, e uma aula de 50 min ficava sem uma linha de transcrição.
-  let busySpentMs = 0;
+  // Última vez que um trecho voltou com texto. É o que decide quando parar:
+  // enquanto a aula anda, vale insistir; parada há minutos, é serviço fora.
+  let lastProgressAt = Date.now();
+  const stalled = () => Date.now() - lastProgressAt >= busyBudgetMs;
 
   const loadSegment = async (index: number): Promise<Blob | null> => {
     const cached = loaded.get(index);
@@ -591,7 +594,6 @@ export async function transcribeInSegments(
   };
 
   const runOne = async (index: number, allowRetry: boolean) => {
-    const startedAt = Date.now();
     const blob = await loadSegment(index);
     if (!blob) {
       lastReason = "FAILED";
@@ -600,7 +602,7 @@ export async function transcribeInSegments(
     const attempt = await postSegmentWithRetry(
       blob,
       lang,
-      allowRetry && busySpentMs < busyBudgetMs,
+      allowRetry && !stalled(),
       retryBackoffMs,
       source.seconds?.(index)
     );
@@ -608,6 +610,7 @@ export async function transcribeInSegments(
 
     if (attempt.text) {
       texts[index] = attempt.text;
+      lastProgressAt = Date.now();
     } else if (attempt.fatalQuota) {
       // A cota do dia acabou: os trechos seguintes receberiam o mesmo 429.
       quotaExhausted = true;
@@ -615,8 +618,7 @@ export async function transcribeInSegments(
     } else if (attempt.busy) {
       busy = true;
       if (!busySegments.includes(index)) busySegments.push(index);
-      busySpentMs += Date.now() - startedAt;
-      if (busySpentMs >= busyBudgetMs) {
+      if (stalled()) {
         console.warn("[transcribe] tempo gasto em recusas estourou o teto; interrompendo");
         stop = true;
       }
@@ -641,7 +643,9 @@ export async function transcribeInSegments(
   // Segunda passada só nos buracos: o congestionamento que derrubou um trecho no
   // meio do caminho costuma ter passado quando o resto termina.
   const retryable = busySegments.filter((index) => !texts[index]).sort((a, b) => a - b);
-  if (!quotaExhausted && retryable.length > 0 && texts.some(Boolean) && busySpentMs < busyBudgetMs) {
+  if (!quotaExhausted && retryable.length > 0 && !stalled()) {
+    // Um respiro antes: o servidor acabou de dizer que a fila está cheia.
+    await delay(retryBackoffMs);
     stop = false;
     let cursor = 0;
     const retryWorker = async () => {

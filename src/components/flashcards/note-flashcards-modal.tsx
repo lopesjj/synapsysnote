@@ -497,9 +497,23 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
         comprehensive.pdfDocuments.some((doc) => Boolean(doc.base64) || Boolean(doc.text?.trim())) ||
         comprehensive.images.some((img) => Boolean(img.base64) || Boolean(img.caption?.trim()));
 
+      // A mídia era o conteúdo da nota e não veio: umas poucas palavras soltas
+      // não sustentam cards, e gerar mesmo assim entregava cards sobre o
+      // título em vez de sobre a aula.
+      const onlyThinText =
+        comprehensive.textContent.trim().length + comprehensive.ocrText.trim().length < 400 &&
+        comprehensive.tablesContent.length === 0 &&
+        comprehensive.pdfTexts.length === 0 &&
+        !comprehensive.pdfDocuments.some((doc) => Boolean(doc.base64) || Boolean(doc.text?.trim())) &&
+        !comprehensive.images.some((img) => Boolean(img.base64) || Boolean(img.caption?.trim()));
+      const mediaMissing =
+        mediaFailures > 0 &&
+        comprehensive.audioTranscripts.length === 0 &&
+        comprehensive.videoTranscripts.length === 0;
+
       // Com o vídeo sem transcrever e nada mais na nota, o modelo recebia só o
       // título e devolvia cards sobre as próprias instruções do prompt.
-      if (!hasStudyMaterial) {
+      if (!hasStudyMaterial || (mediaMissing && onlyThinText)) {
         toast.error(
           t(mediaFailures > 0 ? "ai_no_content_after_media_error" : "ai_no_content_for_cards")
         );

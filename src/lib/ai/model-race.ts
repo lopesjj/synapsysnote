@@ -80,7 +80,9 @@ export function raceModels(
     let finished = false;
     let launched = 0;
     let lastReason: RaceReason = "NOT_CONFIGURED";
-    let quotaScope: "day" | "minute" | undefined;
+    let busyFailures = 0;
+    let minuteQuotaFailures = 0;
+    let dayQuotaFailures = 0;
     /** Veredito sobre o arquivo (sem fala, recusa) que vale mais que um 503 tardio. */
     let verdict: RaceResult | null = null;
 
@@ -103,7 +105,24 @@ export function raceModels(
         finish({ ...verdict, launched });
         return;
       }
-      finish({ text: "", reason: quotaScope ? "QUOTA" : lastReason, quotaScope, launched });
+      // Cota só é a resposta quando TODOS recusaram por cota. Um modelo sem cota
+      // do dia no meio de outros apenas congestionados virava "cota do dia
+      // esgotada" — e o navegador, que trata isso como definitivo, abandonava
+      // a aula inteira quando bastava esperar o congestionamento passar.
+      if (busyFailures > 0) {
+        finish({ text: "", reason: "SERVICE_BUSY", launched });
+        return;
+      }
+      if (minuteQuotaFailures + dayQuotaFailures > 0) {
+        finish({
+          text: "",
+          reason: "QUOTA",
+          quotaScope: minuteQuotaFailures > 0 ? "minute" : "day",
+          launched,
+        });
+        return;
+      }
+      finish({ text: "", reason: lastReason, launched });
     };
 
     /** Abre a próxima chamada possível. Devolve se abriu. */
@@ -144,12 +163,10 @@ export function raceModels(
             return;
           }
           lastReason = result.reason;
-          if (result.reason === "QUOTA") {
-            // A do dia manda: se um modelo esgotou o dia, a mensagem não pode
-            // ser "espere um minuto".
-            if (result.quotaScope === "day" || !quotaScope) {
-              quotaScope = result.quotaScope === "day" ? "day" : "minute";
-            }
+          if (result.reason === "SERVICE_BUSY") busyFailures += 1;
+          else if (result.reason === "QUOTA") {
+            if (result.quotaScope === "day") dayQuotaFailures += 1;
+            else minuteQuotaFailures += 1;
           }
           if (!isModelLevelFailure(result.reason)) {
             // Sem fala, bloqueio ou arquivo recusado: se repetiria igual nos
@@ -175,10 +192,12 @@ export function raceModels(
 
 /**
  * Tempos da corrida em função da duração do áudio. Um trecho de 3 min
- * transcreve em 5-15 s no modelo saudável; o reforço entra perto dos 20 s e a
- * chamada desiste perto dos 50 s. Um arquivo de uma hora inteira precisa de
- * minutos só para o texto sair — com o teto fixo de 40 s de antes ele nunca
- * cabia, e cada tentativa jogava fora o trabalho do modelo.
+ * transcreve em 5-15 s no modelo saudável; o reforço entra perto dos 20 s.
+ *
+ * O teto da chamada é generoso de propósito: com o Gemini em "high demand" o
+ * lite ainda responde, mas em ~70 s (medido), e cortá-lo aos 47 s jogava fora
+ * justamente a chamada que ia dar certo. Quem cobre a lentidão é o reforço em
+ * paralelo, não o corte.
  */
 export function raceTimingFor(audioSeconds: number): {
   hedgeDelayMs: number;
@@ -187,6 +206,6 @@ export function raceTimingFor(audioSeconds: number): {
   const seconds = Number.isFinite(audioSeconds) && audioSeconds > 0 ? audioSeconds : 180;
   return {
     hedgeDelayMs: Math.round(Math.min(60_000, Math.max(12_000, 8_000 + seconds * 60))),
-    callTimeoutMs: Math.round(Math.min(230_000, Math.max(40_000, 20_000 + seconds * 150))),
+    callTimeoutMs: Math.round(Math.min(230_000, Math.max(90_000, 60_000 + seconds * 500))),
   };
 }

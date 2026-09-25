@@ -13,6 +13,7 @@ import {
   noteModelRefused,
   noteModelWorked,
   orderByAvailability,
+  orderForRace,
   parseRetryDelay,
   resetModelCooldowns,
   restingKindOf,
@@ -105,6 +106,30 @@ assert.equal(DEFAULT_TRANSCRIBE_MODEL, "gemini-3.5-transcribe");
   const restante = orderByAvailability(lista, now);
   assert.equal(restante.length, 1);
   assert.equal(restante[0], lista[0]);
+  resetModelCooldowns();
+}
+
+{
+  // Na corrida, congestionado vai para o fim em vez de sair: com trechos em
+  // paralelo, um 503 momentâneo encolhia a cadeia de todos os outros pedidos.
+  resetModelCooldowns();
+  const now = 3_000_000;
+  const lista = transcribeModelChain();
+  noteModelRefused(lista[0], "busy", undefined, now);
+  noteModelRefused(lista[1], "quota-day", undefined, now);
+  noteModelRefused(lista[2], "missing", undefined, now);
+  noteModelRefused(lista[3], "quota-minute", undefined, now);
+  const ordem = orderForRace(lista, now);
+  assert.ok(!ordem.includes(lista[1]));
+  assert.ok(!ordem.includes(lista[2]));
+  assert.equal(ordem[0], lista[4]);
+  // Os dois de molho curto ficam no fim, quem acorda antes primeiro.
+  assert.deepEqual(ordem.slice(-2), [lista[0], lista[3]]);
+  assert.equal(ordem.length, lista.length - 2);
+
+  // Todos sem cota do dia: ainda sobra uma tentativa.
+  lista.forEach((model) => noteModelRefused(model, "quota-day", undefined, now));
+  assert.equal(orderForRace(lista, now).length, 1);
   resetModelCooldowns();
 }
 
@@ -377,6 +402,39 @@ const fast = { retryBackoffMs: 1, busyBudgetMs: 60_000, concurrency: 1 };
   assert.deepEqual([...lazyCalls].sort(), [0, 1, 2, 3]);
 }
 
+// 9. Rodada congestionada com trechos em paralelo: o prazo é de relógio, não a
+//    soma das recusas. Quatro trechos recusados ao mesmo tempo gastam o tempo
+//    de UM, e antes isso somava 4× e abandonava a aula na primeira rodada.
+{
+  const four = Array.from({ length: 4 }, (_, i) => new Blob([`C${i}`]));
+  const calls = installFetch(
+    (segment, call) => (call === 1 ? { status: 503 } : { status: 200, transcript: segment }),
+    30
+  );
+  const result = await transcribeInSegments(four, "pt", undefined, {
+    retryBackoffMs: 1,
+    busyBudgetMs: 80,
+    concurrency: 4,
+  });
+  assert.equal(result.text, "C0 C1 C2 C3");
+  assert.equal(result.missing, 0);
+  assert.equal(calls.length, 8);
+}
+
+// 10. Nada voltou na primeira rodada, mas o prazo não venceu: a segunda
+//     passada ainda tenta (antes exigia algum trecho já transcrito).
+{
+  installFetch((segment, call) =>
+    call <= 2 ? { status: 503 } : { status: 200, transcript: segment }
+  );
+  const result = await transcribeInSegments([new Blob(["Z1"])], "pt", undefined, {
+    retryBackoffMs: 1,
+    busyBudgetMs: 60_000,
+    concurrency: 1,
+  });
+  assert.equal(result.text, "Z1");
+}
+
 globalThis.fetch = realFetch;
 
 // --- cortes nas pausas de fala -------------------------------------------
@@ -510,20 +568,41 @@ function fakeModel(plan: Record<string, { ms: number; result: RaceResult }>) {
   assert.deepEqual(fake.started, ["a"]);
 }
 
-// 4. Todos esgotados no dia: a resposta diz cota do DIA.
+// 4. Cota: só é "do dia" quando TODOS esgotaram o dia. Um que volta em um
+//    minuto faz a resposta ser "espere um minuto".
 {
-  const fake = fakeModel({
+  const raceOf = (plan: Record<string, { ms: number; result: RaceResult }>) =>
+    raceModels(Object.keys(plan), fakeModel(plan).run, {
+      hedgeDelayMs: 5_000,
+      callTimeoutMs: 10_000,
+      deadline: Date.now() + 10_000,
+      minAttemptMs: 1,
+    });
+
+  const allDay = await raceOf({
+    a: { ms: 1, result: { text: "", reason: "QUOTA", quotaScope: "day" } },
+    b: { ms: 1, result: { text: "", reason: "QUOTA", quotaScope: "day" } },
+  });
+  assert.equal(allDay.reason, "QUOTA");
+  assert.equal(allDay.quotaScope, "day");
+
+  const mixed = await raceOf({
     a: { ms: 1, result: { text: "", reason: "QUOTA", quotaScope: "minute" } },
     b: { ms: 1, result: { text: "", reason: "QUOTA", quotaScope: "day" } },
   });
-  const outcome = await raceModels(["a", "b"], fake.run, {
-    hedgeDelayMs: 5_000,
-    callTimeoutMs: 10_000,
-    deadline: Date.now() + 10_000,
-    minAttemptMs: 1,
+  assert.equal(mixed.reason, "QUOTA");
+  assert.equal(mixed.quotaScope, "minute");
+
+  // O defeito dos logs: o 3.8-flash sem cota do DIA no meio de modelos só
+  // congestionados virava 429 "cota do dia", e o navegador abandonava a aula
+  // inteira. Congestionamento passa — a resposta tem de ser "ocupado".
+  const busyAndDay = await raceOf({
+    transcribe: { ms: 1, result: { text: "", reason: "SERVICE_BUSY" } },
+    "flash-3.8": { ms: 1, result: { text: "", reason: "QUOTA", quotaScope: "day" } },
+    lite: { ms: 1, result: { text: "", reason: "SERVICE_BUSY" } },
   });
-  assert.equal(outcome.reason, "QUOTA");
-  assert.equal(outcome.quotaScope, "day");
+  assert.equal(busyAndDay.reason, "SERVICE_BUSY");
+  assert.equal(busyAndDay.quotaScope, undefined);
 }
 
 // 5. Nunca mais que duas chamadas em voo, e nunca o mesmo modelo duas vezes
@@ -555,7 +634,9 @@ function fakeModel(plan: Record<string, { ms: number; result: RaceResult }>) {
 {
   const segment = raceTimingFor(180);
   assert.ok(segment.hedgeDelayMs >= 15_000 && segment.hedgeDelayMs <= 25_000);
-  assert.ok(segment.callTimeoutMs >= 40_000 && segment.callTimeoutMs <= 60_000);
+  // O lite congestionado ainda responde em ~70 s: cortar antes disso jogava
+  // fora a chamada que ia dar certo.
+  assert.ok(segment.callTimeoutMs >= 120_000 && segment.callTimeoutMs <= 180_000);
   assert.ok(raceTimingFor(3600).callTimeoutMs >= 200_000);
 }
 

@@ -72,6 +72,30 @@ export function orderByAvailability(chain: string[], now: number = Date.now()): 
   return soonest.slice(0, 1);
 }
 
+/**
+ * Ordem para a corrida escalonada da transcrição. Só sai da lista quem não
+ * vai responder mesmo: cota do DIA esgotada ou modelo inexistente. Congestionado
+ * (503) e cota do minuto vão para o fim, em ordem de quem acorda primeiro.
+ *
+ * Com trechos em paralelo, excluir o congestionado fazia um trecho castigar os
+ * outros: um 503 momentâneo tirava o modelo da lista de todos os pedidos
+ * seguintes, e a cadeia encolhia para um ou dois modelos justo quando mais
+ * precisava de opção. Na corrida, tentar um modelo lento custa só o tempo até
+ * o reforço entrar.
+ */
+export function orderForRace(chain: string[], now: number = Date.now()): string[] {
+  const ready: string[] = [];
+  const later: string[] = [];
+  for (const model of chain) {
+    const entry = cooldowns.get(model);
+    if (!entry || entry.until <= now) ready.push(model);
+    else if (entry.kind === "busy" || entry.kind === "quota-minute") later.push(model);
+  }
+  later.sort((a, b) => restingForMs(a, now) - restingForMs(b, now));
+  const ordered = [...ready, ...later];
+  return ordered.length > 0 ? ordered : orderByAvailability(chain, now);
+}
+
 /** Motivo do descanso mais grave em vigor, para explicar a recusa a quem chamou. */
 export function restingKindOf(chain: string[], now: number = Date.now()): CooldownKind | null {
   const kinds = chain

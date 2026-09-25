@@ -11,7 +11,7 @@ import {
   isModelResting,
   noteModelRefused,
   noteModelWorked,
-  orderByAvailability,
+  orderForRace,
   parseRetryDelay,
   restingKindOf,
 } from "@/lib/ai/model-cooldown";
@@ -433,12 +433,13 @@ async function transcribeWithGemini(
   // `GEMINI_MODEL` vale para os textos; áudio tem disponibilidade própria e
   // escolha própria, senão um modelo sem cota de áudio trava a transcrição.
   const fullChain = transcribeModelChain(process.env.GEMINI_TRANSCRIBE_MODEL);
-  // Modelo que recusou há pouco sai da frente: numa aula de 20 trechos, sem
-  // isto cada trecho recomeçava pelo mesmo esgotado.
-  const chain = orderByAvailability(fullChain);
+  // Sem cota do dia ou inexistente sai da lista; congestionado vai para o fim
+  // (ver `orderForRace`). Numa aula de 20 trechos, sem isto cada trecho
+  // recomeçava pelo mesmo esgotado.
+  const chain = orderForRace(fullChain);
   if (chain.length < fullChain.length) {
     console.warn(
-      `[transcribe] ${fullChain.length - chain.length} modelo(s) em descanso; tentando ${chain.join(", ")}`
+      `[transcribe] ${fullChain.length - chain.length} modelo(s) sem cota ou indisponíveis; tentando ${chain.join(", ")}`
     );
   }
   // Congestionamento é passageiro. Varrida a lista, voltar ao começo aproveita o
@@ -467,7 +468,9 @@ async function transcribeWithGemini(
       {
         ...timing,
         deadline,
-        maxInFlight: 2,
+        // Com o teto longo, duas chamadas lentas ocupariam as duas vagas e
+        // nenhum reforço entraria; a terceira mantém a corrida viva.
+        maxInFlight: 3,
         minAttemptMs: MIN_ATTEMPT_MS,
       },
       (model, result) => {
@@ -525,7 +528,7 @@ const MAX_PCM_BYTES = 8 * 1024 * 1024;
  * que o teto da própria chamada caiba, com folga para a tradução — sem passar
  * do `maxDuration` da rota.
  */
-const MODEL_CHAIN_DEADLINE_MS = 140_000;
+const MODEL_CHAIN_DEADLINE_MS = 200_000;
 const MAX_CHAIN_DEADLINE_MS = 250_000;
 
 /**

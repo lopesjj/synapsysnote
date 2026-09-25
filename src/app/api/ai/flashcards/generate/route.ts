@@ -331,6 +331,9 @@ ${scope}
 - IF FULLY COVERED: If the material has no uncoverable content or is already fully covered by existing cards, return an empty "flashcards" array: {"flashcards": []}.`;
 }
 
+/** Espera antes de cada rodada pela lista de modelos (a primeira é imediata). */
+const GENERATE_ROUND_DELAYS_MS = [0, 4_000, 12_000];
+
 async function callGemini(
   apiKey: string,
   models: string[],
@@ -339,57 +342,71 @@ async function callGemini(
 ): Promise<{ text: string; error: string }> {
   let lastError = "";
   let useSchema = true;
+  let roundWasTransient = true;
 
-  for (let attempt = 0; attempt < models.length; attempt++) {
-    const model = models[attempt];
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  // Com o Gemini em "high demand" todos os modelos devolvem 503 na hora, e uma
+  // única passada pela lista desistia em 5 s. Congestionamento passa em
+  // segundos: vale varrer de novo depois de uma espera — mas só quando TODAS as
+  // falhas da rodada foram passageiras (503/500/429/rede).
+  for (let round = 0; round < GENERATE_ROUND_DELAYS_MS.length; round++) {
+    if (round > 0) {
+      if (!roundWasTransient) break;
+      await new Promise((resolve) => setTimeout(resolve, GENERATE_ROUND_DELAYS_MS[round]));
+    }
+    roundWasTransient = true;
+    for (let attempt = 0; attempt < models.length; attempt++) {
+      const model = models[attempt];
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-    const generationConfig: Record<string, unknown> = {
-      responseMimeType: "application/json",
-      temperature: 0.25,
-      topP: 0.95,
-      maxOutputTokens,
-    };
-    if (useSchema) generationConfig.responseSchema = RESPONSE_SCHEMA;
+      const generationConfig: Record<string, unknown> = {
+        responseMimeType: "application/json",
+        temperature: 0.25,
+        topP: 0.95,
+        maxOutputTokens,
+      };
+      if (useSchema) generationConfig.responseSchema = RESPONSE_SCHEMA;
 
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts }],
-          generationConfig,
-        }),
-      });
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts }],
+            generationConfig,
+          }),
+        });
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        const message = String(body?.error?.message || `Gemini API error ${res.status}`);
-        lastError = message;
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          const message = String(body?.error?.message || `Gemini API error ${res.status}`);
+          lastError = message;
 
-        if (useSchema && /responseSchema|response_schema|schema/i.test(message)) {
-          useSchema = false;
-          attempt -= 1;
+          if (useSchema && /responseSchema|response_schema|schema/i.test(message)) {
+            useSchema = false;
+            attempt -= 1;
+            continue;
+          }
+          if (/maxOutputTokens|max_output_tokens/i.test(message) && maxOutputTokens > 8192) {
+            maxOutputTokens = 8192;
+            attempt -= 1;
+            continue;
+          }
+          if (![429, 500, 502, 503, 504].includes(res.status)) roundWasTransient = false;
           continue;
         }
-        if (/maxOutputTokens|max_output_tokens/i.test(message) && maxOutputTokens > 8192) {
-          maxOutputTokens = 8192;
-          attempt -= 1;
-          continue;
-        }
-        continue;
+
+        const data = await res.json();
+        const candidate = data?.candidates?.[0];
+        const text = (candidate?.content?.parts || [])
+          .map((part: { text?: string }) => part?.text || "")
+          .join("");
+
+        if (text) return { text, error: "" };
+        lastError = String(candidate?.finishReason || lastError || "EMPTY_RESPONSE");
+        roundWasTransient = false;
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : "Connection error";
       }
-
-      const data = await res.json();
-      const candidate = data?.candidates?.[0];
-      const text = (candidate?.content?.parts || [])
-        .map((part: { text?: string }) => part?.text || "")
-        .join("");
-
-      if (text) return { text, error: "" };
-      lastError = String(candidate?.finishReason || lastError || "EMPTY_RESPONSE");
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : "Connection error";
     }
   }
 
