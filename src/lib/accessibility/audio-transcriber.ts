@@ -11,6 +11,31 @@ export interface TranscribeProgressCallback {
   (currentText: string, percent: number, isInitialReady: boolean): void;
 }
 
+export function isQuotaError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return (
+    err.message === "QUOTA_EXCEEDED" ||
+    err.message === "QUOTA_EXCEEDED_HOUR" ||
+    err.message === "QUOTA_EXCEEDED_DAY" ||
+    (err as { quotaScope?: string }).quotaScope === "hour" ||
+    (err as { quotaScope?: string }).quotaScope === "day"
+  );
+}
+
+export function getQuotaErrorMessageKey(
+  err: unknown
+): "transcription_quota_exceeded_hour" | "transcription_quota_exceeded_day" | "transcription_quota_exceeded" {
+  if (err instanceof Error) {
+    if (err.message === "QUOTA_EXCEEDED_HOUR" || (err as { quotaScope?: string }).quotaScope === "hour") {
+      return "transcription_quota_exceeded_hour";
+    }
+    if (err.message === "QUOTA_EXCEEDED_DAY" || (err as { quotaScope?: string }).quotaScope === "day") {
+      return "transcription_quota_exceeded_day";
+    }
+  }
+  return "transcription_quota_exceeded";
+}
+
 /** Teto de um envio: o limite de arquivo do plano gratuito do Groq (25 MB), com margem. */
 const INLINE_UPLOAD_LIMIT = 24_000_000;
 /** Alvo da extração: menor que o teto, para subir rápido e com folga. */
@@ -159,6 +184,7 @@ interface TranscribeResponse {
   retryAfterMs?: number;
   /** Cota do DIA esgotada: não volta hoje, insistir só gasta o tempo de quem espera. */
   fatalQuota?: boolean;
+  quotaScope?: "minute" | "hour" | "day";
 }
 
 function retryAfterMsOf(res: Response): number | undefined {
@@ -175,13 +201,20 @@ async function readTranscribeResponse(res: Response): Promise<TranscribeResponse
     // 429 pode ser o limite por minuto (passa sozinho) ou o teto de requisições
     // do próprio app — só a cota do DIA é definitiva.
     const data = await res.json().catch(() => null);
-    const daily = data?.quotaScope === "day";
+    const scope =
+      data?.quotaScope === "hour"
+        ? "hour"
+        : data?.quotaScope === "day"
+          ? "day"
+          : "minute";
+    const fatal = scope === "day" || scope === "hour";
     return {
       text: "",
-      busy: !daily,
+      busy: !fatal,
       reason: typeof data?.reason === "string" ? data.reason : "QUOTA",
-      retryAfterMs: retryAfterMsOf(res) ?? (daily ? undefined : 30_000),
-      fatalQuota: daily,
+      retryAfterMs: retryAfterMsOf(res) ?? (fatal ? undefined : 30_000),
+      fatalQuota: fatal,
+      quotaScope: scope,
     };
   }
   if (res.status === 503) {
@@ -237,7 +270,17 @@ async function tryRemoteTranscription(
     clearInterval(timer);
     // Cota do dia esgotada: nem o caminho por URL nem o Whisper local mudam
     // isso, e quem chamou precisa ouvir o motivo certo.
-    if (attempt.fatalQuota) throw new Error("QUOTA_EXCEEDED");
+    if (attempt.fatalQuota) {
+      const err = new Error(
+        attempt.quotaScope === "hour"
+          ? "QUOTA_EXCEEDED_HOUR"
+          : attempt.quotaScope === "day"
+            ? "QUOTA_EXCEEDED_DAY"
+            : "QUOTA_EXCEEDED"
+      );
+      (err as unknown as { quotaScope?: "minute" | "hour" | "day" }).quotaScope = attempt.quotaScope;
+      throw err;
+    }
     busy = busy || attempt.busy;
     if (attempt.text) {
       onProgress?.(attempt.text, 100, true);
@@ -261,7 +304,17 @@ async function tryRemoteTranscription(
       });
 
       const urlAttempt = await readTranscribeResponse(jsonRes);
-      if (urlAttempt.fatalQuota) throw new Error("QUOTA_EXCEEDED");
+      if (urlAttempt.fatalQuota) {
+        const err = new Error(
+          urlAttempt.quotaScope === "hour"
+            ? "QUOTA_EXCEEDED_HOUR"
+            : urlAttempt.quotaScope === "day"
+              ? "QUOTA_EXCEEDED_DAY"
+              : "QUOTA_EXCEEDED"
+        );
+        (err as unknown as { quotaScope?: "minute" | "hour" | "day" }).quotaScope = urlAttempt.quotaScope;
+        throw err;
+      }
       busy = busy || urlAttempt.busy;
       if (urlAttempt.text) {
         onProgress?.(urlAttempt.text, 100, true);
@@ -270,7 +323,7 @@ async function tryRemoteTranscription(
     }
   } catch (err) {
     clearInterval(timer);
-    if (err instanceof Error && err.message === "QUOTA_EXCEEDED") {
+    if (isQuotaError(err)) {
       throw err;
     }
   }
@@ -534,6 +587,7 @@ export async function transcribeInSegments(
   lastReason: string;
   missing: number;
   quotaExhausted: boolean;
+  quotaScope?: "minute" | "hour" | "day";
 }> {
   const source = asSegmentSource(segments);
   const total = source.count;
@@ -551,6 +605,7 @@ export async function transcribeInSegments(
   let busy = false;
   let lastReason = "";
   let quotaExhausted = false;
+  let quotaScope: "minute" | "hour" | "day" | undefined;
   let processed = 0;
   let firstReported = false;
   let stop = false;
@@ -603,6 +658,7 @@ export async function transcribeInSegments(
     } else if (attempt.fatalQuota) {
       // A cota do dia acabou: os trechos seguintes receberiam o mesmo 429.
       quotaExhausted = true;
+      quotaScope = attempt.quotaScope || "day";
       stop = true;
     } else if (attempt.busy) {
       busy = true;
@@ -653,6 +709,7 @@ export async function transcribeInSegments(
     lastReason,
     missing: texts.filter((text) => !text).length,
     quotaExhausted,
+    quotaScope,
   };
 }
 
@@ -802,9 +859,17 @@ async function runTranscription(
               { progressFrom: 14, progressTo: 99 }
             )
         );
-        // Cota esgotada no meio: o que voltou é um pedaço da aula, e gravar
-        // isso como "a transcrição" esconde o resto.
-        if (result.quotaExhausted) throw new Error("QUOTA_EXCEEDED");
+        if (result.quotaExhausted) {
+          const err = new Error(
+            result.quotaScope === "hour"
+              ? "QUOTA_EXCEEDED_HOUR"
+              : result.quotaScope === "day"
+                ? "QUOTA_EXCEEDED_DAY"
+                : "QUOTA_EXCEEDED"
+          );
+          (err as unknown as { quotaScope?: "minute" | "hour" | "day" }).quotaScope = result.quotaScope;
+          throw err;
+        }
         if (result.text && result.missing > 0) {
           // Transcrição com buraco não é entregue: a aula tem de sair inteira.
           console.warn(
@@ -851,10 +916,10 @@ async function runTranscription(
     if (serviceBusy) throw new Error("SERVICE_BUSY");
   } catch (e) {
     if (
-      e instanceof Error &&
-      (e.message === "QUOTA_EXCEEDED" ||
-        e.message === "SERVICE_BUSY" ||
-        e.message === "TRANSCRIBE_FAILED")
+      isQuotaError(e) ||
+      (e instanceof Error &&
+        (e.message === "SERVICE_BUSY" ||
+          e.message === "TRANSCRIBE_FAILED"))
     ) {
       throw e;
     }

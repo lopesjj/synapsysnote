@@ -191,11 +191,15 @@ async function callGroq(
       const header = Number(res.headers.get("retry-after"));
       const retryAfterMs =
         parseGroqRetryAfter(message) ?? (Number.isFinite(header) && header > 0 ? header * 1000 : undefined);
-      const quotaScope = /per day|\(ASD\)|\(RPD\)/i.test(message)
+      const quotaScope = /per day|\(ASD\)|\(RPD\)|audio seconds per day|requests per day/i.test(message)
         ? "day"
-        : /per hour|\(ASH\)/i.test(message)
+        : /per hour|\(ASH\)|audio seconds per hour/i.test(message)
           ? "hour"
-          : "minute";
+          : retryAfterMs && retryAfterMs > 3600_000
+            ? "day"
+            : retryAfterMs && retryAfterMs > 60_000
+              ? "hour"
+              : "minute";
       console.warn(`[transcribe] Groq sem cota (${quotaScope}): ${message.slice(0, 160)}`);
       return { text: "", reason: "QUOTA", quotaScope, retryAfterMs };
     }

@@ -47,7 +47,11 @@ import {
 import { useImageLightboxStore } from "@/lib/store/image-lightbox-store";
 import { getCachedLibrasTranscript, setCachedLibrasTranscript, useLibrasStore } from "@/lib/store/libras-store";
 import { useUiStore } from "@/lib/store/ui-store";
-import { transcribeAudioSource } from "@/lib/accessibility/audio-transcriber";
+import {
+  getQuotaErrorMessageKey,
+  isQuotaError,
+  transcribeAudioSource,
+} from "@/lib/accessibility/audio-transcriber";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
 import { SUPPORTED_LANGUAGES } from "@/lib/i18n/languages";
 import {
@@ -1639,9 +1643,9 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                               }
                             }
                           } catch (err) {
-                            if (err instanceof Error && err.message === "QUOTA_EXCEEDED") {
+                            if (isQuotaError(err)) {
                               quotaErr = true;
-                              toast.error(t("transcription_quota_exceeded"));
+                              toast.error(t(getQuotaErrorMessageKey(err)));
                             } else if (err instanceof Error && err.message === "SERVICE_BUSY") {
                               quotaErr = true;
                               toast.error(t("transcription_service_busy"));
@@ -1736,8 +1740,8 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                           );
                         }
                       } catch (err) {
-                        if (err instanceof Error && err.message === "QUOTA_EXCEEDED") {
-                          toast.error(t("transcription_quota_exceeded"));
+                        if (isQuotaError(err)) {
+                          toast.error(t(getQuotaErrorMessageKey(err)));
                         } else if (err instanceof Error && err.message === "SERVICE_BUSY") {
                           toast.error(t("transcription_service_busy"));
                         } else {

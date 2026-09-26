@@ -139,13 +139,16 @@ function reasonResponse(result: Pick<WhisperResult, "reason" | "quotaScope" | "r
     // O cliente precisa saber se vale esperar: a cota do minuto passa sozinha,
     // a da hora e a do dia não voltam enquanto a pessoa olha a barra.
     const waitMs = result.retryAfterMs ?? 30_000;
-    const final = result.quotaScope === "day" || waitMs > MAX_CLIENT_WAIT_MS;
+    const scope =
+      result.quotaScope ||
+      (waitMs > 3600_000 ? "day" : waitMs > 60_000 ? "hour" : "minute");
+    const final = scope === "day" || scope === "hour" || waitMs > MAX_CLIENT_WAIT_MS;
     return NextResponse.json(
       {
         transcript: "",
         error: "QUOTA_EXCEEDED",
         reason: "QUOTA",
-        quotaScope: final ? "day" : "minute",
+        quotaScope: scope,
         retryAfterSeconds: Math.ceil(waitMs / 1000),
       },
       { status: 429, headers: final ? {} : { "Retry-After": String(Math.ceil(waitMs / 1000)) } }

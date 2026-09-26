@@ -684,6 +684,8 @@ export type TranslationKey =
   | "audio_transcribed_success"
   | "audio_transcribe_error"
   | "transcription_quota_exceeded"
+  | "transcription_quota_exceeded_hour"
+  | "transcription_quota_exceeded_day"
   | "transcription_service_busy"
   | "playback_speed"
   | "speed_normal"
@@ -2180,6 +2182,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     audio_transcribed_success: "Áudio transcrito com sucesso!",
     audio_transcribe_error: "Erro ao transcrever o áudio.",
     transcription_quota_exceeded: "Cota de transcrição atingida!",
+    transcription_quota_exceeded_hour: "Congestionamento no servidor, tente novamente daqui a 1 hora!",
+    transcription_quota_exceeded_day: "Congestionamento no servidor, tente novamente amanhã!",
     transcription_service_busy: "O serviço de transcrição está congestionado agora. Tente de novo em alguns minutos.",
     playback_speed: "Velocidade de reprodução",
     speed_normal: "Normal",
@@ -3397,6 +3401,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     audio_transcribed_success: "Audio transcribed successfully!",
     audio_transcribe_error: "Error transcribing audio.",
     transcription_quota_exceeded: "Transcription quota exceeded!",
+    transcription_quota_exceeded_hour: "Server congestion, please try again in 1 hour!",
+    transcription_quota_exceeded_day: "Server congestion, please try again tomorrow!",
     transcription_service_busy: "The transcription service is busy right now. Try again in a few minutes.",
     playback_speed: "Playback speed",
     speed_normal: "Normal",
@@ -4615,6 +4621,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     audio_transcribed_success: "¡Audio transcrito con éxito!",
     audio_transcribe_error: "Error al transcribir el audio.",
     transcription_quota_exceeded: "¡Cuota de transcripción alcanzada!",
+    transcription_quota_exceeded_hour: "¡Congestión en el servidor, inténtalo de nuevo en 1 hora!",
+    transcription_quota_exceeded_day: "¡Congestión en el servidor, inténtalo de nuevo mañana!",
     transcription_service_busy: "El servicio de transcripción está saturado ahora. Inténtalo de nuevo en unos minutos.",
     playback_speed: "Velocidad de reproducción",
     speed_normal: "Normal",
@@ -5833,6 +5841,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     audio_transcribed_success: "Audio transcrit avec succès !",
     audio_transcribe_error: "Erreur lors de la transcription de l'audio.",
     transcription_quota_exceeded: "Quota de transcription atteint !",
+    transcription_quota_exceeded_hour: "Serveur encombré, veuillez réessayer dans 1 heure !",
+    transcription_quota_exceeded_day: "Serveur encombré, veuillez réessayer demain !",
     transcription_service_busy: "Le service de transcription est saturé pour le moment. Réessayez dans quelques minutes.",
     playback_speed: "Vitesse de lecture",
     speed_normal: "Normal",
@@ -7051,6 +7061,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     audio_transcribed_success: "Audio trascritto con successo!",
     audio_transcribe_error: "Errore durante la trascrizione dell'audio.",
     transcription_quota_exceeded: "Quota di trascrizione raggiunta!",
+    transcription_quota_exceeded_hour: "Congestione del server, riprova tra 1 ora!",
+    transcription_quota_exceeded_day: "Congestione del server, riprova domani!",
     transcription_service_busy: "Il servizio di trascrizione è congestionato ora. Riprova tra qualche minuto.",
     playback_speed: "Velocità di riproduzione",
     speed_normal: "Normale",
@@ -8269,6 +8281,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     audio_transcribed_success: "Audio erfolgreich transkribiert!",
     audio_transcribe_error: "Fehler beim Transkribieren des Audios.",
     transcription_quota_exceeded: "Transkriptionskontingent erreicht!",
+    transcription_quota_exceeded_hour: "Serverüberlastung, bitte versuchen Sie es in 1 Stunde erneut!",
+    transcription_quota_exceeded_day: "Serverüberlastung, bitte versuchen Sie es morgen erneut!",
     transcription_service_busy: "Der Transkriptionsdienst ist gerade ausgelastet. Versuche es in ein paar Minuten erneut.",
     playback_speed: "Wiedergabegeschwindigkeit",
     speed_normal: "Normal",
@@ -9487,6 +9501,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     audio_transcribed_success: "Аудио успешно транскрибировано!",
     audio_transcribe_error: "Ошибка при транскрибировании аудио.",
     transcription_quota_exceeded: "Квота на транскрипцию исчерпана!",
+    transcription_quota_exceeded_hour: "Перегрузка сервера, попробуйте снова через 1 час!",
+    transcription_quota_exceeded_day: "Перегрузка сервера, попробуйте снова завтра!",
     transcription_service_busy: "Сервис расшифровки сейчас перегружен. Попробуйте через несколько минут.",
     playback_speed: "Скорость воспроизведения",
     speed_normal: "Обычная",
@@ -10705,6 +10721,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     audio_transcribed_success: "音声の文字起こしが完了しました！",
     audio_transcribe_error: "音声の文字起こし中にエラーが発生しました。",
     transcription_quota_exceeded: "文字起こしの制限に達しました！",
+    transcription_quota_exceeded_hour: "サーバーが混雑しています。1時間後にもう一度お試しください！",
+    transcription_quota_exceeded_day: "サーバーが混雑しています。明日もう一度お試しください！",
     transcription_service_busy: "文字起こしサービスが混雑しています。数分後にもう一度お試しください。",
     playback_speed: "再生速度",
     speed_normal: "標準",
@@ -11923,6 +11941,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     audio_transcribed_success: "音频转录成功！",
     audio_transcribe_error: "转录音频时出错。",
     transcription_quota_exceeded: "已达到转录配额！",
+    transcription_quota_exceeded_hour: "服务器繁忙，请在1小时后再试！",
+    transcription_quota_exceeded_day: "服务器繁忙，请明天再试！",
     transcription_service_busy: "转录服务当前繁忙，请几分钟后再试。",
     playback_speed: "播放速度",
     speed_normal: "正常",
@@ -13143,6 +13163,8 @@ TRANSLATIONS.ar = {
   audio_transcribed_success: "تم تفريغ الصوت بنجاح!",
   audio_transcribe_error: "حدث خطأ أثناء تفريغ الصوت.",
   transcription_quota_exceeded: "تم الوصول إلى الحد الأقصى للتفريغ!",
+  transcription_quota_exceeded_hour: "ازدحام في الخادم، يرجى المحاولة مرة أخرى بعد ساعة واحدة!",
+  transcription_quota_exceeded_day: "ازدحام في الخادم، يرجى المحاولة مرة أخرى غداً!",
   transcription_service_busy: "خدمة التفريغ مزدحمة حاليًا. حاول مرة أخرى بعد بضع دقائق.",
   playback_speed: "سرعة التشغيل",
   speed_normal: "عادي",

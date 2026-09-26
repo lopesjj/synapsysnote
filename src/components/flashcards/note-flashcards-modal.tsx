@@ -39,7 +39,11 @@ import {
   type CardSide,
 } from "@/lib/flashcards/card-images";
 import { fingerprint } from "@/lib/flashcards/duplicate-cards";
-import { transcribeAudioSource } from "@/lib/accessibility/audio-transcriber";
+import {
+  getQuotaErrorMessageKey,
+  isQuotaError,
+  transcribeAudioSource,
+} from "@/lib/accessibility/audio-transcriber";
 import { prepareEditorAttachment } from "@/lib/media/compress-attachment";
 import { useFlashcardSettings } from "@/lib/flashcards/use-flashcard-settings";
 import {
@@ -470,8 +474,8 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
             const key =
               err instanceof Error && err.message === "SERVICE_BUSY"
                 ? "transcription_service_busy"
-                : err instanceof Error && err.message === "QUOTA_EXCEEDED"
-                  ? "transcription_quota_exceeded"
+                : isQuotaError(err)
+                  ? getQuotaErrorMessageKey(err)
                   : err instanceof Error && err.message === "TRANSCRIBE_FAILED"
                     ? "audio_transcribe_error"
                     : "";

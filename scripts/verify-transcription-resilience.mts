@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import {
+  getQuotaErrorMessageKey,
+  isQuotaError,
   joinSegmentTexts,
   transcribeInSegments,
 } from "../src/lib/accessibility/audio-transcriber";
@@ -25,6 +27,14 @@ assert.equal(parseGroqRetryAfter("Please try again in 45s."), 45_000);
 assert.equal(parseGroqRetryAfter("Please try again in 1h2m."), 3_720_000);
 assert.equal(parseGroqRetryAfter("Please try again in 500ms"), 500);
 assert.equal(parseGroqRetryAfter("rate limit reached"), undefined);
+
+assert.equal(isQuotaError(new Error("QUOTA_EXCEEDED")), true);
+assert.equal(isQuotaError(new Error("QUOTA_EXCEEDED_HOUR")), true);
+assert.equal(isQuotaError(new Error("QUOTA_EXCEEDED_DAY")), true);
+assert.equal(isQuotaError(new Error("SERVICE_BUSY")), false);
+assert.equal(getQuotaErrorMessageKey(new Error("QUOTA_EXCEEDED_HOUR")), "transcription_quota_exceeded_hour");
+assert.equal(getQuotaErrorMessageKey(new Error("QUOTA_EXCEEDED_DAY")), "transcription_quota_exceeded_day");
+assert.equal(getQuotaErrorMessageKey(new Error("QUOTA_EXCEEDED")), "transcription_quota_exceeded");
 
 // O idioma FALADO vem do Whisper, em nome ou código.
 assert.equal(whisperLanguageCode("Portuguese"), "pt");
@@ -112,7 +122,7 @@ interface StubCall {
 type Plan = (
   segment: string,
   call: number
-) => { status: number; transcript?: string; quotaScope?: "day" | "minute" };
+) => { status: number; transcript?: string; quotaScope?: "day" | "hour" | "minute" };
 
 const realFetch = globalThis.fetch;
 
@@ -257,10 +267,28 @@ const fast = { retryBackoffMs: 1, busyBudgetMs: 60_000, concurrency: 1 };
   const result = await transcribeInSegments(segments, "pt", undefined, fast);
 
   assert.equal(result.quotaExhausted, true);
+  assert.equal(result.quotaScope, "day");
   // Quem chamou trata isso como falha de cota; o texto parcial fica marcado,
   // e nao e gravado na nota como se fosse a aula inteira.
   assert.equal(result.text, "alpha um […]");
   // S2 nao e reenviado, e S3 nem chega a ser tentado.
+  assert.deepEqual(
+    calls.map((c) => c.segment),
+    ["S1", "S2"]
+  );
+}
+
+{
+  const calls = installFetch((segment) =>
+    segment === "S2"
+      ? { status: 429, quotaScope: "hour" }
+      : { status: 200, transcript: TEXTS[segment] }
+  );
+  const result = await transcribeInSegments(segments, "pt", undefined, fast);
+
+  assert.equal(result.quotaExhausted, true);
+  assert.equal(result.quotaScope, "hour");
+  assert.equal(result.text, "alpha um […]");
   assert.deepEqual(
     calls.map((c) => c.segment),
     ["S1", "S2"]
