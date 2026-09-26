@@ -349,16 +349,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
     let unsubSnapshot: (() => void) | null = null;
 
+    const performRevocationLogout = async (authInstance?: unknown) => {
+      if (!active) return;
+      active = false;
+      if (unsubSnapshot) {
+        unsubSnapshot();
+        unsubSnapshot = null;
+      }
+      try {
+        await clearCrossHostSession().catch(() => {});
+        suppressSessionHydrate();
+        const { signOut } = await import("firebase/auth");
+        const { getFirebaseAuth } = await import("@/lib/firebase/client");
+        const targetAuth = (authInstance as import("firebase/auth").Auth) || getFirebaseAuth();
+        await signOut(targetAuth).catch(() => {});
+      } finally {
+        writeCachedUser(null);
+        writeDemoUser(null);
+        setFirebaseUser(null);
+        clearRemembered();
+        queryClient.clear();
+        forgetUserLanguage();
+        clearSignedOutStorage();
+        window.location.replace(loginHref("/?logout=1"));
+      }
+    };
+
     const checkRevocation = async () => {
       try {
         const { getFirebaseAuth } = await import("@/lib/firebase/client");
         const auth = getFirebaseAuth();
+        if (typeof auth.authStateReady === "function") {
+          await auth.authStateReady();
+        }
+        if (!active) return;
         const currentUser = auth.currentUser;
-        if (!currentUser) return;
+        if (!currentUser || currentUser.uid !== firebaseUser.uid) return;
+
         const tokenResult = await currentUser.getIdTokenResult();
-        const loginTime = Date.parse(tokenResult.authTime);
-        const { doc, onSnapshot } = await import("firebase/firestore");
-        const { getDb } = await import("@/lib/firebase/client");
+        const authTimeMs = Date.parse(tokenResult.authTime) || 0;
+
+        const [{ doc, onSnapshot }, { getDb }] = await Promise.all([
+          import("firebase/firestore"),
+          import("@/lib/firebase/client"),
+        ]);
+
+        if (!active) return;
         const userDocRef = doc(getDb(), "users", currentUser.uid);
 
         if (unsubSnapshot) unsubSnapshot();
@@ -368,22 +404,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (!active) return;
             const data = snap.data();
             const revokedAt = typeof data?.sessionRevokedAt === "number" ? data.sessionRevokedAt : 0;
-            if (revokedAt > loginTime) {
-              void (async () => {
-                try {
-                  const { signOut } = await import("firebase/auth");
-                  await signOut(auth).catch(() => {});
-                  writeCachedUser(null);
-                  setFirebaseUser(null);
-                  clearRemembered();
-                  queryClient.clear();
-                  clearSignedOutStorage();
-                  window.location.replace("/?logout=1");
-                } catch {}
-              })();
+            if (revokedAt > 0 && revokedAt > authTimeMs) {
+              if (revokedAt - authTimeMs > 3000) {
+                void performRevocationLogout(auth);
+                return;
+              }
+              void currentUser
+                .getIdToken(true)
+                .catch(() => {
+                  void performRevocationLogout(auth);
+                });
             }
           },
-          () => {}
+          (error) => {
+            if (!active) return;
+            const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
+            if (code === "permission-denied" || code === "unauthenticated") {
+              void currentUser
+                .getIdToken(true)
+                .catch(() => {
+                  void performRevocationLogout(auth);
+                });
+            }
+          }
         );
       } catch {}
     };
@@ -399,22 +442,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (!auth.currentUser) return;
             await auth.currentUser.getIdToken(true);
           } catch (error: unknown) {
-            const code = error && typeof error === "object" && "code" in error ? (error as { code: string }).code : "";
-            if (code === "auth/user-token-revoked" || code === "auth/id-token-revoked") {
-              const { signOut } = await import("firebase/auth");
-              const { getFirebaseAuth } = await import("@/lib/firebase/client");
-              await signOut(getFirebaseAuth()).catch(() => {});
-              writeCachedUser(null);
-              setFirebaseUser(null);
-              clearRemembered();
-              queryClient.clear();
-              clearSignedOutStorage();
-              window.location.replace("/?logout=1");
+            const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
+            if (
+              code.includes("token-revoked") ||
+              code.includes("user-disabled") ||
+              code.includes("user-not-found")
+            ) {
+              void performRevocationLogout();
             }
           }
         })();
       }
     };
+
+    const intervalId = window.setInterval(() => {
+      if (!active || document.visibilityState !== "visible") return;
+      void (async () => {
+        try {
+          const { getFirebaseAuth } = await import("@/lib/firebase/client");
+          const auth = getFirebaseAuth();
+          if (!auth.currentUser) return;
+          await auth.currentUser.getIdToken();
+        } catch (error: unknown) {
+          const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
+          if (
+            code.includes("token-revoked") ||
+            code.includes("user-disabled") ||
+            code.includes("user-not-found")
+          ) {
+            void performRevocationLogout();
+          }
+        }
+      })();
+    }, 25_000);
 
     window.addEventListener("focus", handleFocusOrVisible);
     document.addEventListener("visibilitychange", handleFocusOrVisible);
@@ -422,6 +482,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
       if (unsubSnapshot) unsubSnapshot();
+      window.clearInterval(intervalId);
       window.removeEventListener("focus", handleFocusOrVisible);
       document.removeEventListener("visibilitychange", handleFocusOrVisible);
     };

@@ -237,6 +237,8 @@ export async function revokeSessions(uid: string): Promise<void> {
       .collection("users")
       .doc(uid)
       .set({ sessionRevokedAt: Date.now() }, { merge: true })
-      .catch(() => undefined);
+      .catch((error) => {
+        console.error("[account-server] Falha ao atualizar sessionRevokedAt:", error);
+      });
   }
 }
