@@ -884,7 +884,7 @@ function ProfileSection() {
             maxLength={60}
             onChange={(event) => setDraft(event.target.value.slice(0, 60))}
             placeholder={t("display_name_placeholder")}
-            className="rounded-lg flex-1"
+            className="h-11 sm:h-9 text-[15px] sm:text-[13px] px-3.5 sm:px-3 rounded-lg flex-1"
           />
           <Button
             variant="primary"
@@ -907,7 +907,7 @@ function ProfileSection() {
                 onError: () => toast.error(t("name_save_failed")),
               });
             }}
-            className="shrink-0 rounded-lg w-full sm:w-auto justify-center"
+            className="h-11 sm:h-9 text-[14px] sm:text-[13px] shrink-0 rounded-lg w-full sm:w-auto justify-center"
           >
             {rename.isPending ? <Loader2 className="animate-spin" /> : null}
             {t("save")}

@@ -67,7 +67,7 @@ export async function appRequestUser(request: Request): Promise<string | null> {
   const header = request.headers.get("authorization");
   if (header?.startsWith("Bearer ")) {
     try {
-      const decoded = await adminAuth().verifyIdToken(header.slice(7));
+      const decoded = await adminAuth().verifyIdToken(header.slice(7), true);
       return decoded.uid;
     } catch {}
   }

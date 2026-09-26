@@ -26,7 +26,7 @@ export async function requireUser(request: Request): Promise<AuthedUser> {
   }
 
   try {
-    const decoded = await adminAuth().verifyIdToken(header.slice(7));
+    const decoded = await adminAuth().verifyIdToken(header.slice(7), true);
     return { uid: decoded.uid, email: decoded.email, name: decoded.name };
   } catch {
     throw new ApiError(401, "Sessão inválida ou expirada");

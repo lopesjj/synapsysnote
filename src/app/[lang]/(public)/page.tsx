@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useLocale, useRouter } from "@/lib/i18n/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Moon, Sun } from "lucide-react";
+import { useTheme } from "@/components/theme-provider";
 import { toast } from "sonner";
 import { useAuth, type OAuthProviderId } from "@/hooks/use-auth";
 import { useUserProfile } from "@/hooks/use-user-profile";
@@ -52,6 +53,7 @@ function enterWorkspace(language: SupportedLanguage, router: Router, mode: "push
 
 export default function LandingPage() {
   const { t, textDir } = useTranslation();
+  const { theme, toggle: toggleTheme } = useTheme();
   const locale = useLocale();
   const router = useRouter();
   const {
@@ -218,39 +220,53 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[var(--canvas)]">
+    <div className="relative flex min-h-dvh flex-col justify-between overflow-x-hidden overflow-y-auto bg-[var(--canvas)]">
       <div
-        className="pointer-events-none absolute inset-x-0 -top-40 h-[420px]"
+        className="pointer-events-none absolute inset-x-0 -top-32 h-[480px]"
         style={{
           background:
-            "radial-gradient(60% 100% at 50% 0%, color-mix(in oklab, var(--accent) 18%, transparent), transparent 70%)",
+            "radial-gradient(60% 100% at 50% 0%, color-mix(in oklab, var(--accent) 14%, transparent), transparent 75%)",
         }}
       />
 
-      <div className="absolute end-4 top-4 z-10 sm:end-6 sm:top-6">
+      <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-end gap-2.5 px-6 pt-6 sm:pt-8">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={theme === "dark" ? t("light") : t("dark")}
+          className="flex size-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink shadow-2xs"
+        >
+          {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </button>
         <SiteLanguageSwitcher />
-      </div>
+      </header>
 
-      <div className="relative mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 gap-12 px-6 pb-12 pt-20 sm:py-12 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:gap-16">
+      <main className="relative z-10 mx-auto my-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-12 px-6 py-8 sm:py-12 lg:grid-cols-[1.15fr_0.85fr] lg:gap-14 xl:gap-16">
         <div className="max-w-xl">
-          <div className="flex select-none justify-center sm:-translate-x-5 sm:-translate-y-7">
+          <div className="flex select-none justify-center -translate-y-6 sm:-translate-y-7">
             <SynapsysLockup size={92} />
           </div>
 
-          <p dir={textDir} className="mt-10 text-[13px] text-muted">{t("landing_audience")}</p>
+          <div className="mt-8 border-s-2 border-[var(--accent)] ps-3.5 py-0.5">
+            <p dir={textDir} className="text-[13px] font-medium leading-snug text-ink/85 sm:text-[13.5px]">
+              {t("landing_audience")}
+            </p>
+          </div>
 
-          <h1 dir={textDir} className="mt-4 max-w-xl text-[40px] font-semibold leading-[1.08] tracking-[-0.03em] text-ink sm:text-[52px]">
+          <h1 dir={textDir} className="mt-4 max-w-xl text-[40px] font-bold leading-[1.08] tracking-[-0.03em] text-ink sm:text-[50px] lg:text-[52px]">
             {t("landing_headline_lead")}
-            <span className="bg-gradient-to-r from-[var(--accent)] to-[#0ea5e9] bg-clip-text text-transparent">
+            <span className="text-[var(--accent)]">
               {t("landing_headline_accent")}
             </span>
             {t("landing_headline_tail")}
           </h1>
 
-          <p dir={textDir} className="mt-5 me-auto max-w-lg text-[15px] leading-relaxed text-muted">{t("landing_description")}</p>
+          <p dir={textDir} className="mt-5 me-auto max-w-lg text-[15px] leading-relaxed text-muted sm:text-[15.5px]">
+            {t("landing_description")}
+          </p>
         </div>
 
-        <div className="mx-auto w-full max-w-sm sm:max-w-none lux-gradient rounded-[var(--radius-xl)] border border-[var(--border)] p-6 shadow-[var(--shadow-float)]">
+        <div className="relative mx-auto w-full max-w-sm sm:max-w-none rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] p-6 sm:p-7 shadow-[var(--shadow-float)]">
           {user && !sessionSyncFailed && !profileLoading && needsCompletion ? (
             <CompleteRegistrationForm />
           ) : user && !sessionSyncFailed && !needsCompletion ? (
@@ -299,7 +315,7 @@ export default function LandingPage() {
             {tab === "signin" ? t("signin_heading") : t("signup_heading")}
           </p>
 
-          <div className="mt-4 flex gap-1 rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-0.5">
+          <div className="mt-4 flex gap-1 rounded-[var(--radius-md)] border border-[var(--border)]/60 bg-[var(--surface-2)]/80 p-1 dark:border-white/10 dark:bg-white/[0.04]">
             {(["signin", "signup"] as const).map((value) => {
               const blocked = value === "signup" && !SIGNUP_ENABLED;
               return (
@@ -312,8 +328,10 @@ export default function LandingPage() {
                     setTab(value);
                     refreshCaptcha();
                   }}
-                  className={`flex-1 rounded-[6px] py-1.5 text-[12.5px] font-medium transition ${
-                    tab === value ? "bg-[var(--surface)] text-ink shadow-sm" : "text-muted"
+                  className={`flex-1 rounded-[var(--radius-sm)] py-2 text-[12.5px] font-semibold transition-all ${
+                    tab === value
+                      ? "bg-[var(--surface)] text-ink shadow-xs ring-1 ring-black/5 dark:ring-white/10"
+                      : "text-muted hover:text-ink"
                   } ${blocked ? "cursor-not-allowed opacity-45" : ""}`}
                 >
                   {value === "signin" ? t("signin_tab") : t("signup_tab")}
@@ -417,7 +435,7 @@ export default function LandingPage() {
               type="submit"
               variant="primary"
               size="lg"
-              className="w-full"
+              className="w-full shadow-md shadow-[var(--accent)]/20 hover:shadow-[var(--accent)]/35 hover:brightness-105 active:scale-[0.99] transition-all font-semibold"
               disabled={busy || (tab === "signup" && !signupAccepted)}
             >
               {busy ? <Loader2 className="animate-spin" /> : null}
@@ -434,7 +452,7 @@ export default function LandingPage() {
           <Button
             variant="secondary"
             size="lg"
-            className="w-full"
+            className="w-full border border-[var(--border)] bg-[var(--surface)]/70 hover:bg-[var(--surface-hover)] hover:border-[var(--border-strong)] transition-all font-medium shadow-2xs dark:border-white/10 dark:bg-white/[0.04]"
             disabled={oauthBusy !== null}
             onClick={() => void oauth("google")}
           >
@@ -450,9 +468,9 @@ export default function LandingPage() {
             </>
           )}
         </div>
-      </div>
+      </main>
 
-      <LegalFooter />
+      <LegalFooter className="relative z-10 mt-auto pt-8 pb-6" />
     </div>
   );
 }

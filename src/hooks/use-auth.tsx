@@ -344,6 +344,89 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [configured, queryClient]);
 
+  useEffect(() => {
+    if (!configured || !firebaseUser?.uid || firebaseUser.uid === "demo-user") return;
+    let active = true;
+    let unsubSnapshot: (() => void) | null = null;
+
+    const checkRevocation = async () => {
+      try {
+        const { getFirebaseAuth } = await import("@/lib/firebase/client");
+        const auth = getFirebaseAuth();
+        const currentUser = auth.currentUser;
+        if (!currentUser) return;
+        const tokenResult = await currentUser.getIdTokenResult();
+        const loginTime = Date.parse(tokenResult.authTime);
+        const { doc, onSnapshot } = await import("firebase/firestore");
+        const { getDb } = await import("@/lib/firebase/client");
+        const userDocRef = doc(getDb(), "users", currentUser.uid);
+
+        if (unsubSnapshot) unsubSnapshot();
+        unsubSnapshot = onSnapshot(
+          userDocRef,
+          (snap) => {
+            if (!active) return;
+            const data = snap.data();
+            const revokedAt = typeof data?.sessionRevokedAt === "number" ? data.sessionRevokedAt : 0;
+            if (revokedAt > loginTime) {
+              void (async () => {
+                try {
+                  const { signOut } = await import("firebase/auth");
+                  await signOut(auth).catch(() => {});
+                  writeCachedUser(null);
+                  setFirebaseUser(null);
+                  clearRemembered();
+                  queryClient.clear();
+                  clearSignedOutStorage();
+                  window.location.replace("/?logout=1");
+                } catch {}
+              })();
+            }
+          },
+          () => {}
+        );
+      } catch {}
+    };
+
+    void checkRevocation();
+
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === "visible") {
+        void (async () => {
+          try {
+            const { getFirebaseAuth } = await import("@/lib/firebase/client");
+            const auth = getFirebaseAuth();
+            if (!auth.currentUser) return;
+            await auth.currentUser.getIdToken(true);
+          } catch (error: unknown) {
+            const code = error && typeof error === "object" && "code" in error ? (error as { code: string }).code : "";
+            if (code === "auth/user-token-revoked" || code === "auth/id-token-revoked") {
+              const { signOut } = await import("firebase/auth");
+              const { getFirebaseAuth } = await import("@/lib/firebase/client");
+              await signOut(getFirebaseAuth()).catch(() => {});
+              writeCachedUser(null);
+              setFirebaseUser(null);
+              clearRemembered();
+              queryClient.clear();
+              clearSignedOutStorage();
+              window.location.replace("/?logout=1");
+            }
+          }
+        })();
+      }
+    };
+
+    window.addEventListener("focus", handleFocusOrVisible);
+    document.addEventListener("visibilitychange", handleFocusOrVisible);
+
+    return () => {
+      active = false;
+      if (unsubSnapshot) unsubSnapshot();
+      window.removeEventListener("focus", handleFocusOrVisible);
+      document.removeEventListener("visibilitychange", handleFocusOrVisible);
+    };
+  }, [configured, firebaseUser?.uid, queryClient]);
+
   const user = configured ? firebaseUser ?? demoUser : demoUser;
   const loading = configured ? firebaseLoading && !demoUser : false;
 

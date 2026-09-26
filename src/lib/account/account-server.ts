@@ -232,4 +232,11 @@ export function accountExportStream(uid: string): ReadableStream<Uint8Array> {
 
 export async function revokeSessions(uid: string): Promise<void> {
   await adminAuth().revokeRefreshTokens(uid);
+  if (isAdminConfigured()) {
+    await adminDb()
+      .collection("users")
+      .doc(uid)
+      .set({ sessionRevokedAt: Date.now() }, { merge: true })
+      .catch(() => undefined);
+  }
 }

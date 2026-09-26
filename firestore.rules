@@ -69,8 +69,8 @@ service cloud.firestore {
       return workspaceId == 'ws_' + request.auth.uid;
     }
 
-    function legalFields() {
-      return ['legalAcceptedVersion', 'legalAcceptedAt'];
+    function serverOnlyUserFields() {
+      return ['legalAcceptedVersion', 'legalAcceptedAt', 'sessionRevokedAt'];
     }
 
     match /users/{userId} {
@@ -78,11 +78,11 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.auth.uid == userId
         && incoming().uid == userId
-        && !incoming().keys().hasAny(legalFields());
+        && !incoming().keys().hasAny(serverOnlyUserFields());
       allow update: if isSignedIn()
         && request.auth.uid == userId
         && incoming().uid == userId
-        && !incoming().diff(existing()).affectedKeys().hasAny(legalFields());
+        && !incoming().diff(existing()).affectedKeys().hasAny(serverOnlyUserFields());
       allow delete: if false;
     }
 

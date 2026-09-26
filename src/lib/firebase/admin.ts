@@ -141,7 +141,7 @@ export async function verifyBearer(request: Request): Promise<{ uid: string; ema
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer ")) return null;
   try {
-    const decoded = await adminAuth().verifyIdToken(header.slice(7));
+    const decoded = await adminAuth().verifyIdToken(header.slice(7), true);
     return { uid: decoded.uid, email: decoded.email };
   } catch {
     return null;
