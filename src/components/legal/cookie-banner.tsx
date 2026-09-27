@@ -53,17 +53,17 @@ export function CookieBanner() {
             </button>
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <Button variant="secondary" size="sm" className="h-7 px-2.5 text-[11.5px] sm:h-8 sm:px-3 sm:text-[12px]" onClick={() => saveConsent({ functional: false })}>
+            <Button type="button" variant="secondary" size="sm" className="h-7 px-2.5 text-[11.5px] sm:h-8 sm:px-3 sm:text-[12px] touch-manipulation" onClick={() => saveConsent({ functional: false })}>
               {t("cookie_reject")}
             </Button>
-            <Button variant="primary" size="sm" className="h-7 px-2.5 text-[11.5px] sm:h-8 sm:px-3 sm:text-[12px]" onClick={() => saveConsent({ functional: true })}>
+            <Button type="button" variant="primary" size="sm" className="h-7 px-2.5 text-[11.5px] sm:h-8 sm:px-3 sm:text-[12px] touch-manipulation" onClick={() => saveConsent({ functional: true })}>
               {t("cookie_accept")}
             </Button>
             <button
               type="button"
               onPointerEnter={() => preloadLegalBundle(language as SupportedLanguage)}
               onClick={() => openDoc("cookies", COOKIE_PREFERENCES_SECTION)}
-              className="ms-auto text-[11.5px] text-muted underline decoration-[var(--border-strong)] underline-offset-[3px] transition hover:text-ink hover:decoration-current sm:text-[12px]"
+              className="ms-auto text-[11.5px] text-muted underline decoration-[var(--border-strong)] underline-offset-[3px] transition hover:text-ink hover:decoration-current sm:text-[12px] touch-manipulation"
             >
               {t("cookie_customize")}
             </button>

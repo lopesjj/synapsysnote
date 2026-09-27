@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  createMonotonicProgressCallback,
   getQuotaErrorMessageKey,
   isQuotaError,
   joinSegmentTexts,
@@ -458,6 +459,17 @@ globalThis.fetch = realFetch;
   assert.deepEqual(planSpeechCuts(new Float32Array(75 * 60 * fps).fill(0.1), { targetSeconds: 3600 }), []);
   const threeHours = planSpeechCuts(new Float32Array(3 * 3600 * fps).fill(0.1), { targetSeconds: 3600 });
   assert.equal(threeHours.length, 2);
+}
+
+{
+  const recorded: number[] = [];
+  const cb = createMonotonicProgressCallback((_text, percent) => {
+    recorded.push(percent);
+  });
+  if (cb) {
+    [10, 25, 15, 50, 45, 80, 70, 95, 100].forEach((p) => cb("", p, false));
+  }
+  assert.deepEqual(recorded, [10, 25, 50, 80, 95, 100]);
 }
 
 console.log("verify:transcription OK");

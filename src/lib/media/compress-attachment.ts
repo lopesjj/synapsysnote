@@ -528,37 +528,19 @@ export async function decodeAudioBlob(
 ): Promise<AudioBuffer | null> {
   if (typeof window === "undefined") return null;
 
-  const OfflineCtx =
-    window.OfflineAudioContext ||
-    (window as unknown as { webkitOfflineAudioContext?: typeof OfflineAudioContext }).webkitOfflineAudioContext;
   const AudioCtx =
     window.AudioContext ||
     (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  const OfflineCtx =
+    window.OfflineAudioContext ||
+    (window as unknown as { webkitOfflineAudioContext?: typeof OfflineAudioContext }).webkitOfflineAudioContext;
 
-  if (!OfflineCtx && !AudioCtx) return null;
+  if (!AudioCtx && !OfflineCtx) return null;
 
   let audioBuffer: AudioBuffer | null = null;
 
-  if (OfflineCtx) {
+  if (AudioCtx) {
     try {
-      // Decodificar direto na taxa de destino evita guardar a trilha em 48 kHz
-      // só para reamostrar depois. O buffer vai sem cópia: `decodeAudioData`
-      // o consome, e copiar um vídeo de 150 MB "por garantia" dobrava o pico
-      // de memória justo na etapa mais pesada.
-      const arrayBuffer = await blob.arrayBuffer();
-      const offCtx = new OfflineCtx(1, targetSampleRate, targetSampleRate);
-      audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
-        const promise = offCtx.decodeAudioData(arrayBuffer, resolve, reject);
-        if (promise && typeof promise.then === "function") {
-          promise.then(resolve).catch(reject);
-        }
-      });
-    } catch {}
-  }
-
-  if (!audioBuffer && AudioCtx) {
-    try {
-      // Só o caminho de reserva relê o arquivo: o primeiro buffer já foi consumido.
       const arrayBuffer = await blob.arrayBuffer();
       const actx = new AudioCtx();
       try {
@@ -571,6 +553,21 @@ export async function decodeAudioBlob(
       } finally {
         void actx.close().catch(() => undefined);
       }
+    } catch {}
+  }
+
+  if (!audioBuffer && OfflineCtx) {
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const maxFrames = 128 * 1024 * 1024 - 1;
+      const frameCount = Math.min(maxFrames, Math.max(targetSampleRate * 3600 * 3, 44100));
+      const offCtx = new OfflineCtx(1, frameCount, targetSampleRate);
+      audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
+        const promise = offCtx.decodeAudioData(arrayBuffer, resolve, reject);
+        if (promise && typeof promise.then === "function") {
+          promise.then(resolve).catch(reject);
+        }
+      });
     } catch {}
   }
 

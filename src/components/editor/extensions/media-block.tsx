@@ -1610,7 +1610,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                               null,
                               (partialText, percent, isInitialReady) => {
                                 if (typeof percent === "number") {
-                                  setLibrasProgress(percent);
+                                  setLibrasProgress((prev) => Math.max(prev, percent));
                                 }
                                 if (isInitialReady && !opened && partialText) {
                                   opened = true;
@@ -1719,7 +1719,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                           null,
                           (partialText, percent) => {
                             setEphemeralTranscript(partialText);
-                            setTranscribeProgress(percent);
+                            setTranscribeProgress((prev) => Math.max(prev, percent));
                           },
                           effectiveTranscribeLang
                         );

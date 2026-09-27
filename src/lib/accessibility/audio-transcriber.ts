@@ -36,8 +36,7 @@ export function getQuotaErrorMessageKey(
   return "transcription_quota_exceeded";
 }
 
-/** Teto de um envio: o limite de arquivo do plano gratuito do Groq (25 MB), com margem. */
-const INLINE_UPLOAD_LIMIT = 24_000_000;
+const INLINE_UPLOAD_LIMIT = 160 * 1024 * 1024;
 /** Alvo da extração: menor que o teto, para subir rápido e com folga. */
 const TRANSCRIPTION_TARGET_BYTES = 8 * 1024 * 1024;
 const VIDEO_URL_REGEX = /\.(mp4|m4v|mov|mkv|avi|3gp|3g2|mpg|mpeg|ogv|wmv|flv|ts|hevc)($|\?)/i;
@@ -53,15 +52,7 @@ function looksLikeVideo(blob: Blob, sourceUrl?: string): boolean {
  * vídeo de 150 MB vira ~14 MB por hora de fala.
  */
 const SEGMENT_THRESHOLD_BYTES = 2 * 1024 * 1024;
-/**
- * Duração alvo de cada parte enviada ao Whisper. Até ~78 min (a sobra de 30%
- * de `planSpeechCuts`) a aula vai INTEIRA numa chamada só: o Whisper do Groq
- * transcreve uma hora em ~15 s, e sem corte não há emenda nem fala perdida.
- * Só gravações maiores são divididas, na pausa de fala mais próxima de cada
- * hora (`speech-cuts.ts`), para cada parte caber nos 25 MB do plano gratuito.
- */
-const SEGMENT_SECONDS = 3600;
-/** Opus mono 16 kHz a 32 kbps: fala limpa para o Whisper, ~14 MB por hora. */
+const SEGMENT_SECONDS = 240;
 const SPEECH_BITRATE = 32_000;
 const SEGMENT_MAX_BYTES = 20_000_000;
 /**
@@ -230,7 +221,15 @@ async function readTranscribeResponse(res: Response): Promise<TranscribeResponse
 async function postAudioFile(blob: Blob, targetLang: string): Promise<TranscribeResponse> {
   return withTranscribeSlot(async () => {
     const formData = new FormData();
-    formData.append("audio", blob, "audio-file");
+    const fileName =
+      blob instanceof File && blob.name
+        ? blob.name
+        : blob.type.includes("webm")
+          ? "media.webm"
+          : blob.type.includes("ogg")
+            ? "media.ogg"
+            : "media.mp4";
+    formData.append("audio", blob, fileName);
     formData.append("targetLanguage", targetLang);
 
     try {
@@ -255,13 +254,19 @@ async function tryRemoteTranscription(
   targetLang: string,
   onProgress?: TranscribeProgressCallback
 ): Promise<RemoteAttempt> {
+  const startedAt = Date.now();
   let currentPercent = 10;
   onProgress?.("", currentPercent, false);
 
   const timer = setInterval(() => {
-    currentPercent = Math.min(88, currentPercent + 6);
-    onProgress?.("", currentPercent, false);
-  }, 600);
+    const elapsed = Date.now() - startedAt;
+    const target = 10 + 85 * (1 - Math.exp(-elapsed / 30000));
+    const next = Math.max(currentPercent, Math.min(95, Math.round(target)));
+    if (next > currentPercent) {
+      currentPercent = next;
+      onProgress?.("", currentPercent, false);
+    }
+  }, 500);
 
   let busy = false;
 
@@ -775,6 +780,24 @@ function cacheKeyFor(audioUrl: string, lang: string): string {
   return `${lang}::${audioUrl.split("?")[0]}`;
 }
 
+export function createMonotonicProgressCallback(
+  onProgress?: TranscribeProgressCallback
+): TranscribeProgressCallback | undefined {
+  if (!onProgress) return undefined;
+  let highestPercent = 0;
+  let lastReportedText = "";
+  return (text: string, percent: number, isInitialReady: boolean) => {
+    if (text) lastReportedText = text;
+    const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+    if (clamped >= highestPercent) {
+      highestPercent = clamped;
+      onProgress(lastReportedText, highestPercent, isInitialReady);
+    } else if (isInitialReady) {
+      onProgress(lastReportedText, highestPercent, isInitialReady);
+    }
+  };
+}
+
 export async function transcribeAudioSource(
   audioUrl: string,
   audioBlob?: Blob | null,
@@ -784,32 +807,94 @@ export async function transcribeAudioSource(
 ): Promise<string> {
   const lang = targetLang || "pt";
   const cacheKey = audioUrl ? cacheKeyFor(audioUrl, lang) : "";
+  const monotonicProgress = createMonotonicProgressCallback(onProgress);
 
   if (cacheKey && options?.reuseCache) {
     const cached = sessionTranscripts.get(cacheKey);
     if (cached) {
-      onProgress?.(cached, 100, true);
+      monotonicProgress?.(cached, 100, true);
       return cached;
     }
     const running = inFlightTranscripts.get(cacheKey);
     if (running) {
       const text = await running;
-      if (text) onProgress?.(text, 100, true);
+      if (text) monotonicProgress?.(text, 100, true);
       return text;
     }
   }
 
-  const job = runTranscription(audioUrl, audioBlob, onProgress, lang);
+  const job = runTranscription(audioUrl, audioBlob, monotonicProgress, lang);
   if (cacheKey) inFlightTranscripts.set(cacheKey, job);
   try {
     const text = await job;
-    // Todo resultado entra no cache, mesmo o do "transcrever de novo": é ele
-    // que poupa Libras e flashcards de refazer a mesma aula logo em seguida.
+    if (text) monotonicProgress?.(text, 100, true);
     if (cacheKey && text && !text.includes(GAP_MARKER)) sessionTranscripts.set(cacheKey, text);
     return text;
   } finally {
     if (cacheKey && inFlightTranscripts.get(cacheKey) === job) inFlightTranscripts.delete(cacheKey);
   }
+}
+
+async function transcribeByAudioUrl(
+  audioUrl: string,
+  targetLang: string,
+  onProgress?: TranscribeProgressCallback
+): Promise<string | null> {
+  const startedAt = Date.now();
+  let currentPercent = 10;
+  onProgress?.("", currentPercent, false);
+
+  const timer = setInterval(() => {
+    const elapsed = Date.now() - startedAt;
+    const target = 10 + 85 * (1 - Math.exp(-elapsed / 30000));
+    const next = Math.max(currentPercent, Math.min(95, Math.round(target)));
+    if (next > currentPercent) {
+      currentPercent = next;
+      onProgress?.("", currentPercent, false);
+    }
+  }, 500);
+
+  try {
+    const jsonRes = await fetch("/api/ai/transcribe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-target-language": targetLang,
+        ...(await optionalAuthHeader()),
+      },
+      body: JSON.stringify({
+        audioUrl,
+        targetLanguage: targetLang,
+      }),
+    });
+
+    const urlAttempt = await readTranscribeResponse(jsonRes);
+    clearInterval(timer);
+    if (urlAttempt.fatalQuota) {
+      const err = new Error(
+        urlAttempt.quotaScope === "hour"
+          ? "QUOTA_EXCEEDED_HOUR"
+          : urlAttempt.quotaScope === "day"
+            ? "QUOTA_EXCEEDED_DAY"
+            : "QUOTA_EXCEEDED"
+      );
+      (err as unknown as { quotaScope?: "minute" | "hour" | "day" }).quotaScope = urlAttempt.quotaScope;
+      throw err;
+    }
+    if (urlAttempt.text) {
+      onProgress?.(urlAttempt.text, 100, true);
+      return urlAttempt.text;
+    }
+    if (urlAttempt.busy) {
+      throw new Error("SERVICE_BUSY");
+    }
+  } catch (err) {
+    clearInterval(timer);
+    if (isQuotaError(err) || (err instanceof Error && err.message === "SERVICE_BUSY")) {
+      throw err;
+    }
+  }
+  return null;
 }
 
 async function runTranscription(
@@ -822,6 +907,18 @@ async function runTranscription(
   if (typeof window === "undefined") return "";
 
   try {
+    if (
+      audioUrl &&
+      !audioUrl.startsWith("blob:") &&
+      !audioUrl.includes("localhost") &&
+      !audioUrl.includes("127.0.0.1") &&
+      !audioUrl.includes("192.168.")
+    ) {
+      onProgress?.("", 10, false);
+      const urlText = await transcribeByAudioUrl(audioUrl, lang, onProgress);
+      if (urlText) return urlText;
+    }
+
     let blob = audioBlob || null;
     if (!blob && audioUrl) {
       // Um vídeo de 150 MB leva o seu tempo para descer: a barra acompanha.
@@ -832,10 +929,13 @@ async function runTranscription(
 
     if (!blob) return "";
 
+    const attempt = await tryRemoteTranscription(blob, undefined, lang, onProgress);
+    if (attempt.text) return attempt.text;
+    if (attempt.busy) throw new Error("SERVICE_BUSY");
+
     const heavy = looksLikeVideo(blob, audioUrl) || blob.size > SEGMENT_THRESHOLD_BYTES;
 
     if (heavy) {
-      onProgress?.("", 10, false);
 
       // Decodifica uma vez e extrai só a fala. Até ~78 min é uma parte só (a
       // aula inteira numa chamada); acima disso, partes de ~1 h cortadas em

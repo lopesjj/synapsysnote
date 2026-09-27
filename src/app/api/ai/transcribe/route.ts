@@ -12,6 +12,7 @@ import {
   transcribeWithGroq,
   type WhisperResult,
 } from "@/lib/ai/groq-whisper";
+import { extractAudioTrack } from "@/lib/media/server-audio-extractor";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -26,12 +27,11 @@ const transcribeLimiter = createRateLimiter({
   windowMs: 10 * 60_000,
   maxRequests: 40,
   maxConcurrent: 3,
-  maxBytes: 300 * 1024 * 1024,
+  maxBytes: 600 * 1024 * 1024,
 });
 
 
-/** Teto para baixar a mídia quando o cliente manda só a URL. */
-const FETCH_TIMEOUT_MS = 60_000;
+const FETCH_TIMEOUT_MS = 120_000;
 
 let transcriberPromise: Promise<unknown> | null = null;
 
@@ -101,9 +101,7 @@ async function safeFetchAudioUrl(
   audioUrl: string,
   timeoutMs: number
 ): Promise<{ buffer: Buffer; mime: string } | null> {
-  // Conexao presa ao IP validado, com o nome no SNI: buscar pelo IP com fetch
-  // quebrava a validacao do certificado em toda URL https.
-  const fetched = await safeFetchBuffer(audioUrl, MAX_AUDIO_BYTES, {
+  const fetched = await safeFetchBuffer(audioUrl, MAX_MEDIA_FETCH_BYTES, {
     timeoutMs,
     userAgent: "SynapsysNote-Transcribe/1.0",
   });
@@ -114,12 +112,8 @@ async function safeFetchAudioUrl(
   return { buffer: fetched.buffer, mime: fetched.contentType || "audio/webm" };
 }
 
-/**
- * Teto do que a rota aceita receber: o limite de arquivo do plano gratuito do
- * Groq (25 MB), abaixo também do corpo máximo do Cloud Run (32 MiB). Uma hora
- * de fala em Opus mono a 32 kbps dá ~14 MB.
- */
 const MAX_AUDIO_BYTES = GROQ_MAX_UPLOAD_BYTES;
+const MAX_MEDIA_FETCH_BYTES = 160 * 1024 * 1024;
 /**
  * PCM float32 a 16 kHz: o navegador manda trechos de 60 s (~3,8 MB). Dois
  * minutos de folga bastam; o que passar disso nao veio do app.
@@ -279,7 +273,6 @@ export async function POST(req: NextRequest) {
       return await transcribeLocally(new Float32Array(arrayBuffer), whisperLanguage, promptContext, targetLang);
     }
 
-    // --- URL de mídia: o servidor baixa e manda para o Whisper ------------
     if (contentType.includes("application/json")) {
       const json = await req.json().catch(() => ({}));
       const audioUrl = typeof json?.audioUrl === "string" ? json.audioUrl.trim() : "";
@@ -302,17 +295,34 @@ export async function POST(req: NextRequest) {
         }
         bytesUsed = fetched.buffer.byteLength;
 
-        const result = await runWhisper(fetched.buffer, fetched.mime, reqTargetLang);
-        if (result.text) {
-          return NextResponse.json({ transcript: result.text, reason: result.reason, language: result.language });
+        const { buffers, mime } = await extractAudioTrack(fetched.buffer, fetched.mime);
+        const chunkTexts: string[] = [];
+        let detectedLanguage: string | undefined;
+        let finalReason: WhisperResult["reason"] = "OK";
+
+        for (const audioBuf of buffers) {
+          const result = await runWhisper(audioBuf, mime, reqTargetLang);
+          if (result.text) {
+            chunkTexts.push(result.text);
+            if (!detectedLanguage && result.language) detectedLanguage = result.language;
+          } else {
+            finalReason = result.reason;
+            if (result.reason === "QUOTA" || result.reason === "SERVICE_BUSY") {
+              return reasonResponse(result);
+            }
+          }
         }
-        return reasonResponse(result);
+
+        const fullText = chunkTexts.join(" ").trim();
+        if (fullText) {
+          return NextResponse.json({ transcript: fullText, reason: "OK", language: detectedLanguage });
+        }
+        return reasonResponse({ reason: finalReason });
       } catch {
         return NextResponse.json({ transcript: "", reason: "FETCH_FAILED" });
       }
     }
 
-    // --- Arquivo de áudio enviado pelo navegador -------------------------
     const formData = await req.formData().catch(() => null);
     const file = formData?.get("audio") || formData?.get("file");
     if (!(file instanceof Blob) || file.size === 0) {
@@ -328,20 +338,47 @@ export async function POST(req: NextRequest) {
     if (!groqApiKey()) {
       return reasonResponse({ reason: "NOT_CONFIGURED" });
     }
-    if (file.size > MAX_AUDIO_BYTES) {
+    if (file.size > MAX_MEDIA_FETCH_BYTES) {
       return NextResponse.json({ transcript: "", reason: "TOO_LARGE" }, { status: 413 });
     }
 
     const buf = Buffer.from(await file.arrayBuffer());
     bytesUsed = buf.byteLength;
-    const result = await runWhisper(buf, file.type || "audio/ogg", effectiveLang);
-    if (result.text) {
-      return NextResponse.json({ transcript: result.text, reason: result.reason, language: result.language });
+    const fileName = file instanceof File ? file.name.toLowerCase() : "";
+    const rawType = file.type || "";
+    const fileType =
+      rawType && rawType !== "application/octet-stream"
+        ? rawType
+        : fileName.endsWith(".mp4") || fileName.endsWith(".m4v") || fileName.endsWith(".mov")
+          ? "video/mp4"
+          : fileName.endsWith(".webm")
+            ? "video/webm"
+            : fileName.endsWith(".ogg")
+              ? "audio/ogg"
+              : "video/mp4";
+    const { buffers, mime } = await extractAudioTrack(buf, fileType);
+    const chunkTexts: string[] = [];
+    let detectedLanguage: string | undefined;
+    let finalReason: WhisperResult["reason"] = "OK";
+
+    for (const audioBuf of buffers) {
+      const result = await runWhisper(audioBuf, mime, effectiveLang);
+      if (result.text) {
+        chunkTexts.push(result.text);
+        if (!detectedLanguage && result.language) detectedLanguage = result.language;
+      } else {
+        finalReason = result.reason;
+        if (result.reason === "QUOTA" || result.reason === "SERVICE_BUSY") {
+          return reasonResponse(result);
+        }
+      }
     }
-    // Um arquivo codificado (Ogg/WebM/MP4) NÃO é PCM: reinterpretar os bytes
-    // aqui era o que estourava com "byte length ... multiple of 4". Quem sabe
-    // decodificar é o navegador, que reenvia PCM por octet-stream.
-    return reasonResponse(result);
+
+    const fullText = chunkTexts.join(" ").trim();
+    if (fullText) {
+      return NextResponse.json({ transcript: fullText, reason: "OK", language: detectedLanguage });
+    }
+    return reasonResponse({ reason: finalReason });
   } catch (err) {
     // Detalhe interno fica no log do servidor; o cliente recebe so o codigo.
     console.error("[transcribe] falha inesperada", err);

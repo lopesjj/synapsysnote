@@ -220,7 +220,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="relative flex min-h-dvh flex-col justify-between overflow-x-hidden overflow-y-auto bg-[var(--canvas)]">
+    <div className="relative flex min-h-dvh flex-col justify-between overflow-x-hidden bg-[var(--canvas)]">
       <div
         className="pointer-events-none absolute inset-x-0 -top-32 h-[480px]"
         style={{
@@ -234,14 +234,14 @@ export default function LandingPage() {
           type="button"
           onClick={toggleTheme}
           aria-label={theme === "dark" ? t("light") : t("dark")}
-          className="flex size-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink shadow-2xs"
+          className="flex size-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink shadow-2xs touch-manipulation"
         >
           {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </button>
         <SiteLanguageSwitcher />
       </header>
 
-      <main className="relative z-10 mx-auto my-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-12 px-6 py-8 sm:py-12 lg:grid-cols-[1.15fr_0.85fr] lg:gap-14 xl:gap-16">
+      <main className="relative z-10 mx-auto my-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-12 px-6 pt-6 pb-28 sm:py-12 lg:grid-cols-[1.15fr_0.85fr] lg:gap-14 xl:gap-16">
         <div className="max-w-xl">
           <div className="flex select-none justify-center -translate-y-6 sm:-translate-y-7">
             <SynapsysLockup size={92} />
@@ -266,7 +266,7 @@ export default function LandingPage() {
           </p>
         </div>
 
-        <div className="relative mx-auto w-full max-w-sm sm:max-w-none rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] p-6 sm:p-7 shadow-[var(--shadow-float)]">
+        <div className="relative z-20 mx-auto w-full max-w-sm sm:max-w-none rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] p-6 sm:p-7 shadow-[var(--shadow-float)]">
           {user && !sessionSyncFailed && !profileLoading && needsCompletion ? (
             <CompleteRegistrationForm />
           ) : user && !sessionSyncFailed && !needsCompletion ? (
@@ -328,7 +328,7 @@ export default function LandingPage() {
                     setTab(value);
                     refreshCaptcha();
                   }}
-                  className={`flex-1 rounded-[var(--radius-sm)] py-2 text-[12.5px] font-semibold transition-all ${
+                  className={`flex-1 rounded-[var(--radius-sm)] py-2 text-[12.5px] font-semibold transition-all touch-manipulation ${
                     tab === value
                       ? "bg-[var(--surface)] text-ink shadow-xs ring-1 ring-black/5 dark:ring-white/10"
                       : "text-muted hover:text-ink"
@@ -381,7 +381,7 @@ export default function LandingPage() {
 
             {tab === "signin" ? (
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-muted">
+                <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-muted touch-manipulation">
                   <Checkbox
                     checked={remember}
                     onCheckedChange={(value) => setRemember(value === true)}
@@ -395,7 +395,7 @@ export default function LandingPage() {
                     refreshCaptcha();
                   }}
                   dir={textDir}
-                  className="text-[12.5px] text-[var(--accent)] transition hover:underline"
+                  className="text-[12.5px] text-[var(--accent)] transition hover:underline touch-manipulation"
                 >
                   {t("forgot_password")}
                 </button>
@@ -407,7 +407,7 @@ export default function LandingPage() {
             ) : null}
 
             {tab === "signup" ? (
-              <label className="flex cursor-pointer items-start gap-2 text-[12.5px] leading-relaxed text-muted">
+              <label className="flex cursor-pointer items-start gap-2 text-[12.5px] leading-relaxed text-muted touch-manipulation">
                 <Checkbox
                   checked={signupAccepted}
                   onCheckedChange={(value) => setSignupAccepted(value === true)}
@@ -435,7 +435,7 @@ export default function LandingPage() {
               type="submit"
               variant="primary"
               size="lg"
-              className="w-full shadow-md shadow-[var(--accent)]/20 hover:shadow-[var(--accent)]/35 hover:brightness-105 active:scale-[0.99] transition-all font-semibold"
+              className="w-full shadow-md shadow-[var(--accent)]/20 hover:shadow-[var(--accent)]/35 hover:brightness-105 active:scale-[0.99] transition-all font-semibold touch-manipulation"
               disabled={busy || (tab === "signup" && !signupAccepted)}
             >
               {busy ? <Loader2 className="animate-spin" /> : null}
@@ -450,9 +450,10 @@ export default function LandingPage() {
           </div>
 
           <Button
+            type="button"
             variant="secondary"
             size="lg"
-            className="w-full border border-[var(--border)] bg-[var(--surface)]/70 hover:bg-[var(--surface-hover)] hover:border-[var(--border-strong)] transition-all font-medium shadow-2xs dark:border-white/10 dark:bg-white/[0.04]"
+            className="w-full border border-[var(--border)] bg-[var(--surface)]/70 hover:bg-[var(--surface-hover)] hover:border-[var(--border-strong)] transition-all font-medium shadow-2xs dark:border-white/10 dark:bg-white/[0.04] touch-manipulation"
             disabled={oauthBusy !== null}
             onClick={() => void oauth("google")}
           >

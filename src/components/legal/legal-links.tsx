@@ -30,7 +30,7 @@ export function LegalTrigger({
       onPointerEnter={() => preloadLegalBundle(language as SupportedLanguage)}
       onFocus={() => preloadLegalBundle(language as SupportedLanguage)}
       onClick={() => openDoc(doc, section ?? null)}
-      className={className}
+      className={cn("touch-manipulation", className)}
     >
       {children}
     </button>

@@ -13,6 +13,14 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: [
+    "192.168.0.7",
+    "192.168.0.7:43127",
+    "localhost",
+    "localhost:43127",
+    "127.0.0.1",
+    "127.0.0.1:43127",
+  ],
   serverExternalPackages: ["firebase-admin", "@google-cloud/firestore", "google-auth-library"],
   async headers() {
     return [{ source: "/((?!(?:[a-z]{2}/)?__/auth).*)", headers: SECURITY_HEADERS }];

@@ -15,7 +15,10 @@ export function isSplitHosts(): boolean {
       hostname === "localhost" ||
       hostname === "127.0.0.1" ||
       hostname.endsWith(".local") ||
-      hostname.endsWith(".internal")
+      hostname.endsWith(".internal") ||
+      hostname.startsWith("192.168.") ||
+      hostname.startsWith("10.") ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
     ) {
       return false;
     }
@@ -32,7 +35,7 @@ export function cookieParentDomain(): string | undefined {
     if (appHost.endsWith(`.${loginHost}`) || loginHost === appHost) {
       return `.${loginHost}`;
     }
-  } catch {}
+  } catch { }
   return undefined;
 }
 
