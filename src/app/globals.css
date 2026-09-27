@@ -474,13 +474,24 @@
   align-items: flex-start;
 }
 .synapsys-editor .ProseMirror ul[data-type="taskList"] li > label {
-  margin-top: 0.34rem;
+  flex: 0 0 auto;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(1em * var(--editor-line-height, 1.75));
+  margin: 0;
 }
 .synapsys-editor .ProseMirror ul[data-type="taskList"] input[type="checkbox"] {
   accent-color: var(--accent);
   width: 0.95rem;
   height: 0.95rem;
+  margin: 0;
   cursor: pointer;
+}
+.synapsys-editor .ProseMirror ul[data-type="taskList"] li > div {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .synapsys-editor .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
   color: var(--text-faint);
