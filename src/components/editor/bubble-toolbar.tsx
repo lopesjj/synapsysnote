@@ -340,7 +340,7 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
       {panel === "link" ? (
         <form
           className="mt-1 flex items-center gap-1.5 border-t border-[var(--border)] px-1 pt-1.5"
-          onMouseDown={keepSelection}
+          onMouseDown={(event) => event.stopPropagation()}
           onSubmit={(event) => {
             event.preventDefault();
             const raw = linkValue.trim();
@@ -355,6 +355,7 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
             autoFocus
             value={linkValue}
             onChange={(event) => setLinkValue(event.target.value)}
+            onFocus={(event) => event.target.select()}
             placeholder="https://…"
             className="h-7 w-52 text-[12px]"
             onKeyDown={(event) => {

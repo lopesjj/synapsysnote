@@ -22,6 +22,9 @@
   --radius-lg: 0.875rem;
   --radius-xl: 1.125rem;
 
+  --breakpoint-3xl: 120rem;
+  --breakpoint-4xl: 160rem;
+
   --ease-luxury: cubic-bezier(0.16, 1, 0.3, 1);
 }
 

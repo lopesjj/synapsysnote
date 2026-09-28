@@ -315,6 +315,7 @@ export function EditorToolbar({
             autoFocus
             value={linkValue}
             onChange={(event) => setLinkValue(event.target.value)}
+            onFocus={(event) => event.target.select()}
             placeholder="https://…"
             className="h-7 w-44 text-[12px]"
             onKeyDown={(event) => {

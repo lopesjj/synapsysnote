@@ -144,24 +144,31 @@ function IntegrationsBody() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-4xl xl:max-w-5xl 2xl:max-w-6xl px-5 py-8 md:px-8">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border)] pb-5">
-        <div>
-          <h1 className="text-[24px] font-semibold tracking-[-0.02em] text-ink">
-            {t("integrations_title")}
-          </h1>
-          <p className="mt-1 text-[13px] text-muted leading-relaxed">
-            {t("integrations_desc")}
-          </p>
+    <div className="mx-auto w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl 3xl:max-w-[88rem] px-4 sm:px-6 md:px-8 xl:px-10 py-6 md:py-9 transition-all">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[var(--border)] pb-6">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex size-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-2)] text-ink shadow-xs">
+              <Cloud className="size-5 text-[var(--accent)]" />
+            </span>
+            <div>
+              <h1 className="text-[22px] sm:text-[24px] lg:text-[26px] font-semibold tracking-[-0.025em] text-ink">
+                {t("integrations_title")}
+              </h1>
+              <p className="mt-0.5 text-[12.5px] sm:text-[13px] text-muted max-w-2xl leading-relaxed">
+                {t("integrations_desc")}
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1 text-[11.5px] text-muted">
+        <div className="flex items-center gap-1.5 self-start sm:self-center rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1 text-[11.5px] text-muted shadow-xs">
           <ShieldCheck className="size-3.5 text-emerald-400" />
-          <span>AES-256-GCM</span>
+          <span className="font-mono font-medium">AES-256-GCM</span>
         </div>
       </div>
 
       {oauthError ? (
-        <div className="mt-5 rounded-[var(--radius-md)] border border-[color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[color-mix(in_oklab,var(--danger)_8%,transparent)] p-3">
+        <div className="mt-5 rounded-[var(--radius-md)] border border-[color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[color-mix(in_oklab,var(--danger)_8%,transparent)] p-3.5">
           <p className="text-[12.5px] text-ink">
             {oauthProvider ? t("integration_auth_failed", { provider: oauthProvider }) : t("connection_failed")}:{" "}
             {oauthErrorLabel(oauthError, t)}
@@ -170,25 +177,25 @@ function IntegrationsBody() {
       ) : null}
 
       {justConnectedLabel ? (
-        <div className="mt-5 rounded-[var(--radius-md)] border border-[color-mix(in_oklab,var(--success)_35%,transparent)] bg-[color-mix(in_oklab,var(--success)_8%,transparent)] p-3">
+        <div className="mt-5 rounded-[var(--radius-md)] border border-[color-mix(in_oklab,var(--success)_35%,transparent)] bg-[color-mix(in_oklab,var(--success)_8%,transparent)] p-3.5">
           <p className="text-[12.5px] text-ink">
             {t("connected_to", { name: justConnectedLabel })}
           </p>
         </div>
       ) : null}
 
-      <div className="mt-8 space-y-3">
+      <div className="mt-8 sm:mt-10 space-y-4">
         <div>
-          <h2 className="text-[16px] font-semibold text-ink">{t("cloud_services_title")}</h2>
-          <p className="text-[12.5px] text-muted">{t("cloud_services_desc")}</p>
+          <h2 className="text-[16px] sm:text-[17px] font-semibold text-ink">{t("cloud_services_title")}</h2>
+          <p className="mt-0.5 text-[12.5px] text-muted">{t("cloud_services_desc")}</p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="flex flex-col justify-between rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm transition hover:border-[var(--border-strong)]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 xl:gap-5">
+          <div className="flex flex-col justify-between rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs transition-all hover:border-[var(--border-strong)] hover:shadow-sm">
             <div>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex size-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] font-semibold text-[13px] text-ink">
+                  <div className="flex size-8.5 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] font-semibold text-[13px] text-ink">
                     N
                   </div>
                   <h3 className="text-[14px] font-semibold text-ink">Notion</h3>
@@ -200,7 +207,7 @@ function IntegrationsBody() {
                 )}
               </div>
 
-              <p className="mt-3 min-h-[4rem] text-[12px] leading-relaxed text-muted">
+              <p className="mt-3.5 min-h-[3.5rem] sm:min-h-[4rem] text-[12px] leading-relaxed text-muted">
                 {integration?.connected
                   ? `${t("notion_account")}: ${integration.workspaceName} · ${t("last_sync")} ${formatRelative(integration.lastSyncAt ?? null, language)}`
                   : t("notion_connect_prompt")}
@@ -217,11 +224,11 @@ function IntegrationsBody() {
                   >
                     {t("import_pages")}
                   </Button>
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="flex-1"
+                      className="w-full truncate"
                       onClick={connectNotion}
                       disabled={busyService === "notion"}
                     >
@@ -230,7 +237,7 @@ function IntegrationsBody() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-muted hover:text-red-400"
+                      className="w-full text-muted hover:text-red-400 truncate"
                       disabled={busyService === "notion"}
                       onClick={() => void revokeAccess("notion", () => adapter.disconnectNotion())}
                     >
@@ -251,12 +258,12 @@ function IntegrationsBody() {
             </div>
           </div>
 
-          <div className="flex flex-col justify-between rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm transition hover:border-[var(--border-strong)]">
+          <div className="flex flex-col justify-between rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs transition-all hover:border-[var(--border-strong)] hover:shadow-sm">
             <div>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex size-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-blue-500/10 text-blue-400">
-                    <Cloud className="size-4" />
+                  <div className="flex size-8.5 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-blue-500/10 text-blue-400">
+                    <Cloud className="size-4.5" />
                   </div>
                   <h3 className="text-[14px] font-semibold text-ink">Google Docs</h3>
                 </div>
@@ -269,7 +276,7 @@ function IntegrationsBody() {
                 )}
               </div>
 
-              <p className="mt-3 min-h-[4rem] text-[12px] leading-relaxed text-muted">
+              <p className="mt-3.5 min-h-[3.5rem] sm:min-h-[4rem] text-[12px] leading-relaxed text-muted">
                 {googleDocsIntegration?.connected
                   ? `${t("google_account")}: ${googleDocsIntegration.accountEmail} · ${t("last_sync")} ${formatRelative(googleDocsIntegration.lastSyncAt ?? null, language)}`
                   : t("google_connect_prompt")}
@@ -291,11 +298,11 @@ function IntegrationsBody() {
                   >
                     {t("import_google_docs")}
                   </Button>
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="flex-1"
+                      className="w-full truncate"
                       onClick={connectGoogle}
                       disabled={busyService === "google"}
                     >
@@ -304,7 +311,7 @@ function IntegrationsBody() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-muted hover:text-red-400"
+                      className="w-full text-muted hover:text-red-400 truncate"
                       disabled={busyService === "google"}
                       onClick={() => void revokeAccess("google", () => adapter.disconnectGoogleDocs?.())}
                     >
@@ -325,12 +332,12 @@ function IntegrationsBody() {
             </div>
           </div>
 
-          <div className="flex flex-col justify-between rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm transition hover:border-[var(--border-strong)]">
+          <div className="flex flex-col justify-between rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs transition-all hover:border-[var(--border-strong)] hover:shadow-sm sm:col-span-2 lg:col-span-1">
             <div>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex size-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-emerald-500/10 text-emerald-400">
-                    <NotebookPen className="size-4" />
+                  <div className="flex size-8.5 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-emerald-500/10 text-emerald-400">
+                    <NotebookPen className="size-4.5" />
                   </div>
                   <h3 className="text-[14px] font-semibold text-ink">Evernote</h3>
                 </div>
@@ -341,7 +348,7 @@ function IntegrationsBody() {
                 )}
               </div>
 
-              <p className="mt-3 min-h-[4rem] text-[12px] leading-relaxed text-muted">
+              <p className="mt-3.5 min-h-[3.5rem] sm:min-h-[4rem] text-[12px] leading-relaxed text-muted">
                 {evernoteIntegration?.connected
                   ? `${t("evernote_account")}: ${evernoteIntegration.displayName || evernoteIntegration.username} · ${t("last_sync")} ${formatRelative(evernoteIntegration.lastSyncAt ?? null, language)}`
                   : t("evernote_connect_prompt")}
@@ -358,11 +365,11 @@ function IntegrationsBody() {
                   >
                     {t("import_evernote_notes")}
                   </Button>
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="flex-1"
+                      className="w-full truncate"
                       onClick={connectEvernote}
                       disabled={busyService === "evernote"}
                     >
@@ -371,7 +378,7 @@ function IntegrationsBody() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-muted hover:text-red-400"
+                      className="w-full text-muted hover:text-red-400 truncate"
                       disabled={busyService === "evernote"}
                       onClick={() => void revokeAccess("evernote", () => adapter.disconnectEvernote?.())}
                     >
@@ -394,24 +401,24 @@ function IntegrationsBody() {
         </div>
       </div>
 
-      <div className="mt-10 space-y-3">
+      <div className="mt-10 sm:mt-12 space-y-4">
         <div>
-          <h2 className="text-[16px] font-semibold text-ink">
+          <h2 className="text-[16px] sm:text-[17px] font-semibold text-ink">
             {t("local_file_imports_title")}
           </h2>
-          <p className="text-[12.5px] text-muted">{t("local_file_imports_desc")}</p>
+          <p className="mt-0.5 text-[12.5px] text-muted">{t("local_file_imports_desc")}</p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col justify-between rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-2)] p-4 shadow-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 xl:gap-5">
+          <div className="flex flex-col justify-between rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-2)] p-5 shadow-xs transition-all hover:border-[var(--border-strong)]">
             <div>
               <div className="flex items-center gap-2.5">
-                <span className="flex size-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] text-ink">
-                  <FileText className="size-4 text-blue-400" />
+                <span className="flex size-8.5 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] text-ink">
+                  <FileText className="size-4.5 text-blue-400" />
                 </span>
-                <span className="text-[13.5px] font-medium text-ink">Microsoft Word (.docx)</span>
+                <span className="text-[14px] font-medium text-ink">Microsoft Word (.docx)</span>
               </div>
-              <p className="mt-2.5 min-h-[3rem] text-[12px] leading-relaxed text-muted">
+              <p className="mt-3 min-h-[3rem] text-[12px] leading-relaxed text-muted">
                 {t("fimp_card_word_desc")}
               </p>
             </div>
@@ -424,15 +431,15 @@ function IntegrationsBody() {
             </Button>
           </div>
 
-          <div className="flex flex-col justify-between rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-2)] p-4 shadow-sm">
+          <div className="flex flex-col justify-between rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-2)] p-5 shadow-xs transition-all hover:border-[var(--border-strong)]">
             <div>
               <div className="flex items-center gap-2.5">
-                <span className="flex size-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] text-ink">
-                  <NotebookPen className="size-4 text-emerald-400" />
+                <span className="flex size-8.5 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] text-ink">
+                  <NotebookPen className="size-4.5 text-emerald-400" />
                 </span>
-                <span className="text-[13.5px] font-medium text-ink">Evernote (.enex)</span>
+                <span className="text-[14px] font-medium text-ink">Evernote (.enex)</span>
               </div>
-              <p className="mt-2.5 min-h-[3rem] text-[12px] leading-relaxed text-muted">
+              <p className="mt-3 min-h-[3rem] text-[12px] leading-relaxed text-muted">
                 {t("fimp_card_evernote_desc")}
               </p>
             </div>
@@ -447,25 +454,25 @@ function IntegrationsBody() {
         </div>
       </div>
 
-      <div className="mt-10 space-y-3">
+      <div className="mt-10 sm:mt-12 space-y-4">
         <div>
-          <h2 className="text-[16px] font-semibold text-ink">
+          <h2 className="text-[16px] sm:text-[17px] font-semibold text-ink">
             {t("synapsys_workspace_backup_title")}
           </h2>
-          <p className="text-[12.5px] text-muted">
+          <p className="mt-0.5 text-[12.5px] text-muted">
             {t("synapsys_workspace_backup_desc")}
           </p>
         </div>
 
-        <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm transition hover:border-[var(--border-strong)]">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start sm:items-center gap-3.5">
-              <div className="flex size-10 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] text-ink shrink-0">
-                <FolderArchive className="size-5 text-indigo-400" />
+        <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs transition-all hover:border-[var(--border-strong)]">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+            <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+              <div className="flex size-10.5 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] text-ink shrink-0">
+                <FolderArchive className="size-5.5 text-indigo-400" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-[14px] font-semibold text-ink">Synapsys Workspace</h3>
+                  <h3 className="text-[14.5px] font-semibold text-ink">Synapsys Workspace</h3>
                   <Badge tone="accent">.zip</Badge>
                 </div>
                 <p className="mt-1 text-[12px] text-muted max-w-xl leading-relaxed">
@@ -474,13 +481,13 @@ function IntegrationsBody() {
               </div>
             </div>
 
-            <div className="flex flex-wrap sm:flex-nowrap gap-2.5 shrink-0">
+            <div className="flex flex-wrap sm:flex-nowrap gap-2.5 shrink-0 self-start md:self-center w-full md:w-auto">
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={handleDownloadSynapsysWorkspace}
                 disabled={downloadingWorkspace}
-                className="flex items-center gap-1.5"
+                className="flex items-center justify-center gap-1.5 flex-1 sm:flex-initial"
               >
                 {downloadingWorkspace ? (
                   <Loader2 className="size-3.5 animate-spin" />
@@ -494,7 +501,7 @@ function IntegrationsBody() {
                 variant="primary"
                 size="sm"
                 onClick={() => useUiStore.getState().setWorkspaceRestoreOpen(true)}
-                className="flex items-center gap-1.5"
+                className="flex items-center justify-center gap-1.5 flex-1 sm:flex-initial"
               >
                 <Upload className="size-3.5" />
                 <span>{t("synapsys_workspace_import_btn")}</span>
@@ -505,29 +512,37 @@ function IntegrationsBody() {
       </div>
 
       {importJobs.length ? (
-        <div className="mt-10 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Layers className="size-4 text-muted" />
-            <h2 className="text-[14px] font-semibold text-ink">{t("import_history")}</h2>
+        <div className="mt-10 sm:mt-12 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs">
+          <div className="flex items-center justify-between gap-2 mb-4 border-b border-[var(--border)] pb-3">
+            <div className="flex items-center gap-2">
+              <Layers className="size-4 text-muted" />
+              <h2 className="text-[14.5px] font-semibold text-ink">{t("import_history")}</h2>
+            </div>
+            <span className="text-[11.5px] text-faint font-medium">
+              {importJobs.length} {importJobs.length === 1 ? t("wizard_unit_item") : t("wizard_unit_items")}
+            </span>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {importJobs.slice(0, 12).map((job) => {
               const provider = resolveJobProvider(job, t);
               return (
                 <div
                   key={job.id}
-                  className="flex flex-wrap items-center gap-2.5 sm:gap-3 rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 transition hover:bg-[var(--surface-2)]/40"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 rounded-[var(--radius-sm)] border border-[var(--border)] px-3.5 py-2.5 transition-colors hover:bg-[var(--surface-2)]/60"
                 >
-                  <div className="w-[8.75rem] shrink-0">
-                    <Badge tone={provider.tone} className="gap-1.5 px-2 py-0.5 font-medium text-[11px]">
-                      {provider.icon}
-                      <span className="truncate">{provider.label}</span>
-                    </Badge>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-36 md:w-40 shrink-0">
+                      <Badge tone={provider.tone} className="gap-1.5 px-2 py-0.5 font-medium text-[11px] max-w-full">
+                        {provider.icon}
+                        <span className="truncate">{provider.label}</span>
+                      </Badge>
+                    </div>
+                    <span className="text-[12px] text-muted tabular-nums truncate">
+                      {job.processedPages}/{Math.max(job.totalPages, job.processedPages)} {t("notes_unit")} · {job.processedFiles}/{Math.max(job.totalFiles, job.processedFiles)} {t("files_unit")}
+                    </span>
                   </div>
-                  <span className="shrink-0 text-[12px] text-muted tabular-nums">
-                    {job.processedPages}/{Math.max(job.totalPages, job.processedPages)} {t("notes_unit")} · {job.processedFiles}/{Math.max(job.totalFiles, job.processedFiles)} {t("files_unit")}
-                  </span>
-                  <span className="ml-auto flex shrink-0 items-center gap-2">
+
+                  <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 ps-1 sm:ps-0">
                     <Badge
                       tone={
                         job.status === "completed"
@@ -540,20 +555,20 @@ function IntegrationsBody() {
                                 ? "neutral"
                                 : "accent"
                       }
+                      className="text-[11px]"
                     >
                       {getStatusLabel(job.status)}
                     </Badge>
-                    <span className="text-[11px] text-faint tabular-nums">
+                    <span className="text-[11.5px] text-faint tabular-nums w-24 text-right">
                       {formatRelative(job.createdAt, language)}
                     </span>
-                  </span>
+                  </div>
                 </div>
               );
             })}
           </div>
         </div>
       ) : null}
-
     </div>
   );
 }

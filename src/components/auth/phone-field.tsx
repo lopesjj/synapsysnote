@@ -14,7 +14,7 @@ export function PhoneField({
   onChange: (value: string) => void;
   required?: boolean;
 }) {
-  const { t, textDir } = useTranslation();
+  const { t } = useTranslation();
   return (
     <AuthField label={t("field_phone")}>
       <Input
@@ -26,11 +26,7 @@ export function PhoneField({
         value={value}
         onChange={(event) => onChange(formatPhone(event.target.value))}
         placeholder="(11) 98765-4321"
-        aria-describedby="phone-field-hint"
       />
-      <span id="phone-field-hint" dir={textDir} className="block text-start text-[11px] leading-snug text-faint">
-        {t("phone_hint")}
-      </span>
     </AuthField>
   );
 }

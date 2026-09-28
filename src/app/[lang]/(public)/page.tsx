@@ -9,13 +9,12 @@ import { useAuth, type OAuthProviderId } from "@/hooks/use-auth";
 import { useUserProfile } from "@/hooks/use-user-profile";
 import { SynapsysLockup } from "@/components/brand/logo";
 import { AuthField } from "@/components/auth/auth-field";
-import { CompleteRegistrationForm } from "@/components/auth/complete-registration-form";
 import { PhoneField } from "@/components/auth/phone-field";
 import { SiteLanguageSwitcher } from "@/components/i18n/site-language-switcher";
 import { LegalConsentNotice, LegalFooter, LegalTrigger } from "@/components/legal/legal-links";
 import { interpolateNodes } from "@/components/legal/legal-text";
 import { formatTabTitle } from "@/lib/document-title";
-import { loadUserProfile, profileNeedsCompletion } from "@/lib/data/user-profile";
+import { loadUserProfile } from "@/lib/data/user-profile";
 import { LEGAL_FACTS, LEGAL_VERSION } from "@/lib/legal/entity";
 import { isValidPhone } from "@/lib/phone";
 import { Button } from "@/components/ui/button";
@@ -83,7 +82,6 @@ export default function LandingPage() {
       typeof window !== "undefined" &&
       new URLSearchParams(window.location.search).get("session") === "sync_failed",
   );
-  const needsCompletion = profileNeedsCompletion(user, profile);
 
   useEffect(() => {
     setFailedAttempts(getFailedLoginAttempts(email));
@@ -116,10 +114,10 @@ export default function LandingPage() {
     if (params.get("logout") === "1") return;
     if (isSplitHosts() && sessionSyncFailed) return;
 
-    if (!sessionSyncFailed && user && !profileLoading && !needsCompletion) {
+    if (!sessionSyncFailed && user && !profileLoading) {
       enterWorkspace(workspaceLanguage(profile, locale), router, "replace");
     }
-  }, [locale, needsCompletion, profile, profileLoading, router, sessionSyncFailed, user]);
+  }, [locale, profile, profileLoading, router, sessionSyncFailed, user]);
 
   const refreshCaptcha = () => {
     setCaptcha(null);
@@ -166,9 +164,7 @@ export default function LandingPage() {
       setFailedAttempts(0);
       const existing = await loadUserProfile(signedIn.uid);
       hydrateFromProfile(existing);
-      if (!profileNeedsCompletion(signedIn, existing)) {
-        enterWorkspace(workspaceLanguage(existing, locale), router);
-      }
+      enterWorkspace(workspaceLanguage(existing, locale), router);
     } catch (error) {
       const isMissingCaptchaError = error instanceof RecaptchaError && error.reason === "missing";
       if (tab === "signin" && !isMissingCaptchaError) {
@@ -190,9 +186,7 @@ export default function LandingPage() {
       setFailedAttempts(0);
       const existing = await loadUserProfile(signedIn.uid);
       hydrateFromProfile(existing);
-      if (!profileNeedsCompletion(signedIn, existing)) {
-        enterWorkspace(workspaceLanguage(existing, locale), router);
-      }
+      enterWorkspace(workspaceLanguage(existing, locale), router);
     } catch (error) {
       toast.error(authErrorText(error, t, "auth_failed"), {
         duration: 7000,
@@ -267,9 +261,7 @@ export default function LandingPage() {
         </div>
 
         <div className="relative z-20 mx-auto w-full max-w-sm sm:max-w-none rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] p-6 sm:p-7 shadow-[var(--shadow-float)]">
-          {user && !sessionSyncFailed && !profileLoading && needsCompletion ? (
-            <CompleteRegistrationForm />
-          ) : user && !sessionSyncFailed && !needsCompletion ? (
+          {user && !sessionSyncFailed ? (
             <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
               <Loader2 className="size-6 animate-spin text-[var(--accent)]" />
               <p dir={textDir} className="text-[13px] font-medium text-ink">{t("accessing_workspace")}</p>
