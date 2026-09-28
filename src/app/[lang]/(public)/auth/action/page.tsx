@@ -71,7 +71,7 @@ function AuthActionForm() {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (password.length < 8) {
+    if (password.length < 6) {
       toast.error(t("password_min_length"));
       return;
     }
@@ -137,10 +137,10 @@ function AuthActionForm() {
                     type="password"
                     dir="ltr"
                     required
-                    minLength={8}
+                    minLength={6}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    placeholder="••••••••"
+                    placeholder="••••••"
                     autoComplete="new-password"
                   />
                 </AuthField>
@@ -149,10 +149,10 @@ function AuthActionForm() {
                     type="password"
                     dir="ltr"
                     required
-                    minLength={8}
+                    minLength={6}
                     value={confirm}
                     onChange={(event) => setConfirm(event.target.value)}
-                    placeholder="••••••••"
+                    placeholder="••••••"
                     autoComplete="new-password"
                   />
                 </AuthField>

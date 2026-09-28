@@ -18,11 +18,15 @@ export async function persistCrossHostSession(remember: boolean) {
   const user = auth.currentUser;
   if (!user) return;
   const idToken = await user.getIdToken();
+  const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
   const response = await fetch("/api/auth/session", {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken, remember }),
+    headers: {
+      "Content-Type": "application/json",
+      ...(userAgent ? { "x-client-user-agent": encodeURIComponent(userAgent) } : {}),
+    },
+    body: JSON.stringify({ idToken, remember, userAgent }),
   });
   if (!response.ok) {
     throw createAuthError("session");
@@ -31,7 +35,11 @@ export async function persistCrossHostSession(remember: boolean) {
 
 export async function hydrateFromSessionCookie(): Promise<boolean> {
   if (skipHydrate || !isSplitHosts()) return false;
-  const response = await fetch("/api/auth/session/token", { credentials: "include" });
+  const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const response = await fetch("/api/auth/session/token", {
+    credentials: "include",
+    headers: userAgent ? { "x-client-user-agent": encodeURIComponent(userAgent) } : {},
+  });
   if (!response.ok) return false;
   const payload = (await response.json().catch(() => ({}))) as { token?: string };
   if (!payload.token) return false;

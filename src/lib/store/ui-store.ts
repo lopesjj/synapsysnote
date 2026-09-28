@@ -46,6 +46,7 @@ interface UiState extends UiPreferences {
   preferencesOpen: boolean;
   preferencesTab: PreferencesTab;
   changePasswordOpen: boolean;
+  workspaceRestoreOpen: boolean;
 
   toggleSidebar: () => void;
   setSidebarCollapsed: (value: boolean) => void;
@@ -64,6 +65,7 @@ interface UiState extends UiPreferences {
   setPreferencesOpen: (value: boolean) => void;
   setPreferencesTab: (value: PreferencesTab) => void;
   setChangePasswordOpen: (value: boolean) => void;
+  setWorkspaceRestoreOpen: (value: boolean) => void;
   setNotesLayout: (value: NotesLayout) => void;
   setNotesSort: (value: NotesSortKey) => void;
   toggleNotesSortDirection: () => void;
@@ -159,6 +161,7 @@ export const useUiStore = create<UiState>()(
       preferencesOpen: false,
       preferencesTab: "appearance",
       changePasswordOpen: false,
+      workspaceRestoreOpen: false,
 
       toggleSidebar: () => set({ sidebarCollapsed: !get().sidebarCollapsed }),
       setSidebarCollapsed: (value) => set({ sidebarCollapsed: value }),
@@ -178,6 +181,7 @@ export const useUiStore = create<UiState>()(
       setMobileSidebarOpen: (value) => set({ mobileSidebarOpen: value }),
       setPaletteOpen: (value) => set({ paletteOpen: value }),
       setImportOpen: (value) => set({ importOpen: value }),
+      setWorkspaceRestoreOpen: (value) => set({ workspaceRestoreOpen: value }),
       setEvernoteImportOpen: (value, step) =>
         set({ evernoteImportOpen: value, evernoteImportStep: value ? (step ?? null) : null }),
       setGoogleDocsImportOpen: (value) => set({ googleDocsImportOpen: value }),

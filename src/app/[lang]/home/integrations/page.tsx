@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Cloud, FileText, Layers, NotebookPen, ShieldCheck } from "lucide-react";
+import { Cloud, Download, FileText, FolderArchive, Layers, Loader2, NotebookPen, ShieldCheck, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/lib/data/provider";
 import { useUiStore } from "@/lib/store/ui-store";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/primitives";
 import { formatRelative } from "@/lib/utils";
 import { useTranslation, localizeErrorMessage, type TranslationKey } from "@/lib/i18n/translations";
 import { connectGoogleDocsAccount } from "@/lib/import/google-connect";
+import { downloadAccountData } from "@/lib/account/account-client";
 
 export default function IntegrationsPage() {
   return (
@@ -49,14 +50,26 @@ function IntegrationsBody() {
       googleTokenExpiresAt <= now
   );
 
+  const [downloadingWorkspace, setDownloadingWorkspace] = useState(false);
+
   const oauthError = params.get("error");
-  // As rotas de retorno dizem qual servico falhou; codigos antigos trazem o
-  // nome do servico no proprio codigo.
   const oauthProvider = oauthError
     ? connectedProviderLabel(params.get("provider") || oauthError, t)
     : "";
   const justConnected = params.get("connected");
   const justConnectedLabel = justConnected ? connectedProviderLabel(justConnected, t) : "";
+
+  const handleDownloadSynapsysWorkspace = async () => {
+    setDownloadingWorkspace(true);
+    try {
+      await downloadAccountData({ workspaceId: adapter.workspaceId });
+      toast.success(t("account_export_running"));
+    } catch {
+      toast.error(t("account_export_failed"));
+    } finally {
+      setDownloadingWorkspace(false);
+    }
+  };
 
   const connectNotion = async () => {
     setBusyService("notion");
@@ -434,6 +447,63 @@ function IntegrationsBody() {
         </div>
       </div>
 
+      <div className="mt-10 space-y-3">
+        <div>
+          <h2 className="text-[16px] font-semibold text-ink">
+            {t("synapsys_workspace_backup_title")}
+          </h2>
+          <p className="text-[12.5px] text-muted">
+            {t("synapsys_workspace_backup_desc")}
+          </p>
+        </div>
+
+        <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm transition hover:border-[var(--border-strong)]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="flex size-10 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] text-ink shrink-0">
+                <FolderArchive className="size-5 text-indigo-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[14px] font-semibold text-ink">Synapsys Workspace</h3>
+                  <Badge tone="accent">.zip</Badge>
+                </div>
+                <p className="mt-1 text-[12px] text-muted max-w-xl leading-relaxed">
+                  {t("synapsys_workspace_card_hint")}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap sm:flex-nowrap gap-2.5 shrink-0">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleDownloadSynapsysWorkspace}
+                disabled={downloadingWorkspace}
+                className="flex items-center gap-1.5"
+              >
+                {downloadingWorkspace ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Download className="size-3.5" />
+                )}
+                <span>{t("synapsys_workspace_export_btn")}</span>
+              </Button>
+
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => useUiStore.getState().setWorkspaceRestoreOpen(true)}
+                className="flex items-center gap-1.5"
+              >
+                <Upload className="size-3.5" />
+                <span>{t("synapsys_workspace_import_btn")}</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {importJobs.length ? (
         <div className="mt-10 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5">
           <div className="flex items-center gap-2 mb-3">
@@ -550,7 +620,6 @@ function connectedProviderLabel(code: string, t: (key: TranslationKey) => string
   if (normalized.startsWith("google")) return t("provider_google_docs");
   if (normalized.startsWith("evernote")) return t("provider_evernote");
   if (normalized.startsWith("notion")) return t("provider_notion");
-  // Texto vindo da URL nao aparece na tela.
   return "";
 }
 
@@ -562,6 +631,5 @@ function oauthErrorLabel(code: string, t: (key: TranslationKey) => string): stri
   if (/state_mismatch|invalid_state/.test(code)) return t("oauth_error_state");
   if (/incomplete_response/.test(code)) return t("oauth_error_incomplete");
   if (/start_from_app/.test(code)) return t("oauth_error_start_from_app");
-  // Qualquer outro codigo (inclusive texto colado na URL) vira a mensagem generica.
   return t("oauth_error_generic");
 }

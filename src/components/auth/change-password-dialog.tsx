@@ -58,7 +58,7 @@ export function ChangePasswordDialog({
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (nextPassword.length < 8) {
+    if (nextPassword.length < 6) {
       toast.error(t("password_min_length"));
       return;
     }
@@ -106,7 +106,7 @@ export function ChangePasswordDialog({
                   required
                   value={currentPassword}
                   onChange={(event) => setCurrentPassword(event.target.value)}
-                  placeholder="••••••••"
+                  placeholder="••••••"
                   autoComplete="current-password"
                 />
               </AuthField>
@@ -115,10 +115,10 @@ export function ChangePasswordDialog({
               <Input
                 type="password"
                 required
-                minLength={8}
+                minLength={6}
                 value={nextPassword}
                 onChange={(event) => setNextPassword(event.target.value)}
-                placeholder="••••••••"
+                placeholder="••••••"
                 autoComplete="new-password"
               />
             </AuthField>
@@ -126,10 +126,10 @@ export function ChangePasswordDialog({
               <Input
                 type="password"
                 required
-                minLength={8}
+                minLength={6}
                 value={confirm}
                 onChange={(event) => setConfirm(event.target.value)}
-                placeholder="••••••••"
+                placeholder="••••••"
                 autoComplete="new-password"
               />
             </AuthField>

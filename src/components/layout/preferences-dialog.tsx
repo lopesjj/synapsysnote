@@ -50,6 +50,7 @@ import { cn, isMac } from "@/lib/utils";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
 import { SUPPORTED_LANGUAGES } from "@/lib/i18n/languages";
 import { announceToScreenReader, speakText } from "@/components/accessibility/screen-reader";
+import { useWorkspace } from "@/lib/data/provider";
 import {
   deleteMyAccount,
   downloadAccountData,
@@ -60,6 +61,7 @@ import {
 import { authErrorText } from "@/lib/auth/error-message";
 import { AuthError } from "@/lib/auth/errors";
 import { loginHref, navigateTo } from "@/lib/domains";
+import { resetFirestoreCache } from "@/lib/firebase/client";
 
 export function PreferencesDialog({
   open,
@@ -999,6 +1001,7 @@ function Avatar({
 function PrivacySection() {
   const { t } = useTranslation();
   const { mode, signOut } = useAuth();
+  const { adapter } = useWorkspace();
   const [busy, setBusy] = useState<"export" | "sessions" | "delete" | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [understood, setUnderstood] = useState(false);
@@ -1032,7 +1035,8 @@ function PrivacySection() {
   const exportData = async () => {
     setBusy("export");
     try {
-      await downloadAccountData();
+      await downloadAccountData({ workspaceId: adapter?.workspaceId });
+      toast.success(t("account_export_running"));
     } catch {
       toast.error(t("account_export_failed"));
     } finally {
@@ -1056,6 +1060,7 @@ function PrivacySection() {
     setBusy("delete");
     try {
       await reauthenticate(needsPassword ? password : undefined);
+      void resetFirestoreCache().catch(() => undefined);
       await deleteMyAccount();
       toast.success(t("account_deleted"));
       await leave();

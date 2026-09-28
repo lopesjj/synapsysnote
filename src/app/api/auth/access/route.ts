@@ -21,8 +21,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const user = await requireUser(request);
-    const body = (await request.json().catch(() => ({}))) as { event?: string };
-    await recordAccess(request, user, body?.event === "login" ? "login" : "session");
+    const body = (await request.json().catch(() => ({}))) as {
+      event?: string;
+      userAgent?: string;
+      ip?: string;
+    };
+    await recordAccess(
+      request,
+      user,
+      body?.event === "login" ? "login" : "session",
+      body?.userAgent,
+      body?.ip
+    );
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Falha ao registrar acesso" }, { status: 401 });

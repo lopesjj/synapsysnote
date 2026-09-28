@@ -54,6 +54,15 @@ const FileImportWizard = dynamic(
   { ssr: false }
 );
 
+const SynapsysWorkspaceImportDialog = dynamic(
+  () =>
+    import("@/components/import/synapsys-workspace-import-dialog").then(
+      (mod) => mod.SynapsysWorkspaceImportDialog
+    ),
+  { ssr: false }
+);
+import { scheduleRestoreResumptionCheck } from "@/lib/import/workspace-restore-manager";
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -75,6 +84,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const evernoteImportStep = useUiStore((state) => state.evernoteImportStep);
   const googleDocsImportOpen = useUiStore((state) => state.googleDocsImportOpen);
   const fileImportProvider = useUiStore((state) => state.fileImportProvider);
+  const workspaceRestoreOpen = useUiStore((state) => state.workspaceRestoreOpen);
   const backgroundRuns = useBackgroundImportStore((state) => state.runs);
   const backgroundImport = firstRunningBackgroundImport(backgroundRuns);
   const preferencesOpen = useUiStore((state) => state.preferencesOpen);
@@ -165,7 +175,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ? evernoteImportOpen
           : run.wizard === "google-docs"
             ? googleDocsImportOpen
-            : fileImportProvider === run.fileProvider;
+            : run.wizard === "workspace"
+              ? workspaceRestoreOpen
+              : fileImportProvider === run.fileProvider;
 
       if (!notifiedImportsRef.current.has(run.key)) {
         notifiedImportsRef.current.add(run.key);
@@ -179,7 +191,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       if (!wizardVisible) useBackgroundImportStore.getState().clear(run.key);
     }
-  }, [backgroundRuns, evernoteImportOpen, googleDocsImportOpen, fileImportProvider, t]);
+  }, [backgroundRuns, evernoteImportOpen, googleDocsImportOpen, fileImportProvider, workspaceRestoreOpen, t]);
 
   const hasBackgroundImport = Boolean(backgroundImport);
 
@@ -199,8 +211,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const store = useUiStore.getState();
     if (run.wizard === "evernote") store.setEvernoteImportOpen(true);
     else if (run.wizard === "google-docs") store.setGoogleDocsImportOpen(true);
+    else if (run.wizard === "workspace") store.setWorkspaceRestoreOpen(true);
     else if (run.fileProvider) store.setFileImportProvider(run.fileProvider);
   }, []);
+
+  useEffect(() => {
+    if (adapter?.workspaceId) {
+      scheduleRestoreResumptionCheck(adapter.workspaceId);
+    }
+  }, [adapter?.workspaceId]);
 
   useEffect(() => {
     if (isSplitHosts() && isLoginHost()) {
@@ -427,10 +446,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <Loader2 className="size-3.5 animate-spin text-[var(--accent)]" />
             <span className="text-ink">
-              {t("importing_progress", {
-                current: backgroundImport.processedNotes,
-                total: backgroundImport.totalNotes,
-              })}
+              {backgroundImport.wizard === "workspace"
+                ? backgroundImport.totalFiles > 0 && backgroundImport.processedFiles < backgroundImport.totalFiles
+                  ? t("synapsys_import_progress_media", {
+                      current: String(backgroundImport.processedFiles),
+                      total: String(backgroundImport.totalFiles),
+                    })
+                  : t("synapsys_import_progress_pages")
+                : t("importing_progress", {
+                    current: backgroundImport.processedNotes,
+                    total: backgroundImport.totalNotes,
+                  })}
             </span>
           </button>
         ) : null}
@@ -478,6 +504,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <ChangePasswordDialog
         open={changePasswordOpen}
         onOpenChange={(open) => useUiStore.getState().setChangePasswordOpen(open)}
+      />
+      <SynapsysWorkspaceImportDialog
+        open={workspaceRestoreOpen}
+        onOpenChange={(open) => useUiStore.getState().setWorkspaceRestoreOpen(open)}
       />
       <ScreenReaderLiveRegion />
       <LibrasPlayer />

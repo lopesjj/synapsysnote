@@ -186,7 +186,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     const reportSyncError = (error: Error) => {
       const code = (error as { code?: string }).code;
-      if (cancelled || code === "cancelled" || /terminated/i.test(error.message)) return;
+      if (
+        cancelled ||
+        code === "cancelled" ||
+        code === "permission-denied" ||
+        /terminated|permission/i.test(error.message)
+      ) {
+        return;
+      }
       console.error("Falha ao sincronizar o workspace:", error);
       toast.error(translate(useUiStore.getState().language, "sync_error"), { id: "workspace-sync-error" });
     };

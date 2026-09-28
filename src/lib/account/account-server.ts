@@ -5,7 +5,7 @@ import { Zip, ZipDeflate, ZipPassThrough, strToU8 } from "fflate";
 import { adminAuth, adminBucket, adminDb, isAdminConfigured } from "@/lib/firebase/admin";
 import { clearEvernoteConnection } from "@/lib/evernote/store";
 import { readStoredToken, revokeGoogleToken, revokeNotionToken, settleWithin } from "@/lib/import/integration-disconnect";
-import { parseStoredBlocks } from "@/lib/trash/purge-core";
+import { CARD_IMAGE_FIELDS, extractStoragePath, parseStoredBlocks } from "@/lib/trash/purge-core";
 
 const SECRET_FIELDS = new Set(["accessTokenCipher", "refreshTokenCipher", "blocks"]);
 
@@ -86,24 +86,32 @@ export async function deleteAccount(uid: string): Promise<DeletionSummary> {
   const bucket = adminBucket();
   const { owned, member } = await workspacesOf(uid);
 
-  for (const workspace of owned) {
-    await revokeIntegrations(workspace);
-    await db.recursiveDelete(workspace);
-    await bucket.deleteFiles({ prefix: `workspaces/${workspace.id}/` }).catch(() => undefined);
-  }
+  const ownedTasks = owned.map(async (workspace) => {
+    await revokeIntegrations(workspace).catch(() => undefined);
+    await Promise.all([
+      db.recursiveDelete(workspace).catch(() => undefined),
+      bucket.deleteFiles({ prefix: `workspaces/${workspace.id}/` }).catch(() => undefined),
+    ]);
+  });
 
-  for (const workspace of member) {
-    await workspace.collection("members").doc(uid).delete().catch(() => undefined);
-    await workspace.update({ memberIds: FieldValue.arrayRemove(uid) }).catch(() => undefined);
-  }
+  const memberTasks = member.map(async (workspace) => {
+    await Promise.all([
+      workspace.collection("members").doc(uid).delete().catch(() => undefined),
+      workspace.update({ memberIds: FieldValue.arrayRemove(uid) }).catch(() => undefined),
+    ]);
+  });
 
-  await db.recursiveDelete(db.collection("users").doc(uid));
-  await bucket.deleteFiles({ prefix: `users/${uid}/` }).catch(() => undefined);
-  await adminAuth()
-    .deleteUser(uid)
-    .catch((error: { code?: string }) => {
-      if (error?.code !== "auth/user-not-found") throw error;
-    });
+  await Promise.all([
+    ...ownedTasks,
+    ...memberTasks,
+    db.recursiveDelete(db.collection("users").doc(uid)).catch(() => undefined),
+    bucket.deleteFiles({ prefix: `users/${uid}/` }).catch(() => undefined),
+    adminAuth()
+      .deleteUser(uid)
+      .catch((error: { code?: string }) => {
+        if (error?.code !== "auth/user-not-found") throw error;
+      }),
+  ]);
 
   return {
     workspacesDeleted: owned.map((ref) => ref.id),
@@ -133,12 +141,7 @@ async function workspaceData(workspace: DocumentReference, uid: string, owner: b
       collectionData(workspace.collection("trashed_media")),
       workspace.collection("members").doc(uid).get(),
     ]);
-  const pages = await Promise.all(
-    pagesSnap.docs.map(async (page) => ({
-      ...docData(page),
-      versions: await collectionData(page.ref.collection("versions")),
-    }))
-  );
+  const pages = pagesSnap.docs.map(docData);
   const databases = await Promise.all(
     databasesSnap.docs.map(async (database) => ({
       ...docData(database),
@@ -188,7 +191,89 @@ export async function accountSnapshot(uid: string) {
   };
 }
 
-export function accountExportStream(uid: string): ReadableStream<Uint8Array> {
+interface MediaItem {
+  media?: { storagePath?: unknown; url?: unknown };
+  children?: MediaItem[];
+}
+
+function collectBlockPaths(blocks: unknown[], add: (val: unknown) => void) {
+  if (!Array.isArray(blocks)) return;
+  for (const block of blocks as MediaItem[]) {
+    if (block?.media) {
+      add(block.media.storagePath);
+      add(block.media.url);
+    }
+    if (block?.children?.length) {
+      collectBlockPaths(block.children, add);
+    }
+  }
+}
+
+function extractActiveStoragePaths(
+  workspaceId: string,
+  pages: Array<Record<string, unknown>>,
+  notebooks: Array<Record<string, unknown>>,
+  databases: Array<Record<string, unknown>>,
+  flashcards: Array<Record<string, unknown>>,
+  quarantinedPaths: Set<string>
+): Set<string> {
+  const activePaths = new Set<string>();
+  const prefix = `workspaces/${workspaceId}/`;
+
+  const add = (val: unknown) => {
+    const p = extractStoragePath(val);
+    if (p && p.startsWith(prefix) && !quarantinedPaths.has(p)) {
+      activePaths.add(p);
+    }
+  };
+
+  for (const page of pages) {
+    if (page.deletedAt || page.trashedWith) continue;
+    add(page.coverUrl);
+    add(page.icon);
+    collectBlockPaths(parseStoredBlocks(page), add);
+  }
+
+  for (const notebook of notebooks) {
+    if (notebook.deletedAt || notebook.trashedWith) continue;
+    add(notebook.coverUrl);
+    add(notebook.emoji);
+  }
+
+  for (const database of databases) {
+    if (database.deletedAt || database.trashedWith) continue;
+    add(database.icon);
+    if (Array.isArray(database.rows)) {
+      for (const row of database.rows as Array<{ values?: Record<string, unknown> }>) {
+        if (!row.values) continue;
+        for (const val of Object.values(row.values)) {
+          if (!Array.isArray(val)) continue;
+          for (const item of val) {
+            if (item && typeof item === "object") {
+              const entry = item as { storagePath?: unknown; url?: unknown };
+              add(entry.storagePath);
+              add(entry.url);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  for (const card of flashcards) {
+    for (const field of CARD_IMAGE_FIELDS) {
+      add(card[field]);
+    }
+  }
+
+  for (const q of quarantinedPaths) {
+    activePaths.delete(q);
+  }
+
+  return activePaths;
+}
+
+export function workspaceExportStream(workspaceId: string, uid: string): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       let failed = false;
@@ -203,23 +288,246 @@ export function accountExportStream(uid: string): ReadableStream<Uint8Array> {
         if (final) controller.close();
       });
       try {
-        const snapshot = await accountSnapshot(uid);
-        const json = new ZipDeflate("synapsys-dados.json", { level: 6 });
-        zip.add(json);
-        json.push(strToU8(JSON.stringify(snapshot, null, 2)), true);
+        const db = adminDb();
+        const wsRef = db.collection("workspaces").doc(workspaceId);
+        const wsSnap = await wsRef.get();
+        if (!wsSnap.exists) {
+          throw new Error("Workspace não encontrado");
+        }
+        const memberIds = (wsSnap.get("memberIds") as string[]) || [];
+        const ownerId = wsSnap.get("ownerId") as string;
+        if (ownerId !== uid && !memberIds.includes(uid)) {
+          throw new Error("Acesso não autorizado ao workspace");
+        }
 
-        const bucket = adminBucket();
-        const prefixes = [`users/${uid}/`, ...snapshot.ownedWorkspaceIds.map((id) => `workspaces/${id}/`)];
-        for (const prefix of prefixes) {
-          const [files] = await bucket.getFiles({ prefix });
-          for (const file of files) {
-            if (file.name.endsWith("/")) continue;
-            const [content] = await file.download();
-            const entry = new ZipPassThrough(`arquivos/${file.name}`);
-            zip.add(entry);
-            entry.push(new Uint8Array(content.buffer, content.byteOffset, content.byteLength), true);
+        const info = new ZipPassThrough("synapsys-backup-info.txt");
+        zip.add(info);
+        info.push(
+          strToU8(
+            `Synapsys Workspace Backup\nWorkspace: ${workspaceId}\nData: ${new Date().toISOString()}\n`
+          ),
+          true
+        );
+
+        const wsData = await workspaceData(wsRef, uid, true);
+        const quarantinedPaths = new Set<string>();
+        for (const item of (wsData.trashedMedia || []) as Array<Record<string, unknown>>) {
+          if (typeof item.storagePath === "string") {
+            quarantinedPaths.add(item.storagePath);
+          }
+          if (typeof item.url === "string") {
+            const p = extractStoragePath(item.url);
+            if (p) quarantinedPaths.add(p);
           }
         }
+
+        const activePages = (wsData.pages || []).filter((p) => !p.deletedAt && !p.trashedWith);
+        const activeNotebooks = (wsData.notebooks || []).filter((n) => !n.deletedAt && !n.trashedWith);
+        const activeDatabases = (wsData.databases || []).filter((d) => !(d as Record<string, unknown>).deletedAt && !(d as Record<string, unknown>).trashedWith);
+        const activePageIds = new Set(activePages.map((p) => String(p.id)));
+        const activeFlashcards = (wsData.flashcards || []).filter((f) => !f.pageId || activePageIds.has(String(f.pageId)));
+
+        const activeStoragePaths = extractActiveStoragePaths(
+          workspaceId,
+          activePages,
+          activeNotebooks,
+          activeDatabases,
+          activeFlashcards,
+          quarantinedPaths
+        );
+
+        const bucket = adminBucket();
+        const prefix = `workspaces/${workspaceId}/`;
+
+        const filesManifest: Array<{
+          storagePath: string;
+          archivePath: string;
+          name: string;
+          mimeType: string;
+          sizeBytes: number;
+        }> = [];
+
+        for (const storagePath of activeStoragePaths) {
+          if (quarantinedPaths.has(storagePath)) continue;
+          const relative = storagePath.startsWith(prefix) ? storagePath.slice(prefix.length) : storagePath;
+          const name = storagePath.split("/").pop() || relative;
+          filesManifest.push({
+            storagePath,
+            archivePath: `files/${relative}`,
+            name,
+            mimeType: "application/octet-stream",
+            sizeBytes: 0,
+          });
+        }
+
+        const workspacePayload = {
+          synapsysFormat: "synapsys-workspace-v1",
+          version: "1.0",
+          exportedAt: new Date().toISOString(),
+          workspace: wsData.workspace,
+          notebooks: activeNotebooks,
+          pages: activePages,
+          databases: activeDatabases,
+          flashcards: activeFlashcards,
+          files: filesManifest,
+        };
+
+        const json = new ZipDeflate("synapsys-workspace.json", { level: 6 });
+        zip.add(json);
+        json.push(strToU8(JSON.stringify(workspacePayload)), true);
+
+        const pool = 25;
+        let fileIdx = 0;
+        async function downloadWorker() {
+          while (fileIdx < filesManifest.length && !failed) {
+            const target = filesManifest[fileIdx++];
+            if (!target) break;
+            try {
+              const file = bucket.file(target.storagePath);
+              const [content] = await file.download();
+              if (content && !failed) {
+                const entry = new ZipPassThrough(target.archivePath);
+                zip.add(entry);
+                entry.push(new Uint8Array(content.buffer, content.byteOffset, content.byteLength), true);
+              }
+            } catch {}
+          }
+        }
+
+        await Promise.all(Array.from({ length: pool }, () => downloadWorker()));
+        zip.end();
+      } catch (error) {
+        failed = true;
+        zip.terminate();
+        controller.error(error);
+      }
+    },
+  });
+}
+
+export function accountExportStream(uid: string, targetWorkspaceId?: string): ReadableStream<Uint8Array> {
+  if (targetWorkspaceId) {
+    return workspaceExportStream(targetWorkspaceId, uid);
+  }
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let failed = false;
+      const zip = new Zip((error, chunk, final) => {
+        if (failed) return;
+        if (error) {
+          failed = true;
+          controller.error(error);
+          return;
+        }
+        controller.enqueue(chunk);
+        if (final) controller.close();
+      });
+      try {
+        const info = new ZipPassThrough("synapsys-backup-info.txt");
+        zip.add(info);
+        info.push(
+          strToU8(
+            `Synapsys Account Backup\nUser: ${uid}\nData: ${new Date().toISOString()}\n`
+          ),
+          true
+        );
+
+        const snapshot = await accountSnapshot(uid);
+        const primaryWorkspace = snapshot.workspaces[0];
+        const primaryId = String(primaryWorkspace?.workspace?.id || snapshot.ownedWorkspaceIds[0] || `ws_${uid}`);
+
+        const quarantinedPaths = new Set<string>();
+        for (const item of (primaryWorkspace?.trashedMedia || []) as Array<Record<string, unknown>>) {
+          if (typeof item.storagePath === "string") {
+            quarantinedPaths.add(item.storagePath);
+          }
+          if (typeof item.url === "string") {
+            const p = extractStoragePath(item.url);
+            if (p) quarantinedPaths.add(p);
+          }
+        }
+
+        const activePages = (primaryWorkspace?.pages || []).filter((p) => !p.deletedAt && !p.trashedWith);
+        const activeNotebooks = (primaryWorkspace?.notebooks || []).filter((n) => !n.deletedAt && !n.trashedWith);
+        const activeDatabases = (primaryWorkspace?.databases || []).filter((d) => !(d as Record<string, unknown>).deletedAt && !(d as Record<string, unknown>).trashedWith);
+        const activePageIds = new Set(activePages.map((p) => String(p.id)));
+        const activeFlashcards = (primaryWorkspace?.flashcards || []).filter((f) => !f.pageId || activePageIds.has(String(f.pageId)));
+
+        const activeStoragePaths = extractActiveStoragePaths(
+          primaryId,
+          activePages,
+          activeNotebooks,
+          activeDatabases,
+          activeFlashcards,
+          quarantinedPaths
+        );
+
+        const bucket = adminBucket();
+
+        const filesManifest: Array<{
+          storagePath: string;
+          archivePath: string;
+          name: string;
+          mimeType: string;
+          sizeBytes: number;
+        }> = [];
+
+        for (const storagePath of activeStoragePaths) {
+          if (quarantinedPaths.has(storagePath)) continue;
+          const archivePath = storagePath.startsWith(`workspaces/${primaryId}/`)
+            ? `files/${storagePath.slice(`workspaces/${primaryId}/`.length)}`
+            : `arquivos/${storagePath}`;
+          filesManifest.push({
+            storagePath,
+            archivePath,
+            name: storagePath.split("/").pop() || storagePath,
+            mimeType: "application/octet-stream",
+            sizeBytes: 0,
+          });
+        }
+
+        const workspacePayload = {
+          synapsysFormat: "synapsys-workspace-v1",
+          version: "1.0",
+          exportedAt: new Date().toISOString(),
+          workspace: primaryWorkspace?.workspace || { id: primaryId, name: "Workspace" },
+          notebooks: activeNotebooks,
+          pages: activePages,
+          databases: activeDatabases,
+          flashcards: activeFlashcards,
+          account: snapshot.account,
+          profile: snapshot.profile,
+          accessLogs: snapshot.accessLogs,
+          files: filesManifest,
+        };
+
+        const wsJson = new ZipDeflate("synapsys-workspace.json", { level: 6 });
+        zip.add(wsJson);
+        wsJson.push(strToU8(JSON.stringify(workspacePayload)), true);
+
+        const legacyJson = new ZipDeflate("synapsys-dados.json", { level: 6 });
+        zip.add(legacyJson);
+        legacyJson.push(strToU8(JSON.stringify(snapshot)), true);
+
+        const pool = 25;
+        let fileIdx = 0;
+        async function downloadWorker() {
+          while (fileIdx < filesManifest.length && !failed) {
+            const target = filesManifest[fileIdx++];
+            if (!target) break;
+            try {
+              const file = bucket.file(target.storagePath);
+              const [content] = await file.download();
+              if (content && !failed) {
+                const entry = new ZipPassThrough(target.archivePath);
+                zip.add(entry);
+                entry.push(new Uint8Array(content.buffer, content.byteOffset, content.byteLength), true);
+              }
+            } catch {}
+          }
+        }
+
+        await Promise.all(Array.from({ length: pool }, () => downloadWorker()));
         zip.end();
       } catch (error) {
         failed = true;

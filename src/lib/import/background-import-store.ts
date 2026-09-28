@@ -4,7 +4,7 @@ import { create } from "zustand";
 import type { ImportedNoteResult } from "./run-import";
 import type { ImportProvider } from "./parse-file";
 
-export type BackgroundImportWizard = "evernote" | "google-docs" | "file";
+export type BackgroundImportWizard = "evernote" | "google-docs" | "file" | "workspace";
 
 export type BackgroundImportStatus = "running" | "done" | "canceled";
 
@@ -78,7 +78,25 @@ export const useBackgroundImportStore = create<BackgroundImportStore>((set) => (
     set((state) => {
       const current = state.runs[key];
       if (!current) return state;
-      return { runs: { ...state.runs, [key]: { ...current, ...patch } } };
+      const processedFiles =
+        typeof patch.processedFiles === "number"
+          ? Math.max(current.processedFiles, patch.processedFiles)
+          : current.processedFiles;
+      const processedNotes =
+        typeof patch.processedNotes === "number"
+          ? Math.max(current.processedNotes, patch.processedNotes)
+          : current.processedNotes;
+      return {
+        runs: {
+          ...state.runs,
+          [key]: {
+            ...current,
+            ...patch,
+            processedFiles,
+            processedNotes,
+          },
+        },
+      };
     }),
 
   finish: (key, results) =>

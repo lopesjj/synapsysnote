@@ -1,7 +1,7 @@
 import { ApiError, jsonError } from "@/lib/api/errors";
 import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { requireUser } from "@/lib/api/session";
-import { accountExportStream } from "@/lib/account/account-server";
+import { workspaceExportStream } from "@/lib/account/account-server";
 import { adminAuth } from "@/lib/firebase/admin";
 
 export const runtime = "nodejs";
@@ -19,9 +19,9 @@ export async function GET(request: Request) {
     } else {
       user = await requireUser(request);
     }
+    const workspaceId = url.searchParams.get("workspaceId") || `ws_${user.uid}`;
 
-    const workspaceId = url.searchParams.get("workspaceId") || undefined;
-    const source = accountExportStream(user.uid, workspaceId);
+    const source = workspaceExportStream(workspaceId, user.uid);
     const reader = source.getReader();
     const body = new ReadableStream<Uint8Array>({
       async pull(controller) {
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     return new Response(body, {
       headers: {
         "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="synapsys-workspace-${stamp}.zip"`,
+        "Content-Disposition": `attachment; filename="synapsys-${workspaceId}-${stamp}.zip"`,
         "Cache-Control": "no-store",
         "Set-Cookie": "synapsys_download_started=1; Path=/; Max-Age=60; SameSite=Lax",
       },

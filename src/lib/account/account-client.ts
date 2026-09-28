@@ -37,13 +37,12 @@ async function failure(response: Response): Promise<Error> {
   return new Error(payload.error || `Falha na API (${response.status})`);
 }
 
-export async function downloadAccountData(): Promise<void> {
-  const headers = await firebaseAuthHeaders();
-  const response = await fetch("/api/account/export", { headers });
-  if (!response.ok) throw await failure(response);
+async function handleBlobDownload(response: Response): Promise<void> {
   const blob = await response.blob();
   const disposition = response.headers.get("content-disposition") ?? "";
-  const name = disposition.match(/filename="([^"]+)"/)?.[1] ?? "synapsys-note-dados.zip";
+  const name =
+    disposition.match(/filename="([^"]+)"/)?.[1] ??
+    `synapsys-workspace-${new Date().toISOString().slice(0, 10)}.zip`;
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -52,6 +51,44 @@ export async function downloadAccountData(): Promise<void> {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+export async function downloadAccountData(options?: { workspaceId?: string }): Promise<void> {
+  const { getFirebaseAuth } = await import("@/lib/firebase/client");
+  const auth = getFirebaseAuth();
+  if (typeof auth.authStateReady === "function") {
+    await auth.authStateReady();
+  }
+  const user = auth.currentUser;
+  if (!user) throw new Error("Faça login para continuar");
+  const token = await user.getIdToken();
+  const queryParts: string[] = [];
+  if (options?.workspaceId) {
+    queryParts.push(`workspaceId=${encodeURIComponent(options.workspaceId)}`);
+  }
+  queryParts.push(`token=${encodeURIComponent(token)}`);
+  const endpoint = options?.workspaceId ? "/api/workspace/export" : "/api/account/export";
+  const downloadUrl = `${endpoint}?${queryParts.join("&")}`;
+
+  document.cookie = "synapsys_download_started=; Path=/; Max-Age=0";
+
+  const link = document.createElement("a");
+  link.href = downloadUrl;
+  link.setAttribute("download", `synapsys-${options?.workspaceId || "workspace"}-${new Date().toISOString().slice(0, 10)}.zip`);
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => link.remove(), 60_000);
+
+  await new Promise<void>((resolve) => {
+    const start = Date.now();
+    const interval = setInterval(() => {
+      if (document.cookie.includes("synapsys_download_started=1") || Date.now() - start > 15_000) {
+        clearInterval(interval);
+        document.cookie = "synapsys_download_started=; Path=/; Max-Age=0";
+        resolve();
+      }
+    }, 100);
+  });
 }
 
 export async function revokeAllSessions(): Promise<void> {
@@ -66,6 +103,7 @@ export async function deleteMyAccount(): Promise<void> {
     method: "POST",
     headers,
     body: JSON.stringify({ confirm: true }),
+    keepalive: true,
   });
   if (!response.ok) throw await failure(response);
 }

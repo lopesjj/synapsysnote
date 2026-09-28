@@ -39,10 +39,15 @@ export async function reportAccess(event: AccessEvent): Promise<void> {
     if (!uid) return;
     if (event === "session" && readSessionUid() === uid) return;
     writeSessionUid(uid);
+    const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const authHeaders = await firebaseAuthHeaders();
     await fetch("/api/auth/access", {
       method: "POST",
-      headers: await firebaseAuthHeaders(),
-      body: JSON.stringify({ event }),
+      headers: {
+        ...authHeaders,
+        ...(userAgent ? { "x-client-user-agent": encodeURIComponent(userAgent) } : {}),
+      },
+      body: JSON.stringify({ event, userAgent }),
       keepalive: true,
     });
   } catch {}

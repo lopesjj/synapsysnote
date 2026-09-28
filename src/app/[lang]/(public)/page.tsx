@@ -371,10 +371,10 @@ export default function LandingPage() {
                 type="password"
                 dir="ltr"
                 required
-                minLength={8}
+                minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="••••••"
                 autoComplete={tab === "signin" ? "current-password" : "new-password"}
               />
             </AuthField>

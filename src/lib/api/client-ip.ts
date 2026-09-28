@@ -32,6 +32,14 @@ function normalize(value: string): string {
  * confirmar o formato e olhar o log de producao — e ai o ajuste nao exige
  * recompilar.
  */
+const INFRA_PROXIES = new Set(["35.219.200.8", "127.0.0.1", "::1", "unknown"]);
+
+function isInfraProxy(ip: string): boolean {
+  if (INFRA_PROXIES.has(ip)) return true;
+  if (ip.startsWith("169.254.")) return true;
+  return false;
+}
+
 function trustedHops(): number {
   const raw = Number(process.env.TRUSTED_PROXY_HOPS ?? 1);
   return Number.isInteger(raw) && raw >= 0 ? raw : 1;
@@ -50,20 +58,41 @@ export function clientIpFromHeader(
 
   if (!parts.length) return UNKNOWN_CLIENT_IP;
 
-  const index = parts.length - 1 - hops;
-  // Menos elementos do que o esperado significa que nao ha proxy na frente:
-  // sobra o unico valor presente, que nesse caso e o proprio cliente.
-  if (index < 0) return parts[0];
+  let index = parts.length - 1 - hops;
+  if (index < 0) index = 0;
+
+  while (index > 0 && isInfraProxy(parts[index])) {
+    index -= 1;
+  }
+
+  if (isInfraProxy(parts[index])) {
+    const candidate = parts.find((p) => !isInfraProxy(p));
+    if (candidate) return candidate;
+  }
+
   return parts[index];
 }
 
 let shapeLogged = false;
 
 export function clientIpOf(request: Request): string {
+  const xRealIp = request.headers.get("x-real-ip");
+  if (xRealIp && !isInfraProxy(normalize(xRealIp))) {
+    return normalize(xRealIp);
+  }
+
+  const cfIp = request.headers.get("cf-connecting-ip");
+  if (cfIp && !isInfraProxy(normalize(cfIp))) {
+    return normalize(cfIp);
+  }
+
+  const fastlyIp = request.headers.get("fastly-client-ip");
+  if (fastlyIp && !isInfraProxy(normalize(fastlyIp))) {
+    return normalize(fastlyIp);
+  }
+
   const header = request.headers.get("x-forwarded-for");
 
-  // Uma linha por instancia, para conferir o formato real em producao sem
-  // encher o log nem despejar a cadeia inteira de IPs.
   if (!shapeLogged && header) {
     shapeLogged = true;
     const parts = header.split(",").map((part) => part.trim()).filter(Boolean);

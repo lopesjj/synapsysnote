@@ -22,6 +22,8 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as {
       idToken?: string;
       remember?: boolean;
+      userAgent?: string;
+      ip?: string;
     };
     const idToken = body.idToken?.trim();
     if (!idToken) throw new ApiError(400, "Token de sessão ausente.");
@@ -37,7 +39,7 @@ export async function POST(request: Request) {
     const expiresIn = sessionExpiresInMs(remember);
     const session = await adminAuth().createSessionCookie(idToken, { expiresIn });
     await setSessionCookie(session, remember);
-    await recordAccess(request, { uid: decoded.uid, email: decoded.email }, "login");
+    await recordAccess(request, { uid: decoded.uid, email: decoded.email }, "login", body.userAgent, body.ip);
     return Response.json({ ok: true });
   } catch (error) {
     console.error("[auth-session] Erro ao criar cookie de sessão:", error);

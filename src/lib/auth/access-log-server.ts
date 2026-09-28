@@ -17,23 +17,42 @@ export type AccessLogEvent = "login" | "session";
 export async function recordAccess(
   request: Request,
   user: { uid: string; email?: string | null },
-  event: AccessLogEvent
+  event: AccessLogEvent,
+  clientUserAgentOverride?: string | null,
+  clientIpOverride?: string | null
 ): Promise<void> {
   if (!isAdminConfigured()) return;
   try {
+    const rawClientHeader = request.headers.get("x-client-user-agent");
+    let headerUserAgent = "";
+    if (rawClientHeader) {
+      try {
+        headerUserAgent = decodeURIComponent(rawClientHeader);
+      } catch {
+        headerUserAgent = rawClientHeader;
+      }
+    }
+    const serverUserAgent = (request.headers.get("user-agent") || "").slice(0, 512);
+    const candidate =
+      (clientUserAgentOverride?.trim()) ||
+      (headerUserAgent?.trim()) ||
+      (serverUserAgent !== "Google" ? serverUserAgent : "") ||
+      serverUserAgent;
+
+    const resolvedIp = clientIpOverride?.trim() || clientIpOf(request);
+
     await adminDb()
       .collection("access_logs")
       .add({
         uid: user.uid,
         email: user.email || null,
-        ip: clientIpOf(request),
-        userAgent: (request.headers.get("user-agent") || "").slice(0, 512),
+        ip: resolvedIp,
+        userAgent: candidate.slice(0, 512),
         event,
         createdAt: FieldValue.serverTimestamp(),
         expiresAt: Timestamp.fromMillis(Date.now() + ACCESS_LOG_RETENTION_DAYS * DAY_MS),
       });
   } catch (error) {
-    // O login nao pode falhar por causa do registro; o erro fica no log.
     console.error("[access-log] falha ao registrar acesso", error);
   }
 }

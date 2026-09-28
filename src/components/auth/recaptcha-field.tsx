@@ -6,7 +6,7 @@ import { useTheme } from "@/components/theme-provider";
 import { useTranslation } from "@/lib/i18n/translations";
 import type { SupportedLanguage } from "@/types/models";
 
-const SCRIPT_BASE = "https://www.google.com/recaptcha/enterprise.js?render=explicit";
+const SCRIPT_BASE = "https://www.google.com/recaptcha/api.js?render=explicit";
 
 const RECAPTCHA_LANGUAGE: Record<SupportedLanguage, string> = {
   pt: "pt-BR",
