@@ -83,7 +83,7 @@ const pt: LegalBundle = {
         id: "ai",
         title: "Recursos de inteligência artificial",
         blocks: [
-          "Alguns recursos usam inteligência artificial: transcrição de áudio e vídeo, geração de flashcards, identificação de cards repetidos, tradução e a organização em matérias e tópicos de um conteúdo programático que você colar. Eles processam apenas o conteúdo que você escolhe, no momento em que você aciona o recurso.",
+          "Alguns recursos usam inteligência artificial: transcrição de áudio e vídeo, geração de flashcards, identificação de cards repetidos, tradução e a organização em disciplinas e tópicos de um conteúdo programático que você colar. Eles processam apenas o conteúdo que você escolhe, no momento em que você aciona o recurso.",
           {
             note: "Resultados gerados por IA podem conter erros, omissões ou imprecisões. Revise transcrições e flashcards antes de estudar com eles e confira sempre com a fonte oficial — lei seca, edital ou bibliografia indicada.",
           },

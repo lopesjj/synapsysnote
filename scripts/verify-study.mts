@@ -58,6 +58,10 @@ assert.deepEqual(topicListFromText("Crase\nConcordância\nRegência"), ["Crase",
 const csv = subjectsFromCsv("Matéria;Tópico\nPortuguês;Crase\n;Regência\nDireito Penal;Crimes contra a vida\n");
 assert.equal(csv.length, 2);
 assert.deepEqual(csv[0].topics, ["Crase", "Regência"]);
+assert.deepEqual(
+  subjectsFromCsv("Disciplina;Tópico\nPortuguês;Crase\n").map((subject) => [subject.name, subject.topics]),
+  [["Português", ["Crase"]]]
+);
 
 const runIn = parseSyllabus(
   "DIREITO ADMINISTRATIVO: 1 Atos administrativos. 2 Poderes da administração. LÍNGUA PORTUGUESA: 1 Compreensão de textos. 2 Crase. NOÇÕES DE INFORMÁTICA (TI): 1 Redes. 2 Segurança da informação conforme a Lei nº 12.965/2014."

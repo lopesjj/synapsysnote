@@ -14,7 +14,6 @@ const STUDY_TITLES: [string, StudyKey][] = [
   ["/home/study/goals/new", "goal_form_new"],
   ["/home/study/goals", "nav_goals"],
   ["/home/study/subjects", "nav_subjects"],
-  ["/home/study/syllabus", "nav_syllabus"],
   ["/home/study/schedule", "nav_schedule"],
   ["/home/study/reviews", "nav_reviews"],
   ["/home/study/log", "nav_log"],

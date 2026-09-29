@@ -71,7 +71,7 @@ Arquivos: [`firestore.rules`](../firestore.rules) ·
       name, institution, role, examDate, icon, notes, archived,
       weeklyGoalMinutes, weeklyGoalQuestions, order, createdAt, updatedAt
 
-  /study_subjects/{subjectId}                    ← matérias de um objetivo
+  /study_subjects/{subjectId}                    ← disciplinas de um objetivo
       planId, name, color, notebookId, order, createdAt, updatedAt
       topics[] { id, name, done, doneAt, pageId, url }
 
@@ -205,11 +205,11 @@ só os campos mudados (`patchRowValues`, com `FieldPath` no Firestore), para
 que edições simultâneas em dois aparelhos não se sobrescrevam.
 
 **Concorrência no módulo de estudos.** Operações que leem e reescrevem um
-array (tópicos da matéria, ponteiro e histórico do ciclo, linhas de simulado)
+array (tópicos da disciplina, ponteiro e histórico do ciclo, linhas de simulado)
 passam por `transform` no backend: no Firestore rodam dentro de
 `runTransaction`, recalculadas sobre a versão mais recente do documento; sem
 conexão, o cálculo usa o cache local e a gravação entra na fila de sincronização.
-Excluir uma matéria ajusta o ciclo e desvincula as linhas de simulado; remover
+Excluir uma disciplina ajusta o ciclo e desvincula as linhas de simulado; remover
 tópicos desvincula sessões e revisões; excluir uma sessão apaga as revisões que
 ela gerou, reabre as que ela concluiu e limpa a referência no histórico do ciclo.
 
