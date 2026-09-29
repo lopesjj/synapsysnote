@@ -609,7 +609,7 @@ export function FocusPill() {
   if (!active || open) return null;
   const subject = subjectById(timer.subjectId);
   return (
-    <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[45] flex -translate-x-1/2 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] py-1 pl-1 pr-1.5 shadow-[var(--shadow-float)] md:bottom-5">
+    <div className="absolute bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[45] flex -translate-x-1/2 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] py-1 pl-1 pr-1.5 shadow-[var(--shadow-float)] md:bottom-5">
       <button
         type="button"
         onClick={() => (timer.status === "running" ? pauseTimer() : startTimer())}

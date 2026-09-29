@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { usePathname } from "@/lib/i18n/navigation";
 import { isStudyPath, useStudyUi } from "@/lib/study/ui-store";
-import { FocusEngine, FocusOverlay, FocusPill, TimerTitle } from "./focus-timer";
+import { FocusEngine, FocusOverlay, TimerTitle } from "./focus-timer";
 import { LogSessionDialog } from "./log-session-dialog";
 import { Scratchpad } from "./scratchpad";
 
@@ -33,7 +33,6 @@ export function StudyLayer() {
       <FocusEngine />
       <TimerTitle />
       <FocusOverlay />
-      <FocusPill />
       <LogSessionDialog />
       <Scratchpad />
     </>

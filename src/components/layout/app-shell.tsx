@@ -41,6 +41,7 @@ import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/
 import { useStudyT } from "@/lib/study/i18n";
 import { useStudyUi } from "@/lib/study/ui-store";
 import { useActiveModule, useSwitchModule } from "@/components/study/study-sidebar";
+import { FocusPill } from "@/components/study/focus-timer";
 
 const EvernoteImportWizard = dynamic(
   () => import("@/components/import/evernote-import-wizard").then((mod) => mod.EvernoteImportWizard),
@@ -383,7 +384,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ) : null}
       </AnimatePresence>
 
-      <main id="main-content" tabIndex={-1} className="flex min-w-0 flex-1 flex-col focus:outline-none">
+      <main id="main-content" tabIndex={-1} className="relative flex min-w-0 flex-1 flex-col focus:outline-none">
         {chromeHidden || isDocView ? null : (
           <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface)]/90 px-3.5 py-2.5 backdrop-blur-xl md:hidden">
             <button
@@ -404,6 +405,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {mode === "local" && !chromeHidden ? <DemoBanner /> : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto pb-20 md:pb-0">{children}</div>
+
+        <FocusPill />
 
         {zenMode ? (
           <Tooltip
