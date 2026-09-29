@@ -578,7 +578,7 @@ export function FocusButton({
   const start = () => {
     const store = useStudyUi.getState();
     const idle = store.timer.status === "idle";
-    const pageId = materialNote({ reviewId, subjectId, topicId });
+    const pageId = reviewId ? materialNote({ reviewId, subjectId, topicId }) : null;
     if (idle) {
       store.setTimer({ subjectId: subjectId ?? null, topicId: topicId ?? null, reviewId: reviewId ?? null, pageId });
     }
