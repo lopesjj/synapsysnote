@@ -30,6 +30,7 @@ const de: LegalBundle = {
               "Bilder, PDFs, Audio und Video anhängen und Sprachnotizen aufnehmen;",
               "Inhalte aus Notion, Evernote, Google Docs und Dateien importieren;",
               "Lernkarten und Transkripte mit Hilfe von künstlicher Intelligenz erstellen;",
+              "Lerneinheiten mit einem Fokus-Timer erfassen und geplante Wiederholungen, Probeprüfungen und Lernpläne verfolgen;",
               "das Gelernte mit Spaced Repetition wiederholen.",
             ],
           },
@@ -82,7 +83,7 @@ const de: LegalBundle = {
         id: "ai",
         title: "Funktionen mit künstlicher Intelligenz",
         blocks: [
-          "Einige Funktionen nutzen künstliche Intelligenz: Audio- und Videotranskription, Erstellung von Lernkarten, Erkennung doppelter Karten und Übersetzung. Sie verarbeiten nur die Inhalte, die du auswählst, und nur dann, wenn du die Funktion aktivierst.",
+          "Einige Funktionen nutzen künstliche Intelligenz: Audio- und Videotranskription, Erstellung von Lernkarten, Erkennung doppelter Karten, Übersetzung und das Gliedern eines von dir eingefügten Stoffplans in Fächer und Themen. Sie verarbeiten nur die Inhalte, die du auswählst, und nur dann, wenn du die Funktion aktivierst.",
           {
             note: "KI-generierte Ergebnisse können Fehler, Auslassungen oder Ungenauigkeiten enthalten. Überprüfe Transkripte und Lernkarten, bevor du damit lernst, und gleiche sie immer mit der offiziellen Quelle ab — dem Gesetzestext, der Prüfungsausschreibung oder der empfohlenen Literatur.",
           },
@@ -118,14 +119,14 @@ const de: LegalBundle = {
         blocks: [
           "Wir bemühen uns, den Dienst verfügbar und deine Daten sicher zu halten. Dennoch kann es zu Unterbrechungen wegen Wartungsarbeiten, Updates oder aus Gründen außerhalb unserer Kontrolle kommen.",
           "Wir empfehlen, Kopien von allem aufzubewahren, was für dich unverzichtbar ist — zum Beispiel durch den Export von Notizen als PDF.",
-          "{brand} ist ein Hilfsmittel zum Lernen und garantiert nicht, dass du Auswahlprüfungen für den öffentlichen Dienst, Hochschulaufnahmeprüfungen oder andere Prüfungen bestehst.",
+          "{brand} ist ein Hilfsmittel zum Lernen und garantiert nicht, dass du Auswahlprüfungen für den öffentlichen Dienst, Hochschulaufnahmeprüfungen oder andere Prüfungen bestehst. Statistiken, Vorschläge und Lernpläne im Lernmodul sind Schätzungen, die aus deinen Einträgen berechnet werden.",
         ],
       },
       {
         id: "liability",
         title: "Haftungsbeschränkung",
         blocks: [
-          "Im größtmöglichen gesetzlich zulässigen Umfang haften wir nicht für mittelbare Schäden, entgangene Gewinne oder entgangene Chancen, die aus der Nutzung oder der Unmöglichkeit der Nutzung des Dienstes entstehen, noch für von Nutzern erstellte Inhalte oder Dienste Dritter.",
+          "Im größtmöglichen gesetzlich zulässigen Umfang haften wir nicht für mittelbare Schäden, entgangene Gewinne oder entgangene Chancen, die aus der Nutzung oder der Unmöglichkeit der Nutzung des Dienstes entstehen, noch für von Nutzern erstellte Inhalte oder Dienste Dritter. Externe Links, die du in Lernthemen speicherst, führen zu Websites Dritter, deren Inhalte und Datenschutzpraktiken wir nicht kontrollieren.",
           "Nichts in diesen Bedingungen schließt Rechte aus oder schränkt sie ein, die vertraglich nicht ausgeschlossen werden können, einschließlich der Rechte, die dir das brasilianische Verbraucherschutzgesetzbuch (Código de Defesa do Consumidor, Gesetz Nr. 8.078/1990) und die zwingenden Verbraucherschutzgesetze deines Landes garantieren.",
         ],
       },
@@ -183,7 +184,7 @@ const de: LegalBundle = {
               rows: [
                 ["Registrierung", "Name, E-Mail, Telefonnummer und Profilbild", "Du oder dein Google-Konto"],
                 ["Zugangsdaten", "Passwort, nur verschlüsselt vom Authentifizierungsanbieter gespeichert", "Du"],
-                ["Inhalte", "Notizen, Seiten, Notizbücher, Lernkarten, Anhänge, Audio und Video", "Du und die von dir durchgeführten Importe"],
+                ["Inhalte", "Notizen, Seiten, Notizbücher, Lernkarten, Anhänge, Audio und Video; im Lernmodul Ziele, Fächer und Themen (mit den externen Links, die du hinzufügst), Lerneinheiten (mit Material und verknüpften Notizen), Aufgaben, Wiederholungen, Probeprüfungen, Lernpläne, Erinnerungen und Schnellnotizen", "Du und die von dir durchgeführten Importe"],
                 ["Integrationen", "Zugriffstoken für Notion, Evernote und Google Docs", "Der verbundene Dienst, mit deiner Autorisierung"],
                 ["Einstellungen", "Sprache, Design, Barrierefreiheit und Layout", "Du"],
                 ["Zustimmung zu Dokumenten", "Version und Datum, an dem du die Nutzungsbedingungen und diese Richtlinie akzeptiert hast", "Du"],
@@ -204,6 +205,7 @@ const de: LegalBundle = {
               rows: [
                 ["Dein Konto erstellen und pflegen, Zugang authentifizieren und Inhalte synchronisieren", "Vertragserfüllung (Art. 7, V)"],
                 ["Von dir ausgelöste Funktionen ausführen: Importe, Transkripte, Lernkarten und Übersetzungen", "Vertragserfüllung (Art. 7, V)"],
+                ["Statistiken, geplante Wiederholungen und Lernpläne aus deinen Lerneinträgen berechnen", "Vertragserfüllung (Art. 7, V)"],
                 ["Konten vor Betrug und unbefugtem Zugriff schützen, auch mithilfe von reCAPTCHA", "Berechtigtes Interesse (Art. 7, IX)"],
                 ["Zugriffsprotokolle für die im brasilianischen Marco Civil da Internet vorgeschriebene Dauer aufbewahren", "Rechtliche Verpflichtung (Art. 7, II)"],
                 ["Unverzichtbare Mitteilungen senden, wie Passwortzurücksetzungen und Hinweise auf Änderungen", "Vertragserfüllung (Art. 7, V)"],
@@ -220,13 +222,14 @@ const de: LegalBundle = {
         id: "ai",
         title: "Künstliche Intelligenz",
         blocks: [
-          "Wenn du ein Transkript anforderst, Lernkarten erstellst oder einen Abschnitt übersetzt, senden wir dem Anbieter nur die für die Aufgabe erforderlichen Inhalte:",
+          "Wenn du ein Transkript anforderst, Lernkarten erstellst, einen Stoffplan mit KI gliederst oder einen Abschnitt übersetzt, senden wir dem Anbieter nur die für die Aufgabe erforderlichen Inhalte:",
           {
             list: [
               "**Audio- und Videotranskription:** Google Gemini API; alternativ ein Open-Source-Modell (Whisper), das auf unseren eigenen Servern ausgeführt wird.",
               "**Live-Transkription von Sprachnotizen:** die Spracherkennung deines Browsers, die Audio an den Hersteller (Google, Microsoft oder Apple) senden kann. Bleibt deaktiviert, bis du sie bei der Aufnahme einschaltest.",
               "**Lernkarten und Erkennung doppelter Karten:** Google Gemini API.",
               "**Übersetzung:** Google Gemini API; solange sie nicht verfügbar ist, Google Cloud Translation.",
+              "**Gliederung von Stoffplänen:** Google Gemini API, nur wenn du „Mit KI ordnen“ wählst; die normale automatische Aufteilung läuft in deinem Browser.",
             ],
           },
           { note: "Wir verwenden deine Inhalte nicht zum Training von KI-Modellen, und keine KI-Funktion läuft ohne eine Aktion von dir." },
@@ -404,6 +407,7 @@ const de: LegalBundle = {
               "die Firebase-Authentifizierungssitzung, die dich angemeldet hält;",
               "einen Zähler für Anmeldeversuche, mit dem reCAPTCHA bei Bedarf angezeigt wird;",
               "Einstellungen der Oberfläche wie Design, Seitenleiste, zuletzt verwendete Notizbücher und die für Transkripte und Lernkarten gewählten Sprachen;",
+              "den Zustand des Lernmoduls, etwa einen laufenden Fokus-Timer, die zuletzt geöffnete Ansicht und die sichtbaren Ebenen der Planung;",
               "eine Kopie deiner Notizen und Notizbücher, damit sich die App schneller öffnet und auch offline funktioniert.",
             ],
           },

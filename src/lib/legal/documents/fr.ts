@@ -30,6 +30,7 @@ const fr: LegalBundle = {
               "joindre des images, des PDF, des fichiers audio et des vidéos, et enregistrer des notes vocales ;",
               "importer du contenu depuis Notion, Evernote, Google Docs et des fichiers ;",
               "générer des flashcards et des transcriptions avec l'aide de l'intelligence artificielle ;",
+              "enregistrer des séances d'étude avec un minuteur de concentration et suivre les révisions programmées, les examens blancs et les plannings ;",
               "réviser ce que vous avez étudié avec la répétition espacée.",
             ],
           },
@@ -82,7 +83,7 @@ const fr: LegalBundle = {
         id: "ai",
         title: "Fonctionnalités d'intelligence artificielle",
         blocks: [
-          "Certaines fonctionnalités utilisent l'intelligence artificielle : transcription audio et vidéo, génération de flashcards, détection de flashcards en double et traduction. Elles ne traitent que le contenu que vous choisissez, au moment où vous activez la fonctionnalité.",
+          "Certaines fonctionnalités utilisent l'intelligence artificielle : transcription audio et vidéo, génération de flashcards, détection de flashcards en double, traduction et organisation en matières et en thèmes d'un programme que vous collez. Elles ne traitent que le contenu que vous choisissez, au moment où vous activez la fonctionnalité.",
           {
             note: "Les résultats générés par l'IA peuvent contenir des erreurs, des omissions ou des inexactitudes. Relisez les transcriptions et les flashcards avant de les utiliser pour étudier, et vérifiez toujours auprès de la source officielle — texte de loi, avis de concours ou bibliographie recommandée.",
           },
@@ -118,14 +119,14 @@ const fr: LegalBundle = {
         blocks: [
           "Nous nous efforçons de maintenir le service disponible et vos données en sécurité. Malgré cela, des interruptions peuvent survenir pour maintenance, mises à jour ou pour des raisons indépendantes de notre volonté.",
           "Nous vous recommandons de conserver des copies de tout ce qui vous est essentiel — par exemple en exportant des notes en PDF.",
-          "{brand} est un outil d'aide à l'étude et ne garantit pas la réussite aux concours, aux examens d'entrée à l'université ou aux évaluations.",
+          "{brand} est un outil d'aide à l'étude et ne garantit pas la réussite aux concours, aux examens d'entrée à l'université ou aux évaluations. Les statistiques, suggestions et plannings du module d'étude sont des estimations calculées à partir des données que vous enregistrez.",
         ],
       },
       {
         id: "liability",
         title: "Limitation de responsabilité",
         blocks: [
-          "Dans toute la mesure permise par la loi, nous ne sommes pas responsables des dommages indirects, des pertes de bénéfices ou des pertes d'opportunités découlant de l'utilisation ou de l'impossibilité d'utiliser le service, ni du contenu créé par les utilisateurs ou des services tiers.",
+          "Dans toute la mesure permise par la loi, nous ne sommes pas responsables des dommages indirects, des pertes de bénéfices ou des pertes d'opportunités découlant de l'utilisation ou de l'impossibilité d'utiliser le service, ni du contenu créé par les utilisateurs ou des services tiers. Les liens externes que vous enregistrez dans les sujets d'étude mènent à des sites tiers dont nous ne contrôlons ni le contenu ni les pratiques de confidentialité.",
           "Rien dans ces conditions n'exclut ni ne limite les droits qui ne peuvent être écartés par contrat, y compris ceux garantis par le Code de défense du consommateur brésilien (loi n° 8.078/1990) et par les lois impératives de protection des consommateurs de votre pays.",
         ],
       },
@@ -183,7 +184,7 @@ const fr: LegalBundle = {
               rows: [
                 ["Inscription", "Nom, e-mail, numéro de téléphone et photo de profil", "Vous ou votre compte Google"],
                 ["Identifiants", "Mot de passe, conservé uniquement sous forme chiffrée par le fournisseur d'authentification", "Vous"],
-                ["Contenu", "Notes, pages, carnets, flashcards, pièces jointes, fichiers audio et vidéos", "Vous et les importations que vous effectuez"],
+                ["Contenu", "Notes, pages, carnets, flashcards, pièces jointes, fichiers audio et vidéos ; dans le module d'étude, objectifs, matières et sujets (avec les liens externes que vous ajoutez), séances (avec le support et les notes liées), questions, révisions, examens blancs, plannings, rappels et notes rapides", "Vous et les importations que vous effectuez"],
                 ["Intégrations", "Jetons d'accès à Notion, Evernote et Google Docs", "Le service connecté, avec votre autorisation"],
                 ["Préférences", "Langue, thème, accessibilité et disposition", "Vous"],
                 ["Données techniques", "Adresse IP, pays approximatif, navigateur, appareil, date et heure d'accès", "Collecte automatique"],
@@ -204,6 +205,7 @@ const fr: LegalBundle = {
               rows: [
                 ["Créer et maintenir votre compte, authentifier l'accès et synchroniser votre contenu", "Exécution d'un contrat (art. 7, V)"],
                 ["Exécuter les fonctionnalités que vous activez : importations, transcriptions, flashcards et traductions", "Exécution d'un contrat (art. 7, V)"],
+                ["Calculer des statistiques, des révisions programmées et des plannings à partir de vos enregistrements d'étude", "Exécution d'un contrat (art. 7, V)"],
                 ["Protéger les comptes contre la fraude et les accès non autorisés, notamment avec reCAPTCHA", "Intérêt légitime (art. 7, IX)"],
                 ["Conserver les journaux d'accès pendant la durée prévue par le Marco Civil da Internet (cadre civil de l'Internet au Brésil)", "Obligation légale (art. 7, II)"],
                 ["Envoyer des communications essentielles, comme la réinitialisation du mot de passe et les avis de modification", "Exécution d'un contrat (art. 7, V)"],
@@ -220,13 +222,14 @@ const fr: LegalBundle = {
         id: "ai",
         title: "Intelligence artificielle",
         blocks: [
-          "Lorsque vous demandez une transcription, générez des flashcards ou traduisez un passage, nous envoyons au fournisseur uniquement le contenu nécessaire à cette tâche :",
+          "Lorsque vous demandez une transcription, générez des flashcards, organisez un programme avec l'IA ou traduisez un passage, nous envoyons au fournisseur uniquement le contenu nécessaire à cette tâche :",
           {
             list: [
               "**Transcription audio et vidéo :** Google Gemini API ; à titre d'alternative, un modèle open source (Whisper) exécuté sur nos propres serveurs.",
               "**Flashcards et détection de flashcards en double :** Google Gemini API.",
               "**Traduction :** Google Gemini API ; tant qu'elle est indisponible, Google Cloud Translation.",
               "**Transcription en direct des notes vocales :** la reconnaissance vocale de votre navigateur, qui peut envoyer l'audio au fournisseur (Google, Microsoft ou Apple). Reste désactivée tant que vous ne l'activez pas lors de l'enregistrement.",
+              "**Organisation de programmes :** Google Gemini API, uniquement lorsque vous choisissez « Organiser avec l'IA » ; le découpage automatique habituel se fait dans votre navigateur.",
             ],
           },
           { note: "Nous n'utilisons pas votre contenu pour entraîner des modèles d'intelligence artificielle, et aucune fonctionnalité d'IA n'est exécutée sans une action de votre part." },
@@ -404,6 +407,7 @@ const fr: LegalBundle = {
               "la session d'authentification Firebase, qui vous maintient connecté ;",
               "un compteur de tentatives de connexion, utilisé pour afficher le reCAPTCHA si nécessaire ;",
               "les préférences d'interface, comme le thème, la barre latérale, les carnets récents et les langues de transcription et des flashcards ;",
+              "l'état du module d'étude, comme un minuteur de concentration en cours, le dernier écran ouvert et les calques visibles de la Planification ;",
               "une copie de vos notes et carnets, pour que l'application s'ouvre plus vite et continue de fonctionner hors ligne.",
             ],
           },

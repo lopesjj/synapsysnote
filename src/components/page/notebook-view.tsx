@@ -242,7 +242,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
   }, [notes, searchQuery]);
 
   const notebookDatabases = useMemo(
-    () => databases.filter((database) => database.notebookId === notebookId && !database.deletedAt),
+    () => databases.filter((database) => database.notebookId === notebookId && !database.deletedAt && !isPlanningName(database.name)),
     [databases, notebookId]
   );
 

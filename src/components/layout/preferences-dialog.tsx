@@ -6,6 +6,7 @@ import {
   Camera,
   Check,
   Globe,
+  GraduationCap,
   Keyboard,
   Loader2,
   Monitor,
@@ -62,6 +63,8 @@ import { authErrorText } from "@/lib/auth/error-message";
 import { AuthError } from "@/lib/auth/errors";
 import { loginHref, navigateTo } from "@/lib/domains";
 import { resetFirestoreCache } from "@/lib/firebase/client";
+import { useStudyT } from "@/lib/study/i18n";
+import { StudyPreferencesSection } from "@/components/study/study-preferences";
 
 export function PreferencesDialog({
   open,
@@ -71,6 +74,7 @@ export function PreferencesDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { t } = useTranslation();
+  const { st } = useStudyT();
   const activeTab = useUiStore((state) => state.preferencesTab);
   const setActiveTab = useUiStore((state) => state.setPreferencesTab);
 
@@ -80,6 +84,7 @@ export function PreferencesDialog({
     { id: "language", label: t("language"), icon: <Globe className="size-4" /> },
     { id: "typography", label: t("typography"), icon: <Type className="size-4" /> },
     { id: "profile", label: t("profile"), icon: <User className="size-4" /> },
+    { id: "study", label: st("prefs_tab"), icon: <GraduationCap className="size-4" /> },
     { id: "privacy", label: t("privacy_data"), icon: <ShieldCheck className="size-4" /> },
     { id: "shortcuts", label: t("shortcuts"), icon: <Keyboard className="size-4" /> },
   ];
@@ -98,6 +103,8 @@ export function PreferencesDialog({
         return t("profile");
       case "privacy":
         return t("privacy_data");
+      case "study":
+        return st("prefs_tab");
       case "shortcuts":
         return t("shortcuts");
     }
@@ -113,6 +120,8 @@ export function PreferencesDialog({
         return t("language_description");
       case "privacy":
         return t("privacy_data_description");
+      case "study":
+        return st("prefs_desc");
       default:
         return "";
     }
@@ -210,6 +219,7 @@ export function PreferencesDialog({
             {activeTab === "typography" && <TypographySection />}
             {activeTab === "profile" && <ProfileSection />}
             {activeTab === "privacy" && <PrivacySection />}
+            {activeTab === "study" && <StudyPreferencesSection />}
             {activeTab === "shortcuts" && <ShortcutsSection />}
           </div>
         </div>
@@ -886,7 +896,7 @@ function ProfileSection() {
             maxLength={60}
             onChange={(event) => setDraft(event.target.value.slice(0, 60))}
             placeholder={t("display_name_placeholder")}
-            className="h-11 sm:h-9 text-[15px] sm:text-[13px] px-3.5 sm:px-3 rounded-lg flex-1"
+            className="h-11 sm:h-9 text-[15px] sm:text-[13px] px-3.5 sm:px-3 rounded-lg sm:flex-1"
           />
           <Button
             variant="primary"

@@ -124,13 +124,32 @@ async function collectionData(ref: FirebaseFirestore.CollectionReference) {
   return snap.docs.map(docData);
 }
 
+export const STUDY_EXPORT_COLLECTIONS = [
+  "study_plans",
+  "study_subjects",
+  "study_sessions",
+  "study_reviews",
+  "study_exams",
+  "study_cycles",
+  "study_reminders",
+  "study_stickies",
+  "study_meta",
+] as const;
+
+async function studyData(workspace: DocumentReference) {
+  const entries = await Promise.all(
+    STUDY_EXPORT_COLLECTIONS.map(async (name) => [name, await collectionData(workspace.collection(name))] as const)
+  );
+  return Object.fromEntries(entries) as Record<(typeof STUDY_EXPORT_COLLECTIONS)[number], Array<Record<string, unknown>>>;
+}
+
 async function workspaceData(workspace: DocumentReference, uid: string, owner: boolean) {
   const base = docData(await workspace.get());
   if (!owner) {
     const self = await workspace.collection("members").doc(uid).get();
     return { workspace: base, membership: self.exists ? docData(self) : null };
   }
-  const [pagesSnap, notebooks, databasesSnap, flashcards, importJobs, integrations, trashedMedia, members] =
+  const [pagesSnap, notebooks, databasesSnap, flashcards, importJobs, integrations, trashedMedia, members, study] =
     await Promise.all([
       workspace.collection("pages").get(),
       collectionData(workspace.collection("notebooks")),
@@ -140,6 +159,7 @@ async function workspaceData(workspace: DocumentReference, uid: string, owner: b
       collectionData(workspace.collection("integrations")),
       collectionData(workspace.collection("trashed_media")),
       workspace.collection("members").doc(uid).get(),
+      studyData(workspace),
     ]);
   const pages = pagesSnap.docs.map(docData);
   const databases = await Promise.all(
@@ -158,6 +178,7 @@ async function workspaceData(workspace: DocumentReference, uid: string, owner: b
     importJobs,
     integrations,
     trashedMedia,
+    study,
   };
 }
 
@@ -369,6 +390,7 @@ export function workspaceExportStream(workspaceId: string, uid: string): Readabl
           pages: activePages,
           databases: activeDatabases,
           flashcards: activeFlashcards,
+          study: wsData.study,
           files: filesManifest,
         };
 
@@ -495,6 +517,7 @@ export function accountExportStream(uid: string, targetWorkspaceId?: string): Re
           pages: activePages,
           databases: activeDatabases,
           flashcards: activeFlashcards,
+          study: primaryWorkspace?.study,
           account: snapshot.account,
           profile: snapshot.profile,
           accessLogs: snapshot.accessLogs,

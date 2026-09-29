@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useLocale, usePathname, useRouter } from "@/lib/i18n/navigation";
 import { useLocaleUrlSync } from "@/hooks/use-locale-url-sync";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
-import { FilePlus, Home, Loader2, Minimize2, Search } from "lucide-react";
+import { FilePlus, GraduationCap, Home, Loader2, Minimize2, NotebookText, Search, Timer } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { appHref, isLoginHost, isSplitHosts, loginHref, navigateTo } from "@/lib/domains";
@@ -38,6 +38,9 @@ import { useTranslation } from "@/lib/i18n/translations";
 import { Tooltip } from "@/components/ui/primitives";
 import { cn, isMac } from "@/lib/utils";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
+import { useStudyT } from "@/lib/study/i18n";
+import { useStudyUi } from "@/lib/study/ui-store";
+import { useActiveModule, useSwitchModule } from "@/components/study/study-sidebar";
 
 const EvernoteImportWizard = dynamic(
   () => import("@/components/import/evernote-import-wizard").then((mod) => mod.EvernoteImportWizard),
@@ -568,9 +571,12 @@ function isEditingText(target: EventTarget | null): boolean {
 
 function BottomNav() {
   const { t } = useTranslation();
+  const { st } = useStudyT();
   const router = useRouter();
   const pathname = usePathname();
   const { adapter, pages, databases } = useWorkspace();
+  const activeModule = useActiveModule();
+  const switchModule = useSwitchModule();
 
   const createNote = async () => {
     const target = resolveNoteCreationTarget(pathname, pages, databases);
@@ -601,11 +607,29 @@ function BottomNav() {
         active={false}
         onClick={() => useUiStore.getState().setPaletteOpen(true)}
       />
+      {activeModule === "study" ? (
+        <MobileNavItem
+          icon={<Timer className="size-[18px]" />}
+          label={st("nav_focus")}
+          active={false}
+          onClick={() => useStudyUi.getState().setTimerOpen(true)}
+        />
+      ) : (
+        <MobileNavItem
+          icon={<FilePlus className="size-[18px]" />}
+          label={t("new_note")}
+          active={false}
+          onClick={() => void createNote()}
+        />
+      )}
       <MobileNavItem
-        icon={<FilePlus className="size-[18px]" />}
-        label={t("new_note")}
+        icon={activeModule === "study" ? <NotebookText className="size-[18px]" /> : <GraduationCap className="size-[18px]" />}
+        label={activeModule === "study" ? st("module_notes") : st("module_study")}
         active={false}
-        onClick={() => void createNote()}
+        onClick={() => {
+          switchModule(activeModule === "study" ? "notes" : "study");
+          useUiStore.getState().setMobileSidebarOpen(true);
+        }}
       />
     </nav>
   );

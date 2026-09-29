@@ -8,6 +8,7 @@ import {
   deleteDoc,
   deleteField,
   doc,
+  FieldPath,
   getDoc,
   getDocs,
   onSnapshot,
@@ -30,6 +31,7 @@ import type {
   AppBlock,
   AppDatabase,
   DatabaseRow,
+  PropertyValue,
   Flashcard,
   FlashcardRating,
   ImportJob,
@@ -1396,6 +1398,16 @@ export class FirestoreAdapter implements DataAdapter {
     };
     await setDoc(rowRef, { ...next, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
     return next;
+  }
+
+  async patchRowValues(databaseId: string, rowId: string, values: Record<string, PropertyValue>) {
+    const entries = Object.entries(values);
+    if (!entries.length) return;
+    const rowRef = doc(this.docRef("databases", databaseId), "rows", rowId);
+    const rest: unknown[] = [];
+    for (const [key, value] of entries.slice(1)) rest.push(new FieldPath("values", key), value);
+    rest.push("updatedAt", serverTimestamp());
+    await updateDoc(rowRef, new FieldPath("values", entries[0][0]), entries[0][1], ...rest);
   }
 
   async deleteRow(databaseId: string, rowId: string) {

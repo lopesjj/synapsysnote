@@ -5,7 +5,7 @@ import { useLocale, useRouter } from "@/lib/i18n/navigation";
 import { Loader2, Moon, Sun } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { toast } from "sonner";
-import { useAuth, type OAuthProviderId } from "@/hooks/use-auth";
+import { useAuth, useHydrated, type OAuthProviderId } from "@/hooks/use-auth";
 import { useUserProfile } from "@/hooks/use-user-profile";
 import { SynapsysLockup } from "@/components/brand/logo";
 import { AuthField } from "@/components/auth/auth-field";
@@ -47,7 +47,7 @@ function workspaceLanguage(profile: UserProfile | null | undefined, fallback: Su
 
 function enterWorkspace(language: SupportedLanguage, router: Router, mode: "push" | "replace" = "push") {
   rememberUserLanguage(language);
-  navigateTo(appHref("/home", language), router, mode);
+  navigateTo(`${appHref("/home", language)}?entry=login`, router, mode);
 }
 
 export default function LandingPage() {
@@ -77,11 +77,8 @@ export default function LandingPage() {
   const [captcha, setCaptcha] = useState<string | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
   const [failedAttempts, setFailedAttempts] = useState(0);
-  const [sessionSyncFailed] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("session") === "sync_failed",
-  );
+  const hydrated = useHydrated();
+  const sessionSyncFailed = hydrated && new URLSearchParams(window.location.search).get("session") === "sync_failed";
 
   useEffect(() => {
     setFailedAttempts(getFailedLoginAttempts(email));

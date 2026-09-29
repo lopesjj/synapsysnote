@@ -257,9 +257,22 @@ function writeCachedUser(user: AppUser | null) {
   } catch {}
 }
 
+function subscribeHydration() {
+  return () => {};
+}
+
+export function useHydrated(): boolean {
+  return useSyncExternalStore(
+    subscribeHydration,
+    () => true,
+    () => false
+  );
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const configured = isFirebaseConfigured();
   const queryClient = useQueryClient();
+  const hydrated = useHydrated();
   const demoUser = useSyncExternalStore(subscribeDemo, readDemoUser, () => null);
 
   const [firebaseUser, setFirebaseUser] = useState<AppUser | null>(() => readCachedUser());
@@ -488,8 +501,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [configured, firebaseUser?.uid, queryClient]);
 
-  const user = configured ? firebaseUser ?? demoUser : demoUser;
-  const loading = configured ? firebaseLoading && !demoUser : false;
+  const sessionUser = hydrated ? firebaseUser : null;
+  const user = configured ? sessionUser ?? demoUser : demoUser;
+  const loading = configured ? (!hydrated || firebaseLoading) && !demoUser : false;
 
   const value = useMemo<AuthContextValue>(
     () => ({

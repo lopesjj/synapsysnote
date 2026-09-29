@@ -3,6 +3,7 @@ import type {
   AppDatabase,
   CreateFlashcardInput,
   DatabaseRow,
+  PropertyValue,
   Flashcard,
   FlashcardRating,
   ImportJob,
@@ -143,6 +144,7 @@ export interface DataAdapter {
    * uma celula nao mexe na ordem, na data de criacao nem no vinculo com a pagina.
    */
   upsertRow(databaseId: string, row: Partial<DatabaseRow> & { id?: string }): Promise<DatabaseRow | null>;
+  patchRowValues(databaseId: string, rowId: string, values: Record<string, PropertyValue>): Promise<void>;
   deleteRow(databaseId: string, rowId: string): Promise<void>;
 
   fetchNotionTree(): Promise<NotionTreeNode[]>;

@@ -30,6 +30,7 @@ const es: LegalBundle = {
               "adjuntar imágenes, PDF, audios y vídeos, y grabar notas de voz;",
               "importar contenido de Notion, Evernote y Google Docs, y de archivos;",
               "generar flashcards y transcripciones con ayuda de inteligencia artificial;",
+              "registrar sesiones de estudio con un temporizador de enfoque y seguir repasos programados, simulacros y la planificación de estudios;",
               "repasar lo que estudiaste con repetición espaciada.",
             ],
           },
@@ -82,7 +83,7 @@ const es: LegalBundle = {
         id: "ai",
         title: "Funciones de inteligencia artificial",
         blocks: [
-          "Algunas funciones usan inteligencia artificial: transcripción de audio y vídeo, generación de flashcards, detección de tarjetas repetidas y traducción. Solo procesan el contenido que eliges, en el momento en que activas la función.",
+          "Algunas funciones usan inteligencia artificial: transcripción de audio y vídeo, generación de flashcards, detección de tarjetas repetidas, traducción y la organización en materias y temas de un temario que pegues. Solo procesan el contenido que eliges, en el momento en que activas la función.",
           {
             note: "Los resultados generados por IA pueden contener errores, omisiones o imprecisiones. Revisa transcripciones y flashcards antes de estudiar con ellas y contrástalas siempre con la fuente oficial: el texto literal de la ley, la convocatoria o la bibliografía recomendada.",
           },
@@ -118,14 +119,14 @@ const es: LegalBundle = {
         blocks: [
           "Trabajamos para mantener el servicio disponible y tus datos seguros. Aun así, pueden producirse interrupciones por mantenimiento, actualizaciones o causas ajenas a nuestro control.",
           "Te recomendamos guardar copias de lo que sea esencial para ti, por ejemplo exportando notas en PDF.",
-          "{brand} es una herramienta de apoyo al estudio y no garantiza que apruebes oposiciones, concursos públicos, exámenes de ingreso a la universidad ni evaluaciones.",
+          "{brand} es una herramienta de apoyo al estudio y no garantiza que apruebes oposiciones, concursos públicos, exámenes de ingreso a la universidad ni evaluaciones. Las estadísticas, sugerencias y cronogramas del módulo de estudios son estimaciones calculadas a partir de los registros que haces.",
         ],
       },
       {
         id: "liability",
         title: "Limitación de responsabilidad",
         blocks: [
-          "En la máxima medida permitida por la ley, no respondemos por daños indirectos, lucro cesante o pérdida de oportunidades derivados del uso o de la imposibilidad de uso del servicio, ni por contenido creado por usuarios o por servicios de terceros.",
+          "En la máxima medida permitida por la ley, no respondemos por daños indirectos, lucro cesante o pérdida de oportunidades derivados del uso o de la imposibilidad de uso del servicio, ni por contenido creado por usuarios o por servicios de terceros. Los enlaces externos que guardas en los temas de estudio llevan a sitios de terceros cuyo contenido y cuyas prácticas de privacidad no controlamos.",
           "Nada de lo dispuesto en estos términos excluye ni limita derechos que no pueden excluirse por contrato, incluidos los garantizados por el Código de Defensa del Consumidor de Brasil (Ley n.º 8.078/1990) y por las leyes de consumo obligatorias de tu país.",
         ],
       },
@@ -183,7 +184,7 @@ const es: LegalBundle = {
               rows: [
                 ["Registro", "Nombre, correo electrónico, teléfono y foto de perfil", "Tú o tu cuenta de Google"],
                 ["Credenciales", "Contraseña, guardada solo de forma cifrada por el proveedor de autenticación", "Tú"],
-                ["Contenido", "Notas, páginas, cuadernos, flashcards, adjuntos, audios y vídeos", "Tú y las importaciones que hagas"],
+                ["Contenido", "Notas, páginas, cuadernos, flashcards, adjuntos, audios y vídeos; en el módulo de estudios, objetivos, materias y temas (con los enlaces externos que añadas), sesiones (con el material y las notas vinculadas), preguntas, repasos, simulacros, cronogramas, recordatorios y notas rápidas", "Tú y las importaciones que hagas"],
                 ["Integraciones", "Tokens de acceso a Notion, Evernote y Google Docs", "El servicio conectado, con tu autorización"],
                 ["Preferencias", "Idioma, tema, accesibilidad y diseño", "Tú"],
                 ["Datos técnicos", "IP, país aproximado, navegador, dispositivo, fecha y hora de acceso", "Recogida automática"],
@@ -204,6 +205,7 @@ const es: LegalBundle = {
               rows: [
                 ["Crear y mantener tu cuenta, autenticar el acceso y sincronizar tu contenido", "Ejecución de contrato (art. 7, V)"],
                 ["Ejecutar funciones que activas: importaciones, transcripciones, flashcards y traducciones", "Ejecución de contrato (art. 7, V)"],
+                ["Calcular estadísticas, repasos programados y cronogramas a partir de tus registros de estudio", "Ejecución de contrato (art. 7, V)"],
                 ["Proteger las cuentas contra fraudes y accesos indebidos, incluido el uso de reCAPTCHA", "Interés legítimo (art. 7, IX)"],
                 ["Conservar registros de acceso durante el plazo exigido por el Marco Civil de Internet de Brasil", "Obligación legal (art. 7, II)"],
                 ["Enviar comunicaciones esenciales, como restablecimiento de contraseña y avisos de cambios", "Ejecución de contrato (art. 7, V)"],
@@ -220,13 +222,14 @@ const es: LegalBundle = {
         id: "ai",
         title: "Inteligencia artificial",
         blocks: [
-          "Cuando pides una transcripción, generas flashcards o traduces un fragmento, enviamos al proveedor solo el contenido necesario para esa tarea:",
+          "Cuando pides una transcripción, generas flashcards, organizas un temario con IA o traduces un fragmento, enviamos al proveedor solo el contenido necesario para esa tarea:",
           {
             list: [
               "**Transcripción de audio y vídeo:** Google Gemini API; como alternativa, un modelo de código abierto (Whisper) que se ejecuta en nuestros propios servidores.",
               "**Flashcards y detección de tarjetas repetidas:** Google Gemini API.",
               "**Traducción:** Google Gemini API; mientras no esté disponible, Google Cloud Translation.",
               "**Transcripción en vivo de notas de voz:** el reconocimiento de voz de tu navegador, que puede enviar el audio al fabricante (Google, Microsoft o Apple). Permanece apagada hasta que la actives en la grabación.",
+              "**Organización de temarios:** Google Gemini API, solo cuando eliges “Organizar con IA”; la separación automática habitual se hace en tu navegador.",
             ],
           },
           { note: "No usamos tu contenido para entrenar modelos de inteligencia artificial, y ninguna función de IA se ejecuta sin una acción tuya." },
@@ -404,6 +407,7 @@ const es: LegalBundle = {
               "la sesión de autenticación de Firebase, que mantiene tu sesión activa;",
               "un contador de intentos de inicio de sesión, usado para mostrar el reCAPTCHA cuando es necesario;",
               "preferencias de interfaz, como tema, barra lateral, cuadernos recientes e idiomas de transcripción y flashcards;",
+              "el estado del módulo de estudios, como el temporizador de enfoque en marcha, la última pantalla abierta y las capas visibles de la Planificación;",
               "una copia de tus notas y cuadernos, para que la aplicación se abra más rápido y siga funcionando sin internet.",
             ],
           },

@@ -30,6 +30,7 @@ const en: LegalBundle = {
               "attach images, PDFs, audio and video, and record voice notes;",
               "import content from Notion, Evernote, Google Docs and files;",
               "generate flashcards and transcripts with the help of artificial intelligence;",
+              "log study sessions with a focus timer and follow scheduled reviews, mock exams and study planning;",
               "review what you have studied with spaced repetition.",
             ],
           },
@@ -82,7 +83,7 @@ const en: LegalBundle = {
         id: "ai",
         title: "Artificial intelligence features",
         blocks: [
-          "Some features use artificial intelligence: audio and video transcription, flashcard generation, duplicate-card detection and translation. They process only the content you choose, at the moment you trigger the feature.",
+          "Some features use artificial intelligence: audio and video transcription, flashcard generation, duplicate-card detection, translation, and organizing a syllabus you paste into subjects and topics. They process only the content you choose, at the moment you trigger the feature.",
           {
             note: "AI-generated output may contain errors, omissions or inaccuracies. Review transcripts and flashcards before studying with them, and always check them against the official source — the text of the law, the exam notice or the recommended reading list.",
           },
@@ -118,14 +119,14 @@ const en: LegalBundle = {
         blocks: [
           "We work to keep the service available and your data safe. Even so, interruptions may occur for maintenance, updates or reasons beyond our control.",
           "We recommend keeping copies of anything essential to you — for example, by exporting notes as PDF.",
-          "{brand} is a tool to support your studies and does not guarantee that you will pass civil service exams, university entrance exams or any other assessment.",
+          "{brand} is a tool to support your studies and does not guarantee that you will pass civil service exams, university entrance exams or any other assessment. Statistics, suggestions and schedules in the study module are estimates calculated from the records you enter.",
         ],
       },
       {
         id: "liability",
         title: "Limitation of liability",
         blocks: [
-          "To the fullest extent permitted by law, we are not liable for indirect damages, lost profits or lost opportunities arising from the use of, or inability to use, the service, nor for user-created content or third-party services.",
+          "To the fullest extent permitted by law, we are not liable for indirect damages, lost profits or lost opportunities arising from the use of, or inability to use, the service, nor for user-created content or third-party services. External links you save to study topics lead to third-party websites whose content and privacy practices we do not control.",
           "Nothing in these terms excludes or limits rights that cannot be set aside by contract, including those guaranteed by the Brazilian Consumer Protection Code (Law No. 8,078/1990) and by the mandatory consumer protection laws of your country.",
         ],
       },
@@ -183,7 +184,7 @@ const en: LegalBundle = {
               rows: [
                 ["Registration", "Name, email, phone number and profile photo", "You or your Google account"],
                 ["Credentials", "Password, stored only in encrypted form by the authentication provider", "You"],
-                ["Content", "Notes, pages, notebooks, flashcards, attachments, audio and video", "You and the imports you make"],
+                ["Content", "Notes, pages, notebooks, flashcards, attachments, audio and video; in the study module, goals, subjects and topics (with any external links you add), sessions (with their material and linked notes), questions, reviews, mock exams, schedules, reminders and quick notes", "You and the imports you make"],
                 ["Integrations", "Access tokens for Notion, Evernote and Google Docs", "The connected service, with your authorization"],
                 ["Preferences", "Language, theme, accessibility and layout", "You"],
                 ["Technical data", "IP address, approximate country, browser, device, date and time of access", "Collected automatically"],
@@ -204,6 +205,7 @@ const en: LegalBundle = {
               rows: [
                 ["Creating and maintaining your account, authenticating access and syncing your content", "Performance of a contract (art. 7, V)"],
                 ["Running features you trigger: imports, transcriptions, flashcards and translations", "Performance of a contract (art. 7, V)"],
+                ["Calculating statistics, scheduled reviews and study schedules from your study records", "Performance of a contract (art. 7, V)"],
                 ["Protecting accounts against fraud and unauthorized access, including with reCAPTCHA", "Legitimate interest (art. 7, IX)"],
                 ["Keeping access logs for the period set by the Brazilian Civil Rights Framework for the Internet (Marco Civil da Internet)", "Legal obligation (art. 7, II)"],
                 ["Sending essential communications, such as password resets and notices of changes", "Performance of a contract (art. 7, V)"],
@@ -220,13 +222,14 @@ const en: LegalBundle = {
         id: "ai",
         title: "Artificial intelligence",
         blocks: [
-          "When you request a transcription, generate flashcards or translate a passage, we send the provider only the content needed for that task:",
+          "When you request a transcription, generate flashcards, organize a syllabus with AI or translate a passage, we send the provider only the content needed for that task:",
           {
             list: [
               "**Audio and video transcription:** Google Gemini API; as an alternative, an open-source model (Whisper) running on our own servers.",
               "**Flashcards and duplicate-card detection:** Google Gemini API.",
               "**Translation:** Google Gemini API; while it is unavailable, Google Cloud Translation.",
               "**Live transcription of voice notes:** your browser's speech recognition, which may send audio to the provider (Google, Microsoft, or Apple). Stays off until you turn it on during recording.",
+              "**Syllabus organization:** Google Gemini API, only when you choose “Organize with AI”; the regular automatic split runs in your browser.",
             ],
           },
           { note: "We do not use your content to train artificial intelligence models, and no AI feature runs without an action on your part." },
@@ -404,6 +407,7 @@ const en: LegalBundle = {
               "the Firebase authentication session, which keeps you signed in;",
               "a counter of sign-in attempts, used to show reCAPTCHA when needed;",
               "interface preferences, such as theme, sidebar, recent notebooks and the languages for transcriptions and flashcards;",
+              "the state of the study module, such as a running focus timer, the last screen you opened and the visible layers of Planning;",
               "a copy of your notes and notebooks, so the app opens faster and keeps working offline.",
             ],
           },

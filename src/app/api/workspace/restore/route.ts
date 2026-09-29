@@ -126,7 +126,32 @@ interface RestorePayload {
     pages?: RestorePage[];
     databases?: RestoreDatabase[];
     flashcards?: RestoreFlashcard[];
+    study?: Partial<Record<(typeof STUDY_RESTORE_COLLECTIONS)[number], Array<Record<string, unknown>>>>;
   };
+}
+
+const STUDY_RESTORE_COLLECTIONS = [
+  "study_plans",
+  "study_subjects",
+  "study_sessions",
+  "study_reviews",
+  "study_exams",
+  "study_cycles",
+  "study_reminders",
+  "study_stickies",
+  "study_meta",
+] as const;
+
+const STUDY_DOC_LIMIT = 20_000;
+
+function restorableStudyDoc(raw: Record<string, unknown>): Record<string, unknown> | null {
+  if (!raw || typeof raw !== "object") return null;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === "id" || value === undefined) continue;
+    out[key] = value;
+  }
+  return out;
 }
 
 async function commitBatches(
@@ -166,7 +191,7 @@ export async function POST(request: Request) {
     }
 
     if (payload.clean && wsSnap.exists) {
-      const collectionsToClean = ["pages", "notebooks", "databases", "flashcards"];
+      const collectionsToClean = ["pages", "notebooks", "databases", "flashcards", ...STUDY_RESTORE_COLLECTIONS];
       for (const collName of collectionsToClean) {
         try {
           await db.recursiveDelete(wsRef.collection(collName));
@@ -393,6 +418,24 @@ export async function POST(request: Request) {
       });
     }
 
+    let studyDocs = 0;
+    for (const name of STUDY_RESTORE_COLLECTIONS) {
+      const docs = payload.data.study?.[name];
+      if (!Array.isArray(docs)) continue;
+      for (const raw of docs.slice(0, STUDY_DOC_LIMIT)) {
+        const id = typeof raw?.id === "string" ? raw.id : "";
+        if (!id || id.includes("/")) continue;
+        if (name === "study_meta" && id !== "settings") continue;
+        const data = restorableStudyDoc(raw);
+        if (!data) continue;
+        const ref = wsRef.collection(name).doc(id);
+        studyDocs += 1;
+        writeOps.push((batch) => {
+          batch.set(ref, data, { merge: true });
+        });
+      }
+    }
+
     await commitBatches(db, writeOps);
 
     return Response.json({
@@ -402,6 +445,7 @@ export async function POST(request: Request) {
         pages: pages.length,
         databases: databases.length,
         flashcards: flashcards.length,
+        study: studyDocs,
       },
     });
   } catch (error) {

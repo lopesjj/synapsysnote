@@ -1,11 +1,12 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect } from "react";
 import { useRouter } from "@/lib/i18n/navigation";
 import { useWorkspace } from "@/lib/data/provider";
 import { DatabaseView } from "@/components/database/database-view";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/lib/i18n/translations";
+import { isPlanningName } from "@/components/database/database-i18n";
 
 export default function DatabaseRoute({ params }: { params: Promise<{ databaseId: string }> }) {
   const { databaseId } = use(params);
@@ -13,6 +14,13 @@ export default function DatabaseRoute({ params }: { params: Promise<{ databaseId
   const { t } = useTranslation();
   const { databases, ready } = useWorkspace();
   const database = databases.find((d) => d.id === databaseId);
+  const planning = Boolean(database && !database.deletedAt && isPlanningName(database.name));
+
+  useEffect(() => {
+    if (planning) router.replace("/home/study/schedule");
+  }, [planning, router]);
+
+  if (planning) return null;
 
   if (!database) {
     return (

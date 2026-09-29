@@ -17,8 +17,8 @@ export const LEGAL_ENTITY = {
   privacyEmail: "atendimento@synapsysnt.com.br",
 };
 
-export const LEGAL_VERSION = "1.0";
-export const LEGAL_UPDATED_AT = "2026-09-23";
+export const LEGAL_VERSION = "1.1";
+export const LEGAL_UPDATED_AT = "2026-09-29";
 
 /**
  * Prazos citados nos documentos. Os que existem no código vêm de lá, e o

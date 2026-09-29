@@ -4,9 +4,23 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { usePathname } from "@/lib/i18n/navigation";
 import { useWorkspace } from "@/lib/data/provider";
-import { formatTabTitle } from "@/lib/document-title";
+import { useStudy } from "@/lib/study/provider";
+import { formatTabTitle, subscribeTitlePrefix, withTitlePrefix } from "@/lib/document-title";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
 import { isPlanningName } from "@/components/database/database-i18n";
+import { studyTranslate, type StudyKey } from "@/lib/study/i18n";
+
+const STUDY_TITLES: [string, StudyKey][] = [
+  ["/home/study/goals/new", "goal_form_new"],
+  ["/home/study/goals", "nav_goals"],
+  ["/home/study/subjects", "nav_subjects"],
+  ["/home/study/syllabus", "nav_syllabus"],
+  ["/home/study/schedule", "nav_schedule"],
+  ["/home/study/reviews", "nav_reviews"],
+  ["/home/study/log", "nav_log"],
+  ["/home/study/insights", "nav_insights"],
+  ["/home/study/exams", "nav_exams"],
+];
 
 function pathSegment(pathname: string, prefix: string): string | null {
   if (!pathname.startsWith(prefix)) return null;
@@ -21,9 +35,27 @@ function titleForRoute(
   pages: { id: string; title: string }[],
   notebooks: { id: string; name: string }[],
   databases: { id: string; name: string }[],
-  t: (key: TranslationKey) => string
+  t: (key: TranslationKey) => string,
+  language: string,
+  studyPlans: { id: string; name: string }[],
+  studySubjects: { id: string; name: string }[]
 ): string | null {
   const params = new URLSearchParams(search);
+
+  if (pathname === "/home/study" || pathname.startsWith("/home/study/")) {
+    const subjectId = pathSegment(pathname, "/home/study/subjects/");
+    if (subjectId) {
+      const subject = studySubjects.find((candidate) => candidate.id === subjectId);
+      return formatTabTitle(subject?.name || studyTranslate(language, "nav_subjects"));
+    }
+    const goalId = pathSegment(pathname, "/home/study/goals/");
+    if (goalId && goalId !== "new") {
+      const plan = studyPlans.find((candidate) => candidate.id === goalId);
+      return formatTabTitle(plan?.name || studyTranslate(language, "nav_goals"));
+    }
+    const match = STUDY_TITLES.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+    return formatTabTitle(studyTranslate(language, match ? match[1] : "nav_overview"));
+  }
 
   const pageId = pathSegment(pathname, "/home/p/");
   if (pageId) {
@@ -67,11 +99,12 @@ export function useDocumentTitle() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { pages, notebooks, databases } = useWorkspace();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const { plans, subjects } = useStudy();
   const search = searchParams.toString() ? `?${searchParams.toString()}` : "";
   const title = useMemo(
-    () => titleForRoute(pathname, search, pages, notebooks, databases, t),
-    [pathname, search, pages, notebooks, databases, t]
+    () => titleForRoute(pathname, search, pages, notebooks, databases, t, language, plans, subjects),
+    [pathname, search, pages, notebooks, databases, t, language, plans, subjects]
   );
   const lastTitleRef = useRef(formatTabTitle(t("home")));
   if (title) lastTitleRef.current = title;
@@ -79,16 +112,21 @@ export function useDocumentTitle() {
 
   useLayoutEffect(() => {
     const apply = () => {
-      if (document.title !== resolved) document.title = resolved;
+      const next = withTitlePrefix(resolved);
+      if (document.title !== next) document.title = next;
     };
     apply();
+    const unsubscribe = subscribeTitlePrefix(apply);
     const observer = new MutationObserver(apply);
     observer.observe(document.head, {
       childList: true,
       subtree: true,
       characterData: true,
     });
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      unsubscribe();
+    };
   }, [resolved]);
 }
 

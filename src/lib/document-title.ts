@@ -11,3 +11,23 @@ export function formatTabTitle(pageName?: string | null): string {
 
   return `${APP_NAME} | ${name}`;
 }
+
+let titlePrefix: string | null = null;
+const prefixListeners = new Set<() => void>();
+
+export function setTitlePrefix(value: string | null) {
+  if (value === titlePrefix) return;
+  titlePrefix = value;
+  prefixListeners.forEach((listener) => listener());
+}
+
+export function subscribeTitlePrefix(listener: () => void): () => void {
+  prefixListeners.add(listener);
+  return () => {
+    prefixListeners.delete(listener);
+  };
+}
+
+export function withTitlePrefix(title: string): string {
+  return titlePrefix ? `${titlePrefix} · ${title}` : title;
+}

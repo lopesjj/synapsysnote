@@ -129,6 +129,7 @@ export function searchWorkspace(
       score,
       matchedIn: [...matchedIn],
       notebookId: page.notebookId,
+      parentPageId: page.parentPageId ?? null,
       icon: page.icon || undefined,
     });
   }

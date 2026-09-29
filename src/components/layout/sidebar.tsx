@@ -61,6 +61,13 @@ import { childrenOf, isNestedNotebook, parentIdOf } from "@/lib/data/notebook-tr
 import { sortNotebooks, sortPageTree } from "@/lib/data/list-sort";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
 import { MoveItemDialog, type MoveItemTarget } from "./move-dialog";
+import {
+  ModuleSwitch,
+  RailModuleToggle,
+  StudyRailItems,
+  StudySidebarBody,
+  useActiveModule,
+} from "@/components/study/study-sidebar";
 import { isPlanningName } from "@/components/database/database-i18n";
 import {
   ORDER_STEP,
@@ -117,6 +124,7 @@ export function SidebarRail() {
   const pathname = usePathname();
   const { adapter, pages, databases } = useWorkspace();
   const { t } = useTranslation();
+  const railModule = useActiveModule();
 
   const createPage = async () => {
     const target = resolveNoteCreationTarget(pathname, pages, databases);
@@ -150,6 +158,9 @@ export function SidebarRail() {
         </Tooltip>
       </div>
       <div className="flex flex-col items-center gap-2 px-3">
+        <div className="mb-2">
+          <RailModuleToggle />
+        </div>
         <Tooltip label={t("search")} shortcut={isMac() ? "⌘K" : "Ctrl K"} side="right">
           <Button
             variant="ghost"
@@ -172,6 +183,10 @@ export function SidebarRail() {
             </Link>
           </Button>
         </Tooltip>
+        {railModule === "study" ? (
+          <StudyRailItems />
+        ) : (
+          <>
         <Tooltip label={t("new_note")} shortcut={isMac() ? "⌥N" : "Alt N"} side="right">
           <Button variant="ghost" size="icon" onClick={() => void createPage()} aria-label={t("new_note")}>
             <Plus />
@@ -213,6 +228,8 @@ export function SidebarRail() {
             </Link>
           </Button>
         </Tooltip>
+          </>
+        )}
       </div>
       <div className="mt-auto border-t border-[var(--border)] pt-3 pb-[calc(1.125rem+env(safe-area-inset-bottom,0px))]">
         <UserMenu collapsed />
@@ -259,6 +276,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
     flashcards,
     dueFlashcards,
   } = useWorkspace();
+  const activeModule = useActiveModule();
   const trashedCount = trashedPages.length + trashedDatabases.length + trashedNotebooks.length;
 
   const notebooksSort = useUiStore((state) => state.notebooksSort);
@@ -333,7 +351,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   const orphanDatabases = useMemo(() => {
     const notebookIds = new Set(notebooks.map((notebook) => notebook.id));
     return databases
-      .filter((db) => !db.deletedAt && (!db.notebookId || !notebookIds.has(db.notebookId)))
+      .filter((db) => !db.deletedAt && !isPlanningName(db.name) && (!db.notebookId || !notebookIds.has(db.notebookId)))
       .sort((a, b) => compareNatural(a.name ?? "", b.name ?? ""));
   }, [databases, notebooks]);
 
@@ -353,7 +371,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           subnotesSort,
           subnotesSortDirection
         ),
-        databases: databases.filter((db) => db.notebookId === notebook.id && !db.deletedAt),
+        databases: databases.filter((db) => db.notebookId === notebook.id && !db.deletedAt && !isPlanningName(db.name)),
       });
     }
     return map;
@@ -556,6 +574,12 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   if (collapsed) {
     return <SidebarRail />;
   }
+
+  const homeLink = (
+    <NavLink href="/home" active={pathname === "/home"} icon={<Home className="size-3.5" />}>
+      {t("home")}
+    </NavLink>
+  );
 
   const renderNotebooks = (branch: Notebook[], depth: number) => (
     <SortableContext
@@ -765,6 +789,14 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         </Tooltip>
       </div>
 
+      <div className="px-3 pb-3">
+        <ModuleSwitch />
+      </div>
+
+      {activeModule === "study" ? (
+        <StudySidebarBody homeLink={homeLink} />
+      ) : (
+        <>
       <div className="space-y-0.5 px-3">
         <button
           onClick={() => useUiStore.getState().setPaletteOpen(true)}
@@ -774,9 +806,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           {t("search")}
           <Kbd className="ml-auto">{isMac() ? "⌘K" : "Ctrl K"}</Kbd>
         </button>
-        <NavLink href="/home" active={pathname === "/home"} icon={<Home className="size-3.5" />}>
-          {t("home")}
-        </NavLink>
+        {homeLink}
         <NavLink
           href="/home/notes"
           active={pathname === "/home/notes"}
@@ -965,6 +995,8 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           ) : null}
         </DragOverlay>
       </DndContext>
+        </>
+      )}
 
       <div className="border-t border-[var(--border)] pr-3.5 pt-3 pb-[calc(1.125rem+env(safe-area-inset-bottom,0px))]">
         <UserMenu />

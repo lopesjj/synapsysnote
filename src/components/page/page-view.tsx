@@ -12,6 +12,7 @@ import {
   CloudOff,
   FileDown,
   FilePlus,
+  FolderInput,
   Hand,
   History,
   ImageOff,
@@ -30,6 +31,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { AppBlock, Page, PageVersion } from "@/types/models";
+import { MoveItemDialog } from "@/components/layout/move-dialog";
 import type { PageWriteBase } from "@/lib/data/adapter";
 import { exportNoteToPdf } from "@/lib/export/export-note-pdf";
 import { useWorkspace } from "@/lib/data/provider";
@@ -270,6 +272,7 @@ export function PageView({ pageId }: { pageId: string }) {
   const [audioOpen, setAudioOpen] = useState(false);
   const [versions, setVersions] = useState<PageVersion[]>([]);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -841,6 +844,9 @@ export function PageView({ pageId }: { pageId: string }) {
             >
               <Copy /> {t("duplicate_note")}
             </MenuItem>
+            <MenuItem onSelect={() => setMoveOpen(true)}>
+              <FolderInput /> {t("move_to")}
+            </MenuItem>
             <MenuItem
               disabled={exportingPdf}
               onSelect={() => void handleExportPdf()}
@@ -1160,6 +1166,12 @@ export function PageView({ pageId }: { pageId: string }) {
           )}
         </div>
       </article>
+
+      <MoveItemDialog
+        open={moveOpen}
+        onOpenChange={setMoveOpen}
+        item={moveOpen ? { kind: "page", id: pageId, title: page.title || t("untitled") } : null}
+      />
 
       {versionsOpen ? (
         <motion.div

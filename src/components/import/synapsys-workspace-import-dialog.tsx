@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
-import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   Database,
@@ -18,10 +17,6 @@ import { toast } from "sonner";
 import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/primitives";
-import {
-  extractZipJson,
-  type SlicedZipEntry,
-} from "@/lib/import/sliced-zip";
 import { useWorkspace } from "@/lib/data/provider";
 import { useTranslation } from "@/lib/i18n/translations";
 import {
@@ -30,107 +25,16 @@ import {
   cancelRestoreJob,
   isRestoreRunning,
   WORKSPACE_RESTORE_KEY,
-  type RestoreSummary,
 } from "@/lib/import/workspace-restore-manager";
+import {
+  isRestorableBackup,
+  readWorkspaceBackup,
+  summarizeWorkspaceBackup,
+  type RestoreSummary,
+  type WorkspaceBackup,
+} from "@/lib/import/workspace-backup";
 import { useBackgroundImportStore } from "@/lib/import/background-import-store";
 import { cn } from "@/lib/utils";
-
-interface SynapsysParsedData {
-  workspace?: {
-    name?: string;
-    emoji?: string;
-    plan?: string;
-    language?: string;
-  };
-  notebooks?: Array<{
-    id: string;
-    name: string;
-    emoji?: string;
-    color?: string;
-    description?: string;
-    coverUrl?: string | null;
-    coverPosition?: number | null;
-    parentId?: string | null;
-    order?: number;
-    deletedAt?: number | null;
-    trashedWith?: string | null;
-    createdAt?: number;
-    updatedAt?: number;
-  }>;
-  pages?: Array<{
-    id: string;
-    title?: string;
-    icon?: string;
-    coverUrl?: string | null;
-    coverPosition?: number | null;
-    notebookId?: string | null;
-    parentPageId?: string | null;
-    path?: string[];
-    blocks?: unknown[];
-    blocksJson?: string;
-    plainText?: string;
-    extractedOCRText?: string;
-    transcriptText?: string;
-    tags?: string[];
-    outgoingLinks?: string[];
-    backlinks?: string[];
-    favorite?: boolean;
-    archived?: boolean;
-    deletedAt?: number | null;
-    trashedWith?: string | null;
-    order?: number;
-    createdAt?: number;
-    updatedAt?: number;
-    createdBy?: string;
-    updatedBy?: string;
-    versions?: unknown[];
-  }>;
-  databases?: Array<{
-    id: string;
-    name: string;
-    icon?: string;
-    description?: string;
-    notebookId?: string | null;
-    parentPageId?: string | null;
-    properties?: unknown[];
-    views?: unknown[];
-    deletedAt?: number | null;
-    trashedWith?: string | null;
-    createdAt?: number;
-    updatedAt?: number;
-    rows?: unknown[];
-  }>;
-  flashcards?: Array<{
-    id: string;
-    pageId: string;
-    notebookId?: string | null;
-    pageTitle?: string;
-    front: string;
-    back: string;
-    hint?: string;
-    frontImageUrl?: string | null;
-    frontImageStoragePath?: string | null;
-    backImageUrl?: string | null;
-    backImageStoragePath?: string | null;
-    imageUrl?: string | null;
-    imageStoragePath?: string | null;
-    repetition?: number;
-    interval?: number;
-    easeFactor?: number;
-    nextReviewDate?: number;
-    lastReviewedAt?: number | null;
-    createdAt?: number;
-    updatedAt?: number;
-    createdBy?: string;
-  }>;
-  files?: Array<{
-    storagePath: string;
-    archivePath: string;
-    name: string;
-    mimeType: string;
-    sizeBytes: number;
-  }>;
-}
 
 export function SynapsysWorkspaceImportDialog({
   open,
@@ -141,7 +45,6 @@ export function SynapsysWorkspaceImportDialog({
 }) {
   const { t } = useTranslation();
   const { adapter } = useWorkspace();
-  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const backgroundRuns = useBackgroundImportStore((state) => state.runs);
@@ -152,9 +55,8 @@ export function SynapsysWorkspaceImportDialog({
   const [restoring, setRestoring] = useState(false);
   const [progressText, setProgressText] = useState("");
   const [progressPercent, setProgressPercent] = useState(0);
-  const [parsedData, setParsedData] = useState<SynapsysParsedData | null>(null);
+  const [parsedData, setParsedData] = useState<WorkspaceBackup | null>(null);
   const [persistedSummary, setPersistedSummary] = useState<RestoreSummary | null>(null);
-  const [zipEntriesMap, setZipEntriesMap] = useState<Map<string, SlicedZipEntry> | null>(null);
   const activeFileRef = useRef<File | null>(null);
   const [fileName, setFileName] = useState("");
   const [mode, setMode] = useState<"merge" | "clean">("merge");
@@ -189,7 +91,6 @@ export function SynapsysWorkspaceImportDialog({
   const reset = () => {
     setParsedData(null);
     setPersistedSummary(null);
-    setZipEntriesMap(null);
     activeFileRef.current = null;
     setFileName("");
     setProgressText("");
@@ -214,20 +115,15 @@ export function SynapsysWorkspaceImportDialog({
   useEffect(() => {
     if (!open || !adapter?.workspaceId) return;
 
-    if (typeof window !== "undefined") {
-      try {
-        const cached = localStorage.getItem(`synapsys_restore_summary_${adapter.workspaceId}`);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (parsed && typeof parsed === "object") {
-            setPersistedSummary(parsed);
-          }
-        }
-      } catch {}
-    }
-
     const running = isRestoreRunning(adapter.workspaceId);
     void getPersistedRestoreJob(adapter.workspaceId).then(async (persisted) => {
+      try {
+        const cached = localStorage.getItem(`synapsys_restore_summary_${adapter.workspaceId}`);
+        const parsed = cached ? (JSON.parse(cached) as RestoreSummary | null) : null;
+        if (parsed && typeof parsed === "object" && typeof parsed.pagesCount === "number") {
+          setPersistedSummary(parsed);
+        }
+      } catch {}
       if (persisted || running) {
         if (persisted) {
           setFileName(persisted.fileName);
@@ -241,25 +137,9 @@ export function SynapsysWorkspaceImportDialog({
             } catch {}
           } else if (persisted.fileBlob) {
             try {
-              const { data } = await extractZipJson<any>(persisted.fileBlob as File, [
-                "synapsys-workspace.json",
-                "workspace.json",
-                "synapsys-dados.json",
-              ]);
-              if (data) {
-                const ws = (data.workspaces && data.workspaces[0]) || data;
-                const derivedSummary: RestoreSummary = {
-                  workspaceName: ws.workspace?.name,
-                  notebooksCount: (ws.notebooks || []).length,
-                  pagesCount: (ws.pages || []).length,
-                  databasesCount: (ws.databases || []).length,
-                  databaseRowsCount: (ws.databases || []).reduce(
-                    (acc: number, db: any) => acc + (Array.isArray(db?.rows) ? db.rows.length : 0),
-                    0
-                  ),
-                  flashcardsCount: (ws.flashcards || []).length,
-                  filesCount: (ws.files || []).length,
-                };
+              const { data } = await readWorkspaceBackup(persisted.fileBlob);
+              if (isRestorableBackup(data)) {
+                const derivedSummary = summarizeWorkspaceBackup(data);
                 setPersistedSummary(derivedSummary);
                 try {
                   localStorage.setItem(
@@ -295,56 +175,16 @@ export function SynapsysWorkspaceImportDialog({
     try {
       if (!file || file.size === 0) throw new Error("empty_file");
 
-      const { data, entries } = await extractZipJson<any>(file, [
-        "synapsys-workspace.json",
-        "workspace.json",
-        "synapsys-dados.json",
-      ]);
+      const { data: parsed } = await readWorkspaceBackup(file);
 
-      let parsed: SynapsysParsedData | null = null;
-      if (data) {
-        if (data.workspaces && Array.isArray(data.workspaces) && data.workspaces.length > 0) {
-          const first = data.workspaces[0];
-          parsed = {
-            workspace: first.workspace,
-            notebooks: first.notebooks || [],
-            pages: first.pages || [],
-            databases: first.databases || [],
-            flashcards: first.flashcards || [],
-            files: first.files || [],
-          };
-        } else {
-          parsed = {
-            workspace: data.workspace || {},
-            notebooks: data.notebooks || [],
-            pages: data.pages || [],
-            databases: data.databases || [],
-            flashcards: data.flashcards || [],
-            files: data.files || [],
-          };
-        }
-      }
-
-      if (!parsed || (!parsed.pages?.length && !parsed.notebooks?.length && !parsed.databases?.length)) {
+      if (!isRestorableBackup(parsed)) {
         throw new Error(t("synapsys_import_invalid_file"));
       }
 
       setParsedData(parsed);
-      setZipEntriesMap(entries);
       setFileName(file.name);
 
-      const summary: RestoreSummary = {
-        workspaceName: parsed.workspace?.name,
-        notebooksCount: (parsed.notebooks || []).length,
-        pagesCount: (parsed.pages || []).length,
-        databasesCount: (parsed.databases || []).length,
-        databaseRowsCount: (parsed.databases || []).reduce(
-          (acc, db) => acc + (Array.isArray(db.rows) ? db.rows.length : 0),
-          0
-        ),
-        flashcardsCount: (parsed.flashcards || []).length,
-        filesCount: (parsed.files || []).length,
-      };
+      const summary: RestoreSummary = summarizeWorkspaceBackup(parsed);
       setPersistedSummary(summary);
       if (typeof window !== "undefined" && adapter?.workspaceId) {
         try {
@@ -370,7 +210,6 @@ export function SynapsysWorkspaceImportDialog({
       toast.error(message);
       setParsedData(null);
       setPersistedSummary(null);
-      setZipEntriesMap(null);
       activeFileRef.current = null;
     } finally {
       setReading(false);

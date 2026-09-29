@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 import type {
   AppDatabase,
   DatabaseRow,
+  PropertyValue,
   Flashcard,
   FlashcardRating,
   ImportJob,
@@ -655,6 +656,16 @@ export class LocalAdapter implements DataAdapter {
     database.updatedAt = nowMs();
     this.emit();
     return next;
+  }
+
+  async patchRowValues(databaseId: string, rowId: string, values: Record<string, PropertyValue>) {
+    const database = this.state.databases.find((d) => d.id === databaseId);
+    if (!database) return;
+    database.rows = database.rows.map((row) =>
+      row.id === rowId ? { ...row, values: { ...row.values, ...values }, updatedAt: nowMs() } : row
+    );
+    database.updatedAt = nowMs();
+    this.emit();
   }
 
   async deleteRow(databaseId: string, rowId: string) {

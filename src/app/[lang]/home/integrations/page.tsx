@@ -147,10 +147,7 @@ function IntegrationsBody() {
     <div className="mx-auto w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl 3xl:max-w-[88rem] px-4 sm:px-6 md:px-8 xl:px-10 py-6 md:py-9 transition-all">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[var(--border)] pb-6">
         <div className="min-w-0">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex size-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-2)] text-ink shadow-xs">
-              <Cloud className="size-5 text-[var(--accent)]" />
-            </span>
+          <div>
             <div>
               <h1 className="text-[22px] sm:text-[24px] lg:text-[26px] font-semibold tracking-[-0.025em] text-ink">
                 {t("integrations_title")}

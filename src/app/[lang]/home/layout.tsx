@@ -2,6 +2,8 @@ import { HomeHostGate } from "@/components/layout/home-host-gate";
 import { RegistrationGate } from "@/components/auth/registration-gate";
 import { AppShell } from "@/components/layout/app-shell";
 import { WorkspaceProvider } from "@/lib/data/provider";
+import { StudyProvider } from "@/lib/study/provider";
+import { StudyLayer } from "@/components/study/study-layer";
 import { FlashcardNotificationsWatcher } from "@/components/flashcards/flashcard-notifications";
 import { FlashcardSettingsSync } from "@/components/flashcards/flashcard-settings-sync";
 import { ImageLightbox } from "@/components/editor/image-lightbox";
@@ -12,11 +14,14 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
     <HomeHostGate>
       <RegistrationGate>
         <WorkspaceProvider>
-          <FlashcardSettingsSync />
-          <FlashcardNotificationsWatcher />
-          {/* Overlay global: o editor e os flashcards abrem o mesmo visualizador. */}
-          <ImageLightbox />
-          <AppShell>{children}</AppShell>
+          <StudyProvider>
+            <FlashcardSettingsSync />
+            <FlashcardNotificationsWatcher />
+            {/* Overlay global: o editor e os flashcards abrem o mesmo visualizador. */}
+            <ImageLightbox />
+            <AppShell>{children}</AppShell>
+            <StudyLayer />
+          </StudyProvider>
         </WorkspaceProvider>
       </RegistrationGate>
       <LegalLayer banner={false} />

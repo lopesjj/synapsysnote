@@ -8,6 +8,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useWorkspace } from "@/lib/data/provider";
 import { useTheme } from "@/components/theme-provider";
 import { useUiStore } from "@/lib/store/ui-store";
+import { useStudy } from "@/lib/study/provider";
+import { useStudyT } from "@/lib/study/i18n";
+import { useStudyUi } from "@/lib/study/ui-store";
 import { searchWorkspace } from "@/lib/search";
 import { Kbd } from "@/components/ui/primitives";
 import { cn, isMac } from "@/lib/utils";
@@ -49,6 +52,8 @@ export function CommandPalette({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [open, onOpenChange]);
 
+  const { st } = useStudyT();
+  const { activePlan } = useStudy();
   const run = (action: () => void) => {
     onOpenChange(false);
     action();
@@ -72,6 +77,11 @@ export function CommandPalette({
   const notebookMap = useMemo(
     () => new Map(notebooks.map((n) => [n.id, n])),
     [notebooks]
+  );
+
+  const pageMap = useMemo(
+    () => new Map(livePages.map((p) => [p.id, p])),
+    [livePages]
   );
 
   const [recentNotebookIds, setRecentNotebookIds] = useState<string[]>([]);
@@ -222,7 +232,8 @@ export function CommandPalette({
                 {query && pageHits.length ? (
                   <Command.Group heading={<GroupLabel>{t("notes")}</GroupLabel>}>
                     {pageHits.map((hit) => {
-                      const parentNotebook = hit.notebookId ? notebookMap.get(hit.notebookId) : null;
+                      const parentPage = hit.parentPageId ? pageMap.get(hit.parentPageId) : null;
+                      const parentNotebook = (hit.notebookId ? notebookMap.get(hit.notebookId) : null) ?? (parentPage?.notebookId ? notebookMap.get(parentPage.notebookId) : null);
                       return (
                         <Command.Item
                           key={`hit-page-${hit.id}`}
@@ -234,10 +245,22 @@ export function CommandPalette({
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <span className="truncate text-[13px] text-ink">{hit.title}</span>
-                              {parentNotebook ? (
-                                <span className="shrink-0 rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px] text-muted">
-                                  {parentNotebook.name}
-                                </span>
+                              {(parentNotebook || parentPage) ? (
+                                <div className="flex shrink-0 items-center gap-1 text-[10px] text-muted">
+                                  {parentNotebook ? (
+                                    <span className="max-w-[120px] truncate rounded bg-[var(--surface-2)] px-1.5 py-0.5">
+                                      {parentNotebook.name}
+                                    </span>
+                                  ) : null}
+                                  {parentNotebook && parentPage ? (
+                                    <span className="text-[9px] text-faint">/</span>
+                                  ) : null}
+                                  {parentPage ? (
+                                    <span className="max-w-[130px] truncate rounded bg-[var(--surface-2)] px-1.5 py-0.5">
+                                      {parentPage.title || t("untitled")}
+                                    </span>
+                                  ) : null}
+                                </div>
                               ) : null}
                             </div>
                             {hit.snippet ? (
@@ -359,12 +382,9 @@ export function CommandPalette({
                         <Kbd>{isMac() ? "⌥⇧N" : "Alt ⇧ N"}</Kbd>
                       </Command.Item>
                       <Command.Item
-                        value="new-database"
+                        value="planning"
                         className={itemClass}
-                        onSelect={async () => {
-                          const database = await adapter.createDatabase({ name: t("planning") });
-                          go(`/home/db/${database.id}`);
-                        }}
+                        onSelect={() => go("/home/study/schedule")}
                       >
                         <span className="flex-1 text-[13px] text-ink">{t("planning")}</span>
                       </Command.Item>
@@ -411,6 +431,40 @@ export function CommandPalette({
                       </Command.Item>
                       <Command.Item value="trash" className={itemClass} onSelect={() => go("/home/trash")}>
                         <span className="flex-1 text-[13px] text-ink">{t("trash")}</span>
+                      </Command.Item>
+                    </Command.Group>
+                    <Command.Group heading={<GroupLabel>{st("cmd_group")}</GroupLabel>}>
+                      {activePlan ? (
+                        <Command.Item
+                          value="study-log-session"
+                          className={itemClass}
+                          onSelect={() => run(() => useStudyUi.getState().openLog())}
+                        >
+                          <span className="flex-1 text-[13px] text-ink">{st("cmd_log_session")}</span>
+                        </Command.Item>
+                      ) : null}
+                      <Command.Item
+                        value="study-focus"
+                        className={itemClass}
+                        onSelect={() => run(() => useStudyUi.getState().setTimerOpen(true))}
+                      >
+                        <span className="flex-1 text-[13px] text-ink">{st("cmd_start_focus")}</span>
+                      </Command.Item>
+                      <Command.Item value="study-overview" className={itemClass} onSelect={() => go("/home/study")}>
+                        <span className="flex-1 text-[13px] text-ink">{st("cmd_open_study")}</span>
+                      </Command.Item>
+                      <Command.Item value="study-reviews" className={itemClass} onSelect={() => go("/home/study/reviews")}>
+                        <span className="flex-1 text-[13px] text-ink">{st("cmd_reviews")}</span>
+                      </Command.Item>
+                      <Command.Item value="study-new-goal" className={itemClass} onSelect={() => go("/home/study/goals/new")}>
+                        <span className="flex-1 text-[13px] text-ink">{st("cmd_new_goal")}</span>
+                      </Command.Item>
+                      <Command.Item
+                        value="study-scratchpad"
+                        className={itemClass}
+                        onSelect={() => run(() => useStudyUi.getState().setPadOpen(true))}
+                      >
+                        <span className="flex-1 text-[13px] text-ink">{st("cmd_scratchpad")}</span>
                       </Command.Item>
                     </Command.Group>
                   </>

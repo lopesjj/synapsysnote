@@ -69,6 +69,32 @@ service cloud.firestore {
       return workspaceId == 'ws_' + request.auth.uid;
     }
 
+    function studyCollections() {
+      return [
+        'study_plans', 'study_subjects', 'study_sessions', 'study_reviews', 'study_exams',
+        'study_cycles', 'study_reminders', 'study_stickies', 'study_meta'
+      ];
+    }
+
+    function validStudyDoc(collectionName, docId) {
+      return (collectionName != 'study_meta' || docId == 'settings')
+        && (collectionName != 'study_plans'
+          || (incoming().name is string && incoming().name.size() <= 200))
+        && (collectionName != 'study_subjects'
+          || (incoming().name is string && incoming().name.size() <= 200
+            && incoming().topics is list && incoming().topics.size() <= 600))
+        && (collectionName != 'study_sessions'
+          || (incoming().durationSec is number && incoming().durationSec >= 0
+            && incoming().durationSec <= 57600 && incoming().subjectId is string))
+        && (collectionName != 'study_exams'
+          || (incoming().rows is list && incoming().rows.size() <= 100))
+        && (collectionName != 'study_cycles'
+          || (incoming().items is list && incoming().items.size() <= 400
+            && incoming().history is list && incoming().history.size() <= 800))
+        && (collectionName != 'study_stickies'
+          || (incoming().html is string && incoming().html.size() <= 200000));
+    }
+
     function serverOnlyUserFields() {
       return ['legalAcceptedVersion', 'legalAcceptedAt', 'sessionRevokedAt'];
     }
@@ -234,6 +260,14 @@ service cloud.firestore {
       match /flashcards/{flashcardId} {
         allow read: if isMember(workspaceId);
         allow create, update, delete: if canWrite(workspaceId);
+      }
+
+      match /{studyCollection}/{studyDocId} {
+        allow read: if studyCollection in studyCollections() && isMember(workspaceId);
+        allow create, update: if studyCollection in studyCollections()
+          && canWrite(workspaceId)
+          && validStudyDoc(studyCollection, studyDocId);
+        allow delete: if studyCollection in studyCollections() && canWrite(workspaceId);
       }
     }
 

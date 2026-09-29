@@ -67,6 +67,44 @@ Arquivos: [`firestore.rules`](../firestore.rules) ·
       repetition, interval, easeFactor, nextReviewDate, lastReviewedAt   ← SM-2
       createdBy, createdAt, updatedAt
 
+  /study_plans/{planId}                          ← objetivos (concurso, certificação, semestre)
+      name, institution, role, examDate, icon, notes, archived,
+      weeklyGoalMinutes, weeklyGoalQuestions, order, createdAt, updatedAt
+
+  /study_subjects/{subjectId}                    ← matérias de um objetivo
+      planId, name, color, notebookId, order, createdAt, updatedAt
+      topics[] { id, name, done, doneAt, pageId, url }
+
+  /study_sessions/{sessionId}                    ← registros do diário
+      planId, subjectId, topicId, day (AAAA-MM-DD), startMinute, durationSec,
+      categoryId, correct, wrong, pages, pageRanges[], videoSec, videos[],
+      material, pageId                           ← texto livre + nota vinculada com @
+      comment, reviewId, cycleItemId, source, createdAt, updatedAt
+
+  /study_reviews/{reviewId}                      ← revisões espaçadas
+      planId, subjectId, topicId, sessionId, intervalDays, dueDay,
+      status (pending | done | ignored), resolvedAt, resolvedSessionId
+
+  /study_exams/{examId}                          ← simulados
+      planId, day, name, style (multiple | truefalse), board, durationSec,
+      rows[] { id, subjectId, name, weight, total, correct, wrong, blank }, comment
+
+  /study_cycles/{planId}                         ← cronograma em ciclo (um por objetivo)
+      items[] { id, subjectId, minutes }, pointer, round, weekMinutes[7],
+      subjects[] { subjectId, weight, level }, minBlock, maxBlock,
+      history[] { itemId, subjectId, minutes, round, day, sessionId, skipped, at }
+
+  /study_reminders/{reminderId}                  ← provas, prazos e compromissos
+      title, kind (exam | task | event), day, done, planId
+
+  /study_stickies/{stickyId}                     ← folhas do bloco rápido
+      html, color, order
+
+  /study_meta/settings                           ← preferências do módulo de estudos
+      activePlanId, studyWeekdays[], weekStartsOn, performanceLow/High,
+      reviewIntervals[], autoReviews, categories[], timerSound, timeZone,
+      pomodoroFocus/Short/Long/Rounds
+
   /trashed_media/{base64url(storagePath)}       ← quarentena de arquivos (só Admin SDK)
       storagePath, pageId, userId, markedForDeletionAt, expiresAt
 
@@ -143,6 +181,38 @@ Notion e o aceite dos documentos legais são escritos apenas pelo Admin SDK. As
 regras usam `unchanged(field)` / `affectedKeys()` para rejeitar qualquer
 tentativa do cliente.
 
+**Módulo de estudos.** As coleções `study_*` ficam no mesmo workspace das
+notas, e é isso que integra os dois módulos: tópicos e sessões apontam para
+notas por `pageId`, e o cronograma envia blocos para a base "Planejamento". O
+dia de uma sessão é gravado como chave `AAAA-MM-DD` no fuso escolhido nas
+preferências, para que a sequência e as revisões não mudem de dia conforme o
+fuso do aparelho. Arrays de objetos (`topics`, `items`, `rows`) guardam o `id`
+de cada item: sessões, revisões e o histórico do ciclo referenciam esses ids,
+então a gravação só descarta o `id` da raiz do documento
+([`backend.ts`](../src/lib/study/backend.ts)). O material de uma sessão é texto
+livre; ao digitar `@` o usuário vincula uma nota (`pageId`), e "Revisar agora"
+ou "Iniciar foco" abrem essa nota direto. No modo convidado as mesmas coleções
+vivem no `localStorage` com o mesmo formato.
+
+**Planejamento e cronograma são uma coisa só.** As tarefas continuam
+guardadas nas linhas da base "Planejamento" (`databases/{id}/rows`, colunas
+Nome, Status e Data), mas quem as mostra e edita é o Cronograma do módulo de
+estudos, junto dos blocos do ciclo, das revisões e da data da prova. Se houver
+mais de uma base com esse nome, as tarefas de todas aparecem e as novas vão
+para a mais usada. A base não aparece mais na barra lateral das notas, e abrir
+`/home/db/{id}` dela redireciona para o Cronograma. Alterar uma tarefa grava
+só os campos mudados (`patchRowValues`, com `FieldPath` no Firestore), para
+que edições simultâneas em dois aparelhos não se sobrescrevam.
+
+**Concorrência no módulo de estudos.** Operações que leem e reescrevem um
+array (tópicos da matéria, ponteiro e histórico do ciclo, linhas de simulado)
+passam por `transform` no backend: no Firestore rodam dentro de
+`runTransaction`, recalculadas sobre a versão mais recente do documento; sem
+conexão, o cálculo usa o cache local e a gravação entra na fila de sincronização.
+Excluir uma matéria ajusta o ciclo e desvincula as linhas de simulado; remover
+tópicos desvincula sessões e revisões; excluir uma sessão apaga as revisões que
+ela gerou, reabre as que ela concluiu e limpa a referência no histórico do ciclo.
+
 **Props de bloco que o editor persiste.** Além do tipo e do rich text,
 `AppBlock.props` guarda `textAlign`, `indentFirst` (recuo de primeira linha),
 `language` / `autoDetect` (código) e `color`. Anotações de span incluem
@@ -176,6 +246,12 @@ Pontos não óbvios das regras:
   status ainda é `pending` / `discovering` / `running`).
 - **Integrações e quarentena.** `allow write: if false`; o token não existe do
   lado do cliente e a quarentena só muda pelas rotas do servidor.
+- **Coleções de estudo.** Um único `match /{studyCollection}/{studyDocId}`
+  cobre as nove coleções `study_*` (lista fechada em `studyCollections()`):
+  membro lê, editor grava. `validStudyDoc()` limita nomes, tamanho de listas
+  (600 tópicos, 400 blocos, 800 itens de histórico, 100 linhas de simulado),
+  duração de sessão (até 16 h) e o HTML do bloco rápido; em `study_meta` só
+  existe o documento `settings`.
 - **Versões são imutáveis.** `allow update: if false`; histórico que pode ser
   reescrito não é histórico.
 

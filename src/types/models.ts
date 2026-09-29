@@ -502,6 +502,7 @@ export interface SearchHit {
   score: number;
   matchedIn: ("title" | "body" | "transcript" | "tag")[];
   notebookId?: string | null;
+  parentPageId?: string | null;
   icon?: string | null;
 }
 

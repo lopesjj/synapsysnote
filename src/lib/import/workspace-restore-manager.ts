@@ -1,27 +1,28 @@
 "use client";
 
 import { toast } from "sonner";
-import {
-  extractZipEntry,
-  extractZipJson,
-  type SlicedZipEntry,
-} from "./sliced-zip";
+import { extractZipEntry, type SlicedZipEntry } from "./sliced-zip";
 import { optionalAuthHeader } from "@/lib/firebase/auth-headers";
+import { translate } from "@/lib/i18n/translations";
+import { useUiStore } from "@/lib/store/ui-store";
 import {
   useBackgroundImportStore,
   type BackgroundImportRun,
 } from "./background-import-store";
+import {
+  isRestorableBackup,
+  readWorkspaceBackup,
+  summarizeWorkspaceBackup,
+  type RestoreSummary,
+  type WorkspaceBackup,
+} from "./workspace-backup";
+
+export type { RestoreSummary } from "./workspace-backup";
 
 export const WORKSPACE_RESTORE_KEY = "workspace:restore";
 
-export interface RestoreSummary {
-  workspaceName?: string;
-  notebooksCount: number;
-  pagesCount: number;
-  databasesCount: number;
-  databaseRowsCount: number;
-  flashcardsCount: number;
-  filesCount: number;
+function message(key: "synapsys_import_success" | "synapsys_import_failed" | "synapsys_import_invalid_file"): string {
+  return translate(useUiStore.getState().language || "pt", key);
 }
 
 export interface PersistedRestoreJob {
@@ -180,13 +181,16 @@ function extractTokensMap(rawJson: string): Map<string, string> {
   return tokenMap;
 }
 
-function remapWorkspaceData(parsedData: any, targetWorkspaceId: string) {
+type RestorableData = Omit<WorkspaceBackup, "files">;
+
+function remapWorkspaceData(parsedData: WorkspaceBackup, targetWorkspaceId: string): RestorableData {
   let serialized = JSON.stringify({
     workspace: parsedData.workspace,
     notebooks: parsedData.notebooks,
     pages: parsedData.pages,
     databases: parsedData.databases,
     flashcards: parsedData.flashcards,
+    study: parsedData.study,
   });
 
   const manifestFiles = parsedData.files || [];
@@ -213,7 +217,7 @@ function remapWorkspaceData(parsedData: any, targetWorkspaceId: string) {
     serialized = serialized.replaceAll(rawOld, rawNew).replaceAll(encOld, encNew);
   }
 
-  const result = JSON.parse(serialized);
+  const result = JSON.parse(serialized) as RestorableData;
   if (result.workspace) {
     result.workspace.id = targetWorkspaceId;
   }
@@ -303,7 +307,7 @@ async function uploadBatchFilesWithRetry(
       if (res.ok) {
         return true;
       }
-    } catch (err) {
+    } catch {
       if (signal?.aborted) return false;
       const delay = Math.min(600 * Math.pow(1.6, attempts - 1), 6000);
       await new Promise((r) => setTimeout(r, delay));
@@ -336,10 +340,10 @@ export async function executeWorkspaceRestore(
   activeAbortControllers.set(workspaceId, abortCtrl);
 
   const store = useBackgroundImportStore.getState();
-  let existingJob = await getPersistedRestoreJob(workspaceId);
+  const existingJob = await getPersistedRestoreJob(workspaceId);
 
   const uploadedPathsSet = new Set<string>(existingJob?.uploadedPaths || []);
-  let restoredBatchIndex = existingJob?.restoredPageBatch || 0;
+  const restoredBatchIndex = existingJob?.restoredPageBatch || 0;
   let maxReportedFiles = uploadedPathsSet.size;
 
   try {
@@ -352,33 +356,14 @@ export async function executeWorkspaceRestore(
       percent: 5,
     });
 
-    const { data: parsedData, entries: zipMap } = await extractZipJson<any>(
-      file as File,
-      ["synapsys-workspace.json", "workspace.json", "synapsys-dados.json"]
-    );
-    const manifestFiles: Array<{
-      storagePath: string;
-      archivePath: string;
-      name: string;
-      mimeType?: string;
-      sizeBytes?: number;
-    }> = parsedData.files || [];
+    const { data: parsedData, entries: zipMap } = await readWorkspaceBackup(file);
+    if (!isRestorableBackup(parsedData)) throw new Error(message("synapsys_import_invalid_file"));
+    const manifestFiles = parsedData.files;
 
     const totalFiles = manifestFiles.length;
-    const totalNotes = (parsedData.pages || []).length;
+    const totalNotes = parsedData.pages.length;
 
-    const summary: RestoreSummary = {
-      workspaceName: parsedData.workspace?.name,
-      notebooksCount: (parsedData.notebooks || []).length,
-      pagesCount: (parsedData.pages || []).length,
-      databasesCount: (parsedData.databases || []).length,
-      databaseRowsCount: (parsedData.databases || []).reduce(
-        (acc: number, db: any) => acc + (Array.isArray(db.rows) ? db.rows.length : 0),
-        0
-      ),
-      flashcardsCount: (parsedData.flashcards || []).length,
-      filesCount: (parsedData.files || []).length,
-    };
+    const summary: RestoreSummary = summarizeWorkspaceBackup(parsedData);
 
     const currentJob: PersistedRestoreJob = {
       workspaceId,
@@ -560,6 +545,7 @@ export async function executeWorkspaceRestore(
                 notebooks: finalRestoredData.notebooks,
                 databases: finalRestoredData.databases,
                 flashcards: finalRestoredData.flashcards,
+                study: finalRestoredData.study,
               }
             : {}),
           pages: pageSlice,
@@ -605,7 +591,7 @@ export async function executeWorkspaceRestore(
             const errJson = await restoreRes.json().catch(() => ({}));
             throw new Error(errJson.error?.message || `Erro ${restoreRes.status}`);
           }
-        } catch (err) {
+        } catch {
           if (abortCtrl.signal.aborted) return;
           const delay = Math.min(800 * Math.pow(1.6, attempts - 1), 6000);
           await new Promise((r) => setTimeout(r, delay));
@@ -613,7 +599,7 @@ export async function executeWorkspaceRestore(
       }
 
       if (!success) {
-        throw new Error("Falha ao salvar dados do workspace após múltiplas tentativas.");
+        throw new Error(message("synapsys_import_failed"));
       }
 
       const processedNotesCount = Math.min(totalNotes, (batchIdx + 1) * PAGE_CHUNK_SIZE);
@@ -641,7 +627,7 @@ export async function executeWorkspaceRestore(
     setGlobalActiveFlag(false);
 
     store.finish(WORKSPACE_RESTORE_KEY, []);
-    toast.success("Workspace restaurado com sucesso!");
+    toast.success(message("synapsys_import_success"));
 
     onProgress?.({
       stage: "done",
@@ -660,7 +646,7 @@ export async function executeWorkspaceRestore(
   } catch (err) {
     activeAbortControllers.delete(workspaceId);
     setGlobalActiveFlag(false);
-    const message = err instanceof Error ? err.message : "Falha na restauração do workspace";
+    const failure = err instanceof Error && err.message ? err.message : message("synapsys_import_failed");
     useBackgroundImportStore.getState().patch(WORKSPACE_RESTORE_KEY, { status: "done" });
     onProgress?.({
       stage: "error",
@@ -669,9 +655,9 @@ export async function executeWorkspaceRestore(
       processedNotes: 0,
       totalNotes: existingJob?.totalNotes || 0,
       percent: 0,
-      message,
+      message: failure,
     });
-    toast.error(message);
+    toast.error(failure);
     throw err;
   }
 }

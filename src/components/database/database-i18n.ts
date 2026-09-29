@@ -336,6 +336,16 @@ const LOCALIZED_VALUES: Record<string, Record<string, string>> = {
   },
 };
 
+export function canonicalDatabaseKey(text: string): string | null {
+  if (!text) return null;
+  const normalized = text
+    .trim()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase();
+  return CANONICAL_MAP[normalized] ?? null;
+}
+
 export function translateDatabaseText(text: string, lang: string = "pt"): string {
   if (!text) return text;
   const normalized = text
