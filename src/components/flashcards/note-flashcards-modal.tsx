@@ -413,56 +413,56 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
           typeof window !== "undefined"
             ? window.localStorage.getItem("synapsys_transcribe_language")
             : null;
-        // Todas as mídias ao mesmo tempo: o teto de trechos em voo é global
-        // (`audio-transcriber.ts`), então uma aula não atropela a outra, mas
-        // um áudio curto também não espera o vídeo de uma hora terminar.
         const percents = new Array<number>(pending.length).fill(0);
-        let started = 0;
         const updateOverall = () => {
           const mean = percents.reduce((sum, value) => sum + value, 0) / pending.length;
           setProgress(Math.round(18 + (mean / 100) * 30));
         };
-        const results = await Promise.all(
-          pending.map(async (item, index) => {
-            const fallbackName = t(item.kind === "video" ? "media_video" : "media_audio");
-            let mediaUrl = item.url;
-            if (!mediaUrl && item.storagePath) {
-              mediaUrl = await resolveMediaUrl(item.url, item.storagePath);
-            }
-            if (!mediaUrl) return null;
+        const results = [];
+        for (let index = 0; index < pending.length; index++) {
+          const item = pending[index];
+          const fallbackName = t(item.kind === "video" ? "media_video" : "media_audio");
+          let mediaUrl = item.url;
+          if (!mediaUrl && item.storagePath) {
+            mediaUrl = await resolveMediaUrl(item.url, item.storagePath);
+          }
+          if (!mediaUrl) {
+            results.push(null);
+            continue;
+          }
 
-            started += 1;
-            setProgressStatus(
-              t("ai_progress_transcribing_item", {
-                current: started,
-                total: pending.length,
-                name: item.name || fallbackName,
-              })
+          setProgressStatus(
+            t("ai_progress_transcribing_item", {
+              current: index + 1,
+              total: pending.length,
+              name: item.name || fallbackName,
+            })
+          );
+          const effectiveLang = item.transcriptLanguage || savedGlobalLang || language || "pt";
+
+          try {
+            const transcript = await transcribeAudioSource(
+              mediaUrl,
+              null,
+              (_partial, percent) => {
+                percents[index] = percent;
+                updateOverall();
+              },
+              effectiveLang,
+              { reuseCache: true }
             );
-            const effectiveLang = item.transcriptLanguage || savedGlobalLang || language || "pt";
-
-            try {
-              const transcript = await transcribeAudioSource(
-                mediaUrl,
-                null,
-                (_partial, percent) => {
-                  percents[index] = percent;
-                  updateOverall();
-                },
-                effectiveLang,
-                { reuseCache: true }
-              );
-              percents[index] = 100;
-              updateOverall();
-              const trimmed = transcript?.trim();
-              return trimmed ? { kind: item.kind, name: item.name || fallbackName, text: trimmed } : null;
-            } catch (err) {
-              percents[index] = 100;
-              updateOverall();
-              return { error: err };
-            }
-          })
-        );
+            percents[index] = 100;
+            updateOverall();
+            const trimmed = transcript?.trim();
+            results.push(
+              trimmed ? { kind: item.kind, name: item.name || fallbackName, text: trimmed } : null
+            );
+          } catch (err) {
+            percents[index] = 100;
+            updateOverall();
+            results.push({ error: err });
+          }
+        }
 
         // Na ordem da nota, e um aviso por tipo de falha em vez de um por mídia.
         const shown = new Set<string>();

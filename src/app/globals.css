@@ -62,6 +62,14 @@
   --band-low: #c2352f;
   --band-mid: #b7791f;
   --band-high: #2f855a;
+  /* Faixas de desempenho usadas em texto: tons escurecidos para AA sobre o canvas. */
+  --band-low-text: #b42f29;
+  --band-mid-text: #8f5d13;
+  --band-high-text: #276f4b;
+  /* Rótulos pequenos de gráfico, linha de "hoje" e meio-tom de tópico estudado. */
+  --chart-label: var(--text-faint);
+  --today-line: color-mix(in oklab, var(--accent) 50%, transparent);
+  --studied-mix: 40%;
   --sticky-sun: #fdf3c4;
   --sticky-mint: #d9f2e3;
   --sticky-sky: #dcecfb;
@@ -129,6 +137,12 @@
   --band-low: #f07167;
   --band-mid: #e9b44c;
   --band-high: #52c28b;
+  --band-low-text: var(--band-low);
+  --band-mid-text: var(--band-mid);
+  --band-high-text: var(--band-high);
+  --chart-label: var(--text-muted);
+  --today-line: color-mix(in oklab, var(--accent) 70%, transparent);
+  --studied-mix: 55%;
   --sticky-sun: #3a3520;
   --sticky-mint: #1f3a2d;
   --sticky-sky: #1d3146;
@@ -208,6 +222,14 @@
 
   html.dark {
     color-scheme: dark;
+  }
+
+  /* A lista nativa de um <select> transparente cai no fundo branco do sistema
+     e herda o texto claro do tema escuro; as opções levam as cores do tema. */
+  select option,
+  select optgroup {
+    background-color: var(--surface);
+    color: var(--text);
   }
 
   body {

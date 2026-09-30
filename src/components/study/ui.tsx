@@ -555,6 +555,29 @@ export function StudyGate({ title, children }: { title: string; children: ReactN
   return <>{children}</>;
 }
 
+export function useStartFocus() {
+  const router = useRouter();
+  const materialNote = useMaterialNote();
+  return useCallback(
+    ({ subjectId, topicId, reviewId }: { subjectId?: string | null; topicId?: string | null; reviewId?: string | null }) => {
+      const store = useStudyUi.getState();
+      const idle = store.timer.status === "idle";
+      const pageId = reviewId ? materialNote({ reviewId, subjectId, topicId }) : null;
+      if (idle) {
+        store.setTimer({ subjectId: subjectId ?? null, topicId: topicId ?? null, reviewId: reviewId ?? null, pageId });
+      }
+      if (pageId) {
+        if (idle) startTimer();
+        store.setTimerOpen(false);
+        router.push(`/home/p/${pageId}`);
+        return;
+      }
+      store.setTimerOpen(true);
+    },
+    [materialNote, router]
+  );
+}
+
 export function FocusButton({
   subjectId,
   topicId,
@@ -573,23 +596,8 @@ export function FocusButton({
   className?: string;
 }) {
   const { st } = useStudyT();
-  const router = useRouter();
-  const materialNote = useMaterialNote();
-  const start = () => {
-    const store = useStudyUi.getState();
-    const idle = store.timer.status === "idle";
-    const pageId = reviewId ? materialNote({ reviewId, subjectId, topicId }) : null;
-    if (idle) {
-      store.setTimer({ subjectId: subjectId ?? null, topicId: topicId ?? null, reviewId: reviewId ?? null, pageId });
-    }
-    if (pageId) {
-      if (idle) startTimer();
-      store.setTimerOpen(false);
-      router.push(`/home/p/${pageId}`);
-      return;
-    }
-    store.setTimerOpen(true);
-  };
+  const startFocus = useStartFocus();
+  const start = () => startFocus({ subjectId, topicId, reviewId });
   return (
     <Button variant={variant} size={size} onClick={start} className={className} aria-label={label ?? st("sidebar_focus_idle")}>
       <Timer />

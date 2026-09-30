@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, ClipboardPaste, FileSpreadsheet, ImagePlus, Loader2, NotebookTabs, X } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useRouter } from "@/lib/i18n/navigation";
@@ -13,6 +13,7 @@ import { childrenOf, notebookSubtreeIds } from "@/lib/data/notebook-tree";
 import { useStudy, type SubjectDraft } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
 import { useIconUploads } from "@/lib/study/hooks";
+import { useStudyUi } from "@/lib/study/ui-store";
 import { subjectsFromCsv } from "@/lib/study/syllabus";
 import type { Notebook, Page } from "@/types/models";
 import { DraftEditor, PasteImporter, draftsFromParsed, useDraftMerge } from "../syllabus-import";
@@ -65,7 +66,8 @@ export function NewGoalPage() {
   const [panel, setPanel] = useState<Panel | null>(null);
   const [rootId, setRootId] = useState("");
   const [icon, setIcon] = useState<string | null>(null);
-  const [name, setName] = useState("");
+  // Nome digitado no estado vazio da lista de objetivos.
+  const [name, setName] = useState(() => useStudyUi.getState().newGoalDraft);
   const [institution, setInstitution] = useState("");
   const [role, setRole] = useState("");
   const [examDate, setExamDate] = useState("");
@@ -78,6 +80,10 @@ export function NewGoalPage() {
   const nameRef = useRef<HTMLTextAreaElement>(null);
   const absorb = useDraftMerge(drafts, setDrafts);
   const icons = useIconUploads();
+
+  useEffect(() => {
+    useStudyUi.getState().setNewGoalDraft("");
+  }, []);
 
   const sortedRoots = useMemo(() => [...rootNotebooks].sort((a, b) => a.order - b.order || compareNatural(a.name, b.name)), [rootNotebooks]);
   const topicsTotal = drafts.reduce((sum, draft) => sum + draft.topics.filter((topic) => topic.name.trim()).length, 0);

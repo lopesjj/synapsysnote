@@ -37,10 +37,11 @@ export interface LogPrefill {
   source?: "manual" | "timer";
 }
 
+export type GoalSubjectSort = "syllabus" | "coverage" | "accuracy" | "reviews";
+
 export interface ScheduleLayers {
   plan: boolean;
   reviews: boolean;
-  sessions: boolean;
   tasks: boolean;
 }
 
@@ -71,6 +72,10 @@ interface StudyUiState {
   padOpen: boolean;
   scheduleView: "week" | "month";
   scheduleLayers: ScheduleLayers;
+  goalsArchivedOpen: boolean;
+  goalSubjectSort: GoalSubjectSort;
+  /** Nome digitado no estado vazio de Objetivos, levado para a criação (não persiste). */
+  newGoalDraft: string;
   setModule: (module: StudyModule) => void;
   setTimer: (patch: Partial<TimerState>) => void;
   resetTimer: (keep?: Partial<TimerState>) => void;
@@ -80,6 +85,9 @@ interface StudyUiState {
   setPadOpen: (open: boolean) => void;
   setScheduleView: (view: "week" | "month") => void;
   setScheduleLayer: (layer: keyof ScheduleLayers, value: boolean) => void;
+  setGoalsArchivedOpen: (open: boolean) => void;
+  setGoalSubjectSort: (sort: GoalSubjectSort) => void;
+  setNewGoalDraft: (name: string) => void;
 }
 
 export const useStudyUi = create<StudyUiState>()(
@@ -93,7 +101,10 @@ export const useStudyUi = create<StudyUiState>()(
       logEditId: null,
       padOpen: false,
       scheduleView: "week",
-      scheduleLayers: { plan: true, reviews: true, sessions: true, tasks: true },
+      scheduleLayers: { plan: true, reviews: true, tasks: true },
+      goalsArchivedOpen: false,
+      goalSubjectSort: "syllabus",
+      newGoalDraft: "",
       setModule: (module) => set({ module }),
       setTimer: (patch) => set({ timer: { ...get().timer, ...patch } }),
       resetTimer: (keep) =>
@@ -114,14 +125,21 @@ export const useStudyUi = create<StudyUiState>()(
       setPadOpen: (open) => set({ padOpen: open }),
       setScheduleView: (view) => set({ scheduleView: view }),
       setScheduleLayer: (layer, value) => set({ scheduleLayers: { ...get().scheduleLayers, [layer]: value } }),
+      setGoalsArchivedOpen: (open) => set({ goalsArchivedOpen: open }),
+      setGoalSubjectSort: (sort) => set({ goalSubjectSort: sort }),
+      setNewGoalDraft: (name) => set({ newGoalDraft: name }),
     }),
     {
       name: "synapsys.study.ui.v1",
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => localStorage),
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<StudyUiState> & { lastNotesRoute?: string; lastStudyRoute?: string };
         if (version < 2 && state.scheduleLayers) state.scheduleLayers = { ...state.scheduleLayers, tasks: true };
+        if (state.scheduleLayers) {
+          const { plan = true, reviews = true, tasks = true } = state.scheduleLayers;
+          state.scheduleLayers = { plan, reviews, tasks };
+        }
         delete state.lastNotesRoute;
         delete state.lastStudyRoute;
         return state as StudyUiState;
@@ -131,6 +149,8 @@ export const useStudyUi = create<StudyUiState>()(
         timer: state.timer,
         scheduleView: state.scheduleView,
         scheduleLayers: state.scheduleLayers,
+        goalsArchivedOpen: state.goalsArchivedOpen,
+        goalSubjectSort: state.goalSubjectSort,
       }),
     }
   )

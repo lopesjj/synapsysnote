@@ -840,61 +840,63 @@ async function transcribeByAudioUrl(
   targetLang: string,
   onProgress?: TranscribeProgressCallback
 ): Promise<string | null> {
-  const startedAt = Date.now();
-  let currentPercent = 10;
-  onProgress?.("", currentPercent, false);
+  return withTranscribeSlot(async () => {
+    const startedAt = Date.now();
+    let currentPercent = 10;
+    onProgress?.("", currentPercent, false);
 
-  const timer = setInterval(() => {
-    const elapsed = Date.now() - startedAt;
-    const target = 10 + 85 * (1 - Math.exp(-elapsed / 30000));
-    const next = Math.max(currentPercent, Math.min(95, Math.round(target)));
-    if (next > currentPercent) {
-      currentPercent = next;
-      onProgress?.("", currentPercent, false);
-    }
-  }, 500);
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const target = 10 + 85 * (1 - Math.exp(-elapsed / 30000));
+      const next = Math.max(currentPercent, Math.min(95, Math.round(target)));
+      if (next > currentPercent) {
+        currentPercent = next;
+        onProgress?.("", currentPercent, false);
+      }
+    }, 500);
 
-  try {
-    const jsonRes = await fetch("/api/ai/transcribe", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-target-language": targetLang,
-        ...(await optionalAuthHeader()),
-      },
-      body: JSON.stringify({
-        audioUrl,
-        targetLanguage: targetLang,
-      }),
-    });
+    try {
+      const jsonRes = await fetch("/api/ai/transcribe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-target-language": targetLang,
+          ...(await optionalAuthHeader()),
+        },
+        body: JSON.stringify({
+          audioUrl,
+          targetLanguage: targetLang,
+        }),
+      });
 
-    const urlAttempt = await readTranscribeResponse(jsonRes);
-    clearInterval(timer);
-    if (urlAttempt.fatalQuota) {
-      const err = new Error(
-        urlAttempt.quotaScope === "hour"
-          ? "QUOTA_EXCEEDED_HOUR"
-          : urlAttempt.quotaScope === "day"
-            ? "QUOTA_EXCEEDED_DAY"
-            : "QUOTA_EXCEEDED"
-      );
-      (err as unknown as { quotaScope?: "minute" | "hour" | "day" }).quotaScope = urlAttempt.quotaScope;
-      throw err;
+      const urlAttempt = await readTranscribeResponse(jsonRes);
+      clearInterval(timer);
+      if (urlAttempt.fatalQuota) {
+        const err = new Error(
+          urlAttempt.quotaScope === "hour"
+            ? "QUOTA_EXCEEDED_HOUR"
+            : urlAttempt.quotaScope === "day"
+              ? "QUOTA_EXCEEDED_DAY"
+              : "QUOTA_EXCEEDED"
+        );
+        (err as unknown as { quotaScope?: "minute" | "hour" | "day" }).quotaScope = urlAttempt.quotaScope;
+        throw err;
+      }
+      if (urlAttempt.text) {
+        onProgress?.(urlAttempt.text, 100, true);
+        return urlAttempt.text;
+      }
+      if (urlAttempt.busy) {
+        throw new Error("SERVICE_BUSY");
+      }
+    } catch (err) {
+      clearInterval(timer);
+      if (isQuotaError(err) || (err instanceof Error && err.message === "SERVICE_BUSY")) {
+        throw err;
+      }
     }
-    if (urlAttempt.text) {
-      onProgress?.(urlAttempt.text, 100, true);
-      return urlAttempt.text;
-    }
-    if (urlAttempt.busy) {
-      throw new Error("SERVICE_BUSY");
-    }
-  } catch (err) {
-    clearInterval(timer);
-    if (isQuotaError(err) || (err instanceof Error && err.message === "SERVICE_BUSY")) {
-      throw err;
-    }
-  }
-  return null;
+    return null;
+  });
 }
 
 async function runTranscription(

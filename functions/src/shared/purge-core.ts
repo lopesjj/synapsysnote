@@ -152,12 +152,14 @@ export async function referencedPaths(db: Firestore, workspaceId: string, purge:
   const ws = db.collection("workspaces").doc(workspaceId);
   const refs = new Set<string>();
 
-  const [pages, databases, notebooks, cards] = await Promise.all([
+  const [pages, databases, notebooks, cards, plans] = await Promise.all([
     ws.collection("pages").select("blocksJson", "blocks", "coverUrl", "icon").get(),
     ws.collection("databases").select("icon").get(),
     ws.collection("notebooks").select("coverUrl", "emoji").get(),
     ws.collection("flashcards").select("pageId", ...CARD_IMAGE_FIELDS).get(),
+    ws.collection("study_plans").select("icon").get(),
   ]);
+  for (const plan of plans.docs) addPath(plan.get("icon"), refs);
 
   for (const page of pages.docs) {
     if (!skipPages.has(page.id)) addPagePaths(page.data(), refs);
@@ -186,11 +188,13 @@ async function pathsWrittenSince(
   const ws = db.collection("workspaces").doc(workspaceId);
   const refs = new Set<string>();
   const recent = (query: Query) => query.where("updatedAt", ">=", since).get();
-  const [pages, cards, notebooks] = await Promise.all([
+  const [pages, cards, notebooks, plans] = await Promise.all([
     recent(ws.collection("pages")),
     recent(ws.collection("flashcards")),
     recent(ws.collection("notebooks")),
+    ws.collection("study_plans").where("updatedAt", ">=", since.getTime()).select("icon").get(),
   ]);
+  for (const plan of plans.docs) addPath(plan.get("icon"), refs);
   for (const page of pages.docs) {
     if (!skipPages.has(page.id) && !page.get("deletedAt")) addPagePaths(page.data(), refs);
   }

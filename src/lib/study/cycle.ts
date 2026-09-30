@@ -1,4 +1,5 @@
-import type { CycleCompletion, CycleItem, CycleSubjectConfig, DayKey, StudyCycle } from "@/types/study";
+import type { AgendaEntry, CycleCompletion, CycleItem, CycleSubjectConfig, DayKey, StudyCycle } from "@/types/study";
+import { occursOn } from "./agenda";
 import { addDays, compareDay, weekdayOf } from "./dates";
 
 export const CYCLE_HISTORY_LIMIT = 800;
@@ -17,6 +18,8 @@ export interface CyclePlanInput {
   minBlock: number;
   maxBlock: number;
   items?: CycleItem[];
+  /** Tempo semanal já ocupado pelos dias fixos; a rotação divide só o restante. */
+  reservedMinutes?: number;
 }
 
 export function cycleLength(input: Pick<CyclePlanInput, "weekMinutes">): number {
@@ -24,7 +27,7 @@ export function cycleLength(input: Pick<CyclePlanInput, "weekMinutes">): number 
 }
 
 export function subjectMinutes(input: CyclePlanInput): Map<string, number> {
-  const total = cycleLength(input);
+  const total = Math.max(0, cycleLength(input) - Math.max(0, input.reservedMinutes ?? 0));
   const scored = input.subjects.map((config) => ({ id: config.subjectId, score: subjectScore(config) }));
   const sum = scored.reduce((acc, entry) => acc + entry.score, 0);
   const map = new Map<string, number>();
@@ -84,10 +87,23 @@ export function generateCycleItems(input: CyclePlanInput, newId: (index: number)
     );
     if (swap > index) [entries[index], entries[swap]] = [entries[swap], entries[index]];
   }
+  // O ciclo gira: a última disciplina encosta na primeira. Trocas que reduzem as
+  // repetições contando a virada da volta também nunca aumentam as internas.
+  const circular = () => entries.filter((entry, index) => entry.subjectId === entries[(index + 1) % entries.length].subjectId).length;
+  let repeats = entries.length > 2 ? circular() : 0;
+  for (let first = 0; repeats > 0 && first < entries.length - 1; first += 1) {
+    for (let second = first + 1; repeats > 0 && second < entries.length; second += 1) {
+      if (entries[first].subjectId === entries[second].subjectId) continue;
+      [entries[first], entries[second]] = [entries[second], entries[first]];
+      const next = circular();
+      if (next < repeats) repeats = next;
+      else [entries[first], entries[second]] = [entries[second], entries[first]];
+    }
+  }
   return entries.map((entry, index) => ({ id: newId(index), subjectId: entry.subjectId, minutes: entry.minutes }));
 }
 
-export type PlannedStatus = "done" | "skipped" | "planned";
+export type PlannedStatus = "done" | "skipped" | "planned" | "missed";
 
 export interface PlannedBlock {
   key: string;
@@ -98,15 +114,12 @@ export interface PlannedBlock {
   sequence: number;
   status: PlannedStatus;
   isNext: boolean;
+  fixed: boolean;
   completion: CycleCompletion | null;
-  topicId?: string | null;
-  notes?: string | null;
-  day?: DayKey | null;
-  recurrence?: string | null;
 }
 
 export function projectSchedule(
-  cycle: Pick<StudyCycle, "items" | "weekMinutes" | "pointer" | "round" | "history">,
+  cycle: Pick<StudyCycle, "items" | "agenda" | "weekMinutes" | "pointer" | "round" | "history">,
   from: DayKey,
   to: DayKey,
   today: DayKey
@@ -119,13 +132,13 @@ export function projectSchedule(
   };
 
   const sequenceOf = new Map(cycle.items.map((item, index) => [item.id, index]));
+  const fixedIds = new Set(cycle.agenda.map((entry) => entry.id));
+  const marked = new Set<string>();
   let usedToday = 0;
   for (const completion of cycle.history) {
-    if (compareDay(completion.day, from) < 0 || compareDay(completion.day, to) > 0) {
-      if (completion.day === today && !completion.skipped) usedToday += completion.minutes;
-      continue;
-    }
     if (completion.day === today && !completion.skipped) usedToday += completion.minutes;
+    if (fixedIds.has(completion.itemId)) marked.add(`${completion.itemId}:${completion.day}`);
+    if (compareDay(completion.day, from) < 0 || compareDay(completion.day, to) > 0) continue;
     push(completion.day, {
       key: `h:${completion.itemId}:${completion.round}:${completion.at}`,
       itemId: completion.itemId,
@@ -135,72 +148,54 @@ export function projectSchedule(
       sequence: sequenceOf.get(completion.itemId) ?? -1,
       status: completion.skipped ? "skipped" : "done",
       isNext: false,
+      fixed: fixedIds.has(completion.itemId),
       completion,
-      topicId: completion.topicId,
-      notes: completion.notes,
     });
   }
 
-  const datedItems = cycle.items.filter((item) => item.day);
-  const rotatingItems = cycle.items.filter((item) => !item.day);
-
-  for (const item of datedItems) {
-    if (!item.day) continue;
-    let curr = from;
-    while (compareDay(curr, to) <= 0) {
-      const match =
-        !item.recurrence || item.recurrence === "none"
-          ? curr === item.day
-          : compareDay(curr, item.day) >= 0 &&
-            (item.recurrence === "daily"
-              ? true
-              : item.recurrence === "weekdays"
-                ? weekdayOf(curr) >= 1 && weekdayOf(curr) <= 5
-                : item.recurrence === "monthly"
-                  ? curr.slice(8, 10) === item.day.slice(8, 10)
-                  : weekdayOf(curr) === weekdayOf(item.day));
-
-      if (match) {
-        const hasHistory = cycle.history.some((h) => h.itemId === item.id && h.day === curr);
-        if (!hasHistory) {
-          push(curr, {
-            key: `d:${item.id}:${curr}`,
-            itemId: item.id,
-            subjectId: item.subjectId,
-            minutes: item.minutes,
-            round: cycle.round,
-            sequence: sequenceOf.get(item.id) ?? -1,
-            status: "planned",
-            isNext: curr === today,
-            completion: null,
-            topicId: item.topicId,
-            notes: item.notes,
-            day: curr,
-            recurrence: item.recurrence,
-          });
-        }
+  // Disciplinas em dia fixo aparecem nos seus dias e reservam esse tempo antes da rotação.
+  const reserved = new Map<DayKey, number>();
+  if (cycle.agenda.length) {
+    for (let day = compareDay(from, today) < 0 ? from : today; compareDay(day, to) <= 0; day = addDays(day, 1)) {
+      for (const entry of cycle.agenda) {
+        if (!occursOn(entry, day) || marked.has(`${entry.id}:${day}`)) continue;
+        const past = compareDay(day, today) < 0;
+        if (!past) reserved.set(day, (reserved.get(day) ?? 0) + entry.minutes);
+        if (compareDay(day, from) < 0) continue;
+        push(day, {
+          key: `a:${entry.id}:${day}`,
+          itemId: entry.id,
+          subjectId: entry.subjectId,
+          minutes: entry.minutes,
+          round: cycle.round,
+          sequence: -1,
+          status: past ? "missed" : "planned",
+          isNext: false,
+          fixed: true,
+          completion: null,
+        });
       }
-      curr = addDays(curr, 1);
     }
   }
 
-  if (!rotatingItems.length || compareDay(to, today) < 0) return result;
-  const hasCapacity = cycle.weekMinutes.some((value) => value > 0);
-  if (!hasCapacity) return result;
+  if (!cycle.items.length || compareDay(to, today) < 0) return result;
+  if (!cycle.weekMinutes.some((value) => value > 0)) return result;
 
-  let pointer = cycle.pointer % rotatingItems.length;
+  // A projeção começa no ponteiro e preenche o tempo livre de cada dia a partir
+  // de hoje; dias anteriores a `from` só consomem a sequência.
+  let pointer = cycle.pointer % cycle.items.length;
   let round = cycle.round;
-  let first = !datedItems.some((item) => item.day === today);
+  let first = true;
   let day = today;
   let guard = 0;
   while (compareDay(day, to) <= 0 && guard < 5000) {
     guard += 1;
     const capacity = cycle.weekMinutes[weekdayOf(day)] ?? 0;
-    let remaining = day === today ? Math.max(0, capacity - usedToday) : capacity;
+    let remaining = Math.max(0, capacity - (day === today ? usedToday : 0) - (reserved.get(day) ?? 0));
     let placed = 0;
     while (remaining > 0 && guard < 5000) {
       guard += 1;
-      const item = rotatingItems[pointer];
+      const item = cycle.items[pointer];
       const fits = remaining >= item.minutes * 0.6;
       const lonely = placed === 0 && remaining === capacity && remaining >= item.minutes * 0.34;
       if (!fits && !lonely) break;
@@ -211,21 +206,18 @@ export function projectSchedule(
           subjectId: item.subjectId,
           minutes: item.minutes,
           round,
-          sequence: sequenceOf.get(item.id) ?? -1,
+          sequence: pointer,
           status: "planned",
           isNext: first,
+          fixed: false,
           completion: null,
-          topicId: item.topicId,
-          notes: item.notes,
-          day: item.day,
-          recurrence: item.recurrence,
         });
       }
       first = false;
       placed += 1;
       remaining -= item.minutes;
       pointer += 1;
-      if (pointer >= rotatingItems.length) {
+      if (pointer >= cycle.items.length) {
         pointer = 0;
         round += 1;
       }
@@ -233,6 +225,51 @@ export function projectSchedule(
     day = addDays(day, 1);
   }
   return result;
+}
+
+export type LapState = "done" | "skipped" | "current" | "pending";
+
+/**
+ * Situação de cada disciplina na volta atual. Vale o que está no histórico da
+ * volta; a que ficou para trás do ponteiro sem registro (porque o usuário
+ * escolheu outra como próxima) conta como pulada.
+ */
+export function lapStates(cycle: Pick<StudyCycle, "items" | "pointer" | "round" | "history">): LapState[] {
+  const total = cycle.items.length;
+  if (!total) return [];
+  const pointer = cycle.pointer % total;
+  const marks = new Map<string, boolean>();
+  for (const entry of cycle.history) {
+    if (entry.round === cycle.round) marks.set(entry.itemId, entry.skipped);
+  }
+  return cycle.items.map((item, index) => {
+    if (index === pointer) return "current";
+    const skipped = marks.get(item.id);
+    if (skipped === false) return "done";
+    if (skipped === true || index < pointer) return "skipped";
+    return "pending";
+  });
+}
+
+/**
+ * Depois de editar a lista, o ponteiro acompanha a disciplina que era a atual.
+ * Se ela saiu, vai para a primeira que sobrou depois dela; se não sobrou
+ * nenhuma depois, a volta terminou. Uma lista inteiramente nova recomeça do
+ * início da mesma volta.
+ */
+export function remapPointer(
+  previous: Pick<StudyCycle, "items" | "pointer" | "round">,
+  items: readonly Pick<CycleItem, "id">[]
+): { pointer: number; round: number } {
+  const total = previous.items.length;
+  if (!items.length || !total) return { pointer: 0, round: previous.round };
+  const indexOf = new Map(items.map((item, index) => [item.id, index]));
+  if (!previous.items.some((item) => indexOf.has(item.id))) return { pointer: 0, round: previous.round };
+  for (let index = previous.pointer % total; index < total; index += 1) {
+    const found = indexOf.get(previous.items[index].id);
+    if (found !== undefined) return { pointer: found, round: previous.round };
+  }
+  return { pointer: 0, round: previous.round + 1 };
 }
 
 export function advanceCycle(
@@ -251,8 +288,6 @@ export function advanceCycle(
     sessionId: options.sessionId ?? null,
     skipped: Boolean(options.skipped),
     at: options.at,
-    topicId: item.topicId ?? null,
-    notes: item.notes ?? null,
   };
   const nextPointer = cycle.pointer + 1;
   const wrapped = nextPointer >= cycle.items.length;
@@ -263,9 +298,11 @@ export function advanceCycle(
   };
 }
 
-export function undoLastCompletion(cycle: StudyCycle): Pick<StudyCycle, "pointer" | "round" | "history"> | null {
+export function undoLastCompletion(
+  cycle: Pick<StudyCycle, "items" | "pointer" | "round" | "history">
+): Pick<StudyCycle, "pointer" | "round" | "history"> | null {
   const last = cycle.history[cycle.history.length - 1];
-  if (!last || !cycle.items.length) return null;
+  if (!last) return null;
   const index = cycle.items.findIndex((item) => item.id === last.itemId);
   if (index < 0) return { pointer: cycle.pointer, round: cycle.round, history: cycle.history.slice(0, -1) };
   return {
@@ -275,14 +312,82 @@ export function undoLastCompletion(cycle: StudyCycle): Pick<StudyCycle, "pointer
   };
 }
 
-export function roundProgress(cycle: Pick<StudyCycle, "items" | "pointer">): { done: number; total: number; minutesDone: number; minutesTotal: number } {
+/**
+ * Apaga um registro do histórico. O último registro é desfeito por inteiro
+ * (a disciplina volta a ser a atual); um registro mais antigo só sai da lista.
+ */
+export function removeCompletion(
+  cycle: Pick<StudyCycle, "items" | "pointer" | "round" | "history">,
+  target: Pick<CycleCompletion, "itemId" | "day" | "at">
+): Pick<StudyCycle, "pointer" | "round" | "history"> | null {
+  const index = cycle.history.findIndex(
+    (entry) => entry.itemId === target.itemId && entry.day === target.day && entry.at === target.at
+  );
+  if (index < 0) return null;
+  if (index === cycle.history.length - 1) return undoLastCompletion(cycle);
+  return { pointer: cycle.pointer, round: cycle.round, history: cycle.history.filter((_, position) => position !== index) };
+}
+
+export function pendingAgendaEntry(
+  cycle: Pick<StudyCycle, "agenda" | "history">,
+  subjectId: string,
+  day: DayKey
+): AgendaEntry | null {
+  return (
+    cycle.agenda.find(
+      (entry) =>
+        entry.subjectId === subjectId &&
+        occursOn(entry, day) &&
+        !cycle.history.some((completion) => completion.itemId === entry.id && completion.day === day)
+    ) ?? null
+  );
+}
+
+export function recordAgendaDay(
+  cycle: Pick<StudyCycle, "round" | "history">,
+  entry: AgendaEntry,
+  day: DayKey,
+  options: { sessionId?: string | null; skipped?: boolean; at: number }
+): Pick<StudyCycle, "history"> | null {
+  if (!occursOn(entry, day) || cycle.history.some((completion) => completion.itemId === entry.id && completion.day === day)) return null;
+  const completion: CycleCompletion = {
+    itemId: entry.id,
+    subjectId: entry.subjectId,
+    minutes: entry.minutes,
+    round: cycle.round,
+    day,
+    sessionId: options.sessionId ?? null,
+    skipped: Boolean(options.skipped),
+    at: options.at,
+  };
+  return { history: [...cycle.history, completion].slice(-CYCLE_HISTORY_LIMIT) };
+}
+
+export interface RoundProgress {
+  done: number;
+  total: number;
+  position: number;
+  minutesDone: number;
+  minutesLeft: number;
+  minutesTotal: number;
+  states: LapState[];
+}
+
+export function roundProgress(cycle: Pick<StudyCycle, "items" | "pointer" | "round" | "history">): RoundProgress {
+  const states = lapStates(cycle);
   const total = cycle.items.length;
-  const pointer = total ? cycle.pointer % total : 0;
+  let done = 0;
   let minutesDone = 0;
+  let minutesLeft = 0;
   let minutesTotal = 0;
   cycle.items.forEach((item, index) => {
     minutesTotal += item.minutes;
-    if (index < pointer) minutesDone += item.minutes;
+    if (states[index] === "done") {
+      done += 1;
+      minutesDone += item.minutes;
+    } else if (states[index] !== "skipped") {
+      minutesLeft += item.minutes;
+    }
   });
-  return { done: pointer, total, minutesDone, minutesTotal };
+  return { done, total, position: total ? (cycle.pointer % total) + 1 : 0, minutesDone, minutesLeft, minutesTotal, states };
 }

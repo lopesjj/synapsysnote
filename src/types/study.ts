@@ -131,10 +131,6 @@ export interface CycleItem {
   id: string;
   subjectId: string;
   minutes: number;
-  topicId?: string | null;
-  notes?: string | null;
-  day?: DayKey | null;
-  recurrence?: string | null;
 }
 
 export interface CycleCompletion {
@@ -146,8 +142,6 @@ export interface CycleCompletion {
   sessionId: string | null;
   skipped: boolean;
   at: number;
-  topicId?: string | null;
-  notes?: string | null;
 }
 
 export interface CycleSubjectConfig {
@@ -156,10 +150,31 @@ export interface CycleSubjectConfig {
   level: number;
 }
 
+export type AgendaRepeat = "none" | "daily" | "weekly" | "weekdays" | "monthly" | "custom";
+
+/**
+ * Disciplina marcada em dia fixo, fora da rotação do ciclo. As conclusões vão
+ * para o histórico do ciclo com `itemId` igual ao `id` daqui e o dia da ocorrência.
+ */
+export interface AgendaEntry {
+  id: string;
+  subjectId: string;
+  minutes: number;
+  start: DayKey;
+  until: DayKey | null;
+  repeat: AgendaRepeat;
+  weekdays: number[];
+  topicId: string | null;
+  note: string;
+  removed: DayKey[];
+  createdAt: number;
+}
+
 export interface StudyCycle {
   id: string;
   planId: string;
   items: CycleItem[];
+  agenda: AgendaEntry[];
   weekMinutes: number[];
   pointer: number;
   round: number;

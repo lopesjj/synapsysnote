@@ -11,6 +11,7 @@ import { useStudy, type SessionInput } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
 import { useStudyUi, type LogPrefill } from "@/lib/study/ui-store";
 import { addDays, minuteLabel, parseMinuteLabel } from "@/lib/study/dates";
+import { pendingAgendaEntry } from "@/lib/study/cycle";
 import { clockLabel, parseClock } from "@/lib/study/format";
 import { accuracyOf } from "@/lib/study/metrics";
 import { useLiveNote } from "@/lib/study/hooks";
@@ -176,7 +177,8 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
 
 
   const cycleItem = planCycle && planCycle.items.length ? planCycle.items[planCycle.pointer % planCycle.items.length] : null;
-  const cycleMatches = Boolean(cycleItem && subject?.kind === "existing" && cycleItem.subjectId === subject.id);
+  const fixedMatch = planCycle && subject?.kind === "existing" ? pendingAgendaEntry(planCycle, subject.id, day) : null;
+  const cycleMatches = Boolean(fixedMatch || (cycleItem && subject?.kind === "existing" && cycleItem.subjectId === subject.id));
 
   const correctN = numeric(correct);
   const wrongN = numeric(wrong);
@@ -436,7 +438,7 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
               disabled={!cycleMatches}
               onChange={setCountCycle}
               label={st("logform_cycle")}
-              hint={st("logform_cycle_hint")}
+              hint={st(fixedMatch ? "logform_cycle_hint_fixed" : "logform_cycle_hint")}
             />
           ) : null}
           {!editing ? (

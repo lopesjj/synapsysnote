@@ -12,6 +12,8 @@ import {
 } from "react";
 import { useWorkspace } from "@/lib/data/provider";
 import type {
+  AgendaEntry,
+  CycleCompletion,
   CycleItem,
   CycleSubjectConfig,
   DayKey,
@@ -35,6 +37,7 @@ import {
   type PlainWrite,
   type StudyWrite,
 } from "./backend";
+import { MAX_AGENDA_ENTRIES } from "./agenda";
 import {
   toCycle,
   toExam,
@@ -54,7 +57,15 @@ import {
   normalizeSettings,
 } from "./defaults";
 import { addDays, diffDays, todayKey } from "./dates";
-import { advanceCycle, generateCycleItems, undoLastCompletion } from "./cycle";
+import {
+  advanceCycle,
+  generateCycleItems,
+  pendingAgendaEntry,
+  recordAgendaDay,
+  remapPointer,
+  removeCompletion,
+  undoLastCompletion,
+} from "./cycle";
 import { PlanningProvider } from "./planning";
 
 export interface SubjectDraft {
@@ -129,9 +140,13 @@ export interface StudyActions {
   saveExam(input: ExamInput): Promise<string>;
   deleteExam(id: string): Promise<void>;
   saveCycle(planId: string, config: CycleConfigInput): Promise<void>;
-  setCyclePointer(planId: string, pointer: number): Promise<void>;
+  editCycleItems(planId: string, edit: (items: CycleItem[]) => CycleItem[]): Promise<void>;
+  setCyclePointer(planId: string, itemId: string): Promise<void>;
   completeCycleBlock(planId: string, skipped: boolean): Promise<void>;
   undoCycleBlock(planId: string): Promise<void>;
+  removeCycleCompletion(planId: string, target: Pick<CycleCompletion, "itemId" | "day" | "at">): Promise<void>;
+  editAgenda(planId: string, edit: (agenda: AgendaEntry[]) => AgendaEntry[], options?: { removeItemId?: string }): Promise<void>;
+  markAgendaDay(planId: string, entryId: string, day: DayKey, skipped: boolean): Promise<void>;
   deleteCycle(planId: string): Promise<void>;
   saveReminder(input: ReminderInput): Promise<string>;
   deleteReminder(id: string): Promise<void>;
@@ -368,6 +383,12 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     };
 
     const cycleOf = (planId: string) => current().cycles.find((cycle) => cycle.planId === planId || cycle.id === planId);
+
+    const cleanCycleItem = (item: CycleItem): CycleItem => ({
+      id: item.id || backend.newId(),
+      subjectId: item.subjectId,
+      minutes: Math.min(600, Math.max(5, Math.round(item.minutes))),
+    });
 
     const resolveTargets = (input: SessionInput, completeTopic: boolean, create?: CreateTargets) => {
       const snapshot = current();
@@ -608,13 +629,20 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             apply: (raw) => {
               if (!raw) return {};
               const latest = toCycle(raw);
-              if (!latest.items.some((item) => item.subjectId === id) && !latest.subjects.some((config) => config.subjectId === id)) return {};
+              if (
+                !latest.items.some((item) => item.subjectId === id) &&
+                !latest.subjects.some((config) => config.subjectId === id) &&
+                !latest.agenda.some((entry) => entry.subjectId === id)
+              ) {
+                return {};
+              }
               const items = latest.items.filter((item) => item.subjectId !== id);
               const upcoming = latest.items.slice(latest.pointer).find((item) => item.subjectId !== id);
               const pointer = upcoming ? Math.max(0, items.findIndex((item) => item.id === upcoming.id)) : 0;
               return {
                 merge: {
                   items,
+                  agenda: latest.agenda.filter((entry) => entry.subjectId !== id),
                   subjects: latest.subjects.filter((config) => config.subjectId !== id),
                   pointer: items.length ? pointer % items.length : 0,
                   updatedAt: now(),
@@ -716,15 +744,23 @@ export function StudyProvider({ children }: { children: ReactNode }) {
           id,
           data: { ...session, cycleItemId },
         });
-        if (options.countCycle && cycle && cycle.items.length) {
+        if (options.countCycle && cycle && (cycle.items.length || cycle.agenda.length)) {
           writes.push({
             kind: "transform",
             collection: "study_cycles",
             id: cycle.id,
             apply: (raw) => {
               const latest = raw ? toCycle(raw) : null;
-              const item = latest && latest.items.length ? latest.items[latest.pointer % latest.items.length] : null;
-              if (!latest || !item || item.subjectId !== input.subjectId) return { also: [sessionWrite(null)] };
+              if (!latest) return { also: [sessionWrite(null)] };
+              // A disciplina marcada para o dia da sessão tem prioridade sobre a rotação.
+              const fixed = pendingAgendaEntry(latest, input.subjectId, input.day);
+              const marked = fixed ? recordAgendaDay(latest, fixed, input.day, { sessionId: id, at: now() }) : null;
+              if (fixed && marked) {
+                session.cycleItemId = fixed.id;
+                return { merge: { ...marked, updatedAt: now() }, also: [sessionWrite(fixed.id)] };
+              }
+              const item = latest.items.length ? latest.items[latest.pointer % latest.items.length] : null;
+              if (!item || item.subjectId !== input.subjectId) return { also: [sessionWrite(null)] };
               const patch = advanceCycle(latest, input.day, { sessionId: id, at: now() });
               session.cycleItemId = item.id;
               return { merge: patch ? { ...patch, updatedAt: now() } : null, also: [sessionWrite(item.id)] };
@@ -888,11 +924,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         const existing = cycleOf(planId);
         const items =
           config.items && config.items.length > 0
-            ? config.items.map((item) => ({
-                id: item.id || backend.newId(),
-                subjectId: item.subjectId,
-                minutes: Math.max(5, Math.round(item.minutes)),
-              }))
+            ? config.items.map(cleanCycleItem)
             : generateCycleItems(config, () => backend.newId());
         const subjects =
           config.subjects && config.subjects.length > 0
@@ -902,31 +934,41 @@ export function StudyProvider({ children }: { children: ReactNode }) {
                 weight: 3,
                 level: 3,
               }));
+        const data = {
+          planId,
+          items,
+          weekMinutes: config.weekMinutes.map((value) => Math.max(0, Math.round(value))),
+          subjects,
+          minBlock: config.minBlock,
+          maxBlock: config.maxBlock,
+          updatedAt: now(),
+        };
+        if (!existing) {
+          await commit([
+            {
+              kind: "set",
+              collection: "study_cycles",
+              id: planId,
+              data: { ...data, pointer: 0, round: 0, history: [], createdAt: now() },
+            },
+          ]);
+          return;
+        }
         await commit([
           {
-            kind: "set",
+            kind: "transform",
             collection: "study_cycles",
-            id: existing?.id ?? planId,
-            data: {
-              planId,
-              items,
-              weekMinutes: config.weekMinutes.map((value) => Math.max(0, Math.round(value))),
-              pointer: existing && items.length > 0 ? Math.min(existing.pointer, items.length - 1) : 0,
-              round: existing ? existing.round : 0,
-              history: existing?.history ?? [],
-              subjects,
-              minBlock: config.minBlock,
-              maxBlock: config.maxBlock,
-              createdAt: existing?.createdAt ?? now(),
-              updatedAt: now(),
+            id: existing.id,
+            apply: (raw) => {
+              if (!raw) return { merge: { ...data, pointer: 0, round: 0, history: [], createdAt: now() } };
+              return { merge: { ...data, ...remapPointer(toCycle(raw), items) } };
             },
           },
         ]);
       },
-      async setCyclePointer(planId, pointer) {
+      async editCycleItems(planId, edit) {
         const cycle = cycleOf(planId);
-        if (!cycle || !cycle.items.length) return;
-        const target = Math.max(0, Math.min(cycle.items.length - 1, pointer));
+        if (!cycle) return;
         await commit([
           {
             kind: "transform",
@@ -934,7 +976,36 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             id: cycle.id,
             apply: (raw) => {
               if (!raw) return {};
-              return { merge: { pointer: target, updatedAt: now() } };
+              const latest = toCycle(raw);
+              const items = edit(latest.items.map((item) => ({ ...item }))).map(cleanCycleItem);
+              const known = new Set(latest.subjects.map((config) => config.subjectId));
+              const added = [...new Set(items.map((item) => item.subjectId))]
+                .filter((subjectId) => !known.has(subjectId))
+                .map((subjectId) => ({ subjectId, weight: 3, level: 3 }));
+              return {
+                merge: {
+                  items,
+                  ...remapPointer(latest, items),
+                  ...(added.length ? { subjects: [...latest.subjects, ...added] } : {}),
+                  updatedAt: now(),
+                },
+              };
+            },
+          },
+        ]);
+      },
+      async setCyclePointer(planId, itemId) {
+        const cycle = cycleOf(planId);
+        if (!cycle) return;
+        await commit([
+          {
+            kind: "transform",
+            collection: "study_cycles",
+            id: cycle.id,
+            apply: (raw) => {
+              if (!raw) return {};
+              const index = toCycle(raw).items.findIndex((item) => item.id === itemId);
+              return index < 0 ? {} : { merge: { pointer: index, updatedAt: now() } };
             },
           },
         ]);
@@ -967,6 +1038,86 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             apply: (raw) => {
               if (!raw) return {};
               const patch = undoLastCompletion(toCycle(raw));
+              return patch ? { merge: { ...patch, updatedAt: now() } } : {};
+            },
+          },
+        ]);
+      },
+      async removeCycleCompletion(planId, target) {
+        const cycle = cycleOf(planId);
+        if (!cycle) return;
+        await commit([
+          {
+            kind: "transform",
+            collection: "study_cycles",
+            id: cycle.id,
+            apply: (raw) => {
+              if (!raw) return {};
+              const patch = removeCompletion(toCycle(raw), target);
+              return patch ? { merge: { ...patch, updatedAt: now() } } : {};
+            },
+          },
+        ]);
+      },
+      async editAgenda(planId, edit, options) {
+        const finish = (agenda: AgendaEntry[]) =>
+          agenda
+            .slice(0, MAX_AGENDA_ENTRIES)
+            .map((entry) => ({ ...entry, id: entry.id || backend.newId(), createdAt: entry.createdAt || now() }));
+        const fresh = (agenda: AgendaEntry[]): Record<string, unknown> => ({
+          planId,
+          items: [],
+          agenda,
+          weekMinutes: [0, 0, 0, 0, 0, 0, 0],
+          pointer: 0,
+          round: 0,
+          history: [],
+          subjects: [],
+          minBlock: 30,
+          maxBlock: 60,
+          createdAt: now(),
+          updatedAt: now(),
+        });
+        const cycle = cycleOf(planId);
+        if (!cycle) {
+          const agenda = finish(edit([]));
+          if (agenda.length) await commit([{ kind: "set", collection: "study_cycles", id: planId, data: fresh(agenda) }]);
+          return;
+        }
+        await commit([
+          {
+            kind: "transform",
+            collection: "study_cycles",
+            id: cycle.id,
+            apply: (raw) => {
+              if (!raw) {
+                const agenda = finish(edit([]));
+                return agenda.length ? { merge: fresh(agenda) } : {};
+              }
+              const latest = toCycle(raw);
+              const merge: Record<string, unknown> = { agenda: finish(edit(latest.agenda.map((entry) => ({ ...entry })))), updatedAt: now() };
+              if (options?.removeItemId && latest.items.some((item) => item.id === options.removeItemId)) {
+                const items = latest.items.filter((item) => item.id !== options.removeItemId);
+                Object.assign(merge, { items }, remapPointer(latest, items));
+              }
+              return { merge };
+            },
+          },
+        ]);
+      },
+      async markAgendaDay(planId, entryId, day, skipped) {
+        const cycle = cycleOf(planId);
+        if (!cycle) return;
+        await commit([
+          {
+            kind: "transform",
+            collection: "study_cycles",
+            id: cycle.id,
+            apply: (raw) => {
+              if (!raw) return {};
+              const latest = toCycle(raw);
+              const entry = latest.agenda.find((item) => item.id === entryId);
+              const patch = entry ? recordAgendaDay(latest, entry, day, { skipped, at: now() }) : null;
               return patch ? { merge: { ...patch, updatedAt: now() } } : {};
             },
           },

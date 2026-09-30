@@ -45,9 +45,9 @@ import { KpiBand } from "@/components/study/widgets";
 import { TaskCheck, TaskDialog, type TaskDialogState } from "@/components/study/tasks";
 import type { StudyReminder, StudyReview } from "@/types/study";
 import type { Notebook, Page } from "@/types/models";
+import { EDITORIAL_SERIF, SERIF_LANGUAGES } from "@/lib/typography";
 
-const SERIF = "var(--font-newsreader), ui-serif, Georgia, serif";
-const SERIF_LANGUAGES = new Set(["pt", "en", "es", "fr", "it", "de"]);
+const SERIF = EDITORIAL_SERIF;
 const TILE = "rounded-[22px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_1px_2px_rgba(15,44,76,0.04)]";
 const LIFT =
   "transition-[transform,box-shadow] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:shadow-[0_0_0_1px_var(--border-strong),0_18px_36px_-20px_rgba(15,44,76,0.38)]";

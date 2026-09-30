@@ -92,6 +92,7 @@ Arquivos: [`firestore.rules`](../firestore.rules) ·
   /study_cycles/{planId}                         ← cronograma em ciclo (um por objetivo)
       items[] { id, subjectId, minutes }, pointer, round, weekMinutes[7],
       subjects[] { subjectId, weight, level }, minBlock, maxBlock,
+      agenda[] { id, subjectId, minutes, start, until, repeat, weekdays[], topicId, removed[] },
       history[] { itemId, subjectId, minutes, round, day, sessionId, skipped, at }
 
   /study_reminders/{reminderId}                  ← provas, prazos e compromissos
@@ -183,7 +184,7 @@ tentativa do cliente.
 
 **Módulo de estudos.** As coleções `study_*` ficam no mesmo workspace das
 notas, e é isso que integra os dois módulos: tópicos e sessões apontam para
-notas por `pageId`, e o cronograma envia blocos para a base "Planejamento". O
+notas por `pageId`, e as tarefas do Planejamento ficam na base "Planejamento". O
 dia de uma sessão é gravado como chave `AAAA-MM-DD` no fuso escolhido nas
 preferências, para que a sequência e as revisões não mudem de dia conforme o
 fuso do aparelho. Arrays de objetos (`topics`, `items`, `rows`) guardam o `id`
@@ -196,11 +197,11 @@ vivem no `localStorage` com o mesmo formato.
 
 **Planejamento e cronograma são uma coisa só.** As tarefas continuam
 guardadas nas linhas da base "Planejamento" (`databases/{id}/rows`, colunas
-Nome, Status e Data), mas quem as mostra e edita é o Cronograma do módulo de
-estudos, junto dos blocos do ciclo, das revisões e da data da prova. Se houver
-mais de uma base com esse nome, as tarefas de todas aparecem e as novas vão
-para a mais usada. A base não aparece mais na barra lateral das notas, e abrir
-`/home/db/{id}` dela redireciona para o Cronograma. Alterar uma tarefa grava
+Nome, Status e Data), mas quem as mostra e edita é a página Planejamento do
+módulo de estudos, junto das disciplinas do ciclo, das revisões e da data da
+prova. Se houver mais de uma base com esse nome, as tarefas de todas aparecem e
+as novas vão para a mais usada. A base não aparece mais na barra lateral das
+notas, e abrir `/home/db/{id}` dela redireciona para essa página. Alterar uma tarefa grava
 só os campos mudados (`patchRowValues`, com `FieldPath` no Firestore), para
 que edições simultâneas em dois aparelhos não se sobrescrevam.
 
@@ -212,6 +213,15 @@ conexão, o cálculo usa o cache local e a gravação entra na fila de sincroniz
 Excluir uma disciplina ajusta o ciclo e desvincula as linhas de simulado; remover
 tópicos desvincula sessões e revisões; excluir uma sessão apaga as revisões que
 ela gerou, reabre as que ela concluiu e limpa a referência no histórico do ciclo.
+
+**Rotação e dias fixos.** `items` é a sequência que gira: o ponteiro guarda a
+disciplina atual (editar a lista mantém a mesma disciplina como atual) e a
+projeção preenche o tempo livre de cada dia a partir de hoje. `agenda` guarda as
+disciplinas com dia marcado (`repeat`: none, daily, weekly, weekdays, monthly ou
+custom com `weekdays`); elas reservam o seu tempo antes da rotação. "Só este dia"
+entra em `removed`, "este e os seguintes" vira `until` e "todos" apaga o item. As
+conclusões dos dois tipos vão para `history` com o dia da ocorrência, e cada
+registro pode ser apagado; apagar o último também devolve o ponteiro.
 
 **Props de bloco que o editor persiste.** Além do tipo e do rich text,
 `AppBlock.props` guarda `textAlign`, `indentFirst` (recuo de primeira linha),

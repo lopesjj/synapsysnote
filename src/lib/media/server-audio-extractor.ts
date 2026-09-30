@@ -62,9 +62,17 @@ export async function extractAudioTrack(
   inputBuffer: Buffer,
   mimeType: string
 ): Promise<{ buffers: Buffer[]; mime: string }> {
-  const isMp4 =
-    mimeType.includes("mp4") ||
-    (inputBuffer.length > 8 && inputBuffer.toString("ascii", 4, 8) === "ftyp");
+  const isMp3 =
+    mimeType.includes("mp3") ||
+    mimeType.includes("mpeg") ||
+    (inputBuffer.length > 3 && inputBuffer.toString("ascii", 0, 3) === "ID3") ||
+    (inputBuffer.length > 2 && inputBuffer[0] === 0xff && (inputBuffer[1] & 0xe0) === 0xe0);
+  const isWav =
+    mimeType.includes("wav") ||
+    (inputBuffer.length > 4 && inputBuffer.toString("ascii", 0, 4) === "RIFF");
+  const isFlac =
+    mimeType.includes("flac") ||
+    (inputBuffer.length > 4 && inputBuffer.toString("ascii", 0, 4) === "fLaC");
   const isWebm =
     mimeType.includes("webm") ||
     (inputBuffer.length > 4 && inputBuffer[0] === 0x1a && inputBuffer[1] === 0x45 && inputBuffer[2] === 0xdf && inputBuffer[3] === 0xa3);
@@ -72,7 +80,12 @@ export async function extractAudioTrack(
     mimeType.includes("ogg") ||
     mimeType.includes("opus") ||
     (inputBuffer.length > 4 && inputBuffer.toString("ascii", 0, 4) === "OggS");
-  const isVideo = mimeType.startsWith("video/") || isMp4 || isWebm;
+  const isMp4 =
+    mimeType.includes("mp4") ||
+    mimeType.includes("m4a") ||
+    mimeType.includes("aac") ||
+    (inputBuffer.length > 8 && inputBuffer.toString("ascii", 4, 8) === "ftyp");
+  const isVideo = mimeType.startsWith("video/") || (isMp4 && !mimeType.includes("m4a") && !mimeType.includes("aac")) || isWebm;
 
   if (!isVideo && inputBuffer.byteLength <= GROQ_MAX_UPLOAD_BYTES) {
     return { buffers: [inputBuffer], mime: mimeType };
@@ -80,7 +93,19 @@ export async function extractAudioTrack(
 
   const tempDir = os.tmpdir();
   const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const ext = isWebm ? ".webm" : isOgg ? ".ogg" : ".mp4";
+  const ext = isWebm
+    ? ".webm"
+    : isOgg
+      ? ".ogg"
+      : isMp3
+        ? ".mp3"
+        : isWav
+          ? ".wav"
+          : isFlac
+            ? ".flac"
+            : isMp4
+              ? (mimeType.includes("m4a") ? ".m4a" : ".mp4")
+              : ".mp4";
   const inputPath = path.join(tempDir, `synapsys_in_${id}${ext}`);
   const outputPath = path.join(tempDir, `synapsys_out_${id}.ogg`);
   const generatedFiles: string[] = [inputPath, outputPath];

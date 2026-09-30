@@ -30,6 +30,9 @@ export function Combobox({
   onClear,
   emptyLabel,
   autoFocus,
+  boxClassName,
+  inputClassName,
+  commitOnBlur,
 }: {
   options: ComboOption[];
   value: string | null;
@@ -44,6 +47,10 @@ export function Combobox({
   onClear?: () => void;
   emptyLabel?: string;
   autoFocus?: boolean;
+  boxClassName?: string;
+  inputClassName?: string;
+  /** Texto digitado e não escolhido vira `onCreate` ao sair do campo. */
+  commitOnBlur?: boolean;
 }) {
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -51,6 +58,7 @@ export function Combobox({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
+  const pendingRef = useRef<() => void>(() => {});
 
   const selected = options.find((option) => option.id === value) ?? null;
   const display = selected?.label ?? pendingLabel ?? "";
@@ -70,9 +78,16 @@ export function Combobox({
   const total = filtered.length + (canCreate ? 1 : 0);
 
   useEffect(() => {
+    pendingRef.current = () => {
+      if (commitOnBlur && canCreate && onCreate) onCreate(trimmed);
+    };
+  });
+
+  useEffect(() => {
     if (!open) return;
     const onPointer = (event: PointerEvent) => {
       if (!wrapperRef.current?.contains(event.target as Node)) {
+        pendingRef.current();
         setOpen(false);
         setQuery("");
       }
@@ -98,7 +113,8 @@ export function Combobox({
         className={cn(
           "flex h-9 items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2.5 transition",
           open && "border-[var(--accent)] ring-2 ring-[var(--accent-soft)]",
-          disabled && "pointer-events-none opacity-50"
+          disabled && "pointer-events-none opacity-50",
+          boxClassName
         )}
         onClick={() => inputRef.current?.focus()}
       >
@@ -144,11 +160,12 @@ export function Combobox({
                 setQuery("");
               }
             } else if (event.key === "Tab") {
+              pendingRef.current();
               setOpen(false);
               setQuery("");
             }
           }}
-          className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-faint"
+          className={cn("h-full min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-faint", inputClassName)}
         />
         {clearable && (value || pendingLabel) && !open ? (
           <button

@@ -123,6 +123,11 @@ export function fontsByCategory(): { category: FontCategory; label: string; font
   }));
 }
 
+/** Serifa editorial dos títulos de destaque (saudação da Home, Objetivos). */
+export const EDITORIAL_SERIF = "var(--font-newsreader), ui-serif, Georgia, serif";
+/** Idiomas cujo alfabeto a Newsreader cobre; os demais ficam na Geist. */
+export const SERIF_LANGUAGES = new Set(["pt", "en", "es", "fr", "it", "de"]);
+
 export const EDITOR_WIDTHS: Record<"narrow" | "normal" | "wide", string> = {
   narrow: "clamp(44rem, 50vw, 50rem)",
   normal: "clamp(58rem, 68vw, 76rem)",

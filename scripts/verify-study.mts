@@ -18,11 +18,26 @@ import {
 import {
   advanceCycle,
   generateCycleItems,
+  lapStates,
+  pendingAgendaEntry,
   projectSchedule,
+  recordAgendaDay,
+  remapPointer,
+  removeCompletion,
   roundProgress,
   subjectMinutes,
   undoLastCompletion,
 } from "../src/lib/study/cycle";
+import {
+  dropAgendaDay,
+  endAgendaBefore,
+  makeAgendaEntry,
+  nextOccurrence,
+  nextWeekday,
+  occursOn,
+  upsertAgendaEntry,
+  weeklyAgendaMinutes,
+} from "../src/lib/study/agenda";
 import { pagesFromRanges, safeUrl, secondsFromVideos, toSession, toSubject } from "../src/lib/study/normalize";
 import { clockLabel, parseClock } from "../src/lib/study/format";
 import { addDays, dayRange, monthGrid, startOfWeek, weekdayOf } from "../src/lib/study/dates";
@@ -331,11 +346,33 @@ const balanced = generateCycleItems(
   (index) => `b${index}`
 );
 assert.equal(adjacentRepeats(balanced), 0);
+const circularRepeats = (list: { subjectId: string }[]) =>
+  list.filter((item, index) => item.subjectId === list[(index + 1) % list.length].subjectId).length;
+assert.equal(circularRepeats(balanced), 0);
+const dominant = generateCycleItems(
+  {
+    subjects: [
+      { subjectId: "pt", weight: 5, level: 2 },
+      { subjectId: "dc", weight: 4, level: 3 },
+      { subjectId: "da", weight: 4, level: 3 },
+      { subjectId: "ctb", weight: 3, level: 2 },
+      { subjectId: "rl", weight: 2, level: 4 },
+    ],
+    weekMinutes: [0, 150, 150, 120, 150, 120, 180],
+    minBlock: 40,
+    maxBlock: 90,
+    reservedMinutes: 45,
+  },
+  (index) => `d${index}`
+);
+const dominantLargest = Math.max(...[...new Set(dominant.map((item) => item.subjectId))].map((id) => dominant.filter((item) => item.subjectId === id).length));
+assert.equal(circularRepeats(dominant), Math.max(0, dominantLargest - (dominant.length - dominantLargest)), "cycle must not repeat a subject across the lap boundary");
 
 const cycle: StudyCycle = {
   id: "p",
   planId: "p",
   items,
+  agenda: [],
   weekMinutes,
   pointer: 0,
   round: 0,
@@ -373,6 +410,121 @@ assert.equal(lastItem.round, 1);
 assert.equal(lastItem.history[0].skipped, true);
 const withHistory = projectSchedule({ ...cycle, ...advanced }, monday, monday, monday);
 assert.equal((withHistory.get(monday) ?? [])[0].status, "done");
+
+const mark = (index: number, round: number, skipped: boolean) => ({
+  itemId: items[index].id,
+  subjectId: items[index].subjectId,
+  minutes: items[index].minutes,
+  round,
+  day: monday,
+  sessionId: null,
+  skipped,
+  at: index,
+});
+const midLap = { ...cycle, pointer: 3, round: 1, history: [mark(4, 0, false), mark(0, 1, false), mark(1, 1, true)] };
+assert.deepEqual(lapStates(midLap).slice(0, 5), ["done", "skipped", "skipped", "current", "pending"]);
+const midProgress = roundProgress(midLap);
+assert.equal(midProgress.done, 1);
+assert.equal(midProgress.position, 4);
+assert.equal(midProgress.minutesLeft, items.slice(3).reduce((sum, item) => sum + item.minutes, 0));
+assert.equal(roundProgress({ ...midLap, pointer: 0, round: 2 }).done, 0);
+
+const ids = (...values: string[]) => values.map((id) => ({ id }));
+const abcd = { items: ids("a", "b", "c", "d").map((item) => ({ ...item, subjectId: "s", minutes: 30 })), pointer: 2, round: 4 };
+assert.deepEqual(remapPointer(abcd, ids("c", "a", "b", "d")), { pointer: 0, round: 4 });
+assert.deepEqual(remapPointer(abcd, ids("a", "b", "d")), { pointer: 2, round: 4 });
+assert.deepEqual(remapPointer({ ...abcd, pointer: 3 }, ids("a", "b", "c")), { pointer: 0, round: 5 });
+assert.deepEqual(remapPointer(abcd, ids("x", "y")), { pointer: 0, round: 4 });
+assert.deepEqual(remapPointer(abcd, []), { pointer: 0, round: 4 });
+
+// Registros apagados um a um, inclusive com o ciclo vazio.
+const twoMarks = { ...cycle, pointer: 2, round: 0, history: [mark(0, 0, false), mark(1, 0, true)] };
+const withoutOld = removeCompletion(twoMarks, twoMarks.history[0]);
+assert.ok(withoutOld);
+assert.equal(withoutOld.pointer, 2);
+assert.deepEqual(withoutOld.history.map((entry) => entry.itemId), [items[1].id]);
+const withoutLast = removeCompletion(twoMarks, twoMarks.history[1]);
+assert.ok(withoutLast);
+assert.equal(withoutLast.pointer, 1);
+assert.equal(removeCompletion(twoMarks, { itemId: "nope", day: monday, at: 0 }), null);
+const emptied = { ...twoMarks, items: [], pointer: 0 };
+assert.equal(undoLastCompletion(emptied)?.history.length, 1);
+assert.equal(removeCompletion(emptied, emptied.history[0])?.history.length, 1);
+
+// Disciplinas em dias fixos.
+const tuesday = "2026-09-29";
+const wednesday = "2026-09-30";
+const english = makeAgendaEntry(
+  { subjectId: "en", minutes: 80, start: wednesday, repeat: "weekly", weekdays: [], topicId: null },
+  { id: "en-weekly", until: null, removed: [], createdAt: 1 }
+);
+assert.equal(occursOn(english, wednesday), true);
+assert.equal(occursOn(english, addDays(wednesday, 7)), true);
+assert.equal(occursOn(english, addDays(wednesday, 1)), false);
+assert.equal(occursOn(english, addDays(wednesday, -7)), false);
+assert.equal(nextOccurrence(english, tuesday), wednesday);
+assert.equal(nextWeekday(tuesday, 3), wednesday);
+assert.equal(nextWeekday(tuesday, 2), tuesday);
+const custom = makeAgendaEntry({ subjectId: "rl", minutes: 30, start: monday, repeat: "custom", weekdays: [5, 1, 1], topicId: null });
+assert.deepEqual(custom.weekdays, [1, 5]);
+assert.equal(occursOn(custom, friday), false);
+assert.equal(occursOn(custom, "2026-10-02"), true);
+assert.equal(makeAgendaEntry({ subjectId: "x", minutes: 30, start: monday, repeat: "custom", weekdays: [], topicId: null }).repeat, "none");
+const monthly = makeAgendaEntry({ subjectId: "x", minutes: 30, start: "2026-09-30", repeat: "monthly", weekdays: [], topicId: null });
+assert.equal(occursOn(monthly, "2026-10-30"), true);
+assert.equal(occursOn(monthly, "2026-10-29"), false);
+
+const skipped = dropAgendaDay([english], english.id, addDays(wednesday, 7));
+assert.equal(occursOn(skipped[0], addDays(wednesday, 7)), false);
+assert.equal(occursOn(skipped[0], addDays(wednesday, 14)), true);
+assert.deepEqual(dropAgendaDay([{ ...english, repeat: "none" }], english.id, wednesday), []);
+const ended = endAgendaBefore([english], english.id, addDays(wednesday, 14));
+assert.equal(ended[0].until, addDays(wednesday, 13));
+assert.equal(occursOn(ended[0], addDays(wednesday, 7)), true);
+assert.equal(occursOn(ended[0], addDays(wednesday, 14)), false);
+assert.equal(nextOccurrence(ended[0], addDays(wednesday, 8)), null);
+assert.deepEqual(endAgendaBefore([english], english.id, wednesday), []);
+assert.deepEqual(upsertAgendaEntry([english], { ...english, minutes: 60 }).map((entry) => entry.minutes), [60]);
+assert.equal(upsertAgendaEntry([english], { ...english, id: "" }).length, 2);
+
+const fixedCycle: StudyCycle = { ...cycle, pointer: 0, round: 0, history: [], agenda: [english] };
+const fixedWeek = projectSchedule(fixedCycle, monday, addDays(monday, 6), tuesday);
+const wednesdayBlocks = fixedWeek.get(wednesday) ?? [];
+assert.equal(wednesdayBlocks[0].fixed, true);
+assert.equal(wednesdayBlocks[0].status, "planned");
+const rotationMinutes = (day: string) =>
+  (fixedWeek.get(day) ?? []).filter((block) => !block.fixed).reduce((sum, block) => sum + block.minutes, 0);
+assert.ok(rotationMinutes(wednesday) < rotationMinutes(addDays(wednesday, 1)), "fixed minutes must shrink the rotation that day");
+const pastWeek = projectSchedule(fixedCycle, monday, addDays(monday, 6), "2026-10-02");
+assert.equal((pastWeek.get(wednesday) ?? [])[0].status, "missed");
+
+assert.equal(pendingAgendaEntry(fixedCycle, "en", wednesday)?.id, english.id);
+assert.equal(pendingAgendaEntry(fixedCycle, "en", tuesday), null);
+const marked = recordAgendaDay(fixedCycle, english, wednesday, { at: 5, sessionId: "s9" });
+assert.ok(marked);
+assert.equal(recordAgendaDay({ ...fixedCycle, ...marked }, english, wednesday, { at: 6 }), null);
+assert.equal(recordAgendaDay(fixedCycle, english, tuesday, { at: 7 }), null);
+const afterMark = { ...fixedCycle, ...marked };
+assert.equal(pendingAgendaEntry(afterMark, "en", wednesday), null);
+const markedWeek = projectSchedule(afterMark, monday, addDays(monday, 6), wednesday);
+const wednesdayAfter = markedWeek.get(wednesday) ?? [];
+assert.equal(wednesdayAfter.filter((block) => block.itemId === english.id).length, 1);
+assert.equal(wednesdayAfter.find((block) => block.itemId === english.id)?.status, "done");
+assert.equal(lapStates(afterMark)[0], "current");
+assert.equal(undoLastCompletion(afterMark)?.pointer, afterMark.pointer);
+
+// Tópico livre, tempo dos dias fixos e o desconto na geração automática.
+const withNote = makeAgendaEntry({ subjectId: "en", minutes: 30, start: monday, repeat: "none", weekdays: [], topicId: null, note: "  Simulado   oral " });
+assert.equal(withNote.note, "Simulado oral");
+assert.equal(makeAgendaEntry({ subjectId: "en", minutes: 30, start: monday, repeat: "none", weekdays: [], topicId: "t1", note: "x" }).note, "");
+assert.equal(weeklyAgendaMinutes([english], monday), 80);
+assert.equal(weeklyAgendaMinutes([english, withNote], monday), 80);
+assert.equal(weeklyAgendaMinutes([english, makeAgendaEntry({ subjectId: "x", minutes: 30, start: monday, repeat: "daily", weekdays: [], topicId: null })], monday), 80 + 7 * 30);
+const reservedShares = subjectMinutes({ ...input, reservedMinutes: 330 });
+const reservedTotal = [...reservedShares.values()].reduce((sum, value) => sum + value, 0);
+const fullTotal = [...minutes.values()].reduce((sum, value) => sum + value, 0);
+assert.ok(reservedTotal < fullTotal && Math.abs(reservedTotal - 330) <= 40, `reserved split ${reservedTotal}`);
+assert.equal(subjectMinutes({ ...input, reservedMinutes: 10_000 }).size, 0);
 
 const local = studyBackendFor("local", "verify");
 let latestSubjects: Array<Record<string, unknown>> = [];

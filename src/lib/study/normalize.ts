@@ -1,4 +1,6 @@
 import type {
+  AgendaEntry,
+  AgendaRepeat,
   CycleCompletion,
   CycleItem,
   MockExam,
@@ -18,6 +20,7 @@ import type {
   VideoEntry,
 } from "@/types/study";
 import type { StudyDoc } from "./backend";
+import { MAX_AGENDA_ENTRIES, MAX_AGENDA_REMOVED } from "./agenda";
 import { isDayKey } from "./dates";
 import { MAX_SESSION_SECONDS, STICKY_COLORS, SUBJECT_COLORS } from "./defaults";
 
@@ -234,6 +237,34 @@ function toCycleItem(raw: unknown, index: number): CycleItem | null {
   return { id: str(entry.id) || `c${index}`, subjectId, minutes: Math.max(5, nonNegative(entry.minutes, 600)) };
 }
 
+const AGENDA_REPEATS: AgendaRepeat[] = ["none", "daily", "weekly", "weekdays", "monthly", "custom"];
+
+function toAgendaEntry(raw: unknown, index: number): AgendaEntry | null {
+  if (!raw || typeof raw !== "object") return null;
+  const entry = raw as Record<string, unknown>;
+  const subjectId = str(entry.subjectId);
+  if (!subjectId || !isDayKey(entry.start)) return null;
+  const repeat = AGENDA_REPEATS.includes(entry.repeat as AgendaRepeat) ? (entry.repeat as AgendaRepeat) : "none";
+  const weekdays = Array.isArray(entry.weekdays)
+    ? [...new Set(entry.weekdays.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value >= 0 && value <= 6))].sort(
+        (a, b) => a - b
+      )
+    : [];
+  return {
+    id: str(entry.id) || `a${index}`,
+    subjectId,
+    minutes: Math.max(5, nonNegative(entry.minutes, 600)),
+    start: entry.start,
+    until: isDayKey(entry.until) ? entry.until : null,
+    repeat: repeat === "custom" && !weekdays.length ? "none" : repeat,
+    weekdays,
+    topicId: nullableStr(entry.topicId),
+    note: str(entry.note).slice(0, 120),
+    removed: Array.isArray(entry.removed) ? entry.removed.filter(isDayKey).slice(-MAX_AGENDA_REMOVED) : [],
+    createdAt: num(entry.createdAt),
+  };
+}
+
 function toCompletion(raw: unknown): CycleCompletion | null {
   if (!raw || typeof raw !== "object") return null;
   const entry = raw as Record<string, unknown>;
@@ -275,10 +306,14 @@ export function toCycle(raw: StudyDoc): StudyCycle {
   const history = Array.isArray(raw.history)
     ? raw.history.map(toCompletion).filter((entry): entry is CycleCompletion => Boolean(entry))
     : [];
+  const agenda = Array.isArray(raw.agenda)
+    ? raw.agenda.map(toAgendaEntry).filter((entry): entry is AgendaEntry => Boolean(entry)).slice(0, MAX_AGENDA_ENTRIES)
+    : [];
   return {
     id: raw.id,
     planId: str(raw.planId) || raw.id,
     items,
+    agenda,
     weekMinutes,
     pointer: items.length ? nonNegative(raw.pointer) % items.length : 0,
     round: nonNegative(raw.round),

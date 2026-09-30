@@ -293,9 +293,22 @@ export async function POST(req: NextRequest) {
         if (!fetched) {
           return NextResponse.json({ transcript: "", reason: "FETCH_FAILED" });
         }
-        bytesUsed = fetched.buffer.byteLength;
-
-        const { buffers, mime } = await extractAudioTrack(fetched.buffer, fetched.mime);
+        const lowerUrl = audioUrl.toLowerCase();
+        const effectiveMime =
+          lowerUrl.includes(".mp3")
+            ? "audio/mpeg"
+            : lowerUrl.includes(".wav")
+              ? "audio/wav"
+              : lowerUrl.includes(".ogg")
+                ? "audio/ogg"
+                : lowerUrl.includes(".m4a")
+                  ? "audio/m4a"
+                  : lowerUrl.includes(".webm")
+                    ? "video/webm"
+                    : lowerUrl.includes(".mp4")
+                      ? "video/mp4"
+                      : fetched.mime;
+        const { buffers, mime } = await extractAudioTrack(fetched.buffer, effectiveMime);
         const chunkTexts: string[] = [];
         let detectedLanguage: string | undefined;
         let finalReason: WhisperResult["reason"] = "OK";

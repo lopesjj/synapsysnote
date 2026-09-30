@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -61,25 +62,40 @@ export function Field({ label, children, hint, htmlFor }: { label: string; child
   );
 }
 
+export type GoalField = "name" | "icon" | "examDate" | "weekly" | "notes";
+
 export function GoalDialog({
   open,
   onOpenChange,
   plan,
   onSaved,
+  focus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   plan?: StudyPlan | null;
   onSaved?: (id: string) => void;
+  /** Campo que recebe o foco ao abrir (padrão: nome). */
+  focus?: GoalField;
 }) {
   return (
     <DialogShell open={open} onOpenChange={onOpenChange} className="max-w-lg">
-      {open ? <GoalForm plan={plan ?? null} onClose={() => onOpenChange(false)} onSaved={onSaved} /> : null}
+      {open ? <GoalForm plan={plan ?? null} focus={focus ?? "name"} onClose={() => onOpenChange(false)} onSaved={onSaved} /> : null}
     </DialogShell>
   );
 }
 
-function GoalForm({ plan, onClose, onSaved }: { plan: StudyPlan | null; onClose: () => void; onSaved?: (id: string) => void }) {
+function GoalForm({
+  plan,
+  focus,
+  onClose,
+  onSaved,
+}: {
+  plan: StudyPlan | null;
+  focus: GoalField;
+  onClose: () => void;
+  onSaved?: (id: string) => void;
+}) {
   const { st, textDir } = useStudyT();
   const { actions } = useStudy();
   const icons = useIconUploads();
@@ -149,6 +165,7 @@ function GoalForm({ plan, onClose, onSaved }: { plan: StudyPlan | null; onClose:
             <button
               type="button"
               aria-label={st("goal_icon")}
+              autoFocus={focus === "icon"}
               className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] transition hover:border-[var(--border-strong)]"
             >
               <GoalMark icon={icon} name={name || st("untitled_goal")} seed={plan?.id || name || "goal"} size={48} />
@@ -159,7 +176,7 @@ function GoalForm({ plan, onClose, onSaved }: { plan: StudyPlan | null; onClose:
           <Field label={st("goal_name")} htmlFor="goal-name">
             <Input
               id="goal-name"
-              autoFocus
+              autoFocus={focus === "name"}
               dir={textDir}
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -177,11 +194,11 @@ function GoalForm({ plan, onClose, onSaved }: { plan: StudyPlan | null; onClose:
           <Input id="goal-role" dir={textDir} value={role} onChange={(event) => setRole(event.target.value)} placeholder={st("goal_role_placeholder")} maxLength={160} />
         </Field>
         <Field label={st("goal_exam_date")} htmlFor="goal-exam">
-          <Input id="goal-exam" type="date" value={examDate} onChange={(event) => setExamDate(event.target.value)} />
+          <Input id="goal-exam" autoFocus={focus === "examDate"} type="date" value={examDate} onChange={(event) => setExamDate(event.target.value)} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label={st("goal_weekly_hours")} htmlFor="goal-hours">
-            <Input id="goal-hours" inputMode="decimal" value={hours} onChange={(event) => setHours(event.target.value.replace(/[^\d.,]/g, "").slice(0, 5))} placeholder="0" className="tabular-nums" />
+            <Input id="goal-hours" autoFocus={focus === "weekly"} inputMode="decimal" value={hours} onChange={(event) => setHours(event.target.value.replace(/[^\d.,]/g, "").slice(0, 5))} placeholder="0" className="tabular-nums" />
           </Field>
           <Field label={st("goal_weekly_questions")} htmlFor="goal-questions">
             <Input id="goal-questions" inputMode="numeric" value={questions} onChange={(event) => setQuestions(event.target.value.replace(/[^\d]/g, "").slice(0, 6))} placeholder="0" className="tabular-nums" />
@@ -189,7 +206,7 @@ function GoalForm({ plan, onClose, onSaved }: { plan: StudyPlan | null; onClose:
         </div>
       </div>
       <Field label={st("goal_notes")} htmlFor="goal-notes">
-        <Textarea id="goal-notes" dir={textDir} rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={st("goal_notes_placeholder")} />
+        <Textarea id="goal-notes" autoFocus={focus === "notes"} dir={textDir} rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={st("goal_notes_placeholder")} />
       </Field>
       {error ? <p className="text-[12.5px] font-medium text-[var(--danger)]">{error}</p> : null}
     </DialogFrame>
@@ -289,12 +306,28 @@ function ReminderForm({ reminder, onClose }: { reminder: StudyReminder | null; o
       toast.error(st("error_generic"));
     }
   };
+  const remove = async () => {
+    if (!reminder || !window.confirm(st("reminder_delete_confirm", { name: reminder.title || st("reminder_title_label") }))) return;
+    try {
+      await actions.deleteReminder(reminder.id);
+      toast.success(st("reminder_deleted"));
+      onClose();
+    } catch {
+      toast.error(st("error_generic"));
+    }
+  };
   return (
     <DialogFrame
       title={reminder ? st("reminder_edit") : st("reminder_add")}
       onSubmit={() => void submit()}
       footer={
         <>
+          {reminder ? (
+            <Button type="button" variant="ghost" className="mr-auto text-[var(--danger)]" onClick={() => void remove()}>
+              <Trash2 />
+              {st("delete")}
+            </Button>
+          ) : null}
           <Button type="button" variant="ghost" onClick={onClose}>
             {st("cancel")}
           </Button>

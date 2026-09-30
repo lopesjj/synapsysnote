@@ -277,14 +277,17 @@ export function TaskCheck({ task, size = "md" }: { task: PlanningTask; size?: "s
 export function TaskLine({
   task,
   onOpen,
+  onDelete,
   meta,
   dense = false,
 }: {
   task: PlanningTask;
   onOpen: (task: PlanningTask) => void;
+  onDelete?: (task: PlanningTask) => void;
   meta?: string;
   dense?: boolean;
 }) {
+  const { st } = useStudyT();
   return (
     <div
       className={cn(
@@ -306,14 +309,24 @@ export function TaskLine({
         {task.title || "—"}
       </button>
       {meta ? <span className="shrink-0 text-[10.5px] tabular-nums text-faint">{meta}</span> : null}
+      {onDelete ? (
+        <button
+          type="button"
+          onClick={() => onDelete(task)}
+          aria-label={`${st("delete")}: ${task.title || st("task_title_label")}`}
+          className="-my-1 flex size-6 shrink-0 items-center justify-center rounded-[6px] text-faint opacity-0 transition hover:bg-[var(--surface-hover)] hover:text-[var(--danger)] focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      ) : null}
     </div>
   );
 }
 
 export function TasksPanel({ onOpen }: { onOpen: (task: PlanningTask) => void }) {
-  const { st, locale } = useStudyT();
+  const { st, locale, textDir } = useStudyT();
   const { today } = useStudy();
-  const { tasks, createTask } = usePlanning();
+  const { tasks, createTask, deleteTask } = usePlanning();
   const [draft, setDraft] = useState("");
   const open = tasks.filter((task) => !task.done);
   const overdue = open.filter((task) => task.day && task.day < today).sort((a, b) => ((a.day ?? "") < (b.day ?? "") ? -1 : 1));
@@ -336,46 +349,59 @@ export function TasksPanel({ onOpen }: { onOpen: (task: PlanningTask) => void })
     }
   };
 
+  const remove = async (task: PlanningTask) => {
+    if (!window.confirm(st("task_delete_confirm", { name: task.title || st("task_title_label") }))) return;
+    try {
+      await deleteTask(task);
+      toast.success(st("task_deleted"));
+    } catch {
+      toast.error(st("error_generic"));
+    }
+  };
+
   return (
-    <section className="rounded-[20px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_1px_2px_rgba(15,44,76,0.04)]">
-      <div className="flex items-baseline justify-between gap-2 px-4 pb-2 pt-4">
-        <h2 className="text-[13.5px] font-semibold text-ink">{st("tasks_panel_title")}</h2>
-        {open.length ? <span className="text-[11.5px] tabular-nums text-muted">{open.length}</span> : null}
+    <section className="min-w-0 rounded-[20px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_1px_2px_rgba(15,44,76,0.04)]">
+      <div className="flex items-baseline justify-between gap-2 px-5 pb-2.5 pt-4">
+        <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-ink">{st("tasks_panel_title")}</h2>
+        {open.length ? <span className="text-[12px] tabular-nums text-faint">{open.length}</span> : null}
       </div>
       <form
-        className="px-3 pb-2"
+        className="px-3 pb-1.5"
         onSubmit={(event) => {
           event.preventDefault();
           void add();
         }}
       >
-        <label className="flex h-8 items-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-[var(--border-strong)] px-2 text-faint focus-within:border-solid focus-within:border-[var(--accent)]">
+        <label className="flex h-9 items-center gap-2 rounded-[10px] bg-[var(--surface-2)] px-2.5 text-faint transition focus-within:bg-[var(--surface)] focus-within:shadow-[inset_0_0_0_1.5px_var(--accent)]">
           <Plus className="size-3.5 shrink-0" />
           <input
             value={draft}
+            dir={textDir}
             maxLength={300}
             onChange={(event) => setDraft(event.target.value)}
             placeholder={st("tasks_quick_placeholder")}
             aria-label={st("task_new")}
-            className="h-full min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-faint"
+            className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-faint"
           />
         </label>
       </form>
-      <div className="max-h-[22rem] overflow-y-auto px-2 pb-3">
+      <div className="max-h-[24rem] overflow-y-auto px-2 pb-3">
         {groups.every((group) => !group.items.length) ? (
-          <p className="px-2 py-2 text-[12px] leading-relaxed text-faint">{st("tasks_empty")}</p>
+          <p className="px-3 py-2 text-[12.5px] leading-relaxed text-faint">{st("tasks_empty")}</p>
         ) : (
           groups.map((group) =>
             group.items.length ? (
-              <div key={group.key} className="mt-1.5">
-                <p className={cn("px-2 pb-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em]", group.tone ?? "text-faint")}>
+              <div key={group.key} className="mt-2.5 first:mt-1.5">
+                <p className={cn("flex items-baseline gap-1.5 px-2 pb-0.5 text-[11.5px] font-medium", group.tone ?? "text-muted")}>
                   {group.label}
+                  <span className="tabular-nums text-faint">{group.items.length}</span>
                 </p>
                 {group.items.map((task) => (
                   <TaskLine
                     key={task.id}
                     task={task}
                     onOpen={onOpen}
+                    onDelete={(target) => void remove(target)}
                     meta={group.key === "overdue" && task.day ? formatDay(task.day, locale, { day: "numeric", month: "short" }) : undefined}
                   />
                 ))}
