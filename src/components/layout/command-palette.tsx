@@ -10,7 +10,7 @@ import { useTheme } from "@/components/theme-provider";
 import { useUiStore } from "@/lib/store/ui-store";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
-import { useStudyUi } from "@/lib/study/ui-store";
+import { openBlankTimer, useStudyUi } from "@/lib/study/ui-store";
 import { searchWorkspace } from "@/lib/search";
 import { Kbd } from "@/components/ui/primitives";
 import { cn, isMac } from "@/lib/utils";
@@ -446,7 +446,7 @@ export function CommandPalette({
                       <Command.Item
                         value="study-focus"
                         className={itemClass}
-                        onSelect={() => run(() => useStudyUi.getState().setTimerOpen(true))}
+                        onSelect={() => run(openBlankTimer)}
                       >
                         <span className="flex-1 text-[13px] text-ink">{st("cmd_start_focus")}</span>
                       </Command.Item>

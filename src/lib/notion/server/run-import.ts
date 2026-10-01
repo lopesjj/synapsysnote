@@ -478,12 +478,20 @@ async function importPage(args: ImportArgs): Promise<string> {
     throw new Error("A página passa do limite de 1 MB por nota. Divida-a em páginas menores no Notion e importe de novo.");
   }
 
+  let fallbackNotebookId = progress.targetNotebookId;
+  if (fallbackNotebookId) {
+    const targetDoc = await notebooksRef(workspaceId).doc(fallbackNotebookId).get();
+    if (!targetDoc.exists || targetDoc.get("deletedAt")) {
+      fallbackNotebookId = null;
+    }
+  }
+
   const { notebookId, parentPageId } = resolveImportPlacement({
     notionId: node.id,
     parents,
     roles,
     idMap,
-    fallbackNotebookId: progress.targetNotebookId,
+    fallbackNotebookId,
     preserveHierarchy: progress.options.preserveHierarchy,
   });
 
@@ -621,12 +629,20 @@ async function importDatabase(args: ImportArgs): Promise<string> {
     (schema as unknown as { properties: Record<string, never> }).properties
   );
 
+  let fallbackNotebookId = progress.targetNotebookId;
+  if (fallbackNotebookId) {
+    const targetDoc = await notebooksRef(workspaceId).doc(fallbackNotebookId).get();
+    if (!targetDoc.exists || targetDoc.get("deletedAt")) {
+      fallbackNotebookId = null;
+    }
+  }
+
   const { notebookId, parentPageId } = resolveImportPlacement({
     notionId: node.id,
     parents,
     roles,
     idMap,
-    fallbackNotebookId: progress.targetNotebookId,
+    fallbackNotebookId,
     preserveHierarchy: progress.options.preserveHierarchy,
   });
 

@@ -39,12 +39,13 @@ import {
   weeklyAgendaMinutes,
 } from "../src/lib/study/agenda";
 import { pagesFromRanges, safeUrl, secondsFromVideos, toSession, toSubject } from "../src/lib/study/normalize";
-import { clockLabel, parseClock } from "../src/lib/study/format";
+import { clockLabel, maskClock, parseClock, parseDurationInput } from "../src/lib/study/format";
 import { addDays, dayRange, monthGrid, startOfWeek, weekdayOf } from "../src/lib/study/dates";
 import { normalizeSettings } from "../src/lib/study/defaults";
 import { cleanForStorage, studyBackendFor } from "../src/lib/study/backend";
 import { buildNoteDirectory, materialNoteId, searchNotes } from "../src/lib/study/material";
-import type { StudyCycle, StudySession } from "../src/types/study";
+import { bucketReviews, reviewForecast, reviewPunctuality, reviewStages } from "../src/lib/study/review-queue";
+import type { StudyCycle, StudyReview, StudySession } from "../src/types/study";
 
 const sample = [
   "CONHECIMENTOS GERAIS",
@@ -302,6 +303,33 @@ assert.equal(parseClock("00:61:00"), null);
 assert.equal(parseClock("abc"), null);
 assert.equal(clockLabel(5415), "01:30:15");
 assert.equal(clockLabel(75), "01:15");
+
+// Campo de tempo com máscara: digitar só números monta HH:MM:SS da esquerda para a direita.
+const typed = (keys: string) => [...keys].reduce((value, key) => maskClock(value + key), "");
+assert.equal(typed("002000"), "00:20:00");
+assert.equal(typed("0"), "0");
+assert.equal(typed("00"), "00");
+assert.equal(typed("002"), "00:2");
+assert.equal(typed("0130"), "01:30");
+assert.equal(typed("1:30"), "01:30");
+assert.equal(typed("1:"), "01:");
+assert.equal(typed("01:3:"), "01:03:");
+assert.equal(typed("0020001"), "00:20:00");
+assert.equal(maskClock("002000"), "00:20:00");
+assert.equal(maskClock("1:30:00"), "01:30:00");
+assert.equal(maskClock("00:20:", true), "00:20");
+assert.equal(maskClock("ab12c3"), "12:3");
+assert.equal(maskClock(":"), "");
+assert.equal(parseDurationInput("00:20:00"), 1200);
+assert.equal(parseDurationInput("45"), 2700);
+assert.equal(parseDurationInput("01:30"), 5400);
+assert.equal(parseDurationInput("01:"), 3600);
+assert.equal(parseDurationInput("00:2"), 120);
+assert.equal(parseDurationInput("00:75:00"), 4500);
+assert.equal(parseDurationInput(""), 0);
+assert.equal(parseDurationInput("1:2:3:4"), null);
+assert.equal(parseDurationInput("1h"), null);
+assert.equal(clockLabel(parseDurationInput("00:75:00") ?? 0, true), "01:15:00");
 
 assert.equal(startOfWeek("2026-09-27", 1), "2026-09-21");
 assert.equal(startOfWeek("2026-09-27", 0), "2026-09-27");
@@ -570,4 +598,77 @@ console.log("verify-study: ok");
 }
 
 console.log("verify-study: day status ok");
+
+{
+  const today = "2026-09-30";
+  const noon = (day: string) => Date.parse(`${day}T12:00:00Z`);
+  const review = (overrides: Partial<StudyReview>): StudyReview => ({
+    id: "r",
+    planId: "p",
+    subjectId: "a",
+    topicId: null,
+    sessionId: "s1",
+    intervalDays: 1,
+    dueDay: today,
+    status: "pending",
+    resolvedAt: null,
+    resolvedSessionId: null,
+    createdAt: 0,
+    updatedAt: 0,
+    ...overrides,
+  });
+  const reviews = [
+    review({ id: "due", dueDay: today }),
+    review({ id: "late", dueDay: "2026-09-27", intervalDays: 7 }),
+    review({ id: "soon", dueDay: "2026-10-01", subjectId: "b" }),
+    review({ id: "far", dueDay: "2026-11-15", intervalDays: 30 }),
+    review({ id: "done-on-time", status: "done", dueDay: "2026-09-29", resolvedAt: noon("2026-09-29") }),
+    review({ id: "done-late", status: "done", dueDay: "2026-09-20", resolvedAt: noon("2026-09-23") }),
+    review({ id: "ignored-old", status: "ignored", dueDay: "2026-07-30", resolvedAt: noon("2026-08-01") }),
+  ];
+  const ids = (list: StudyReview[]) => list.map((entry) => entry.id);
+
+  const all = bucketReviews(reviews, { today, timeZone: "UTC", period: "all" });
+  assert.deepEqual(ids(all.due), ["due"]);
+  assert.deepEqual(ids(all.overdue), ["late"]);
+  assert.deepEqual(ids(all.upcoming), ["soon", "far"]);
+  assert.deepEqual(ids(all.done), ["done-on-time", "done-late"]);
+  assert.deepEqual(ids(all.ignored), ["ignored-old"]);
+  // Trinta dias cortam o que vence depois e o que foi resolvido antes; "para hoje" nunca é cortada.
+  const month = bucketReviews(reviews, { today, timeZone: "UTC", period: "30" });
+  assert.deepEqual(ids(month.upcoming), ["soon"]);
+  assert.deepEqual(ids(month.ignored), []);
+  assert.deepEqual(ids(month.due), ["due"]);
+  assert.deepEqual(ids(bucketReviews(reviews, { today, timeZone: "UTC", period: "all", subjectId: "b" }).upcoming), ["soon"]);
+
+  // A etapa segue a ordem dos intervalos entre as irmãs da mesma sessão, disciplina e tópico.
+  const stages = reviewStages([
+    review({ id: "s30", intervalDays: 30, dueDay: "2026-10-29" }),
+    review({ id: "s1", intervalDays: 1, status: "done", resolvedAt: noon("2026-10-01") }),
+    review({ id: "s7", intervalDays: 7, dueDay: "2026-10-06" }),
+    review({ id: "other", subjectId: "b", intervalDays: 7 }),
+    review({ id: "loose", sessionId: "", intervalDays: 3 }),
+  ]);
+  assert.deepEqual([stages.get("s1")?.index, stages.get("s7")?.index, stages.get("s30")?.index], [1, 2, 3]);
+  assert.equal(stages.get("s7")?.total, 3);
+  assert.deepEqual(stages.get("s7")?.steps.map((step) => step.status), ["done", "pending", "pending"]);
+  assert.deepEqual([stages.get("other")?.index, stages.get("other")?.total], [1, 1]);
+  assert.equal(stages.get("loose")?.total, 1);
+
+  // A previsão conta só pendentes de hoje em diante, dentro da janela.
+  const forecast = reviewForecast(reviews, today, 14);
+  assert.equal(forecast.length, 14);
+  assert.deepEqual(forecast.slice(0, 2), [
+    { day: today, count: 1 },
+    { day: "2026-10-01", count: 1 },
+  ]);
+  assert.equal(forecast.reduce((sum, entry) => sum + entry.count, 0), 2);
+  assert.equal(reviewForecast(reviews, today, 14, "b").reduce((sum, entry) => sum + entry.count, 0), 1);
+
+  const punctuality = reviewPunctuality(reviews, today, "UTC", 30);
+  assert.deepEqual(punctuality, { onTime: 1, late: 1, ignored: 0, total: 2 });
+  assert.equal(reviewPunctuality(reviews, today, "UTC", 90).ignored, 1);
+}
+
+console.log("verify-study: review queue ok");
 

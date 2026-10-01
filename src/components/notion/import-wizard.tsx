@@ -9,8 +9,11 @@ import {
   Check,
   ChevronRight,
   CircleDashed,
+  FileText,
+  Folder,
   Loader2,
   RefreshCw,
+  Search,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -71,7 +74,14 @@ export function ImportWizard({
   const connected = Boolean(integration?.connected);
   const isJobActive = Boolean(job && ["pending", "discovering", "running"].includes(job.status));
   const step: Step = isJobActive ? "progress" : (stepOverride ?? (connected ? "select" : "connect"));
-  const resolvedNotebookId = targetNotebookId;
+  const validNotebooks = useMemo(
+    () => notebooks.filter((nb) => !("deletedAt" in nb && Boolean(nb.deletedAt))),
+    [notebooks]
+  );
+  const resolvedNotebookId =
+    targetNotebookId && validNotebooks.some((nb) => nb.id === targetNotebookId)
+      ? targetNotebookId
+      : null;
 
   const handleConnect = async () => {
     setConnecting(true);
@@ -148,7 +158,7 @@ export function ImportWizard({
             summary={summary}
             reimportConfirmed={reimportConfirmed}
             onConfirmReimport={setReimportConfirmed}
-            notebooks={notebooks}
+            notebooks={validNotebooks}
             targetNotebookId={resolvedNotebookId}
             onChangeNotebook={setTargetNotebookId}
             options={options}
@@ -502,7 +512,7 @@ function PreviewStep({
   summary: { pages: number; databases: number; rows: number; total: number; existingCount: number };
   reimportConfirmed: boolean;
   onConfirmReimport: (confirmed: boolean) => void;
-  notebooks: { id: string; name: string; emoji?: string }[];
+  notebooks: { id: string; name: string; emoji?: string; parentId?: string | null }[];
   targetNotebookId: string | null;
   onChangeNotebook: (id: string | null) => void;
   options: {
@@ -513,6 +523,34 @@ function PreviewStep({
   onChangeOptions: (next: typeof options) => void;
 }) {
   const { t } = useTranslation();
+  const [filterTab, setFilterTab] = useState<"all" | "pages" | "notebooks">("all");
+  const [targetSearch, setTargetSearch] = useState("");
+
+  const rootPages = useMemo(() => notebooks.filter((nb) => !nb.parentId), [notebooks]);
+  const nestedNotebooks = useMemo(() => notebooks.filter((nb) => Boolean(nb.parentId)), [notebooks]);
+  const parentMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const nb of notebooks) {
+      map.set(nb.id, nb.name || t("untitled"));
+    }
+    return map;
+  }, [notebooks, t]);
+
+  const normalizedSearch = targetSearch.trim().toLowerCase();
+  const visiblePages = useMemo(() => {
+    if (filterTab === "notebooks") return [];
+    if (!normalizedSearch) return rootPages;
+    return rootPages.filter((nb) => nb.name.toLowerCase().includes(normalizedSearch));
+  }, [filterTab, normalizedSearch, rootPages]);
+
+  const visibleNotebooks = useMemo(() => {
+    if (filterTab === "pages") return [];
+    if (!normalizedSearch) return nestedNotebooks;
+    return nestedNotebooks.filter((nb) => {
+      const parentName = nb.parentId ? parentMap.get(nb.parentId) || "" : "";
+      return nb.name.toLowerCase().includes(normalizedSearch) || parentName.toLowerCase().includes(normalizedSearch);
+    });
+  }, [filterTab, nestedNotebooks, normalizedSearch, parentMap]);
 
   const toggles = [
     {
@@ -562,43 +600,172 @@ function PreviewStep({
         </div>
       ) : null}
 
-      <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
-          {t("wizard_unfiled_target")}
-        </p>
-        <p className="text-[11.5px] leading-relaxed text-muted">
-          {t("wizard_unfiled_target_desc")}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {notebooks.map((notebook) => (
+      <div className="space-y-3 rounded-[var(--radius-md)] border border-[var(--border)] p-4 bg-[var(--surface-2)]/40">
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
+            {t("wizard_unfiled_target")}
+          </p>
+          <p className="text-[11.5px] leading-relaxed text-muted">
+            {t("wizard_unfiled_target_desc")}
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5 text-xs">
             <button
-              key={notebook.id}
               type="button"
-              onClick={() => onChangeNotebook(notebook.id)}
+              onClick={() => setFilterTab("all")}
               className={cn(
-                "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] transition",
-                targetNotebookId === notebook.id
-                  ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                  : "border-[var(--border)] text-muted hover:text-ink"
+                "rounded px-2.5 py-1 text-[11.5px] font-medium transition",
+                filterTab === "all"
+                  ? "bg-[var(--surface-2)] text-ink shadow-xs"
+                  : "text-muted hover:text-ink"
               )}
             >
-              <WorkspaceIcon icon={notebook.emoji} fallback="📓" size={14} />
-              {notebook.name}
+              {t("archived_filter_all")} ({rootPages.length + nestedNotebooks.length})
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => onChangeNotebook(null)}
-            className={cn(
-              "rounded-full border px-3 py-1.5 text-[12px] transition",
-              targetNotebookId === null
-                ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                : "border-[var(--border)] text-muted hover:text-ink"
-            )}
-          >
-            {t("wizard_no_parent_page")}
-          </button>
+            <button
+              type="button"
+              onClick={() => setFilterTab("pages")}
+              className={cn(
+                "rounded px-2.5 py-1 text-[11.5px] font-medium transition",
+                filterTab === "pages"
+                  ? "bg-[var(--surface-2)] text-ink shadow-xs"
+                  : "text-muted hover:text-ink"
+              )}
+            >
+              {t("archived_filter_pages")} ({rootPages.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterTab("notebooks")}
+              className={cn(
+                "rounded px-2.5 py-1 text-[11.5px] font-medium transition",
+                filterTab === "notebooks"
+                  ? "bg-[var(--surface-2)] text-ink shadow-xs"
+                  : "text-muted hover:text-ink"
+              )}
+            >
+              {t("archived_filter_notebooks")} ({nestedNotebooks.length})
+            </button>
+          </div>
+
+          <div className="relative flex-1 sm:max-w-[200px]">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3 -translate-y-1/2 text-muted" />
+            <input
+              type="search"
+              value={targetSearch}
+              onChange={(e) => setTargetSearch(e.target.value)}
+              placeholder={t("wizard_target_search_placeholder")}
+              className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] pl-8 pr-3 text-[11.5px] text-ink placeholder:text-faint focus:border-[var(--accent)] focus:outline-none"
+            />
+          </div>
         </div>
+
+        {filterTab !== "notebooks" && !normalizedSearch ? (
+          <div className="space-y-1.5 pt-1">
+            <p className="text-[11.5px] font-semibold text-ink flex items-center gap-1.5">
+              <FileText className="size-3.5 text-muted" />
+              {t("wizard_unfiled_root_section")}
+            </p>
+            <button
+              type="button"
+              onClick={() => onChangeNotebook(null)}
+              className={cn(
+                "w-full flex items-center justify-between rounded-[var(--radius-sm)] border p-2 text-left text-[12px] transition",
+                targetNotebookId === null
+                  ? "border-[var(--accent)] bg-[var(--accent-soft)] text-ink ring-1 ring-[var(--accent)]"
+                  : "border-[var(--border)] bg-[var(--surface)] text-muted hover:text-ink hover:border-[var(--border-strong)]"
+              )}
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="flex size-6 items-center justify-center rounded bg-[var(--surface-2)] text-ink">
+                  📄
+                </span>
+                <div>
+                  <span className="block font-medium text-ink">{t("wizard_target_root_title")}</span>
+                  <span className="block text-[11px] text-faint">{t("wizard_target_root_desc")}</span>
+                </div>
+              </div>
+              {targetNotebookId === null ? <Check className="size-4 text-[var(--accent)] shrink-0" /> : null}
+            </button>
+          </div>
+        ) : null}
+
+        {visiblePages.length > 0 ? (
+          <div className="space-y-1.5 pt-1">
+            <p className="text-[11.5px] font-semibold text-ink flex items-center gap-1.5">
+              <FileText className="size-3.5 text-muted" />
+              {t("wizard_target_pages_section")} ({visiblePages.length})
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[140px] overflow-y-auto pr-1">
+              {visiblePages.map((pageItem) => {
+                const isSelected = targetNotebookId === pageItem.id;
+                return (
+                  <button
+                    key={pageItem.id}
+                    type="button"
+                    onClick={() => onChangeNotebook(pageItem.id)}
+                    className={cn(
+                      "flex items-center justify-between rounded-[var(--radius-sm)] border p-2 text-left text-[12px] transition",
+                      isSelected
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)] text-ink ring-1 ring-[var(--accent)]"
+                        : "border-[var(--border)] bg-[var(--surface)] text-muted hover:text-ink hover:border-[var(--border-strong)]"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <WorkspaceIcon icon={pageItem.emoji} fallback="📄" size={16} />
+                      <div className="min-w-0">
+                        <span className="truncate font-medium text-ink block">{pageItem.name}</span>
+                        <span className="text-[10px] text-muted font-normal block">{t("wizard_target_page_badge")}</span>
+                      </div>
+                    </div>
+                    {isSelected ? <Check className="size-3.5 text-[var(--accent)] shrink-0 ml-1" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {visibleNotebooks.length > 0 ? (
+          <div className="space-y-1.5 pt-1">
+            <p className="text-[11.5px] font-semibold text-ink flex items-center gap-1.5">
+              <Folder className="size-3.5 text-muted" />
+              {t("wizard_target_notebooks_section")} ({visibleNotebooks.length})
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[140px] overflow-y-auto pr-1">
+              {visibleNotebooks.map((nb) => {
+                const isSelected = targetNotebookId === nb.id;
+                const parentName = nb.parentId ? parentMap.get(nb.parentId) : null;
+                return (
+                  <button
+                    key={nb.id}
+                    type="button"
+                    onClick={() => onChangeNotebook(nb.id)}
+                    className={cn(
+                      "flex items-center justify-between rounded-[var(--radius-sm)] border p-2 text-left text-[12px] transition",
+                      isSelected
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)] text-ink ring-1 ring-[var(--accent)]"
+                        : "border-[var(--border)] bg-[var(--surface)] text-muted hover:text-ink hover:border-[var(--border-strong)]"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <WorkspaceIcon icon={nb.emoji} fallback="📓" size={16} />
+                      <div className="min-w-0">
+                        <span className="truncate font-medium text-ink block">{nb.name}</span>
+                        <span className="text-[10px] text-faint truncate block">
+                          {parentName ? t("wizard_target_in_parent", { parent: parentName }) : t("wizard_target_notebook_badge")}
+                        </span>
+                      </div>
+                    </div>
+                    {isSelected ? <Check className="size-3.5 text-[var(--accent)] shrink-0 ml-1" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="space-y-2.5">

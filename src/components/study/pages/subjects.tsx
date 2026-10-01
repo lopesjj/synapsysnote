@@ -445,7 +445,7 @@ function TopicTrack({ topics, color }: { topics: StudyTopic[]; color: string }) 
           </span>
         )}
       </span>
-      <span className="min-w-[2.25rem] shrink-0 text-[11px] tabular-nums text-faint">
+      <span className={cn("min-w-[2.25rem] shrink-0 text-[11px] tabular-nums", total > 0 && done === total ? "font-semibold text-emerald-600 dark:text-emerald-400" : "text-faint")}>
         {done}/{total}
       </span>
     </span>
@@ -508,12 +508,23 @@ function SubjectGroup({
           </button>
           <span aria-hidden className="h-8 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subject.color }} />
           <div className="min-w-0 flex-1">
-            <Link
-              href={`/home/study/subjects/${subject.id}`}
-              className="block truncate text-[14px] font-semibold tracking-[-0.01em] text-ink decoration-[var(--border-strong)] underline-offset-[3px] hover:underline"
-            >
-              <Highlight text={subject.name} query={query} />
-            </Link>
+            <div className="flex items-center gap-2 min-w-0">
+              <Link
+                href={`/home/study/subjects/${subject.id}`}
+                className="block truncate text-[14px] font-semibold tracking-[-0.01em] text-ink decoration-[var(--border-strong)] underline-offset-[3px] hover:underline"
+              >
+                <Highlight text={subject.name} query={query} />
+              </Link>
+              {total > 0 && done === total ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-gradient-to-r from-emerald-500/15 via-teal-500/15 to-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold tracking-tight text-emerald-600 shadow-[0_0_8px_rgba(16,185,129,0.18)] dark:text-emerald-400 shrink-0"
+                  title={st("subject_completed_badge")}
+                >
+                  <Check className="size-2.5 stroke-[3]" />
+                  <span>{st("tab_done")}</span>
+                </span>
+              ) : null}
+            </div>
             <button type="button" onClick={onToggle} tabIndex={-1} className="mt-0.5 block max-w-full truncate text-left text-[11.5px] text-faint transition hover:text-muted">
               {st("topics_count", { count: total })}
               {total && pending ? ` · ${st("topics_pending_short", { count: pending })}` : ""}

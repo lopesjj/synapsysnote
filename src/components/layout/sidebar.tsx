@@ -28,6 +28,7 @@ import { WorkspaceIcon, isIconUrl } from "@/lib/icons/workspace-icon";
 import { TrashCanIcon } from "@/lib/icons/trash-icon";
 import { FlashcardsIcon } from "@/lib/icons/flashcard-icon";
 import {
+  Archive,
   ChevronRight,
   Copy,
   FilePlus,
@@ -275,6 +276,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
     rootNotebooks,
     flashcards,
     dueFlashcards,
+    archivedCount,
   } = useWorkspace();
   const activeModule = useActiveModule();
   const trashedCount = trashedPages.length + trashedDatabases.length + trashedNotebooks.length;
@@ -630,6 +632,16 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               }
             }}
             onRename={(name) => adapter.updateNotebook(notebook.id, { name })}
+            onArchive={async () => {
+              await adapter.updateNotebook(notebook.id, { archived: true });
+              toast.success(t("notebook_archived"), {
+                action: {
+                  label: t("undo_action"),
+                  onClick: () => adapter.updateNotebook(notebook.id, { archived: false }),
+                },
+              });
+              if (active) router.push("/home");
+            }}
             onDelete={async () => {
               const name = notebook.name?.trim() || (isNestedNotebook(notebook) ? t("notebook_count_singular") : t("new_page"));
               if (!window.confirm(t("delete_notebook_confirm", { name }))) return;
@@ -733,6 +745,16 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               });
               if (active) router.push("/home");
             }}
+            onArchive={async () => {
+              await adapter.updatePage(node.page.id, { archived: true });
+              toast.success(t("page_archived"), {
+                action: {
+                  label: t("undo_action"),
+                  onClick: () => adapter.updatePage(node.page.id, { archived: false }),
+                },
+              });
+              if (active) router.push("/home");
+            }}
           />
           <AnimatePresence initial={false}>
             {isOpen && node.children.length ? (
@@ -833,6 +855,16 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
           {t("trash")}
           {trashedCount ? (
             <span className="ml-auto text-[10.5px] text-faint">{trashedCount}</span>
+          ) : null}
+        </NavLink>
+        <NavLink
+          href="/home/archive"
+          active={pathname === "/home/archive"}
+          icon={<Archive className="size-3.5" />}
+        >
+          {t("archive")}
+          {archivedCount ? (
+            <span className="ml-auto text-[10.5px] text-faint">{archivedCount}</span>
           ) : null}
         </NavLink>
         <NavLink
@@ -1051,6 +1083,7 @@ function NotebookRow({
   onMove,
   onDuplicate,
   onRename,
+  onArchive,
   onDelete,
   dropIntent,
   draggingKind,
@@ -1069,6 +1102,7 @@ function NotebookRow({
   onMove?: () => void;
   onDuplicate: () => Promise<void>;
   onRename: (name: string) => Promise<void>;
+  onArchive?: () => Promise<void>;
   onDelete: () => Promise<void>;
   children: React.ReactNode;
 }) {
@@ -1232,6 +1266,11 @@ function NotebookRow({
             <MenuItem onSelect={() => void onDuplicate()}>
               <Copy /> {isNestedNotebook(notebook) ? t("duplicate_notebook") : t("duplicate_page")}
             </MenuItem>
+            {onArchive ? (
+              <MenuItem onSelect={() => void onArchive()}>
+                <Archive className="size-4" /> {t("archive")}
+              </MenuItem>
+            ) : null}
             <MenuSeparator />
             <MenuItem destructive onSelect={() => void onDelete()}>
               <Trash2 /> {isNestedNotebook(notebook) ? t("delete_notebook") : t("delete_page")}
@@ -1278,6 +1317,7 @@ function SortablePageRow({
   onToggleFavorite,
   onDuplicate,
   onTrash,
+  onArchive,
 }: {
   node: PageTreeNode;
   active: boolean;
@@ -1289,6 +1329,7 @@ function SortablePageRow({
   onToggleFavorite: () => void;
   onDuplicate: () => Promise<void>;
   onTrash: () => Promise<void>;
+  onArchive?: () => Promise<void>;
 }) {
   const router = useRouter();
   const { t } = useTranslation();
@@ -1404,6 +1445,11 @@ function SortablePageRow({
               <MenuItem onSelect={() => void onDuplicate()}>
                 <Copy /> {t("duplicate_note")}
               </MenuItem>
+              {onArchive ? (
+                <MenuItem onSelect={() => void onArchive()}>
+                  <Archive className="size-4" /> {t("archive")}
+                </MenuItem>
+              ) : null}
               <MenuSeparator />
               <MenuItem destructive onSelect={() => void onTrash()}>
                 <Trash2 /> {t("delete_page")}

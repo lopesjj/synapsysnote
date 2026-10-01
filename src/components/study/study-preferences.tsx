@@ -13,6 +13,7 @@ import { BUILT_IN_CATEGORIES, REVIEW_INTERVAL_PRESETS, SUBJECT_COLORS, TIMER_SOU
 import { availableTimeZones, capitalizeFirst, orderedWeekdays, weekdayLabel, zoneOffsetLabel } from "@/lib/study/dates";
 import { playTimerSound } from "@/lib/study/sound";
 import type { StudyCategory, StudySettings, TimerSound } from "@/types/study";
+import { StudySelect } from "./ui";
 
 function Block({ title, hint, children }: { title: string; hint?: ReactNode; children: ReactNode }) {
   return (
@@ -369,20 +370,16 @@ export function StudyPreferencesSection() {
       </Block>
 
       <Block title={st("prefs_timezone")} hint={st("prefs_timezone_hint")}>
-        <div className="relative max-w-md">
-          <select
+        <div className="max-w-md">
+          <StudySelect
+            ariaLabel={st("prefs_timezone")}
             value={settings.timeZone}
-            onChange={(event) => update({ timeZone: event.target.value })}
-            className="h-9 w-full appearance-none rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] pl-3 pr-8 text-[13px] text-ink outline-none focus:border-[var(--accent)]"
-          >
-            <option value="auto">{st("prefs_timezone_auto", { zone: deviceZone })}</option>
-            {zones.map((entry) => (
-              <option key={entry.zone} value={entry.zone}>
-                {entry.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
+            onChange={(val) => update({ timeZone: String(val) })}
+            options={[
+              { value: "auto", label: st("prefs_timezone_auto", { zone: deviceZone }) },
+              ...zones.map((entry) => ({ value: entry.zone, label: entry.label })),
+            ]}
+          />
         </div>
       </Block>
     </div>

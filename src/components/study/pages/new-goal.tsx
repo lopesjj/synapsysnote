@@ -17,7 +17,7 @@ import { useStudyUi } from "@/lib/study/ui-store";
 import { subjectsFromCsv } from "@/lib/study/syllabus";
 import type { Notebook, Page } from "@/types/models";
 import { DraftEditor, PasteImporter, draftsFromParsed, useDraftMerge } from "../syllabus-import";
-import { GoalMark, StudyPage } from "../ui";
+import { GoalMark, StudyPage, StudySelect } from "../ui";
 
 type Panel = "paste" | "notebook" | "csv";
 
@@ -331,21 +331,17 @@ export function NewGoalPage() {
                   <label htmlFor="new-goal-root" className="mb-1.5 block text-[12.5px] font-medium text-ink">
                     {st("notebook_pick")}
                   </label>
-                  <div className="relative max-w-sm">
-                    <select
-                      id="new-goal-root"
+                  <div className="max-w-sm">
+                    <StudySelect
+                      ariaLabel={st("notebook_pick")}
                       value={rootId}
-                      onChange={(event) => importNotebook(event.target.value)}
-                      className="h-9 w-full appearance-none rounded-[10px] bg-[var(--surface)] pl-3 pr-8 text-[13px] text-ink shadow-[inset_0_0_0_1px_var(--border)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_var(--accent-soft)]"
-                    >
-                      <option value="">—</option>
-                      {sortedRoots.map((notebook) => (
-                        <option key={notebook.id} value={notebook.id}>
-                          {notebook.name || "—"}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
+                      onChange={(val) => importNotebook(String(val))}
+                      placeholder="—"
+                      options={[
+                        { value: "", label: "—" },
+                        ...sortedRoots.map((notebook) => ({ value: notebook.id, label: notebook.name || "—" })),
+                      ]}
+                    />
                   </div>
                   <p className="mt-2 text-[12px] leading-relaxed text-muted">{st("notebook_mode_hint")}</p>
                 </div>

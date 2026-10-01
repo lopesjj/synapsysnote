@@ -878,12 +878,17 @@ export class LocalAdapter implements DataAdapter {
       };
 
       const blocks = mockConvertedBlocks(node);
+      let fallbackNotebookId = current.targetNotebookId;
+      if (fallbackNotebookId) {
+        const found = this.state.notebooks.find((nb) => nb.id === fallbackNotebookId && !nb.deletedAt);
+        if (!found) fallbackNotebookId = null;
+      }
       const placement = resolveImportPlacement({
         notionId: item.notionId,
         parents,
         roles,
         idMap: notionToAppId,
-        fallbackNotebookId: current.targetNotebookId,
+        fallbackNotebookId,
         preserveHierarchy: current.options.preserveHierarchy,
       });
 

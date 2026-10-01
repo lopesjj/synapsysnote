@@ -10,9 +10,10 @@ import { Input, Textarea } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
-import { clockLabel, parseClock } from "@/lib/study/format";
+import { clockLabel, parseDurationInput } from "@/lib/study/format";
 import { examTotals, percentLabel } from "@/lib/study/metrics";
 import type { MockExam, MockExamRow, MockExamStyle } from "@/types/study";
+import { ClockInput } from "./clock-input";
 import { Field } from "./dialogs";
 import { Segmented, SubjectDot } from "./ui";
 
@@ -109,7 +110,7 @@ function ExamForm({ exam, onClose }: { exam: MockExam | null; onClose: () => voi
       setError(st("exam_needs_questions"));
       return;
     }
-    const seconds = parseClock(durationText);
+    const seconds = parseDurationInput(durationText);
     if (seconds === null) {
       setError(st("logform_invalid_time"));
       return;
@@ -163,18 +164,7 @@ function ExamForm({ exam, onClose }: { exam: MockExam | null; onClose: () => voi
             <Input id="exam-board" dir={textDir} value={board} onChange={(event) => setBoard(event.target.value)} maxLength={80} />
           </Field>
           <Field label={st("exam_duration")} htmlFor="exam-duration">
-            <Input
-              id="exam-duration"
-              inputMode="numeric"
-              value={durationText}
-              placeholder="00:00:00"
-              onChange={(event) => setDurationText(event.target.value.replace(/[^\d:]/g, "").slice(0, 9))}
-              onBlur={() => {
-                const seconds = parseClock(durationText);
-                if (seconds !== null && durationText.trim()) setDurationText(clockLabel(seconds, true));
-              }}
-              className="font-mono tabular-nums"
-            />
+            <ClockInput id="exam-duration" value={durationText} onChange={setDurationText} ariaLabel={st("exam_duration")} />
           </Field>
         </div>
         <div className="flex flex-wrap items-center gap-3">

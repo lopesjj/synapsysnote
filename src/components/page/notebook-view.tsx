@@ -23,7 +23,7 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { ChevronRight, Copy, FilePlus, FolderPlus, GripVertical, ImageOff, MoreHorizontal, Search, Trash2, X } from "lucide-react";
+import { Archive, ChevronRight, Copy, FilePlus, FolderPlus, GripVertical, ImageOff, MoreHorizontal, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useUiStore } from "@/lib/store/ui-store";
 import { useWorkspace, type PageTreeNode } from "@/lib/data/provider";
@@ -94,17 +94,18 @@ function moveItem<T>(items: T[], from: number, to: number): T[] {
 export function NotebookView({ notebookId }: { notebookId: string }) {
   const router = useRouter();
   const { t, language } = useTranslation();
-  const { adapter, notebooks, livePages, databases, treeFor, ready } = useWorkspace();
-  const notebook = notebooks.find((candidate) => candidate.id === notebookId);
+  const { adapter, notebooks, archivedNotebooks, livePages, archivedPages, databases, treeFor, ready, isNotebookArchived } = useWorkspace();
+  const notebook = notebooks.find((candidate) => candidate.id === notebookId) ?? archivedNotebooks.find((candidate) => candidate.id === notebookId);
+  const isArchived = Boolean(notebook && isNotebookArchived(notebook.id));
 
   const [titleDraft, setTitleDraft] = useState<{ id: string; value: string } | null>(null);
   const title = titleDraft?.id === notebookId ? titleDraft.value : (notebook?.name ?? "");
-  // O nome era gravado a cada tecla; agora vai depois de uma pausa na digitacao.
   const { schedule: scheduleName } = useDebounceAutoSave<string>({
     resetKey: notebookId,
     delay: 600,
     maxWait: 4000,
     onSave: async (name) => {
+      if (isArchived) return;
       await adapter.updateNotebook(notebookId, { name });
     },
     onUnloadSave: (name) => {
@@ -118,8 +119,8 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
   });
 
   const childNotebooks = useMemo(
-    () => childrenOf(notebooks, notebookId),
-    [notebookId, notebooks]
+    () => childrenOf(isArchived ? [...notebooks, ...archivedNotebooks] : notebooks, notebookId),
+    [notebookId, notebooks, archivedNotebooks, isArchived]
   );
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -141,8 +142,23 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
   };
 
   const noteTree = useMemo(() => {
+    if (isArchived) {
+      const scope = archivedPages.filter((p) => p.notebookId === notebookId && !p.deletedAt);
+      const scopeIds = new Set(scope.map((p) => p.id));
+      const byParent = new Map<string | null, Page[]>();
+      for (const page of scope) {
+        const key = page.parentPageId && scopeIds.has(page.parentPageId) ? page.parentPageId : null;
+        if (!byParent.has(key)) byParent.set(key, []);
+        byParent.get(key)!.push(page);
+      }
+      const build = (parentId: string | null, depth: number): PageTreeNode[] =>
+        (byParent.get(parentId) ?? [])
+          .sort((a, b) => a.order - b.order || compareNatural(a.title, b.title))
+          .map((page) => ({ page, depth, children: build(page.id, depth + 1) }));
+      return build(null, 0);
+    }
     return treeFor(notebookId);
-  }, [notebookId, treeFor]);
+  }, [notebookId, treeFor, isArchived, archivedPages]);
 
   const filterTree = (nodes: PageTreeNode[], query: string): PageTreeNode[] => {
     if (!query) return nodes;
@@ -216,10 +232,11 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
   };
 
   const notes = useMemo(() => {
-    return livePages
+    const pool = isArchived ? [...livePages, ...archivedPages] : livePages;
+    return pool
       .filter((p) => p.notebookId === notebookId && !p.deletedAt)
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || compareNatural(a.title, b.title));
-  }, [notebookId, livePages]);
+  }, [notebookId, livePages, archivedPages, isArchived]);
 
   const filteredChildNotebooks = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -599,6 +616,29 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
 
   return (
     <div className="relative">
+      {isArchived ? (
+        <div className="relative z-40 w-full border-b border-amber-500/30 bg-amber-500/15 px-4 py-2 text-amber-950 dark:bg-amber-950/70 dark:border-amber-500/40 dark:text-amber-200">
+          <div className="mx-auto flex max-w-[var(--reading-width,64rem)] items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 text-xs font-medium">
+              <Archive className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span>{t("archived_notice_notebook")}</span>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={async () => {
+                await adapter.updateNotebook(notebookId, { archived: false });
+                toast.success(t("notebook_unarchived"));
+              }}
+              className="h-7 text-xs bg-amber-50 dark:bg-amber-900/60 border-amber-300 dark:border-amber-600/50 text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900"
+            >
+              <RotateCcw className="mr-1.5 size-3" />
+              {t("unarchive")}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {hasCover ? (
         <CoverPicker
           coverUrl={notebook.coverUrl}
@@ -656,6 +696,15 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
               }}
             >
               <Copy /> {parentIdOf(notebook) ? t("duplicate_notebook") : t("duplicate_page")}
+            </MenuItem>
+            <MenuItem
+              onSelect={async () => {
+                await adapter.updateNotebook(notebookId, { archived: !isArchived });
+                toast.success(isArchived ? t("notebook_unarchived") : t("notebook_archived"));
+              }}
+            >
+              {isArchived ? <RotateCcw /> : <Archive />}
+              {isArchived ? t("unarchive") : t("archive")}
             </MenuItem>
             <MenuSeparator />
             <MenuItem
@@ -737,6 +786,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
             <textarea
               id="notebook-title-input"
               value={title}
+              disabled={isArchived}
               rows={1}
               cols={1}
               placeholder={parentIdOf(notebook) ? t("notebook_name_placeholder") : t("page_name_placeholder")}

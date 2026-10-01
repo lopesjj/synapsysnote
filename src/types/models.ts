@@ -211,6 +211,7 @@ export interface Notebook {
   parentId?: string | null;
   order: number;
   notionPageId?: string | null;
+  archived?: boolean;
   /** Na lixeira desde quando; `null`/ausente = caderno ativo. */
   deletedAt?: ISOTimestamp | null;
   /** Caderno cuja exclusao levou este para a lixeira junto. */

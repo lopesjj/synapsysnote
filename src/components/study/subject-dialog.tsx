@@ -35,6 +35,7 @@ import { topicListFromText } from "@/lib/study/syllabus";
 import type { StudySubject, StudyTopic } from "@/types/study";
 import type { Notebook } from "@/types/models";
 import { Field } from "./dialogs";
+import { StudySelect } from "./ui";
 
 export function SubjectDialog({
   open,
@@ -254,22 +255,16 @@ function SubjectForm({ planId, subject, onClose }: { planId: string; subject: St
         </div>
 
         <Field label={st("subject_notebook")} hint={st("subject_notebook_hint")} htmlFor="subject-notebook">
-          <div className="relative">
-            <select
-              id="subject-notebook"
-              value={notebookId ?? ""}
-              onChange={(event) => setNotebookId(event.target.value || null)}
-              className="h-9 w-full appearance-none rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] pl-3 pr-8 text-[13px] text-ink outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)]"
-            >
-              <option value="">{st("subject_notebook_none")}</option>
-              {options.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
-          </div>
+          <StudySelect
+            ariaLabel={st("subject_notebook")}
+            value={notebookId ?? ""}
+            onChange={(val) => setNotebookId(val ? String(val) : null)}
+            placeholder={st("subject_notebook_none")}
+            options={[
+              { value: "", label: st("subject_notebook_none") },
+              ...options.map((option) => ({ value: option.id, label: option.label })),
+            ]}
+          />
         </Field>
 
         <div>

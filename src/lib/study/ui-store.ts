@@ -74,6 +74,8 @@ interface StudyUiState {
   scheduleLayers: ScheduleLayers;
   goalsArchivedOpen: boolean;
   goalSubjectSort: GoalSubjectSort;
+  /** Planejamento da página inicial mostrando só o que falta fazer no dia. */
+  homePendingOnly: boolean;
   /** Nome digitado no estado vazio de Objetivos, levado para a criação (não persiste). */
   newGoalDraft: string;
   setModule: (module: StudyModule) => void;
@@ -87,6 +89,7 @@ interface StudyUiState {
   setScheduleLayer: (layer: keyof ScheduleLayers, value: boolean) => void;
   setGoalsArchivedOpen: (open: boolean) => void;
   setGoalSubjectSort: (sort: GoalSubjectSort) => void;
+  setHomePendingOnly: (value: boolean) => void;
   setNewGoalDraft: (name: string) => void;
 }
 
@@ -104,6 +107,7 @@ export const useStudyUi = create<StudyUiState>()(
       scheduleLayers: { plan: true, reviews: true, tasks: true },
       goalsArchivedOpen: false,
       goalSubjectSort: "syllabus",
+      homePendingOnly: false,
       newGoalDraft: "",
       setModule: (module) => set({ module }),
       setTimer: (patch) => set({ timer: { ...get().timer, ...patch } }),
@@ -127,6 +131,7 @@ export const useStudyUi = create<StudyUiState>()(
       setScheduleLayer: (layer, value) => set({ scheduleLayers: { ...get().scheduleLayers, [layer]: value } }),
       setGoalsArchivedOpen: (open) => set({ goalsArchivedOpen: open }),
       setGoalSubjectSort: (sort) => set({ goalSubjectSort: sort }),
+      setHomePendingOnly: (value) => set({ homePendingOnly: value }),
       setNewGoalDraft: (name) => set({ newGoalDraft: name }),
     }),
     {
@@ -151,6 +156,7 @@ export const useStudyUi = create<StudyUiState>()(
         scheduleLayers: state.scheduleLayers,
         goalsArchivedOpen: state.goalsArchivedOpen,
         goalSubjectSort: state.goalSubjectSort,
+        homePendingOnly: state.homePendingOnly,
       }),
     }
   )
@@ -183,6 +189,21 @@ export function pauseTimer() {
 
 export function isTimerActive(timer: TimerState): boolean {
   return timer.status !== "idle";
+}
+
+/** Sessão de revisão preparada e ainda parada: o relógio espera a pessoa dar o play. */
+export function isTimerArmed(timer: TimerState): boolean {
+  return timer.status === "idle" && Boolean(timer.reviewId);
+}
+
+/**
+ * Abre o relógio para uma sessão nova, sem disciplina escolhida. Uma sessão em
+ * andamento, pausada ou já preparada para uma revisão continua como está.
+ */
+export function openBlankTimer() {
+  const store = useStudyUi.getState();
+  if (store.timer.status === "idle" && !isTimerArmed(store.timer)) store.resetTimer({ subjectId: null, topicId: null });
+  store.setTimerOpen(true);
 }
 
 export function isStudyPath(pathname: string | null | undefined): boolean {

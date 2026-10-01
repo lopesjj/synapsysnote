@@ -52,6 +52,44 @@ export function parseClock(value: string): number | null {
   return h * 3600 + m * 60 + s;
 }
 
+/**
+ * Máscara de duração HH:MM:SS preenchida da esquerda para a direita, como os
+ * campos com máscara: "002000" vira "00:20:00". Dois-pontos digitados fecham o
+ * grupo atual com zero à esquerda ("1:" vira "01:"); o que passa de seis
+ * dígitos é descartado.
+ */
+export function maskClock(raw: string, deleting = false): string {
+  const groups = raw.replace(/[^\d:]/g, "").split(":");
+  const parts: string[] = [];
+  groups.forEach((group, index) => {
+    let digits = group;
+    while (digits.length > 2 && parts.length < 3) {
+      parts.push(digits.slice(0, 2));
+      digits = digits.slice(2);
+    }
+    if (parts.length >= 3 || !digits) return;
+    parts.push(index < groups.length - 1 ? digits.padStart(2, "0") : digits);
+  });
+  const text = parts.slice(0, 3).join(":");
+  // Os dois-pontos que a pessoa acabou de digitar ficam, para o próximo número ir ao grupo seguinte.
+  const typedColon = !deleting && raw.trimEnd().endsWith(":") && parts.length > 0 && parts.length < 3;
+  return typedColon ? `${text}:` : text;
+}
+
+/**
+ * Lê o tempo digitado no campo com máscara. Um número sem dois-pontos vale
+ * minutos ("45" = 45 min); grupos vazios valem zero e minutos ou segundos acima
+ * de 59 passam para a unidade seguinte ("00:75" = 1 h 15 min).
+ */
+export function parseDurationInput(value: string): number | null {
+  const clean = value.trim();
+  if (!clean) return 0;
+  if (/^\d+$/.test(clean)) return Number(clean) * 60;
+  if (!/^\d*(?::\d*){1,2}$/.test(clean)) return null;
+  const [h = "", m = "", s = ""] = clean.split(":");
+  return Number(h || 0) * 3600 + Number(m || 0) * 60 + Number(s || 0);
+}
+
 export function formatNumber(value: number, language: string, maximumFractionDigits = 0): string {
   return new Intl.NumberFormat(intlLocale(language), { maximumFractionDigits }).format(value);
 }

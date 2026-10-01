@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, FileText, Minimize2, Minus, Pause, Play, Plus, RotateCcw, Square, Volume2 } from "lucide-react";
+import { Check, ChevronDown, FileText, Maximize2, Minimize2, Minus, Pause, Play, Plus, RotateCcw, Square, Volume2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
@@ -11,6 +11,7 @@ import { useLiveNote, usePlanMetrics } from "@/lib/study/hooks";
 import { useRouter } from "@/lib/i18n/navigation";
 import { useStudyT, type StudyKey } from "@/lib/study/i18n";
 import {
+  isTimerArmed,
   pauseTimer,
   startTimer,
   timerElapsedMs,
@@ -553,7 +554,7 @@ export function FocusOverlay() {
             </div>
 
             <div className="mt-8 flex items-start justify-center gap-6 sm:gap-10">
-              <SideControl label={st("timer_discard")} onClick={discard} disabled={idle && !hasTime}>
+              <SideControl label={st("timer_discard")} onClick={discard} disabled={idle && !hasTime && !isTimerArmed(timer)}>
                 <RotateCcw />
               </SideControl>
               <button
@@ -598,51 +599,120 @@ export function TimerTitle() {
   return null;
 }
 
+/** O relógio do rodapé aparece com sessão em andamento, pausada ou preparada, e some com o relógio aberto. */
+export function useFocusPillVisible(): boolean {
+  return useStudyUi((state) => !state.timerOpen && (state.timer.status !== "idle" || isTimerArmed(state.timer)));
+}
+
+/**
+ * Relógio do rodapé. Aparece com uma sessão em andamento, pausada ou preparada
+ * para uma revisão; nesse último caso o botão "Iniciar" pulsa, porque o tempo
+ * só começa a contar quando a pessoa dá o play. Enquanto ele está na tela, a
+ * área rolável ganha espaço embaixo (ver `app-shell`) para ele não cobrir o fim
+ * da página.
+ */
 export function FocusPill() {
   const { st } = useStudyT();
   const timer = useStudyUi((state) => state.timer);
-  const open = useStudyUi((state) => state.timerOpen);
+  const visible = useFocusPillVisible();
   const { settings, subjectById } = useStudy();
-  const active = timer.status !== "idle";
-  const now = useNow(active && !open, 1000);
+  const armed = isTimerArmed(timer);
+  const running = timer.status === "running";
+  const now = useNow(running && visible, 1000);
   const label = useMemo(() => clockLabel(displaySeconds(timer, settings, now), true), [now, settings, timer]);
-  if (!active || open) return null;
+  if (!visible) return null;
   const subject = subjectById(timer.subjectId);
+  const topic = subject?.topics.find((entry) => entry.id === timer.topicId);
+  const status = armed
+    ? st("timer_armed_hint")
+    : !running
+      ? st("sidebar_focus_paused")
+      : timer.mode === "pomodoro"
+        ? st(PHASE_KEY[timer.phase])
+        : st(MODE_KEY[timer.mode]);
+  const iconButton =
+    "flex size-9 shrink-0 items-center justify-center rounded-full text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink [&_svg]:size-4";
+
   return (
-    <div className="absolute bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[45] flex -translate-x-1/2 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] py-1 pl-1 pr-1.5 shadow-[var(--shadow-float)] md:bottom-5">
-      <button
-        type="button"
-        onClick={() => (timer.status === "running" ? pauseTimer() : startTimer())}
-        className="flex size-8 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent)] transition hover:brightness-110"
-        aria-label={timer.status === "running" ? st("timer_pause") : st("timer_resume")}
+    <div className="absolute bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[45] w-[min(34rem,calc(100%-1.5rem))] -translate-x-1/2 md:bottom-5">
+      <div
+        className={cn(
+          "flex items-center gap-3 rounded-[18px] border bg-[var(--surface)] p-2 pe-2.5 shadow-[var(--shadow-float)]",
+          armed ? "border-[color-mix(in_oklab,var(--accent)_45%,var(--border))]" : "border-[var(--border)]"
+        )}
       >
-        {timer.status === "running" ? <Pause className="size-3.5" /> : <Play className="size-3.5 translate-x-[1px]" />}
-      </button>
-      <button
-        type="button"
-        onClick={() => useStudyUi.getState().setTimerOpen(true)}
-        className="flex items-center gap-2 px-1.5 text-left"
-        aria-label={st("timer_open")}
-      >
-        <span className={cn("font-mono text-[13px] font-semibold tabular-nums text-ink", timer.status === "paused" && "text-muted")}>
-          {label}
-        </span>
-        {subject ? (
-          <span className="hidden max-w-[9rem] items-center gap-1.5 truncate text-[11.5px] text-muted sm:flex">
-            <SubjectDot color={subject.color} />
-            <span className="truncate">{subject.name}</span>
+        {running ? (
+          <button
+            type="button"
+            onClick={pauseTimer}
+            className="flex size-11 shrink-0 items-center justify-center rounded-[13px] bg-[var(--accent-soft)] text-[var(--accent)] transition hover:brightness-110 active:scale-95"
+            aria-label={st("timer_pause")}
+            title={st("timer_pause")}
+          >
+            <Pause className="size-[18px]" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={startTimer}
+            className="relative flex h-11 shrink-0 items-center gap-2 rounded-[13px] bg-[var(--accent)] pe-4 ps-3.5 text-[13.5px] font-semibold text-[var(--accent-contrast)] shadow-[0_10px_24px_-12px_var(--accent)] transition hover:brightness-110 active:scale-[0.97]"
+          >
+            {armed ? <span aria-hidden className="synapsys-armed pointer-events-none absolute inset-0 rounded-[13px] border-2 border-[var(--accent)]" /> : null}
+            <Play className="size-4 fill-current" />
+            {armed ? st("timer_start") : st("timer_resume")}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => useStudyUi.getState().setTimerOpen(true)}
+          className="flex min-w-0 flex-1 flex-col items-start text-start"
+          aria-label={st("timer_open")}
+        >
+          <span className="flex w-full min-w-0 items-baseline gap-2">
+            <span className={cn("font-mono text-[18px] font-semibold leading-6 tabular-nums tracking-[-0.02em]", running ? "text-ink" : "text-muted")}>
+              {label}
+            </span>
+            <span className={cn("min-w-0 truncate text-[12px] font-medium", armed ? "text-[var(--accent)]" : "text-faint")}>{status}</span>
           </span>
-        ) : null}
-      </button>
-      <button
-        type="button"
-        onClick={() => finishFocus(settings, st("timer_too_short"))}
-        className="flex size-7 items-center justify-center rounded-full text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink"
-        aria-label={st("timer_stop")}
-        title={st("timer_stop")}
-      >
-        <Square className="size-3" />
-      </button>
+          <span className="flex w-full min-w-0 items-center gap-1.5 text-[12px] leading-4 text-muted">
+            {subject ? <SubjectDot color={subject.color} /> : null}
+            <span className="truncate">
+              {subject ? subject.name : st("timer_no_subject")}
+              {topic ? <span className="text-faint"> · {topic.name}</span> : null}
+            </span>
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => useStudyUi.getState().setTimerOpen(true)}
+          className={cn(iconButton, "max-sm:hidden")}
+          aria-label={st("timer_open")}
+          title={st("timer_open")}
+        >
+          <Maximize2 />
+        </button>
+        {armed ? (
+          <button
+            type="button"
+            onClick={() => useStudyUi.getState().resetTimer({ subjectId: null, topicId: null })}
+            className={iconButton}
+            aria-label={st("cancel")}
+            title={st("cancel")}
+          >
+            <X />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => finishFocus(settings, st("timer_too_short"))}
+            className={cn(iconButton, "[&_svg]:size-3.5")}
+            aria-label={st("timer_stop")}
+            title={st("timer_stop")}
+          >
+            <Square />
+          </button>
+        )}
+      </div>
     </div>
   );
 }

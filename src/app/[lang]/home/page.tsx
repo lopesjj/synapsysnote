@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { Link, useRouter } from "@/lib/i18n/navigation";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   Check,
   CheckCircle2,
@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { useWorkspace } from "@/lib/data/provider";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/primitives";
+import { Checkbox, EmptyState } from "@/components/ui/primitives";
 import { cn, formatRelative } from "@/lib/utils";
 import { WorkspaceIcon, isIconUrl } from "@/lib/icons/workspace-icon";
 import { coverPresetById } from "@/lib/covers/presets";
@@ -35,15 +35,17 @@ import { useTranslation, type TranslationKey } from "@/lib/i18n/translations";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
 import { usePlanMetrics } from "@/lib/study/hooks";
-import { useStudyUi } from "@/lib/study/ui-store";
+import { openBlankTimer, useStudyUi } from "@/lib/study/ui-store";
 import { usePlanning } from "@/lib/study/planning";
 import type { PlanningTask } from "@/lib/study/planning-bridge";
-import { nextUp } from "@/lib/study/suggest";
+import { projectSchedule, type PlannedBlock } from "@/lib/study/cycle";
+import { resolvedDayOf } from "@/lib/study/review-queue";
+import { cardStage } from "@/lib/flashcards/srs";
 import { addDays, capitalizeFirst, dayKeyOf, diffDays, formatDay, minuteOfDay, startOfWeek, weekDays, weekdayLabel, weekdayOf } from "@/lib/study/dates";
 import { FocusButton, GoalSwitcher, SubjectDot } from "@/components/study/ui";
 import { KpiBand } from "@/components/study/widgets";
 import { TaskCheck, TaskDialog, type TaskDialogState } from "@/components/study/tasks";
-import type { StudyReminder, StudyReview } from "@/types/study";
+import type { DayKey, StudyReminder, StudyReview } from "@/types/study";
 import type { Notebook, Page } from "@/types/models";
 import { EDITORIAL_SERIF, SERIF_LANGUAGES } from "@/lib/typography";
 
@@ -586,31 +588,70 @@ function PaperCard({ page, notebook }: { page: Page; notebook?: Notebook }) {
 
 function PlanningTile() {
   const { st } = useStudyT();
+  const { today } = useStudy();
+  const pendingOnly = useStudyUi((state) => state.homePendingOnly);
+  const [picked, setPicked] = useState<{ day: DayKey | null; direction: 1 | -1 }>({ day: null, direction: 1 });
+  const selected = picked.day ?? today;
+  const select = (day: DayKey) => {
+    if (day === selected) return;
+    setPicked({ day: day === today ? null : day, direction: day > selected ? 1 : -1 });
+  };
   return (
     <section aria-label={st("nav_schedule")} className={cn(TILE, "@container flex min-w-0 flex-col p-5 sm:p-6")}>
       <header className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-[15px] font-semibold tracking-[-0.015em] text-ink">{st("nav_schedule")}</h2>
-        <QuietLink href="/home/study/schedule">{st("open")}</QuietLink>
+        <div className="flex items-center gap-4">
+          <label className="flex cursor-pointer select-none items-center gap-2 text-[12.5px] text-muted transition hover:text-ink">
+            <Checkbox checked={pendingOnly} onCheckedChange={(value) => useStudyUi.getState().setHomePendingOnly(value === true)} />
+            {st("home_pending_only")}
+          </label>
+          <QuietLink href="/home/study/schedule">{st("open")}</QuietLink>
+        </div>
       </header>
-      <WeekStrip />
-      <Agenda />
+      <WeekStrip selected={selected} onSelect={select} />
+      <Agenda anchor={selected} direction={picked.direction} pendingOnly={pendingOnly} />
     </section>
   );
 }
 
-function WeekStrip() {
-  const { locale, duration } = useStudyT();
+type DayMark = "review" | "task" | "event";
+
+/**
+ * Semana com o que está marcado em cada dia, na mesma linguagem do Planejamento:
+ * traço na cor da disciplina, anel para revisão, quadrado para tarefa. Tocar num
+ * dia mostra a agenda dele logo abaixo.
+ */
+function WeekStrip({ selected, onSelect }: { selected: DayKey; onSelect: (day: DayKey) => void }) {
+  const { st, locale, duration } = useStudyT();
+  const reduceMotion = useReducedMotion();
   const study = useStudy();
   const metrics = usePlanMetrics();
   const { tasks } = usePlanning();
-  const { today, activePlan: plan, planReviews, reminders, settings } = study;
+  const { today, activePlan: plan, planCycle, planReviews, reminders, settings, subjectById } = study;
   const week = useMemo(() => weekDays(startOfWeek(today, settings.weekStartsOn)), [today, settings.weekStartsOn]);
+
+  const plannedByDay = useMemo(() => {
+    const map = new Map<DayKey, { colors: string[]; minutes: number }>();
+    if (!planCycle) return map;
+    for (const [day, blocks] of projectSchedule(planCycle, week[0], week[6], today)) {
+      const colors: string[] = [];
+      let minutes = 0;
+      for (const block of blocks) {
+        const subject = subjectById(block.subjectId);
+        if (!subject || block.status === "skipped" || block.status === "missed") continue;
+        if (block.status === "planned") minutes += block.minutes;
+        if (!colors.includes(subject.color)) colors.push(subject.color);
+      }
+      if (colors.length) map.set(day, { colors, minutes });
+    }
+    return map;
+  }, [planCycle, subjectById, today, week]);
 
   const marks = useMemo(() => {
     const first = week[0];
     const last = week[6];
-    const map = new Map<string, Set<"task" | "review" | "event">>();
-    const add = (day: string | null | undefined, kind: "task" | "review" | "event") => {
+    const map = new Map<string, Set<DayMark>>();
+    const add = (day: string | null | undefined, kind: DayMark) => {
       if (!day || day < first || day > last) return;
       const set = map.get(day) ?? new Set();
       set.add(kind);
@@ -618,52 +659,72 @@ function WeekStrip() {
     };
     for (const task of tasks) add(task.day, "task");
     if (plan) {
-      for (const review of planReviews) if (review.status === "pending") add(review.dueDay, "review");
+      for (const review of planReviews) if (review.status === "pending") add(review.dueDay < today ? today : review.dueDay, "review");
       add(plan.examDate, "event");
     }
     for (const reminder of reminders) {
       if (!reminder.done && (!reminder.planId || reminder.planId === plan?.id)) add(reminder.day, "event");
     }
     return map;
-  }, [plan, planReviews, reminders, tasks, week]);
-
-  const color = { task: "var(--text-faint)", review: "var(--accent)", event: "var(--warning)" } as const;
+  }, [plan, planReviews, reminders, tasks, today, week]);
 
   return (
     <div className="mb-5 grid grid-cols-7 gap-1 rounded-[16px] bg-[var(--surface-2)] p-1">
       {week.map((day) => {
         const isToday = day === today;
+        const isSelected = day === selected;
         const kinds = marks.get(day);
+        const planned = plannedByDay.get(day);
         const seconds = metrics.byDay.get(day) ?? 0;
-        const label = [capitalizeFirst(formatDay(day, locale, { weekday: "long", day: "numeric", month: "long" })), seconds ? duration(seconds) : null]
+        const label = [
+          capitalizeFirst(formatDay(day, locale, { weekday: "long", day: "numeric", month: "long" })),
+          planned?.minutes ? `${st("week_planned_label")} ${duration(planned.minutes * 60)}` : null,
+          seconds ? `${st("week_done_label")} ${duration(seconds)}` : null,
+        ]
           .filter(Boolean)
           .join(" · ");
         return (
-          <Link
+          <button
             key={day}
-            href="/home/study/schedule"
-            prefetch
+            type="button"
             title={label}
             aria-label={label}
+            aria-pressed={isSelected}
+            onClick={() => onSelect(day)}
             className={cn(
-              "flex flex-col items-center gap-1 rounded-[12px] pb-2 pt-1.5 transition",
-              isToday ? "bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_4px_10px_-6px_rgba(15,44,76,0.3)]" : "hover:bg-[var(--surface-hover)]"
+              "group/day relative flex min-w-0 flex-col items-center gap-1 rounded-[12px] pb-2 pt-1.5 outline-none transition-[background-color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-[var(--accent)] active:scale-[0.95]",
+              !isSelected && "hover:bg-[var(--surface-hover)]"
             )}
           >
-            <span className={cn("text-[10.5px] font-medium", isToday ? "text-[var(--accent)]" : "text-faint")}>
+            {/* O cartão do dia escolhido desliza até o dia tocado. */}
+            {isSelected ? (
+              <motion.span
+                layoutId="home-week-selected"
+                aria-hidden
+                className="absolute inset-0 rounded-[12px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_8px_18px_-10px_rgba(15,44,76,0.5)]"
+                transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42, mass: 0.9 }}
+              />
+            ) : null}
+            <span className={cn("relative text-[10.5px] font-medium", isToday ? "text-[var(--accent)]" : "text-faint")}>
               {weekdayLabel(weekdayOf(day), locale, "short").replace(".", "")}
             </span>
-            <span className={cn("text-[16px] font-semibold tabular-nums leading-none tracking-[-0.02em]", isToday ? "text-ink" : day < today ? "text-faint" : "text-muted")}>
+            <span
+              className={cn(
+                "relative text-[16px] font-semibold tabular-nums leading-none tracking-[-0.02em] transition-colors duration-200",
+                isSelected || isToday ? "text-ink" : day < today ? "text-faint group-hover/day:text-muted" : "text-muted group-hover/day:text-ink"
+              )}
+            >
               {Number(day.slice(8, 10))}
             </span>
-            <span className="flex h-1.5 items-center gap-[3px]">
-              {(["review", "task", "event"] as const)
-                .filter((kind) => kinds?.has(kind))
-                .map((kind) => (
-                  <span key={kind} className="size-[5px] rounded-full" style={{ background: color[kind] }} />
-                ))}
+            <span aria-hidden className="relative flex h-2 max-w-full items-center gap-[3px] overflow-hidden">
+              {planned?.colors.slice(0, 3).map((color) => (
+                <span key={color} className="h-2 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: color, opacity: day < today ? 0.5 : 1 }} />
+              ))}
+              {kinds?.has("review") ? <span className="size-[6px] shrink-0 rounded-full border-[1.5px] border-[var(--accent)]" /> : null}
+              {kinds?.has("task") ? <span className="size-[5px] shrink-0 rounded-[1.5px] bg-[var(--text-faint)]" /> : null}
+              {kinds?.has("event") ? <span className="size-[5px] shrink-0 rounded-full bg-[var(--warning)]" /> : null}
             </span>
-          </Link>
+          </button>
         );
       })}
     </div>
@@ -675,10 +736,6 @@ function StudyOverview() {
   const { st, locale } = useStudyT();
   const study = useStudy();
   const plan = study.activePlan;
-  const suggestion = useMemo(
-    () => (plan ? nextUp(study.planSubjects, study.planSessions, study.planCycle, study.today, study.settings) : null),
-    [plan, study.planCycle, study.planSessions, study.planSubjects, study.settings, study.today]
-  );
 
   if (!study.ready) {
     return (
@@ -700,7 +757,7 @@ function StudyOverview() {
           <Button variant="primary" size="sm" onClick={() => router.push("/home/study/goals/new")}>
             {st("home_study_intro_cta")}
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => useStudyUi.getState().setTimerOpen(true)}>
+          <Button variant="ghost" size="sm" onClick={openBlankTimer}>
             <Timer />
             {st("home_quick_focus")}
           </Button>
@@ -719,133 +776,169 @@ function StudyOverview() {
         ? st("countdown_today")
         : st("countdown_past", { date: examDate });
 
+  // O objetivo ativo abre o painel dos números, como o cabeçalho de um projeto no Linear.
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+    <section aria-label={plan.name || st("untitled_goal")} className={cn(TILE, "overflow-hidden")}>
+      <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-4 px-5 pb-4 pt-5 sm:px-6">
         <GoalSwitcher detail={<span title={examDate || undefined}>{examLine}</span>} />
         <div className="flex flex-wrap items-center gap-1.5">
-          <FocusButton
-            variant="primary"
-            subjectId={suggestion?.subject.id ?? null}
-            topicId={suggestion?.topic?.id ?? null}
-            label={st("next_up_start")}
-          />
+          {/* Sessão nova começa em branco: a disciplina é escolhida no relógio. */}
+          <Button variant="primary" size="sm" onClick={openBlankTimer}>
+            <Timer />
+            {st("next_up_start")}
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => useStudyUi.getState().openLog()}>
             <Plus />
             {st("logform_title_new")}
           </Button>
         </div>
       </div>
-      <KpiBand />
-    </div>
+      <KpiBand className="rounded-none border-t border-[var(--border)] shadow-none" />
+    </section>
   );
 }
 
 type AgendaItem =
   | { kind: "exam"; key: string }
-  | { kind: "reviews"; key: string; count: number; subjects: string[] }
-  | { kind: "cards"; key: string; count: number }
+  | { kind: "study"; key: string; block: PlannedBlock }
+  | { kind: "review"; key: string; review: StudyReview }
+  | { kind: "cards"; key: string; total: number; fresh: number }
   | { kind: "reminder"; key: string; reminder: StudyReminder }
   | { kind: "task"; key: string; task: PlanningTask; overdue: boolean };
 
-const AGENDA_ORDER: Record<AgendaItem["kind"], number> = { exam: 0, reviews: 1, cards: 2, reminder: 3, task: 4 };
-const TODAY_LIMIT = 7;
-const LATER_LIMIT = 4;
-const LATER_DAYS = 2;
+const AGENDA_ORDER: Record<AgendaItem["kind"], number> = { exam: 0, study: 1, review: 2, cards: 3, reminder: 4, task: 5 };
+const DAY_LIMIT = 12;
 
-function Agenda() {
+/** Item já feito: continua no dia, riscado, e só sai com "Só pendentes". */
+function agendaItemDone(item: AgendaItem): boolean {
+  if (item.kind === "study") return item.block.status === "done" || item.block.status === "skipped";
+  if (item.kind === "review") return item.review.status === "done";
+  if (item.kind === "reminder") return item.reminder.done;
+  if (item.kind === "task") return item.task.done;
+  return false;
+}
+
+/**
+ * Agenda do dia escolhido na semana (hoje, por padrão), com tudo o que o
+ * Planejamento mostra: disciplinas do ciclo e dos dias fixos, revisões,
+ * flashcards, lembretes, prova e tarefas. Trocar de dia desliza o conteúdo na
+ * direção do dia tocado.
+ */
+function Agenda({ anchor, direction, pendingOnly }: { anchor: DayKey; direction: 1 | -1; pendingOnly: boolean }) {
   const { st, locale } = useStudyT();
+  const reduceMotion = useReducedMotion();
   const study = useStudy();
   const { dueFlashcards } = useWorkspace();
   const { tasks } = usePlanning();
   const [dialog, setDialog] = useState<TaskDialogState>({ open: false, task: null, day: null });
-  const { today, activePlan: plan, planReviews, planSubjects, reminders } = study;
-  const cardsDue = dueFlashcards.length;
+  const { today, activePlan: plan, planCycle, planReviews, reminders, settings, subjectById } = study;
 
-  const groups = useMemo(() => {
-    const horizon = addDays(today, 6);
-    const byDay = new Map<string, AgendaItem[]>();
-    const push = (day: string, item: AgendaItem) => {
-      const list = byDay.get(day);
-      if (list) list.push(item);
-      else byDay.set(day, [item]);
-    };
+  const items = useMemo(() => {
+    const list: AgendaItem[] = [];
     for (const task of tasks) {
       if (!task.day) continue;
-      if (task.day < today) {
-        if (!task.done) push(today, { kind: "task", key: task.id, task, overdue: true });
-      } else if (task.day <= horizon) {
-        push(task.day, { kind: "task", key: task.id, task, overdue: false });
-      }
+      if (task.day === anchor) list.push({ kind: "task", key: task.id, task, overdue: !task.done && task.day < today });
+      else if (anchor === today && task.day < today && !task.done) list.push({ kind: "task", key: task.id, task, overdue: true });
     }
     if (plan) {
-      const counts = new Map<string, number>();
-      const names = new Map<string, Set<string>>();
-      const subjectName = new Map(planSubjects.map((subject) => [subject.id, subject.name]));
-      for (const review of planReviews) {
-        if (review.status !== "pending") continue;
-        const day = review.dueDay < today ? today : review.dueDay;
-        if (day > horizon) continue;
-        counts.set(day, (counts.get(day) ?? 0) + 1);
-        const set = names.get(day) ?? new Set<string>();
-        const name = subjectName.get(review.subjectId);
-        if (name) set.add(name);
-        names.set(day, set);
+      if (planCycle) {
+        for (const block of projectSchedule(planCycle, anchor, anchor, today).get(anchor) ?? []) {
+          if (subjectById(block.subjectId)) list.push({ kind: "study", key: block.key, block });
+        }
       }
-      for (const [day, count] of counts) push(day, { kind: "reviews", key: `reviews-${day}`, count, subjects: [...(names.get(day) ?? [])] });
-      if (plan.examDate && plan.examDate >= today && plan.examDate <= horizon) push(plan.examDate, { kind: "exam", key: "exam" });
+      for (const review of planReviews) {
+        // Pendente atrasada vai para hoje, como no Planejamento; feita fica no dia em que foi feita.
+        const day =
+          review.status === "pending"
+            ? review.dueDay < today
+              ? today
+              : review.dueDay
+            : review.status === "done"
+              ? resolvedDayOf(review, settings.timeZone)
+              : null;
+        if (day === anchor) list.push({ kind: "review", key: review.id, review });
+      }
+      if (plan.examDate === anchor) list.push({ kind: "exam", key: "exam" });
     }
     for (const reminder of reminders) {
-      if (reminder.done || reminder.day < today || reminder.day > horizon) continue;
-      if (reminder.planId && reminder.planId !== plan?.id) continue;
-      push(reminder.day, { kind: "reminder", key: reminder.id, reminder });
+      if (reminder.day !== anchor || (reminder.planId && reminder.planId !== plan?.id)) continue;
+      list.push({ kind: "reminder", key: reminder.id, reminder });
     }
-    if (cardsDue) push(today, { kind: "cards", key: "cards", count: cardsDue });
+    if (dueFlashcards.length && anchor === today) {
+      list.push({
+        kind: "cards",
+        key: "cards",
+        total: dueFlashcards.length,
+        fresh: dueFlashcards.filter((card) => cardStage(card) === "new").length,
+      });
+    }
+    // Ordem estável por tipo: marcar algo como feito não faz a linha pular de lugar.
+    return list.sort((a, b) => AGENDA_ORDER[a.kind] - AGENDA_ORDER[b.kind]);
+  }, [anchor, dueFlashcards, plan, planCycle, planReviews, reminders, settings.timeZone, subjectById, tasks, today]);
 
-    const rank = (item: AgendaItem) => AGENDA_ORDER[item.kind] * 10 + (item.kind === "task" && item.task.done ? 5 : 0);
-    const later = [...byDay.keys()].filter((day) => day > today).sort().slice(0, LATER_DAYS);
-    return [today, ...later].map((day) => ({ day, items: (byDay.get(day) ?? []).sort((a, b) => rank(a) - rank(b)) }));
-  }, [cardsDue, plan, planReviews, planSubjects, reminders, tasks, today]);
-
-  const dayTitle = (day: string) => {
-    if (day === today) return st("today");
-    if (day === addDays(today, 1)) return st("tomorrow");
-    return capitalizeFirst(formatDay(day, locale, { weekday: "long" }));
-  };
+  const visible = pendingOnly ? items.filter((item) => !agendaItemDone(item)) : items;
+  const shown = visible.slice(0, DAY_LIMIT);
+  const hidden = visible.length - shown.length;
+  const trackable = items.filter((item) => item.kind !== "exam" && item.kind !== "cards");
+  const doneCount = trackable.filter(agendaItemDone).length;
+  const offset = reduceMotion ? 0 : 20;
+  const title =
+    anchor === today
+      ? st("today")
+      : anchor === addDays(today, 1)
+        ? st("tomorrow")
+        : anchor === addDays(today, -1)
+          ? st("yesterday")
+          : capitalizeFirst(formatDay(anchor, locale, { weekday: "long" }));
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className="grid gap-x-8 gap-y-5 @xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] @5xl:grid-cols-3">
-        {groups.map(({ day, items }, index) => {
-          const visible = items.slice(0, day === today ? TODAY_LIMIT : LATER_LIMIT);
-          const hidden = items.length - visible.length;
-          return (
-            <div key={day} className={cn("min-w-0", index === 0 && "@xl:row-span-2 @5xl:row-span-1")}>
-              <p className="mb-1.5 flex items-baseline gap-2">
-                <span className="text-[13px] font-semibold text-ink">{dayTitle(day)}</span>
-                <span className="text-[12px] text-faint">{formatDay(day, locale, { day: "numeric", month: "short" })}</span>
-              </p>
-              {visible.length ? (
-                <ul>
-                  {visible.map((item) => (
-                    <AgendaRow key={item.key} item={item} onOpenTask={(task) => setDialog({ open: true, task, day: task.day })} />
-                  ))}
-                </ul>
-              ) : (
-                <p className="py-1.5 text-[13px] text-faint">{st("home_today_clear")}</p>
-              )}
-              {hidden > 0 ? (
-                <Link href="/home/study/schedule" prefetch className="mt-0.5 inline-block pl-7 text-[12px] text-muted transition hover:text-ink">
-                  {st("more_items", { count: hidden })}
-                </Link>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={anchor}
+          initial={{ opacity: 0, x: direction * offset }}
+          animate={{ opacity: 1, x: 0, transition: { duration: 0.26, ease: [0.16, 1, 0.3, 1] } }}
+          exit={{ opacity: 0, x: -direction * offset, transition: { duration: 0.12, ease: "easeIn" } }}
+          className="min-w-0"
+        >
+          <div className="mb-1.5 flex items-baseline justify-between gap-3">
+            <p className="flex min-w-0 items-baseline gap-2">
+              <span className="text-[13px] font-semibold text-ink">{title}</span>
+              <span className="text-[12px] text-faint">{formatDay(anchor, locale, { day: "numeric", month: "short" })}</span>
+            </p>
+            {trackable.length ? (
+              <span className="shrink-0 text-[12px] tabular-nums text-faint">{st("home_day_progress", { done: doneCount, total: trackable.length })}</span>
+            ) : null}
+          </div>
+          {shown.length ? (
+            <ul>
+              <AnimatePresence>
+                {shown.map((item, index) => (
+                  <AgendaRow
+                    key={item.key}
+                    item={item}
+                    day={anchor}
+                    index={index}
+                    onOpenTask={(task) => setDialog({ open: true, task, day: task.day })}
+                  />
+                ))}
+              </AnimatePresence>
+            </ul>
+          ) : (
+            <p className="py-1.5 text-[13px] text-faint">
+              {items.length ? st("home_day_all_done") : anchor === today ? st("home_today_clear") : st("home_day_clear")}
+            </p>
+          )}
+          {hidden > 0 ? (
+            <Link href="/home/study/schedule" prefetch className="mt-0.5 inline-block pl-7 text-[12px] text-muted transition hover:text-ink">
+              {st("more_items", { count: hidden })}
+            </Link>
+          ) : null}
+        </motion.div>
+      </AnimatePresence>
       <button
         type="button"
-        onClick={() => setDialog({ open: true, task: null, day: today })}
+        onClick={() => setDialog({ open: true, task: null, day: anchor < today ? today : anchor })}
         className="-mx-2 mt-auto flex items-center gap-3 self-start rounded-[var(--radius-sm)] px-2 py-1.5 pt-4 text-[13px] text-muted transition hover:text-ink"
       >
         <span className="flex w-4 justify-center">
@@ -858,26 +951,149 @@ function Agenda() {
   );
 }
 
-function AgendaRow({ item, onOpenTask }: { item: AgendaItem; onOpenTask: (task: PlanningTask) => void }) {
-  const { st, locale } = useStudyT();
+function AgendaRow({
+  item,
+  day,
+  index,
+  onOpenTask,
+}: {
+  item: AgendaItem;
+  day: DayKey;
+  index: number;
+  onOpenTask: (task: PlanningTask) => void;
+}) {
+  const { st, locale, duration } = useStudyT();
+  const reduceMotion = useReducedMotion();
   const study = useStudy();
-  const row = "-mx-2 flex min-w-0 gap-3 rounded-[10px] px-2 py-1.5 transition hover:bg-[var(--surface-hover)]";
-  const rail = (color: string) => (
+  const done = agendaItemDone(item);
+  // As linhas entram em cascata ao trocar de dia e saem suavemente com "Só pendentes".
+  const motionProps = reduceMotion
+    ? {}
+    : {
+        layout: "position" as const,
+        initial: { opacity: 0, y: 6 },
+        animate: { opacity: 1, y: 0, transition: { duration: 0.24, delay: Math.min(index, 8) * 0.035, ease: [0.16, 1, 0.3, 1] as const } },
+        exit: { opacity: 0, x: -10, transition: { duration: 0.16 } },
+      };
+  const row = "-mx-2 flex min-w-0 gap-3 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[var(--surface-hover)]";
+  const rail = (color: string, opacity = 1) => (
     <span className="flex w-4 shrink-0 justify-center self-stretch py-[3px]">
-      <span className="w-[3px] rounded-full" style={{ background: color }} />
+      <span className="w-[3px] rounded-full" style={{ background: color, opacity }} />
     </span>
   );
   const text = (title: string, meta?: string | null) => (
     <span className="min-w-0 flex-1">
-      <span className="block truncate text-[13.5px] leading-5 text-ink">{title}</span>
+      <span className={cn("block truncate text-[13.5px] leading-5", done ? "text-faint line-through" : "text-ink")}>{title}</span>
       {meta ? <span className="block truncate text-[12px] leading-4 text-faint">{meta}</span> : null}
     </span>
   );
 
+  if (item.kind === "study") {
+    const { block } = item;
+    const subject = study.subjectById(block.subjectId);
+    const entry = block.fixed ? study.planCycle?.agenda.find((candidate) => candidate.id === block.itemId) : undefined;
+    const topicId = entry ? entry.topicId : (subject?.topics.find((topic) => !topic.done)?.id ?? null);
+    const topicText = (entry?.topicId ? study.topicById(block.subjectId, entry.topicId)?.name : null) ?? (entry?.note || null);
+    const planned = block.status === "planned";
+    const status =
+      block.status === "missed" ? (
+        <span className="text-[var(--band-low-text)]">{st("agenda_missed")}</span>
+      ) : block.status === "skipped" ? (
+        <span>{st("agenda_skipped")}</span>
+      ) : block.isNext ? (
+        <span className="font-medium text-[var(--accent)]">{st("cycle_state_current")}</span>
+      ) : null;
+    return (
+      <motion.li {...motionProps} className={cn(row, "group/study items-center")}>
+        {rail(subject?.color ?? "var(--text-faint)", planned ? 1 : 0.45)}
+        <Link href="/home/study/schedule" prefetch className="min-w-0 flex-1">
+          <span className={cn("block truncate text-[13.5px] leading-5", planned ? "text-ink" : "text-faint", block.status === "done" && "line-through")}>
+            {subject?.name || st("untitled_subject")}
+          </span>
+          <span className="flex min-w-0 items-center gap-1 text-[12px] leading-4 text-faint">
+            {block.status === "done" ? <Check className="size-3 shrink-0 text-[var(--accent)]" strokeWidth={2.5} aria-hidden /> : null}
+            <span className="shrink-0 tabular-nums">{duration(block.minutes * 60)}</span>
+            {topicText ? <span className="min-w-0 truncate">· {topicText}</span> : null}
+            {status ? <span className="shrink-0">·</span> : null}
+            {status}
+          </span>
+        </Link>
+        {planned && day === study.today ? (
+          <FocusButton
+            variant="ghost"
+            size="icon-sm"
+            subjectId={block.subjectId}
+            topicId={topicId}
+            label={st("next_up_start")}
+            className="shrink-0 opacity-0 transition focus-visible:opacity-100 group-hover/study:opacity-100 [@media(hover:none)]:opacity-100"
+          />
+        ) : null}
+      </motion.li>
+    );
+  }
+
+  if (item.kind === "review") {
+    const { review } = item;
+    const subject = study.subjectById(review.subjectId);
+    const topic = study.topicById(review.subjectId, review.topicId);
+    const color = subject?.color ?? "var(--accent)";
+    const late = !done && review.dueDay < study.today ? diffDays(review.dueDay, study.today) : 0;
+    const meta = [st("home_review_meta", { count: review.intervalDays }), topic?.name].filter(Boolean).join(" · ");
+    const toggle = async () => {
+      await study.actions.resolveReviews([review.id], done ? "pending" : "done");
+      if (!done) {
+        toast.success(st("review_done_toast", { count: 1 }), {
+          action: { label: st("review_restore"), onClick: () => void study.actions.resolveReviews([review.id], "pending") },
+        });
+      }
+    };
+    return (
+      <motion.li {...motionProps} className={cn(row, "group/review items-center")}>
+        <span className="flex w-4 shrink-0 justify-center">
+          <button
+            type="button"
+            onClick={() => void toggle()}
+            aria-pressed={done}
+            aria-label={done ? st("review_restore") : st("review_complete")}
+            title={done ? st("review_restore") : st("review_complete")}
+            className="group/check flex size-[17px] items-center justify-center rounded-full border-2 transition-[background-color,transform] duration-200 active:scale-90"
+            style={{ borderColor: color, backgroundColor: done ? color : "transparent" }}
+          >
+            <Check
+              className={cn("size-2.5 transition-opacity duration-150", done ? "text-white" : "opacity-0 group-hover/check:opacity-100")}
+              style={done ? undefined : { color }}
+              strokeWidth={3.5}
+            />
+          </button>
+        </span>
+        <Link href="/home/study/reviews" prefetch className="min-w-0 flex-1">
+          <span className={cn("block truncate text-[13.5px] leading-5 transition-colors", done ? "text-faint line-through" : "text-ink")}>
+            {subject?.name || st("untitled_subject")}
+          </span>
+          <span className="flex min-w-0 items-center gap-1 text-[12px] leading-4 text-faint">
+            <span className={cn("min-w-0 truncate", done && "line-through")}>{meta}</span>
+            {late ? <span className="shrink-0 text-[var(--band-low-text)]">· {st("review_late_by", { count: late })}</span> : null}
+          </span>
+        </Link>
+        {!done && day === study.today ? (
+          <FocusButton
+            variant="ghost"
+            size="icon-sm"
+            subjectId={review.subjectId}
+            topicId={review.topicId}
+            reviewId={review.id}
+            label={st("review_start")}
+            className="shrink-0 opacity-0 transition focus-visible:opacity-100 group-hover/review:opacity-100 [@media(hover:none)]:opacity-100"
+          />
+        ) : null}
+      </motion.li>
+    );
+  }
+
   if (item.kind === "task") {
     const { task } = item;
     return (
-      <li className={cn(row, "items-center")}>
+      <motion.li {...motionProps} className={cn(row, "items-center")}>
         <span className="flex w-4 shrink-0 justify-center">
           <TaskCheck task={task} />
         </span>
@@ -891,56 +1107,47 @@ function AgendaRow({ item, onOpenTask }: { item: AgendaItem; onOpenTask: (task: 
         {item.overdue && task.day ? (
           <span className="shrink-0 text-[12px] tabular-nums text-[var(--danger)]">{formatDay(task.day, locale, { day: "numeric", month: "short" })}</span>
         ) : null}
-      </li>
-    );
-  }
-
-  if (item.kind === "reviews") {
-    const shown = item.subjects.slice(0, 2).join(", ");
-    const extra = item.subjects.length - 2;
-    return (
-      <li>
-        <Link href="/home/study/reviews" prefetch className={row}>
-          {rail("var(--accent)")}
-          {text(st("home_agenda_reviews", { count: item.count }), extra > 0 ? `${shown} ${st("more_items", { count: extra })}` : shown)}
-        </Link>
-      </li>
+      </motion.li>
     );
   }
 
   if (item.kind === "cards") {
+    const reviewCards = item.total - item.fresh;
+    const split = item.fresh && reviewCards ? `${st("reviews_cards_new", { count: item.fresh })} · ${st("reviews_cards_review", { count: reviewCards })}` : null;
     return (
-      <li>
+      <motion.li {...motionProps}>
         <Link href="/home/flashcards" prefetch className={cn(row, "items-center")}>
-          {rail("var(--rating-good)")}
-          {text(st("home_agenda_cards", { count: item.count }))}
+          <span className="flex w-4 shrink-0 justify-center text-[var(--accent)]">
+            <Layers className="size-3.5" />
+          </span>
+          {text(st("reviews_cards_title"), [st("reviews_cards_count", { count: item.total }), split].filter(Boolean).join(" · "))}
         </Link>
-      </li>
+      </motion.li>
     );
   }
 
   if (item.kind === "exam") {
     const plan = study.activePlan;
     return (
-      <li>
+      <motion.li {...motionProps}>
         <Link href={plan ? `/home/study/goals/${plan.id}` : "/home/study"} prefetch className={row}>
           <span className="flex w-4 shrink-0 justify-center pt-[3px] text-[var(--danger)]">
             <Flag className="size-3.5" />
           </span>
           {text(st("reminder_kind_exam"), plan?.name ?? null)}
         </Link>
-      </li>
+      </motion.li>
     );
   }
 
   const { reminder } = item;
   return (
-    <li>
+    <motion.li {...motionProps}>
       <Link href="/home/study/schedule" prefetch className={row}>
-        {rail(reminder.kind === "exam" ? "var(--danger)" : "var(--warning)")}
+        {rail(reminder.kind === "exam" ? "var(--danger)" : "var(--warning)", done ? 0.45 : 1)}
         {text(reminder.title, st(`reminder_kind_${reminder.kind}`))}
       </Link>
-    </li>
+    </motion.li>
   );
 }
 
@@ -990,7 +1197,6 @@ function PageCard({ notebook, notebooks, livePages }: { notebook: Notebook; note
 function TodayReviewsTile() {
   const { st } = useStudyT();
   const study = useStudy();
-  const { dueFlashcards } = useWorkspace();
   const plan = study.activePlan;
   const { planReviews, reviews, actions, today, settings, subjectById, topicById } = study;
 
@@ -1171,20 +1377,6 @@ function TodayReviewsTile() {
                 {st("review_done_toast", { count: doneToday.length })}
               </p>
             ) : null}
-
-            {dueFlashcards.length > 0 ? (
-              <Link
-                href="/home/flashcards"
-                prefetch
-                className="mt-1 flex items-center justify-between gap-2 rounded-[12px] bg-[var(--surface-2)] px-3 py-2 text-[12px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
-              >
-                <span className="flex items-center gap-2 truncate">
-                  <Layers className="size-3.5 shrink-0 text-[var(--accent)]" />
-                  <span className="truncate">{st("flashcards_due_callout", { count: dueFlashcards.length })}</span>
-                </span>
-                <ChevronRight className="size-3.5 shrink-0 text-faint" />
-              </Link>
-            ) : null}
           </div>
         </div>
       ) : doneToday.length > 0 ? (
@@ -1202,19 +1394,6 @@ function TodayReviewsTile() {
             {st("tab_done")}
             <ChevronRight className="size-3.5" />
           </Link>
-          {dueFlashcards.length > 0 ? (
-            <Link
-              href="/home/flashcards"
-              prefetch
-              className="mt-4 flex w-full items-center justify-between gap-2 rounded-[12px] bg-[var(--surface-2)] px-3 py-2 text-[12px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
-            >
-              <span className="flex items-center gap-2 truncate">
-                <Layers className="size-3.5 shrink-0 text-[var(--accent)]" />
-                <span className="truncate">{st("flashcards_due_callout", { count: dueFlashcards.length })}</span>
-              </span>
-              <ChevronRight className="size-3.5 shrink-0 text-faint" />
-            </Link>
-          ) : null}
         </div>
       ) : (
         <div className="flex flex-1 flex-col items-center justify-center py-7 text-center">
@@ -1231,19 +1410,6 @@ function TodayReviewsTile() {
             {st("tab_upcoming")}
             <ChevronRight className="size-3.5" />
           </Link>
-          {dueFlashcards.length > 0 ? (
-            <Link
-              href="/home/flashcards"
-              prefetch
-              className="mt-4 flex w-full items-center justify-between gap-2 rounded-[12px] bg-[var(--surface-2)] px-3 py-2 text-[12px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
-            >
-              <span className="flex items-center gap-2 truncate">
-                <Layers className="size-3.5 shrink-0 text-[var(--accent)]" />
-                <span className="truncate">{st("flashcards_due_callout", { count: dueFlashcards.length })}</span>
-              </span>
-              <ChevronRight className="size-3.5 shrink-0 text-faint" />
-            </Link>
-          ) : null}
         </div>
       )}
     </section>

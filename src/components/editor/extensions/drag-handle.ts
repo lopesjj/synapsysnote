@@ -67,14 +67,6 @@ export const DragHandle = Extension.create({
             state.pos = null;
           };
 
-          const addButton = document.createElement("button");
-          addButton.type = "button";
-          addButton.title = "Inserir bloco abaixo";
-          addButton.innerHTML =
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
-          addButton.style.cssText =
-            "display:flex;align-items:center;justify-content:center;width:20px;height:22px;border-radius:5px;color:var(--text-faint);background:transparent;border:none;cursor:pointer;";
-
           const dragButton = document.createElement("button");
           dragButton.type = "button";
           dragButton.title = "Arrastar para reordenar";
@@ -92,16 +84,14 @@ export const DragHandle = Extension.create({
           deleteButton.style.cssText =
             "display:flex;align-items:center;justify-content:center;width:20px;height:22px;border-radius:5px;color:var(--text-faint);background:transparent;border:none;cursor:pointer;";
 
-          for (const button of [addButton, dragButton]) {
-            button.addEventListener("mouseenter", () => {
-              button.style.background = "var(--surface-hover)";
-              button.style.color = "var(--text-muted)";
-            });
-            button.addEventListener("mouseleave", () => {
-              button.style.background = "transparent";
-              button.style.color = "var(--text-faint)";
-            });
-          }
+          dragButton.addEventListener("mouseenter", () => {
+            dragButton.style.background = "var(--surface-hover)";
+            dragButton.style.color = "var(--text-muted)";
+          });
+          dragButton.addEventListener("mouseleave", () => {
+            dragButton.style.background = "transparent";
+            dragButton.style.color = "var(--text-faint)";
+          });
 
           deleteButton.addEventListener("mouseenter", () => {
             deleteButton.style.background = "var(--surface-hover)";
@@ -112,7 +102,7 @@ export const DragHandle = Extension.create({
             deleteButton.style.color = "var(--text-faint)";
           });
 
-          container.append(addButton, dragButton, deleteButton);
+          container.append(dragButton, deleteButton);
           container.addEventListener("mouseenter", cancelHide);
           container.addEventListener("mouseleave", scheduleHide);
 
@@ -143,7 +133,8 @@ export const DragHandle = Extension.create({
             state.dom = hit.dom;
             container.style.display = "flex";
             container.style.top = `${rect.top - parentRect.top + 1}px`;
-            container.style.left = `${rect.left - parentRect.left - 68}px`;
+            // Dois botoes de 20px + 1px de espaco + 12px de ponte ate o bloco.
+            container.style.left = `${rect.left - parentRect.left - 47}px`;
           };
 
           const onMouseLeave = (event: MouseEvent) => {
@@ -154,19 +145,6 @@ export const DragHandle = Extension.create({
             }
             scheduleHide();
           };
-
-          addButton.addEventListener("click", () => {
-            if (state.pos === null) return;
-            const node = view.state.doc.nodeAt(state.pos);
-            if (!node) return;
-            const insertAt = state.pos + node.nodeSize;
-            const tr = view.state.tr.insert(
-              insertAt,
-              view.state.schema.nodes.paragraph.create()
-            );
-            view.dispatch(tr.scrollIntoView());
-            view.focus();
-          });
 
           deleteButton.addEventListener("click", () => {
             if (state.pos === null) return;

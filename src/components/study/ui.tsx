@@ -23,7 +23,7 @@ import { WorkspaceIcon, isIconUrl } from "@/lib/icons/workspace-icon";
 import { cn } from "@/lib/utils";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT, type StudyKey } from "@/lib/study/i18n";
-import { startTimer, useStudyUi } from "@/lib/study/ui-store";
+import { useStudyUi } from "@/lib/study/ui-store";
 import { useLiveNote, useMaterialNote } from "@/lib/study/hooks";
 import { splitDuration } from "@/lib/study/format";
 import { BUILT_IN_CATEGORIES, SUBJECT_COLORS } from "@/lib/study/defaults";
@@ -53,19 +53,29 @@ function markColor(seed: string): string {
   return SUBJECT_COLORS[hash % SUBJECT_COLORS.length];
 }
 
+/** Sombra de ícone de app: a marca do objetivo sobe do fundo quando aparece grande. */
+const MARK_LIFT = "0 1px 2px rgba(15, 44, 76, 0.1), 0 10px 20px -12px rgba(15, 44, 76, 0.5)";
+
+/**
+ * Marca do objetivo: logo enviado, ícone escolhido ou monograma. A partir de
+ * 40px ela ganha relevo (`raised`), como um ícone de app, para se destacar.
+ */
 export function GoalMark({
   icon,
   name,
   seed,
   size,
   className,
+  raised = size >= 40,
 }: {
   icon: string | null | undefined;
   name: string;
   seed: string;
   size: number;
   className?: string;
+  raised?: boolean;
 }) {
+  const borderRadius = Math.max(4, Math.round(size * (raised ? 0.27 : 0.24)));
   if (icon && isIconUrl(icon)) {
     return (
       <span
@@ -73,9 +83,9 @@ export function GoalMark({
         style={{
           width: size,
           height: size,
-          borderRadius: Math.max(4, Math.round(size * 0.24)),
-          padding: size >= 28 ? Math.round(size * 0.1) : 1,
-          boxShadow: "inset 0 0 0 1px var(--border)",
+          borderRadius,
+          padding: size >= 28 ? Math.round(size * 0.12) : 1,
+          boxShadow: raised ? `inset 0 0 0 1px rgba(15, 44, 76, 0.12), ${MARK_LIFT}` : "inset 0 0 0 1px var(--border)",
         }}
         aria-hidden
       >
@@ -87,10 +97,15 @@ export function GoalMark({
     return (
       <span
         className={cn("inline-flex shrink-0 items-center justify-center overflow-hidden", className)}
-        style={{ width: size, height: size, borderRadius: Math.max(4, Math.round(size * 0.24)) }}
+        style={{
+          width: size,
+          height: size,
+          borderRadius,
+          ...(raised ? { backgroundColor: "var(--surface-2)", boxShadow: `inset 0 0 0 1px var(--border), ${MARK_LIFT}` } : null),
+        }}
         aria-hidden
       >
-        <WorkspaceIcon icon={icon} size={Math.round(size * 0.72)} />
+        <WorkspaceIcon icon={icon} size={Math.round(size * (raised ? 0.6 : 0.72))} />
       </span>
     );
   }
@@ -102,11 +117,15 @@ export function GoalMark({
       style={{
         width: size,
         height: size,
-        borderRadius: Math.max(4, Math.round(size * 0.24)),
+        borderRadius,
         fontSize: Math.max(8, Math.round(size * (text.length > 2 ? 0.34 : 0.42))),
         color,
-        backgroundColor: `color-mix(in oklab, ${color} 13%, var(--surface))`,
-        boxShadow: `inset 0 0 0 1px color-mix(in oklab, ${color} 26%, transparent)`,
+        background: raised
+          ? `linear-gradient(160deg, color-mix(in oklab, ${color} 26%, var(--surface)), color-mix(in oklab, ${color} 11%, var(--surface)))`
+          : `color-mix(in oklab, ${color} 13%, var(--surface))`,
+        boxShadow: raised
+          ? `inset 0 0 0 1px color-mix(in oklab, ${color} 34%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 10px 22px -12px color-mix(in oklab, ${color} 80%, transparent)`
+          : `inset 0 0 0 1px color-mix(in oklab, ${color} 26%, transparent)`,
       }}
       aria-hidden
     >
@@ -180,35 +199,35 @@ export function GoalSwitcher({ compact = false, detail }: { compact?: boolean; d
         {detail !== undefined ? (
           <button
             type="button"
-            className="group -m-1.5 flex min-w-0 items-center gap-3 rounded-[14px] p-1.5 text-left transition hover:bg-[var(--surface-hover)]"
+            className="group -m-2 flex min-w-0 items-center gap-4 rounded-[18px] p-2 text-left transition hover:bg-[var(--surface-hover)]"
             aria-label={st("goal_switch_label")}
           >
             {activePlan ? (
-              <GoalMark icon={activePlan.icon} name={name} seed={activePlan.id} size={36} />
+              <GoalMark icon={activePlan.icon} name={name} seed={activePlan.id} size={52} />
             ) : (
-              <span className="flex size-9 items-center justify-center rounded-[10px] bg-[var(--surface-2)] text-muted">
-                <Flag className="size-4" />
+              <span className="flex size-[52px] items-center justify-center rounded-[14px] bg-[var(--surface-2)] text-muted">
+                <Flag className="size-5" />
               </span>
             )}
             <span className="min-w-0 flex-1">
-              <span className="flex min-w-0 items-center gap-1">
-                <span className="truncate text-[14.5px] font-semibold tracking-[-0.01em] text-ink">{name}</span>
-                <ChevronDown className="size-3.5 shrink-0 text-faint transition group-data-[state=open]:rotate-180" />
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="line-clamp-2 text-[19px] font-semibold leading-tight tracking-[-0.02em] text-ink [overflow-wrap:anywhere]">{name}</span>
+                <ChevronDown className="size-4 shrink-0 text-faint transition group-data-[state=open]:rotate-180" />
               </span>
-              {detail ? <span className="block truncate text-[12px] text-faint">{detail}</span> : null}
+              {detail ? <span className="mt-0.5 block truncate text-[13px] text-muted">{detail}</span> : null}
             </span>
           </button>
         ) : (
           <button
             type="button"
             className={cn(
-              "group inline-flex h-9 max-w-[16rem] items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2.5 text-[13px] text-ink transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]",
+              "group inline-flex h-9 max-w-[18rem] items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] pe-2.5 ps-1.5 text-[13px] text-ink transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]",
               compact && "h-8 w-full max-w-none"
             )}
             aria-label={st("goal_switch_label")}
           >
             {activePlan ? (
-              <GoalMark icon={activePlan.icon} name={activePlan.name} seed={activePlan.id} size={18} />
+              <GoalMark icon={activePlan.icon} name={activePlan.name} seed={activePlan.id} size={compact ? 20 : 24} />
             ) : (
               <Flag className="size-3.5 text-muted" />
             )}
@@ -223,7 +242,7 @@ export function GoalSwitcher({ compact = false, detail }: { compact?: boolean; d
         <MenuLabel>{st("goal_switch_label")}</MenuLabel>
         {live.map((plan) => (
           <MenuItem key={plan.id} onSelect={() => void actions.setActivePlan(plan.id)}>
-            <GoalMark icon={plan.icon} name={plan.name} seed={plan.id} size={16} />
+            <GoalMark icon={plan.icon} name={plan.name} seed={plan.id} size={20} />
             <span className="min-w-0 flex-1 truncate">{plan.name || st("untitled_goal")}</span>
             {plan.id === activePlan?.id ? <Check className="!text-[var(--accent)]" /> : null}
           </MenuItem>
@@ -564,10 +583,16 @@ export function useStartFocus() {
       const idle = store.timer.status === "idle";
       const pageId = reviewId ? materialNote({ reviewId, subjectId, topicId }) : null;
       if (idle) {
-        store.setTimer({ subjectId: subjectId ?? null, topicId: topicId ?? null, reviewId: reviewId ?? null, pageId });
+        // Revisão abre sempre no cronômetro e parada: quem dá o play é a pessoa.
+        store.resetTimer({
+          ...(reviewId ? { mode: "stopwatch" as const } : null),
+          subjectId: subjectId ?? null,
+          topicId: topicId ?? null,
+          reviewId: reviewId ?? null,
+          pageId,
+        });
       }
       if (pageId) {
-        if (idle) startTimer();
         store.setTimerOpen(false);
         router.push(`/home/p/${pageId}`);
         return;
@@ -652,27 +677,106 @@ export function SelectFilter({
   onChange,
   options,
   label,
+  className,
 }: {
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
   label: string;
+  className?: string;
 }) {
+  const current = options.find((option) => option.value === value) ?? options[0];
   return (
-    <div className="relative">
-      <select
-        aria-label={label}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-8 max-w-[14rem] appearance-none rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] pl-2.5 pr-7 text-[12.5px] text-ink outline-none focus:border-[var(--accent)]"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
-    </div>
+    <Menu>
+      <MenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          className={cn(
+            "group inline-flex h-8 max-w-[15rem] items-center justify-between gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2.5 text-[12.5px] font-normal text-ink shadow-sm outline-none transition",
+            "hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)] data-[state=open]:border-[var(--accent)] data-[state=open]:bg-[var(--surface-hover)]",
+            className
+          )}
+        >
+          <span className="truncate">{current?.label ?? label}</span>
+          <ChevronDown className="size-3.5 shrink-0 text-muted opacity-70 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+        </button>
+      </MenuTrigger>
+      <MenuContent align="start" className="min-w-[12rem] max-h-72 overflow-y-auto p-1 shadow-[var(--shadow-float)]">
+        {options.map((option) => {
+          const isSelected = option.value === value;
+          return (
+            <MenuItem
+              key={option.value || "__all__"}
+              onSelect={() => onChange(option.value)}
+              className={cn(
+                "flex items-center justify-between gap-3 rounded-[var(--radius-xs)] px-2.5 py-1.5 text-[12.5px] transition-colors cursor-pointer",
+                isSelected ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]" : "text-ink hover:bg-[var(--surface-hover)]"
+              )}
+            >
+              <span className="truncate">{option.label}</span>
+              {isSelected ? <Check className="size-3.5 shrink-0 text-[var(--accent)]" /> : null}
+            </MenuItem>
+          );
+        })}
+      </MenuContent>
+    </Menu>
+  );
+}
+
+export function StudySelect<T extends string | number = string>({
+  value,
+  onChange,
+  options,
+  placeholder,
+  ariaLabel,
+  disabled,
+  className,
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: { value: T; label: ReactNode }[];
+  placeholder?: string;
+  ariaLabel?: string;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const current = options.find((option) => option.value === value);
+  return (
+    <Menu>
+      <MenuTrigger asChild disabled={disabled}>
+        <button
+          type="button"
+          aria-label={ariaLabel}
+          disabled={disabled}
+          className={cn(
+            "group inline-flex h-9 w-full items-center justify-between gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-ink outline-none transition",
+            "hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)] data-[state=open]:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50",
+            className
+          )}
+        >
+          <span className="truncate">{current?.label ?? placeholder ?? "—"}</span>
+          <ChevronDown className="size-3.5 shrink-0 text-muted opacity-70 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+        </button>
+      </MenuTrigger>
+      <MenuContent align="start" className="min-w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto p-1 shadow-[var(--shadow-float)]">
+        {options.map((option) => {
+          const isSelected = option.value === value;
+          return (
+            <MenuItem
+              key={String(option.value)}
+              onSelect={() => onChange(option.value)}
+              className={cn(
+                "flex items-center justify-between gap-3 rounded-[var(--radius-xs)] px-2.5 py-1.5 text-[12.5px] transition-colors cursor-pointer",
+                isSelected ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]" : "text-ink hover:bg-[var(--surface-hover)]"
+              )}
+            >
+              <span className="truncate">{option.label}</span>
+              {isSelected ? <Check className="size-3.5 shrink-0 text-[var(--accent)]" /> : null}
+            </MenuItem>
+          );
+        })}
+      </MenuContent>
+    </Menu>
   );
 }

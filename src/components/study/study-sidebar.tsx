@@ -4,11 +4,9 @@ import { useCallback, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import {
   BarChart3,
-  BookOpenText,
   CalendarDays,
   ClipboardCheck,
   Flag,
-  GraduationCap,
   LayoutDashboard,
   NotebookPen,
   NotebookText,
@@ -20,6 +18,7 @@ import {
   StickyNote,
   Timer,
 } from "lucide-react";
+import { StudyIcon, DisciplinesIcon } from "@/lib/icons/study-icons";
 import { Link, usePathname, useRouter } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Kbd, Tooltip } from "@/components/ui/primitives";
@@ -28,7 +27,7 @@ import { useUiStore } from "@/lib/store/ui-store";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT, type StudyKey } from "@/lib/study/i18n";
 import { useTranslation } from "@/lib/i18n/translations";
-import { pauseTimer, startTimer, useStudyUi, type StudyModule } from "@/lib/study/ui-store";
+import { isTimerArmed, openBlankTimer, pauseTimer, startTimer, useStudyUi, type StudyModule } from "@/lib/study/ui-store";
 import { clockLabel } from "@/lib/study/format";
 import { displaySeconds, useNow } from "./focus-timer";
 import { SubjectDot } from "./ui";
@@ -49,7 +48,7 @@ export function ModuleSwitch({ className }: { className?: string }) {
   const switchModule = useSwitchModule();
   const options: { id: StudyModule; label: string; icon: ReactNode }[] = [
     { id: "notes", label: st("module_notes"), icon: <NotebookText className="size-3.5" /> },
-    { id: "study", label: st("module_study"), icon: <GraduationCap className="size-3.5" /> },
+    { id: "study", label: st("module_study"), icon: <StudyIcon className="size-3.5" /> },
   ];
   return (
     <div
@@ -92,7 +91,7 @@ export function ModuleSwitch({ className }: { className?: string }) {
 const STUDY_NAV: { href: string; key: StudyKey; icon: ReactNode; exact?: boolean }[] = [
   { href: "/home/study", key: "nav_overview", icon: <LayoutDashboard className="size-3.5" />, exact: true },
   { href: "/home/study/goals", key: "nav_goals", icon: <Flag className="size-3.5" /> },
-  { href: "/home/study/subjects", key: "nav_subjects", icon: <BookOpenText className="size-3.5" /> },
+  { href: "/home/study/subjects", key: "nav_subjects", icon: <DisciplinesIcon className="size-3.5" /> },
   { href: "/home/study/schedule", key: "nav_schedule", icon: <CalendarDays className="size-3.5" /> },
   { href: "/home/study/reviews", key: "nav_reviews", icon: <RotateCcw className="size-3.5" /> },
   { href: "/home/study/log", key: "nav_log", icon: <NotebookPen className="size-3.5" /> },
@@ -114,24 +113,29 @@ function FocusDock() {
   const timer = useStudyUi((state) => state.timer);
   const { subjectById, activePlan, settings } = useStudy();
   const active = timer.status !== "idle";
+  const armed = isTimerArmed(timer);
   const now = useNow(timer.status === "running", 1000);
   const subject = subjectById(timer.subjectId);
-  if (active) {
+  if (active || armed) {
     return (
       <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--accent)]/35 bg-[var(--accent-soft)]/60 px-2 py-1.5">
         <button
           type="button"
           onClick={() => (timer.status === "running" ? pauseTimer() : startTimer())}
           className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-contrast)] transition hover:brightness-110"
-          aria-label={timer.status === "running" ? st("timer_pause") : st("timer_resume")}
+          aria-label={timer.status === "running" ? st("timer_pause") : armed ? st("timer_start") : st("timer_resume")}
         >
           {timer.status === "running" ? <Pause className="size-3.5" /> : <Play className="size-3.5 translate-x-[1px]" />}
         </button>
         <button type="button" onClick={() => useStudyUi.getState().setTimerOpen(true)} className="min-w-0 flex-1 text-left">
           <span className="block font-mono text-[13px] font-semibold tabular-nums text-ink">{clockLabel(displaySeconds(timer, settings, now), true)}</span>
-          <span className="flex items-center gap-1.5 truncate text-[11px] text-muted">
-            {subject ? <SubjectDot color={subject.color} /> : null}
-            <span className="truncate">{subject?.name ?? (timer.status === "paused" ? st("sidebar_focus_paused") : st("timer_no_subject"))}</span>
+          <span className={cn("flex items-center gap-1.5 truncate text-[11px]", armed ? "font-medium text-[var(--accent)]" : "text-muted")}>
+            {subject && !armed ? <SubjectDot color={subject.color} /> : null}
+            <span className="truncate">
+              {armed
+                ? st("timer_armed_hint")
+                : (subject?.name ?? (timer.status === "paused" ? st("sidebar_focus_paused") : st("timer_no_subject")))}
+            </span>
           </span>
         </button>
       </div>
@@ -139,9 +143,9 @@ function FocusDock() {
   }
   return (
     <div className="grid grid-cols-[1fr_auto_auto] gap-1.5">
-      <Button variant="primary" size="sm" className="h-8 justify-start" onClick={() => useStudyUi.getState().setTimerOpen(true)}>
-        <Timer />
-        {st("sidebar_focus_idle")}
+      <Button variant="primary" size="sm" className="h-8 justify-center gap-2 leading-none" onClick={openBlankTimer}>
+        <Timer className="size-4 shrink-0" />
+        <span className="truncate leading-none">{st("sidebar_focus_idle")}</span>
       </Button>
       <Tooltip label={st("logform_title_new")}>
         <Button variant="secondary" size="icon" className="size-8" disabled={!activePlan} onClick={() => useStudyUi.getState().openLog()} aria-label={st("logform_title_new")}>
@@ -270,9 +274,9 @@ export function StudyRailItems() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => useStudyUi.getState().setTimerOpen(true)}
+          onClick={openBlankTimer}
           aria-label={st("nav_focus")}
-          className={cn(timer.status !== "idle" && "text-[var(--accent)]")}
+          className={cn((timer.status !== "idle" || isTimerArmed(timer)) && "text-[var(--accent)]")}
         >
           <Timer />
         </Button>
@@ -295,9 +299,9 @@ export function RailModuleToggle() {
         aria-label={label}
         className="relative flex h-9 w-11 items-center justify-center rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] text-ink transition hover:border-[var(--border-strong)]"
       >
-        {active === "study" ? <GraduationCap className="size-4" /> : <NotebookText className="size-4" />}
+        {active === "study" ? <StudyIcon className="size-4" /> : <NotebookText className="size-4" />}
         <span className="absolute -bottom-1 -right-1 flex size-4 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-muted">
-          {next === "study" ? <GraduationCap className="size-2.5" /> : <NotebookText className="size-2.5" />}
+          {next === "study" ? <StudyIcon className="size-2.5" /> : <NotebookText className="size-2.5" />}
         </span>
       </button>
     </Tooltip>

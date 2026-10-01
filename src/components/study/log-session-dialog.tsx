@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { useRouter } from "@/lib/i18n/navigation";
 import { DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Input, Textarea } from "@/components/ui/primitives";
@@ -12,11 +13,12 @@ import { useStudyT } from "@/lib/study/i18n";
 import { useStudyUi, type LogPrefill } from "@/lib/study/ui-store";
 import { addDays, minuteLabel, parseMinuteLabel } from "@/lib/study/dates";
 import { pendingAgendaEntry } from "@/lib/study/cycle";
-import { clockLabel, parseClock } from "@/lib/study/format";
+import { clockLabel, parseDurationInput } from "@/lib/study/format";
 import { accuracyOf } from "@/lib/study/metrics";
 import { useLiveNote } from "@/lib/study/hooks";
+import { ClockInput } from "./clock-input";
 import { Combobox, type ComboOption } from "./combobox";
-import { SubjectDot, useCategoryLabel } from "./ui";
+import { StudySelect, SubjectDot, useCategoryLabel } from "./ui";
 import { MaterialInput } from "./material-input";
 
 type Choice = { kind: "existing"; id: string } | { kind: "new"; name: string } | null;
@@ -64,40 +66,9 @@ function Group({ title, aside, children, className }: { title: string; aside?: R
   );
 }
 
-function ClockInput({
-  value,
-  onChange,
-  ariaLabel,
-  forceHours = true,
-  className,
-  id,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  ariaLabel: string;
-  forceHours?: boolean;
-  className?: string;
-  id?: string;
-}) {
-  return (
-    <Input
-      id={id}
-      inputMode="numeric"
-      aria-label={ariaLabel}
-      value={value}
-      placeholder={forceHours ? "00:00:00" : "00:00"}
-      onChange={(event) => onChange(event.target.value.replace(/[^\d:]/g, "").slice(0, 9))}
-      onBlur={() => {
-        const seconds = parseClock(value);
-        if (seconds !== null && value.trim()) onChange(clockLabel(seconds, forceHours));
-      }}
-      className={cn("font-mono tabular-nums", className)}
-    />
-  );
-}
-
 function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editId: string | null }) {
   const { st, locale, textDir } = useStudyT();
+  const router = useRouter();
   const categoryLabel = useCategoryLabel();
   const liveNote = useLiveNote();
   const { activePlan, plans, subjects, cycles, sessions, settings, reviews, subjectById, actions, today } = useStudy();
@@ -216,7 +187,7 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
       setError(st("logform_need_subject"));
       return;
     }
-    const seconds = parseClock(duration);
+    const seconds = parseDurationInput(duration);
     if (seconds === null) {
       setError(st("logform_invalid_time"));
       return;
@@ -266,7 +237,13 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
         if (saveAnother) {
           reset(saved.subjectId);
         } else {
-          useStudyUi.getState().closeLog();
+          const store = useStudyUi.getState();
+          store.closeLog();
+          // Sessão cronometrada registrada: volta para a página inicial, na guia Estudos.
+          if (input.source === "timer") {
+            store.setModule("study");
+            router.push("/home");
+          }
         }
       }
     } catch {
@@ -394,21 +371,15 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
           </div>
           <div>
             <FieldLabel htmlFor="log-category">{st("logform_category")}</FieldLabel>
-            <div className="relative">
-              <select
-                id="log-category"
-                value={categoryId}
-                onChange={(event) => setCategoryId(event.target.value)}
-                className="h-9 w-full appearance-none rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] pl-3 pr-8 text-[13px] text-ink outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)]"
-              >
-                {settings.categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {categoryLabel(category.id)}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
-            </div>
+            <StudySelect
+              ariaLabel={st("logform_category")}
+              value={categoryId}
+              onChange={(val) => setCategoryId(String(val))}
+              options={settings.categories.map((category) => ({
+                value: category.id,
+                label: categoryLabel(category.id),
+              }))}
+            />
           </div>
           <div className="sm:col-span-3">
             <FieldLabel htmlFor="log-material">{st("logform_material")}</FieldLabel>

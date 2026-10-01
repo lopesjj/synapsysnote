@@ -5,7 +5,8 @@ import dynamic from "next/dynamic";
 import { useLocale, usePathname, useRouter } from "@/lib/i18n/navigation";
 import { useLocaleUrlSync } from "@/hooks/use-locale-url-sync";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
-import { FilePlus, GraduationCap, Home, Loader2, Minimize2, NotebookText, Search, Timer } from "lucide-react";
+import { FilePlus, Home, Loader2, Minimize2, NotebookText, Search, Timer } from "lucide-react";
+import { StudyIcon } from "@/lib/icons/study-icons";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { appHref, isLoginHost, isSplitHosts, loginHref, navigateTo } from "@/lib/domains";
@@ -39,9 +40,9 @@ import { Tooltip } from "@/components/ui/primitives";
 import { cn, isMac } from "@/lib/utils";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
 import { useStudyT } from "@/lib/study/i18n";
-import { useStudyUi } from "@/lib/study/ui-store";
+import { openBlankTimer } from "@/lib/study/ui-store";
 import { useActiveModule, useSwitchModule } from "@/components/study/study-sidebar";
-import { FocusPill } from "@/components/study/focus-timer";
+import { FocusPill, useFocusPillVisible } from "@/components/study/focus-timer";
 
 const EvernoteImportWizard = dynamic(
   () => import("@/components/import/evernote-import-wizard").then((mod) => mod.EvernoteImportWizard),
@@ -81,6 +82,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const locale = useLocale();
 
   const zenMode = useUiStore((state) => state.zenMode);
+  const focusPillVisible = useFocusPillVisible();
   const mobileSidebarOpen = useUiStore((state) => state.mobileSidebarOpen);
   const paletteOpen = useUiStore((state) => state.paletteOpen);
   const importOpen = useUiStore((state) => state.importOpen);
@@ -404,7 +406,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {mode === "local" && !chromeHidden ? <DemoBanner /> : null}
 
-        <div className="min-h-0 flex-1 overflow-y-auto pb-20 md:pb-0">{children}</div>
+        {/* Com o relógio do rodapé na tela, o fim da página rola para cima dele em vez de ficar coberto. */}
+        <div
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto",
+            focusPillVisible ? "pb-[calc(10.5rem+env(safe-area-inset-bottom,0px))] md:pb-[6.75rem]" : "pb-20 md:pb-0"
+          )}
+        >
+          {children}
+        </div>
 
         <FocusPill />
 
@@ -615,7 +625,7 @@ function BottomNav() {
           icon={<Timer className="size-[18px]" />}
           label={st("nav_focus")}
           active={false}
-          onClick={() => useStudyUi.getState().setTimerOpen(true)}
+          onClick={openBlankTimer}
         />
       ) : (
         <MobileNavItem
@@ -626,7 +636,7 @@ function BottomNav() {
         />
       )}
       <MobileNavItem
-        icon={activeModule === "study" ? <NotebookText className="size-[18px]" /> : <GraduationCap className="size-[18px]" />}
+        icon={activeModule === "study" ? <NotebookText className="size-[18px]" /> : <StudyIcon className="size-[18px]" />}
         label={activeModule === "study" ? st("module_notes") : st("module_study")}
         active={false}
         onClick={() => {

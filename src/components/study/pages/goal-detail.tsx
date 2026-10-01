@@ -130,7 +130,7 @@ function GoalDocument({
               aria-label={st("goal_icon")}
               className="block rounded-[12px] outline-none transition hover:opacity-85 focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)]"
             >
-              <GoalMark icon={plan.icon} name={name} seed={plan.id} size={52} />
+              <GoalMark icon={plan.icon} name={name} seed={plan.id} size={64} />
             </button>
             <h1 dir={textDir} className="mt-4">
               <button

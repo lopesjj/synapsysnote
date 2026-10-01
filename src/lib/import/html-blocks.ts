@@ -998,7 +998,11 @@ function convertBlockElement(
           id: blockId(),
           type: "toggle",
           richText: header[0]?.richText ?? [],
-          props: { open: element.attrs.open !== undefined },
+          // Resumo com título (<summary><h2>…) vira título recolhível do mesmo nível.
+          props: {
+            open: element.attrs.open !== undefined,
+            ...(header[0]?.type?.startsWith("heading_") ? { level: Number(header[0].type.slice(-1)) as 1 | 2 | 3 } : {}),
+          },
           ...(body.length ? { children: body } : {}),
         },
       ];

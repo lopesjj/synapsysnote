@@ -310,6 +310,9 @@ function renderTableHtml(block: AppBlock): string {
 
   return html;
 }
+
+/** Titulo recolhivel com nivel (props.level) usa o tamanho do titulo correspondente. */
+const TOGGLE_HEADER_SIZE: Record<number, string> = { 1: "20px", 2: "17px", 3: "15px" };
 
 function renderBlockHtml(block: AppBlock, imageMap: Map<string, string>, depth = 0): string {
   if (isVideoAttachment(block)) {
@@ -323,6 +326,9 @@ function renderBlockHtml(block: AppBlock, imageMap: Map<string, string>, depth =
   const spans = block.richText || [];
   const inline = spansToHtml(spans);
 
+  // Titulos importados antes da correcao do Notion guardam o conteudo como filhos.
+  const childrenOf = (parent: AppBlock) => (parent.children || []).map((b) => renderBlockHtml(b, imageMap, 0)).join("");
+
   switch (block.type) {
     case "paragraph": {
       const align = block.props?.textAlign || "left";
@@ -335,17 +341,17 @@ function renderBlockHtml(block: AppBlock, imageMap: Map<string, string>, depth =
 
     case "heading_1": {
       const align = block.props?.textAlign || "left";
-      return `<h1 style="margin:18px 0 8px 0;font-size:20px;font-weight:700;color:#0f172a;text-align:${align};line-height:1.3;">${inline}</h1>`;
+      return `<h1 style="margin:18px 0 8px 0;font-size:20px;font-weight:700;color:#0f172a;text-align:${align};line-height:1.3;">${inline}</h1>${childrenOf(block)}`;
     }
 
     case "heading_2": {
       const align = block.props?.textAlign || "left";
-      return `<h2 style="margin:14px 0 6px 0;font-size:17px;font-weight:600;color:#0f172a;text-align:${align};line-height:1.35;">${inline}</h2>`;
+      return `<h2 style="margin:14px 0 6px 0;font-size:17px;font-weight:600;color:#0f172a;text-align:${align};line-height:1.35;">${inline}</h2>${childrenOf(block)}`;
     }
 
     case "heading_3": {
       const align = block.props?.textAlign || "left";
-      return `<h3 style="margin:12px 0 4px 0;font-size:15px;font-weight:600;color:#1e293b;text-align:${align};line-height:1.4;">${inline}</h3>`;
+      return `<h3 style="margin:12px 0 4px 0;font-size:15px;font-weight:600;color:#1e293b;text-align:${align};line-height:1.4;">${inline}</h3>${childrenOf(block)}`;
     }
 
     case "bulleted_list_item": {
@@ -400,7 +406,7 @@ function renderBlockHtml(block: AppBlock, imageMap: Map<string, string>, depth =
       const childrenHtml = (block.children || []).map((b) => renderBlockHtml(b, imageMap, 0)).join("");
       return `
         <div style="margin:10px 0;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;background:#fcfcfc;">
-          <div style="font-weight:600;font-size:13.5px;color:#0f172a;display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+          <div style="font-weight:600;font-size:${TOGGLE_HEADER_SIZE[Number(block.props?.level) || 0] ?? "13.5px"};color:#0f172a;display:flex;align-items:center;gap:6px;margin-bottom:6px;">
             <span style="font-size:10px;color:#64748b;">▼</span> <span>${inline}</span>
           </div>
           <div style="padding-left:14px;border-left:2px solid #e2e8f0;margin-top:6px;">

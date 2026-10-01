@@ -44,9 +44,14 @@ interface WorkspaceContextValue {
   /** Cadernos ativos. Os que estao na lixeira ficam em `trashedNotebooks`. */
   notebooks: Notebook[];
   trashedNotebooks: Notebook[];
+  archivedNotebooks: Notebook[];
   pages: Page[];
   livePages: Page[];
   trashedPages: Page[];
+  archivedPages: Page[];
+  archivedCount: number;
+  isPageArchived: (id: string) => boolean;
+  isNotebookArchived: (id: string) => boolean;
   databases: AppDatabase[];
   trashedDatabases: AppDatabase[];
   importJobs: ImportJob[];
@@ -279,14 +284,53 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const flashcardsReady = flashcardsAdapter === adapter || flashcards.length > 0;
 
   const value = useMemo<WorkspaceContextValue>(() => {
-    const liveNotebooks = notebooks.filter((notebook) => !notebook.deletedAt);
+    const nonTrashedNotebooks = notebooks.filter((notebook) => !notebook.deletedAt);
     const trashedNotebooks = notebooks
       .filter((notebook) => notebook.deletedAt)
       .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
-    const livePages = pages.filter((p) => !p.deletedAt);
+    const nonTrashedPages = pages.filter((p) => !p.deletedAt);
     const trashedPages = pages
       .filter((p) => p.deletedAt)
       .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
+
+    const archivedNotebookIds = new Set<string>();
+    for (const nb of nonTrashedNotebooks) {
+      if (nb.archived) archivedNotebookIds.add(nb.id);
+    }
+    let nbAdded = true;
+    while (nbAdded) {
+      nbAdded = false;
+      for (const nb of nonTrashedNotebooks) {
+        if (!archivedNotebookIds.has(nb.id) && nb.parentId && archivedNotebookIds.has(nb.parentId)) {
+          archivedNotebookIds.add(nb.id);
+          nbAdded = true;
+        }
+      }
+    }
+
+    const liveNotebooks = nonTrashedNotebooks.filter((nb) => !archivedNotebookIds.has(nb.id));
+    const archivedNotebooks = nonTrashedNotebooks.filter((nb) => archivedNotebookIds.has(nb.id));
+
+    const archivedPageIds = new Set<string>();
+    for (const p of nonTrashedPages) {
+      if (p.archived || (p.notebookId && archivedNotebookIds.has(p.notebookId))) {
+        archivedPageIds.add(p.id);
+      }
+    }
+    let pAdded = true;
+    while (pAdded) {
+      pAdded = false;
+      for (const p of nonTrashedPages) {
+        if (!archivedPageIds.has(p.id) && p.parentPageId && archivedPageIds.has(p.parentPageId)) {
+          archivedPageIds.add(p.id);
+          pAdded = true;
+        }
+      }
+    }
+
+    const livePages = nonTrashedPages.filter((p) => !archivedPageIds.has(p.id));
+    const archivedPages = nonTrashedPages.filter((p) => archivedPageIds.has(p.id));
+    const archivedCount = archivedNotebooks.length + archivedPages.length;
 
     const livePageById = new Map(livePages.map((p) => [p.id, p]));
     const pageIndex = new Map(pages.map((p) => [p.id, p]));
@@ -337,9 +381,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       mode: adapter.mode,
       notebooks: liveNotebooks,
       trashedNotebooks,
+      archivedNotebooks,
       pages,
       livePages,
       trashedPages,
+      archivedPages,
+      archivedCount,
+      isPageArchived: (id: string) => archivedPageIds.has(id),
+      isNotebookArchived: (id: string) => archivedNotebookIds.has(id),
       databases,
       trashedDatabases: databases.filter((d) => Boolean(d.deletedAt)),
       importJobs,

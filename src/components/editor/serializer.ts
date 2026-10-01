@@ -192,12 +192,19 @@ function blockToNode(block: AppBlock): JSONContent | null {
       return paragraph(inline, paragraphAttrs(block));
     case "heading_1":
     case "heading_2":
-    case "heading_3":
+    case "heading_3": {
+      const level = Number(block.type.slice(-1)) as 1 | 2 | 3;
+      if (block.children?.length) {
+        // Titulo com conteudo dentro (titulo recolhivel do Notion importado antes da
+        // correcao): vira titulo recolhivel, senao o conteudo some ao salvar.
+        return blockToNode({ ...block, type: "toggle", props: { ...block.props, level, open: block.props?.open ?? true } });
+      }
       return {
         type: "heading",
-        attrs: headingAttrs(block, Number(block.type.slice(-1))),
+        attrs: headingAttrs(block, level),
         ...(inline.length ? { content: inline } : {}),
       };
+    }
     case "quote": {
       const children = block.children?.length ? blocksToNodes(block.children) : [];
       return {
@@ -230,7 +237,8 @@ function blockToNode(block: AppBlock): JSONContent | null {
       return {
         type: "callout",
         attrs: { emoji: block.props?.emoji ?? "💡" },
-        content: [paragraph(), ...((block.children ?? []).map(blockToNode).filter(Boolean) as JSONContent[])],
+        // blocksToNodes agrupa itens de lista; blockToNode sozinho os trataria como bloco nao suportado.
+        content: [paragraph(), ...blocksToNodes(block.children ?? [])],
       };
     case "toggle": {
       const level = (block.props?.level as 1 | 2 | 3 | undefined) ?? undefined;
@@ -333,10 +341,35 @@ export function blocksToNodes(blocks: AppBlock[]): JSONContent[] {
 
     const node = blockToNode(block);
     if (node) nodes.push(node);
+    // Blocos que nao guardam filhos no editor (paragrafo, codigo, midia...) mas
+    // vieram com conteudo recuado, como no Notion: os filhos seguem logo depois,
+    // um nivel mais recuados, em vez de sumirem.
+    if (block.children?.length && LEAF_TYPES.has(block.type)) {
+      nodes.push(...blocksToNodes(block.children.map(indentOnce)));
+    }
     index += 1;
   }
 
   return nodes;
+}
+
+const LEAF_TYPES = new Set<BlockType>(["paragraph", "code", "equation", "divider", "image", "video", "audio", "file", "table"]);
+const INDENTABLE = new Set<BlockType>([
+  "paragraph",
+  "heading_1",
+  "heading_2",
+  "heading_3",
+  "bulleted_list_item",
+  "numbered_list_item",
+  "todo",
+  "toggle",
+  "quote",
+]);
+
+function indentOnce(block: AppBlock): AppBlock {
+  if (!INDENTABLE.has(block.type)) return block;
+  const indent = Math.min(8, Number(block.props?.indent ?? 0) + 1);
+  return { ...block, props: { ...block.props, indent } };
 }
 
 export function blocksToDoc(blocks: AppBlock[]): JSONContent {

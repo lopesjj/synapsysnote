@@ -5,6 +5,7 @@ import { Link, useRouter } from "@/lib/i18n/navigation";
 import { motion } from "framer-motion";
 import {
   Accessibility,
+  Archive,
   AudioLines,
   Check,
   Clock,
@@ -256,8 +257,9 @@ function extractPageText(
 export function PageView({ pageId }: { pageId: string }) {
   const router = useRouter();
   const { t, language } = useTranslation();
-  const { adapter, pages, livePages, notebooks, databases, pageById, ready, flashcards } = useWorkspace();
+  const { adapter, pages, livePages, notebooks, databases, pageById, ready, flashcards, isPageArchived } = useWorkspace();
   const page = pageById(pageId);
+  const isArchived = Boolean(page && isPageArchived(page.id));
   const importOrigin = page ? pageImportOrigin(page) : null;
   const [flashcardsModalOpen, setFlashcardsModalOpen] = useState(false);
   const noteFlashcardsCount = useMemo(
@@ -617,6 +619,29 @@ export function PageView({ pageId }: { pageId: string }) {
 
   return (
     <div className="relative">
+      {isArchived ? (
+        <div className="relative z-40 w-full border-b border-amber-500/30 bg-amber-500/15 px-4 py-2 text-amber-950 dark:bg-amber-950/70 dark:border-amber-500/40 dark:text-amber-200">
+          <div className="mx-auto flex max-w-[var(--reading-width,64rem)] items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 text-xs font-medium">
+              <Archive className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span>{t("archived_notice_note")}</span>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={async () => {
+                await adapter.updatePage(pageId, { archived: false });
+                toast.success(t("page_unarchived"));
+              }}
+              className="h-7 text-xs bg-amber-50 dark:bg-amber-900/60 border-amber-300 dark:border-amber-600/50 text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900"
+            >
+              <RotateCcw className="mr-1.5 size-3" />
+              {t("unarchive")}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {hasCover ? (
         <CoverPicker
           coverUrl={page.coverUrl}
@@ -853,6 +878,15 @@ export function PageView({ pageId }: { pageId: string }) {
             >
               <FileDown /> {t("export_pdf")}
             </MenuItem>
+            <MenuItem
+              onSelect={async () => {
+                await adapter.updatePage(pageId, { archived: !isArchived });
+                toast.success(isArchived ? t("page_unarchived") : t("page_archived"));
+              }}
+            >
+              {isArchived ? <RotateCcw /> : <Archive />}
+              {isArchived ? t("unarchive") : t("archive")}
+            </MenuItem>
             <MenuSeparator />
             <MenuItem
               destructive
@@ -883,7 +917,6 @@ export function PageView({ pageId }: { pageId: string }) {
         aria-label={page.title || t("untitled")}
         className="relative z-10 mx-auto w-full max-w-full sm:max-w-[var(--reading-width,64rem)] px-4 pb-28 sm:pb-36 pb-safe sm:px-5 md:px-8"
       >
-        
         <div
           className={cn(
             "group flex flex-col items-start sm:flex-row sm:items-center",
@@ -937,6 +970,7 @@ export function PageView({ pageId }: { pageId: string }) {
               id="page-title-input"
               aria-label={page.title ? t("page_title_label", { title: page.title }) : t("untitled")}
               value={title}
+              disabled={isArchived}
               rows={1}
               cols={1}
               placeholder={t("untitled")}
@@ -1013,6 +1047,7 @@ export function PageView({ pageId }: { pageId: string }) {
           <BlockEditor
             key={`${page.id}-${editorKey}`}
             page={page}
+            editable={!isArchived}
             mentionCandidates={mentionCandidates}
             onChange={handleEditorChange}
             onRequestUpload={() => fileInput.current?.click()}

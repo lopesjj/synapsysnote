@@ -6,7 +6,6 @@ import {
   Camera,
   Check,
   Globe,
-  GraduationCap,
   Keyboard,
   Loader2,
   Monitor,
@@ -21,6 +20,7 @@ import {
   User,
   X,
 } from "lucide-react";
+import { StudyIcon } from "@/lib/icons/study-icons";
 import { toast } from "sonner";
 import { DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -84,7 +84,7 @@ export function PreferencesDialog({
     { id: "language", label: t("language"), icon: <Globe className="size-4" /> },
     { id: "typography", label: t("typography"), icon: <Type className="size-4" /> },
     { id: "profile", label: t("profile"), icon: <User className="size-4" /> },
-    { id: "study", label: st("prefs_tab"), icon: <GraduationCap className="size-4" /> },
+    { id: "study", label: st("prefs_tab"), icon: <StudyIcon className="size-4" /> },
     { id: "privacy", label: t("privacy_data"), icon: <ShieldCheck className="size-4" /> },
     { id: "shortcuts", label: t("shortcuts"), icon: <Keyboard className="size-4" /> },
   ];

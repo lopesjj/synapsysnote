@@ -151,7 +151,7 @@ function FeaturedGoal({ plan, fact, onEdit }: { plan: StudyPlan; fact: GoalFacts
   return (
     <section className={PANEL} aria-label={name}>
       <div className="group relative flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[var(--surface-hover)]">
-        <GoalMark icon={plan.icon} name={name} seed={plan.id} size={44} />
+        <GoalMark icon={plan.icon} name={name} seed={plan.id} size={56} />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
             <Link
@@ -303,7 +303,7 @@ function GoalRow({ plan, fact, onEdit }: { plan: StudyPlan; fact: GoalFacts; onE
     <li className={cn("group relative border-t border-[var(--border)] px-4 py-3.5 transition-colors first:border-t-0 hover:bg-[var(--surface-hover)]", TABLE_GRID)}>
       {/* Objetivo */}
       <div className="flex min-w-0 items-center gap-3">
-        <GoalMark icon={plan.icon} name={name} seed={plan.id} size={36} />
+        <GoalMark icon={plan.icon} name={name} seed={plan.id} size={40} />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <Link
@@ -450,7 +450,7 @@ function ArchivedGoals({
                 key={plan.id}
                 className="group relative flex items-center gap-3 border-t border-[var(--border)] px-4 py-3 transition-colors first:border-t-0 hover:bg-[var(--surface-hover)]"
               >
-                <GoalMark icon={plan.icon} name={name} seed={plan.id} size={28} className="opacity-60 grayscale" />
+                <GoalMark icon={plan.icon} name={name} seed={plan.id} size={32} className="opacity-60 grayscale" />
                 <div className="min-w-0 flex-1">
                   <Link
                     href={`/home/study/goals/${plan.id}`}

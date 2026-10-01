@@ -52,6 +52,9 @@ export interface ConvertContext {
   maxDepth?: number;
 }
 
+const HEADING_LEVELS: Record<string, 1 | 2 | 3> = { heading_1: 1, heading_2: 2, heading_3: 3 };
+const NO_CHILD_RECURSION = new Set(["table", "child_page", "child_database"]);
+
 const TYPE_MAP: Record<string, BlockType> = {
   paragraph: "paragraph",
   heading_1: "heading_1",
@@ -266,7 +269,17 @@ export async function notionBlockToAppBlock(
     };
   }
 
-  const appBlock: AppBlock = { id: randomUUID(), type, notionBlockId: block.id };
+  // Titulo recolhivel do Notion ("▶ Titulo"): vira titulo recolhivel no editor, com o
+  // conteudo dentro, como no Notion. Titulo sem filhos e sem is_toggleable segue comum.
+  const headingLevel = HEADING_LEVELS[block.type];
+  const toggleHeading = headingLevel !== undefined && (payload?.is_toggleable === true || block.has_children);
+  const appBlock: AppBlock = {
+    id: randomUUID(),
+    type: toggleHeading ? "toggle" : type,
+    notionBlockId: block.id,
+    // A API do Notion nao diz se o titulo estava recolhido: abre aberto para o conteudo ficar a vista.
+    ...(toggleHeading ? { props: { level: headingLevel, open: true } } : {}),
+  };
   const richText = payload?.rich_text as NotionRichText[] | undefined;
   if (richText) appBlock.richText = notionRichTextToSpans(richText, ctx);
 
@@ -354,7 +367,9 @@ export async function notionBlockToAppBlock(
       break;
   }
 
-  if (block.has_children && depth < maxDepth && block.type !== "table") {
+  // Subpaginas e bases sao importadas por conta propria; buscar o conteudo delas aqui
+  // duplicaria texto e midia dentro da nota pai.
+  if (block.has_children && depth < maxDepth && !NO_CHILD_RECURSION.has(block.type)) {
     const children = await ctx.fetchChildren(block.id);
     const converted = await notionBlocksToAppBlocks(children, ctx, depth + 1);
     if (converted.length) appBlock.children = converted;

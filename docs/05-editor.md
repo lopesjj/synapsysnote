@@ -24,7 +24,7 @@ volta; anotações viram marks; menções viram nós `mention`.
 | `SlashCommand` | [`slash-command.tsx`](../src/components/editor/extensions/slash-command.tsx) | palette de 17 comandos ancorada no cursor (Tippy + CSS), filtrada por título e palavras-chave |
 | `TableBlock` | [`table-block.tsx`](../src/components/editor/extensions/table-block.tsx) | grade editável persistida como `AppBlock` `table` |
 | `Mention` | [`mention-suggestion.tsx`](../src/components/editor/extensions/mention-suggestion.tsx) | `@` lista notas e cadernos e insere a menção que gera o backlink |
-| `DragHandle` | [`drag-handle.ts`](../src/components/editor/extensions/drag-handle.ts) | alça lateral + botão “+”, plugin ProseMirror próprio |
+| `DragHandle` | [`drag-handle.ts`](../src/components/editor/extensions/drag-handle.ts) | alça lateral (arrastar e excluir bloco), plugin ProseMirror próprio |
 | `Callout` | [`callout.tsx`](../src/components/editor/extensions/callout.tsx) | destaque com emoji clicável |
 | `ToggleBlock` | [`toggle-block.tsx`](../src/components/editor/extensions/toggle-block.tsx) | conteúdo recolhível |
 | `EquationBlock` | [`equation-block.tsx`](../src/components/editor/extensions/equation-block.tsx) | LaTeX renderizado com KaTeX, edição inline |

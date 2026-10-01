@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Check, ChevronLeft, ChevronRight, Flame, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Flame, MoreHorizontal, Pencil, Plus, Trash2, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useRouter } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,37 @@ import {
   SubjectDot,
   bandColor,
 } from "./ui";
+
+function StreakFlame({ active, className }: { active?: boolean; className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={cn("size-3.5 shrink-0", active && "animate-[pulse_2.5s_ease-in-out_infinite]", className)}
+      fill="none"
+      aria-hidden
+    >
+      <defs>
+        <linearGradient id="streak-flame-outer" x1="8" y1="1" x2="8" y2="15" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FBBF24" />
+          <stop offset="45%" stopColor="#F59E0B" />
+          <stop offset="100%" stopColor="#EA580C" />
+        </linearGradient>
+        <linearGradient id="streak-flame-inner" x1="8" y1="7" x2="8" y2="14" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FEF08A" />
+          <stop offset="100%" stopColor="#F59E0B" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M8.2 1.2c-.3.4-.6.9-.8 1.5-.4 1.2-.2 2.3.2 3.1.1.2 0 .5-.2.6-.2.1-.5 0-.6-.2-.7-1.1-.8-2.5-.4-3.7C4.6 3.6 3 5.8 3 8.3 3 11.5 5.2 14 8 14s5-2.5 5-5.7c0-2.2-1.3-4.2-3.1-5.1-.3-.1-.4-.4-.3-.7.1-.4.4-.7.6-1 .2-.3.1-.7-.2-.9-.2-.1-.5-.1-.8.6z"
+        fill="url(#streak-flame-outer)"
+      />
+      <path
+        d="M8 7.5c-.2.3-.4.7-.5 1.1-.3.8-.1 1.5.1 2 .1.2 0 .4-.2.5-.2.1-.4 0-.5-.2-.4-.7-.5-1.6-.2-2.4C5.8 9 5 10.3 5 11.8 5 13.6 6.3 14 8 14s3-.4 3-2.2c0-1.2-.7-2.3-1.8-2.9-.2-.1-.3-.3-.2-.5.1-.3.3-.5.4-.7.1-.2 0-.4-.1-.5-.1 0-.3 0-.3.4z"
+        fill="url(#streak-flame-inner)"
+      />
+    </svg>
+  );
+}
 
 export function relativeDay(day: DayKey, today: DayKey, locale: string, st: StudyT): string {
   if (day === today) return st("today");
@@ -128,10 +159,44 @@ export function KpiBand({ className }: { className?: string }) {
       </KpiCell>
       <KpiCell
         label={st("kpi_streak")}
-        className="border-l border-t border-[var(--border)] lg:border-t-0"
-        hint={metrics.streak.best ? st("kpi_streak_hint", { count: metrics.streak.best }) : undefined}
+        className={cn(
+          "border-l border-t border-[var(--border)] lg:border-t-0 transition-colors",
+          metrics.streak.current > 0 && "bg-gradient-to-br from-amber-500/[0.04] to-orange-500/[0.02]"
+        )}
+        hint={
+          metrics.streak.best ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-muted">
+              <Trophy className="size-3 text-amber-500/80 shrink-0" />
+              <span>{st("kpi_streak_hint", { count: metrics.streak.best })}</span>
+            </span>
+          ) : undefined
+        }
       >
-        <Figure value={metrics.streak.current} unit={st("countdown_days_label", { count: metrics.streak.current })} />
+        <div className="flex items-center justify-between gap-2">
+          <Figure value={metrics.streak.current} unit={st("countdown_days_label", { count: metrics.streak.current })} />
+          {metrics.streak.current > 0 ? (
+            <div
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-tight transition-all backdrop-blur-sm",
+                metrics.streak.current >= (metrics.streak.best ?? 0) && (metrics.streak.best ?? 0) > 1
+                  ? "border border-amber-500/35 bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-amber-500/10 text-amber-600 shadow-[0_0_12px_rgba(245,158,11,0.22)] dark:text-amber-300"
+                  : "border border-amber-500/25 bg-gradient-to-r from-amber-500/10 via-orange-500/[0.08] to-amber-500/[0.04] text-amber-600 shadow-[0_1px_3px_rgba(245,158,11,0.08)] dark:text-amber-400"
+              )}
+              title={
+                metrics.streak.current >= (metrics.streak.best ?? 0) && (metrics.streak.best ?? 0) > 1
+                  ? st("streak_record_badge")
+                  : st("streak_active_badge")
+              }
+            >
+              <StreakFlame active />
+              <span>
+                {metrics.streak.current >= (metrics.streak.best ?? 0) && (metrics.streak.best ?? 0) > 1
+                  ? st("streak_record_badge")
+                  : st("streak_active_badge")}
+              </span>
+            </div>
+          ) : null}
+        </div>
       </KpiCell>
     </section>
   );
@@ -206,7 +271,7 @@ export function ConsistencyPanel() {
       label: st("heatmap_stat_streak"),
       value: (
         <span className="inline-flex items-center gap-1.5">
-          <Flame className={cn("size-4", metrics.streak.current ? "text-[var(--warning)]" : "text-faint")} strokeWidth={2} />
+          <Flame className={cn("size-4", metrics.streak.current ? "animate-pulse text-[var(--warning)]" : "text-faint")} strokeWidth={2} />
           {st("kpi_streak_value", { count: metrics.streak.current })}
         </span>
       ),
@@ -411,10 +476,30 @@ export function SubjectsTablePanel() {
                   </td>
                   <td className="py-2.5 pl-3 pr-5">
                     <div className="flex items-center gap-2">
-                      <Meter value={done} max={total} className="w-16" label={st("col_coverage")} />
-                      <span className="text-[11.5px] tabular-nums text-faint">
+                      <Meter
+                        value={done}
+                        max={total}
+                        tone={total > 0 && done === total ? "var(--accent-emerald, #10b981)" : subject.color ?? undefined}
+                        className={cn("w-16", total > 0 && done === total && "shadow-[0_0_8px_rgba(16,185,129,0.25)]")}
+                        label={st("col_coverage")}
+                      />
+                      <span
+                        className={cn(
+                          "text-[11.5px] tabular-nums",
+                          total > 0 && done === total ? "font-semibold text-emerald-600 dark:text-emerald-400" : "text-faint"
+                        )}
+                      >
                         {done}/{total}
                       </span>
+                      {total > 0 && done === total ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-gradient-to-r from-emerald-500/15 via-teal-500/15 to-emerald-500/10 px-2 py-0.5 text-[10.5px] font-semibold tracking-tight text-emerald-600 shadow-[0_0_8px_rgba(16,185,129,0.18)] dark:text-emerald-400"
+                          title={st("subject_completed_badge")}
+                        >
+                          <Check className="size-2.5 stroke-[3]" />
+                          <span>100%</span>
+                        </span>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
