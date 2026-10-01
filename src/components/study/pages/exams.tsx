@@ -122,11 +122,11 @@ function ExamsBody() {
               const open = expanded === exam.id;
               return (
                 <li key={exam.id}>
-                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 px-4 py-3">
                     <button
                       type="button"
                       onClick={() => setExpanded(open ? null : exam.id)}
-                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      className="flex min-w-0 w-full sm:w-auto sm:flex-1 items-center gap-3 text-left"
                       aria-expanded={open}
                     >
                       <ChevronRight className={cn("size-4 shrink-0 text-faint transition-transform", open && "rotate-90")} />
@@ -140,43 +140,47 @@ function ExamsBody() {
                         </span>
                       </span>
                     </button>
-                    <span className="inline-flex items-center gap-1.5 text-[12px] tabular-nums text-muted">
-                      <Timer className="size-3.5 text-faint" />
-                      {clockLabel(exam.durationSec, true)}
-                    </span>
-                    <span
-                      className="text-[12.5px] tabular-nums"
-                      title={`${st("correct_label")} · ${st("blank_label")} · ${st("wrong_label")}`}
-                    >
-                      <span className="text-[var(--band-high)]">{totals.correct}</span>
-                      <span className="text-faint"> · {totals.blank} · </span>
-                      <span className="text-[var(--band-low)]">{totals.wrong}</span>
-                    </span>
-                    <AccuracyTag accuracy={totals.percent} band={performanceBand(totals.percent, settings)} className="w-14 font-medium" />
-                    <div className="flex items-center gap-0.5">
-                      {exam.comment ? (
-                        <Tooltip label={exam.comment.slice(0, 280)}>
-                          <span className="flex size-7 items-center justify-center text-faint">
-                            <MessageSquareText className="size-3.5" />
-                          </span>
-                        </Tooltip>
-                      ) : null}
-                      <Button variant="ghost" size="icon-sm" aria-label={st("edit")} onClick={() => setDialog({ open: true, exam })}>
-                        <Pencil />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={st("delete")}
-                        className="hover:text-[var(--danger)]"
-                        onClick={async () => {
-                          if (!window.confirm(st("exam_delete_confirm", { name: exam.name }))) return;
-                          await actions.deleteExam(exam.id);
-                          toast.success(st("exam_deleted"));
-                        }}
-                      >
-                        <Trash2 />
-                      </Button>
+                    <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-x-4 gap-y-2 flex-wrap sm:flex-nowrap pl-7 sm:pl-0">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span className="inline-flex items-center gap-1.5 text-[12px] tabular-nums text-muted">
+                          <Timer className="size-3.5 text-faint" />
+                          {clockLabel(exam.durationSec, true)}
+                        </span>
+                        <span
+                          className="text-[12.5px] tabular-nums"
+                          title={`${st("correct_label")} · ${st("blank_label")} · ${st("wrong_label")}`}
+                        >
+                          <span className="text-[var(--band-high)]">{totals.correct}</span>
+                          <span className="text-faint"> · {totals.blank} · </span>
+                          <span className="text-[var(--band-low)]">{totals.wrong}</span>
+                        </span>
+                        <AccuracyTag accuracy={totals.percent} band={performanceBand(totals.percent, settings)} className="w-14 font-medium" />
+                      </div>
+                      <div className="flex items-center gap-0.5 ml-auto sm:ml-0">
+                        {exam.comment ? (
+                          <Tooltip label={exam.comment.slice(0, 280)}>
+                            <span className="flex size-7 items-center justify-center text-faint">
+                              <MessageSquareText className="size-3.5" />
+                            </span>
+                          </Tooltip>
+                        ) : null}
+                        <Button variant="ghost" size="icon-sm" aria-label={st("edit")} onClick={() => setDialog({ open: true, exam })}>
+                          <Pencil />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={st("delete")}
+                          className="hover:text-[var(--danger)]"
+                          onClick={async () => {
+                            if (!window.confirm(st("exam_delete_confirm", { name: exam.name }))) return;
+                            await actions.deleteExam(exam.id);
+                            toast.success(st("exam_deleted"));
+                          }}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                   {open ? <ExamBreakdown exam={exam} /> : null}

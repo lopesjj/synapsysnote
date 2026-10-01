@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { useUiStore } from "@/lib/store/ui-store";
 import { useWorkspace, type PageTreeNode } from "@/lib/data/provider";
 import { childrenOf, isNotebookDescendant, notebookSubtreeIds, parentIdOf } from "@/lib/data/notebook-tree";
+import { unarchiveNotebookTree } from "@/lib/data/archive";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState, Tooltip } from "@/components/ui/primitives";
@@ -613,67 +614,42 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
 
   const empty = !childNotebooks.length && !notes.length && !notebookDatabases.length;
   const hasCover = Boolean(notebook.coverUrl);
+  const showCoverHeader = hasCover && !isArchived;
+  const isRootPage = !parentIdOf(notebook);
 
   return (
     <div className="relative">
-      {isArchived ? (
-        <div className="relative z-40 w-full border-b border-amber-500/30 bg-amber-500/15 px-4 py-2 text-amber-950 dark:bg-amber-950/70 dark:border-amber-500/40 dark:text-amber-200">
-          <div className="mx-auto flex max-w-[var(--reading-width,64rem)] items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 text-xs font-medium">
-              <Archive className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span>{t("archived_notice_notebook")}</span>
-            </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={async () => {
-                await adapter.updateNotebook(notebookId, { archived: false });
-                toast.success(t("notebook_unarchived"));
-              }}
-              className="h-7 text-xs bg-amber-50 dark:bg-amber-900/60 border-amber-300 dark:border-amber-600/50 text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900"
-            >
-              <RotateCcw className="mr-1.5 size-3" />
-              {t("unarchive")}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {hasCover ? (
-        <CoverPicker
-          coverUrl={notebook.coverUrl}
-          coverPosition={notebook.coverPosition}
-          onChange={(coverUrl) => void adapter.updateNotebook(notebookId, { coverUrl })}
-          onPositionChange={(pos) => void adapter.updateNotebook(notebookId, { coverPosition: pos })}
-          onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
-        />
-      ) : null}
-
       <div
         className={cn(
           "z-30 flex items-center gap-2 px-4 py-1.5 md:px-8",
-          hasCover
+          showCoverHeader
             ? "absolute inset-x-0 top-0 border-transparent bg-gradient-to-b from-black/45 via-black/20 to-transparent text-white"
-            : "sticky top-0 border-b border-[var(--border)] bg-[var(--canvas)]/85 backdrop-blur-xl"
+            : "sticky top-0 border-b border-[var(--border)] bg-[var(--canvas)]/85 backdrop-blur-xl text-ink"
         )}
       >
-        <WorkspaceCrumbs notebook={notebook} inverted={hasCover} />
+        <WorkspaceCrumbs notebook={notebook} inverted={showCoverHeader} />
 
         <Menu>
           <MenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label={t("more_actions")}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t("more_actions")}
+              className={showCoverHeader ? "text-white hover:bg-white/15 hover:text-white" : undefined}
+            >
               <MoreHorizontal />
             </Button>
           </MenuTrigger>
           <MenuContent align="end">
-            <MenuItem onSelect={() => void createSubnotebook()}>
+            <MenuItem onSelect={() => void createSubnotebook()} disabled={isArchived}>
               <FolderPlus /> {t("new_notebook")}
             </MenuItem>
-            <MenuItem onSelect={() => void createNote()}>
+            <MenuItem onSelect={() => void createNote()} disabled={isArchived}>
               <FilePlus /> {t("new_note")}
             </MenuItem>
             {hasCover ? (
               <MenuItem
+                disabled={isArchived}
                 onSelect={async () => {
                   await adapter.updateNotebook(notebookId, { coverUrl: null });
                   toast.success(t("remove_cover"));
@@ -699,8 +675,18 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
             </MenuItem>
             <MenuItem
               onSelect={async () => {
-                await adapter.updateNotebook(notebookId, { archived: !isArchived });
-                toast.success(isArchived ? t("notebook_unarchived") : t("notebook_archived"));
+                if (isArchived) {
+                  const result = await unarchiveNotebookTree(
+                    adapter,
+                    [...notebooks, ...archivedNotebooks],
+                    [...livePages, ...archivedPages],
+                    notebookId
+                  );
+                  toast.success(result.isRootPage ? t("root_page_unarchived") : t("notebook_unarchived"));
+                } else {
+                  await adapter.updateNotebook(notebookId, { archived: true });
+                  toast.success(isRootPage ? t("root_page_archived") : t("notebook_archived"));
+                }
               }}
             >
               {isArchived ? <RotateCcw /> : <Archive />}
@@ -710,29 +696,56 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
             <MenuItem
               destructive
               onSelect={async () => {
-                const name = notebook.name?.trim() || (parentIdOf(notebook) ? t("notebook_count_singular") : t("new_page"));
-                if (!window.confirm(t("delete_notebook_confirm", { name }))) return;
+                const name = notebook.name?.trim() || (isRootPage ? t("new_page") : t("notebook_count_singular"));
+                if (!window.confirm(isRootPage ? t("delete_page_confirm", { name }) : t("delete_notebook_confirm", { name }))) return;
                 const parent = parentIdOf(notebook);
                 await adapter.deleteNotebook(notebookId);
                 toast.success(parent ? t("notebook_deleted") : t("page_deleted"));
                 router.push(parent ? `/home/n/${parent}` : "/home");
               }}
             >
-              <Trash2 /> {parentIdOf(notebook) ? t("delete_notebook") : t("delete_page")}
+              <Trash2 /> {isRootPage ? t("delete_page") : t("delete_notebook")}
             </MenuItem>
           </MenuContent>
         </Menu>
       </div>
 
-      {!hasCover ? (
-        <CoverPicker
-          coverUrl={notebook.coverUrl}
-          coverPosition={notebook.coverPosition}
-          onChange={(coverUrl) => void adapter.updateNotebook(notebookId, { coverUrl })}
-          onPositionChange={(pos) => void adapter.updateNotebook(notebookId, { coverPosition: pos })}
-          onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
-        />
+      {isArchived ? (
+        <div className="relative z-20 w-full border-b border-[var(--archive-banner-border)] bg-[var(--archive-banner-bg)] px-4 py-2 text-[var(--archive-banner-text)] transition-colors">
+          <div className="mx-auto flex max-w-[var(--reading-width,64rem)] items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 text-xs font-semibold">
+              <Archive className="size-4 shrink-0 text-[var(--archive-banner-icon)]" />
+              <span>{isRootPage ? t("archived_notice_page") : t("archived_notice_notebook")}</span>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={async () => {
+                const result = await unarchiveNotebookTree(
+                  adapter,
+                  [...notebooks, ...archivedNotebooks],
+                  [...livePages, ...archivedPages],
+                  notebookId
+                );
+                toast.success(result.isRootPage ? t("root_page_unarchived") : t("notebook_unarchived"));
+              }}
+              className="h-7 text-xs bg-[var(--archive-btn-bg)] border border-[var(--archive-btn-border)] text-[var(--archive-btn-text)] hover:bg-[var(--archive-btn-hover)] shadow-xs transition-colors"
+            >
+              <RotateCcw className="mr-1.5 size-3" />
+              {t("unarchive")}
+            </Button>
+          </div>
+        </div>
       ) : null}
+
+      <CoverPicker
+        coverUrl={notebook.coverUrl}
+        coverPosition={notebook.coverPosition}
+        readOnly={isArchived}
+        onChange={(coverUrl) => void adapter.updateNotebook(notebookId, { coverUrl })}
+        onPositionChange={(pos) => void adapter.updateNotebook(notebookId, { coverPosition: pos })}
+        onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
+      />
 
       <div className="relative z-10 mx-auto w-full max-w-full sm:max-w-[var(--reading-width,64rem)] px-4 pb-24 pb-safe sm:px-5 md:px-8">
         <div
@@ -759,12 +772,14 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
             trigger={
               <button
                 type="button"
+                disabled={isArchived}
                 className={cn(
                   "shrink-0 self-start sm:self-center leading-none transition",
                   isIconUrl(notebook.emoji ?? "") ? "rounded-[22px] sm:rounded-[28px]" : "rounded-[10px]",
-                  !hasCover && "hover:bg-[var(--surface-hover)]"
+                  !hasCover && !isArchived && "hover:bg-[var(--surface-hover)]",
+                  isArchived && "cursor-default"
                 )}
-                aria-label={t("change_icon")}
+                aria-label={isArchived ? undefined : t("change_icon")}
               >
                 <WorkspaceIcon
                   icon={notebook.emoji}
@@ -820,10 +835,10 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => void createSubnotebook()}>
+            <Button variant="secondary" onClick={() => void createSubnotebook()} disabled={isArchived}>
               <FolderPlus /> {t("new_notebook")}
             </Button>
-            <Button variant="secondary" onClick={() => void createNote()}>
+            <Button variant="secondary" onClick={() => void createNote()} disabled={isArchived}>
               <FilePlus /> {t("new_note")}
             </Button>
           </div>
@@ -835,7 +850,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t("search_in_notebook")}
+                placeholder={isRootPage ? t("search_in_page") : t("search_in_notebook")}
                 className="h-8 w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] pl-8 pr-7 text-[12.5px] text-ink placeholder:text-faint transition focus:border-[var(--accent)] focus:bg-[var(--surface)] focus:outline-none"
               />
               {searchQuery ? (

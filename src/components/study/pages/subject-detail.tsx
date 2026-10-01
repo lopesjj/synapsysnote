@@ -115,7 +115,7 @@ export function SubjectDetailPage({ subjectId }: { subjectId: string }) {
               : st("kpi_accuracy_empty")}
           </p>
         </div>
-        <div className="bg-[var(--surface)] px-5 py-4">
+        <div className="col-span-2 bg-[var(--surface)] px-5 py-4 sm:col-span-1 lg:col-span-1">
           <p className="text-[12px] font-medium text-muted">{st("kpi_coverage")}</p>
           <p className="mt-2 text-[22px] font-semibold leading-none tracking-[-0.03em] text-ink">
             {subject.topics.length ? Math.round((done / subject.topics.length) * 100) : 0}

@@ -14,12 +14,14 @@ export function CoverPicker({
   onChange,
   onPositionChange,
   onUploadImage,
+  readOnly = false,
 }: {
   coverUrl?: string | null;
   coverPosition?: number | null;
   onChange: (coverUrl: string | null) => void;
   onPositionChange?: (coverPosition: number) => void;
   onUploadImage?: (file: File) => Promise<string>;
+  readOnly?: boolean;
 }) {
   const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -380,21 +382,23 @@ export function CoverPicker({
       ) : null}
 
       {!coverUrl ? (
-        <div className="mx-auto flex w-full max-w-[var(--reading-width,64rem)] justify-end px-2 pt-1 sm:px-6 sm:pt-4 md:px-8">
-          <Menu open={menuOpen} onOpenChange={setMenuOpen}>
-            <MenuTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1 text-[12px] text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink"
-              >
-                <ImagePlus className="size-3.5" /> {t("add_cover")}
-              </button>
-            </MenuTrigger>
-            <MenuContent align="end" className="min-w-0 p-0 shadow-2xl border border-[var(--border)] overflow-hidden">
-              {swatches}
-            </MenuContent>
-          </Menu>
-        </div>
+        !readOnly ? (
+          <div className="mx-auto flex w-full max-w-[var(--reading-width,64rem)] justify-end px-2 pt-1 sm:px-6 sm:pt-4 md:px-8">
+            <Menu open={menuOpen} onOpenChange={setMenuOpen}>
+              <MenuTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1 text-[12px] text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink"
+                >
+                  <ImagePlus className="size-3.5" /> {t("add_cover")}
+                </button>
+              </MenuTrigger>
+              <MenuContent align="end" className="min-w-0 p-0 shadow-2xl border border-[var(--border)] overflow-hidden">
+                {swatches}
+              </MenuContent>
+            </Menu>
+          </div>
+        ) : null
       ) : (
         <div className={cn("w-full overflow-hidden", isRepositioning ? "relative z-40" : "group/cover relative z-0")}>
           <div
@@ -455,7 +459,7 @@ export function CoverPicker({
                 </button>
               </div>
             </div>
-          ) : (
+          ) : !readOnly ? (
             <div className="absolute top-12 right-3 z-20 flex items-center gap-1.5 opacity-100 pointer-events-auto transition-opacity duration-200 sm:top-14 sm:right-6 md:right-8 md:opacity-0 md:pointer-events-none md:group-hover/cover:opacity-100 md:group-hover/cover:pointer-events-auto md:focus-within:opacity-100 md:focus-within:pointer-events-auto">
               <Menu open={menuOpen} onOpenChange={setMenuOpen}>
                 <MenuTrigger asChild>
@@ -489,7 +493,7 @@ export function CoverPicker({
                 <ImageOff className="size-3" /> {t("remove_cover")}
               </button>
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </>

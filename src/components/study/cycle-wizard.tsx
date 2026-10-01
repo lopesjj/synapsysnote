@@ -387,16 +387,18 @@ function WizardBody({ initialMode, onClose }: { initialMode: Mode; onClose: () =
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-5">
         {step === 0 ? (
           <div>
-            <div className="grid grid-cols-7 gap-1.5 sm:gap-3">
-              {orderedWeekdays(settings.weekStartsOn).map((weekday) => (
-                <DayBar
-                  key={weekday}
-                  value={weekMinutes[weekday]}
-                  label={capitalizeFirst(weekdayLabel(weekday, locale, "short").replace(".", ""))}
-                  longLabel={capitalizeFirst(weekdayLabel(weekday, locale, "long"))}
-                  onChange={(minutes) => setDay(weekday, minutes)}
-                />
-              ))}
+            <div className="-mx-2 overflow-x-auto px-2 pb-2 sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
+              <div className="grid min-w-[21rem] grid-cols-7 gap-1.5 sm:min-w-0 sm:gap-3">
+                {orderedWeekdays(settings.weekStartsOn).map((weekday) => (
+                  <DayBar
+                    key={weekday}
+                    value={weekMinutes[weekday]}
+                    label={capitalizeFirst(weekdayLabel(weekday, locale, "short").replace(".", ""))}
+                    longLabel={capitalizeFirst(weekdayLabel(weekday, locale, "long"))}
+                    onChange={(minutes) => setDay(weekday, minutes)}
+                  />
+                ))}
+              </div>
             </div>
             <div className="mt-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-[var(--border)] pt-3">
               <p className="text-[12.5px] text-faint">{st("wizard_time_hint")}</p>

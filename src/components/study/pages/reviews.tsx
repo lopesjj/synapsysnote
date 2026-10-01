@@ -204,23 +204,25 @@ function ReviewQueue() {
                 )}
               </div>
             ) : null}
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:ml-auto sm:w-auto sm:justify-end">
               {tab !== "due" ? (
-                <Segmented<ReviewPeriod>
-                  value={period}
-                  onChange={(value) => {
-                    setPeriod(value);
-                    setSelected(new Set());
-                  }}
-                  ariaLabel={st("period_label")}
-                  options={[
-                    { value: "7", label: st("period_7") },
-                    { value: "30", label: st("period_30") },
-                    { value: "90", label: st("period_90") },
-                    { value: "365", label: st("period_365") },
-                    { value: "all", label: st("period_all") },
-                  ]}
-                />
+                <div className="max-w-full overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <Segmented<ReviewPeriod>
+                    value={period}
+                    onChange={(value) => {
+                      setPeriod(value);
+                      setSelected(new Set());
+                    }}
+                    ariaLabel={st("period_label")}
+                    options={[
+                      { value: "7", label: st("period_7") },
+                      { value: "30", label: st("period_30") },
+                      { value: "90", label: st("period_90") },
+                      { value: "365", label: st("period_365") },
+                      { value: "all", label: st("period_all") },
+                    ]}
+                  />
+                </div>
               ) : null}
               <SelectFilter
                 label={st("col_subject")}

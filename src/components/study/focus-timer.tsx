@@ -369,8 +369,8 @@ export function FocusOverlay() {
           aria-modal="true"
           aria-label={st("nav_focus")}
         >
-          <div className="flex items-center justify-between gap-3 px-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] sm:px-6">
-            <div role="tablist" aria-label={st("nav_focus")} className="flex items-center gap-0.5 rounded-full bg-[var(--surface)] p-1 shadow-[0_0_0_1px_var(--border)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 pt-[calc(1rem+env(safe-area-inset-top,0px))] sm:px-6">
+            <div role="tablist" aria-label={st("nav_focus")} className="flex max-w-[calc(100vw-5.25rem)] items-center gap-0.5 overflow-x-auto rounded-full bg-[var(--surface)] p-1 shadow-[0_0_0_1px_var(--border)] sm:max-w-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {(["stopwatch", "countdown", "pomodoro"] as const).map((mode) => {
                 const active = timer.mode === mode;
                 return (
@@ -382,7 +382,7 @@ export function FocusOverlay() {
                     disabled={!idle && !active}
                     onClick={() => setMode(mode)}
                     className={cn(
-                      "h-8 rounded-full px-3.5 text-[12.5px] font-medium transition disabled:opacity-35",
+                      "h-7 shrink-0 rounded-full px-2.5 text-[11.5px] font-medium transition whitespace-nowrap disabled:opacity-35 sm:h-8 sm:px-3.5 sm:text-[12.5px]",
                       active ? "bg-[var(--surface-2)] text-ink" : "text-muted hover:text-ink"
                     )}
                   >
@@ -391,7 +391,7 @@ export function FocusOverlay() {
                 );
               })}
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               <Menu>
                 <MenuTrigger asChild>
                   <button

@@ -97,7 +97,7 @@ function KpiCell({
   className?: string;
 }) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-2 px-5 py-4", className)}>
+    <div className={cn("flex min-w-0 flex-col gap-2 px-3.5 py-3 sm:px-5 sm:py-4", className)}>
       <span className="text-[12px] font-medium text-muted">{label}</span>
       <div className="min-h-[2.25rem]">{children}</div>
       {hint ? <div className="text-[11.5px] leading-snug text-faint">{hint}</div> : null}

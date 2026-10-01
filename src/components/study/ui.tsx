@@ -159,7 +159,7 @@ export function StudyHeader({
   const { activePlan } = useStudy();
   return (
     <header className="mb-7 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-b border-[var(--border)] pb-5">
-      <div className="min-w-0 flex-[1_1_22rem]">
+      <div className="min-w-0 flex-1 basis-72">
         <h1 dir={textDir} className="text-[26px] font-semibold leading-tight tracking-[-0.025em] text-ink sm:text-[28px]">
           {title}
         </h1>
@@ -277,15 +277,15 @@ export function Panel({
   return (
     <section className={cn("rounded-[20px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_1px_2px_rgba(15,44,76,0.04)]", className)}>
       {title || action ? (
-        <div className="flex items-start justify-between gap-3 px-5 pb-3.5 pt-5 sm:px-6">
-          <div className="min-w-0">
+        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-4 pb-3.5 pt-4 sm:px-6 sm:pt-5">
+          <div className="min-w-0 flex-1">
             {title ? <h2 className="text-[15px] font-semibold tracking-[-0.015em] text-ink">{title}</h2> : null}
             {description ? <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{description}</p> : null}
           </div>
           {action ? <div className="flex shrink-0 items-center gap-1.5 pt-0.5">{action}</div> : null}
         </div>
       ) : null}
-      <div className={cn("px-5 pb-5 sm:px-6 sm:pb-6", !title && !action && "pt-5 sm:pt-6", bodyClassName)}>{children}</div>
+      <div className={cn("px-4 pb-4 sm:px-6 sm:pb-6", !title && !action && "pt-4 sm:pt-6", bodyClassName)}>{children}</div>
     </section>
   );
 }

@@ -695,21 +695,23 @@ function CalendarSheet({
   const layers = useStudyUi((state) => state.scheduleLayers);
   return (
     <section className={cn(SHEET, "@container min-w-0 overflow-hidden")}>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-[var(--border)] px-3 py-2.5 sm:px-4">
-        <div className="flex items-center">
-          <Button variant="ghost" size="icon-sm" aria-label={st("prev_period")} onClick={() => onShift(-1)}>
-            <ChevronLeft />
-          </Button>
-          <Button variant="ghost" size="icon-sm" aria-label={st("next_period")} onClick={() => onShift(1)}>
-            <ChevronRight />
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-[var(--border)] px-3 py-2 sm:px-4 sm:py-2.5">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:flex-initial">
+          <div className="flex shrink-0 items-center">
+            <Button variant="ghost" size="icon-sm" aria-label={st("prev_period")} onClick={() => onShift(-1)}>
+              <ChevronLeft />
+            </Button>
+            <Button variant="ghost" size="icon-sm" aria-label={st("next_period")} onClick={() => onShift(1)}>
+              <ChevronRight />
+            </Button>
+          </div>
+          <h2 className="min-w-0 truncate text-[14px] font-semibold tracking-[-0.015em] text-ink sm:text-[15px]">{title}</h2>
+          <Button variant="ghost" size="sm" onClick={onToday} className="shrink-0 px-2 text-[12px]">
+            {st("today")}
           </Button>
         </div>
-        <h2 className="min-w-0 text-[15px] font-semibold tracking-[-0.015em] text-ink">{title}</h2>
-        <Button variant="ghost" size="sm" onClick={onToday}>
-          {st("today")}
-        </Button>
-        <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div role="group" aria-label={st("schedule_show")} className="flex flex-wrap items-center">
+        <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:ml-auto sm:w-auto sm:justify-end sm:gap-x-3">
+          <div role="group" aria-label={st("schedule_show")} className="flex items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {LAYERS.map((layer) => {
               const on = layers[layer.key];
               return (
@@ -719,7 +721,7 @@ function CalendarSheet({
                   aria-pressed={on}
                   onClick={() => useStudyUi.getState().setScheduleLayer(layer.key, !on)}
                   className={cn(
-                    "inline-flex h-7 items-center gap-1.5 rounded-[var(--radius-sm)] px-2 text-[12px] font-medium transition hover:bg-[var(--surface-hover)]",
+                    "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[var(--radius-sm)] px-2 text-[11.5px] font-medium transition hover:bg-[var(--surface-hover)] sm:text-[12px]",
                     on ? "text-ink" : "text-faint"
                   )}
                 >
@@ -1172,7 +1174,7 @@ function MonthView({
     <div>
       <div className="grid grid-cols-7 border-b border-[var(--border)]">
         {orderedWeekdays(settings.weekStartsOn).map((weekday) => (
-          <span key={weekday} className="truncate px-2 py-2 text-[11.5px] font-medium text-faint">
+          <span key={weekday} className="truncate px-1 py-2 text-center text-[10.5px] font-medium text-faint sm:px-2 sm:text-[11.5px]">
             {capitalizeFirst(weekdayLabel(weekday, locale, "short").replace(".", ""))}
           </span>
         ))}
@@ -1218,14 +1220,14 @@ function MonthCell({
       onClick={onOpen}
       aria-label={formatDay(day, locale, { weekday: "long", day: "numeric", month: "long" })}
       className={cn(
-        "flex min-h-[4.75rem] min-w-0 flex-col gap-1 border-b border-r border-[var(--border)] p-1.5 text-left transition hover:bg-[var(--surface-hover)] @2xl:min-h-[6.75rem] [&:nth-child(7n)]:border-r-0",
+        "flex min-h-[4.5rem] min-w-0 flex-col gap-1 border-b border-r border-[var(--border)] p-1 text-left transition hover:bg-[var(--surface-hover)] sm:p-1.5 @2xl:min-h-[6.75rem] [&:nth-child(7n)]:border-r-0",
         outside && "bg-[color-mix(in_oklab,var(--surface-2)_45%,transparent)]"
       )}
     >
       <span className="flex items-center gap-1">
         <span
           className={cn(
-            "flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[12px] font-semibold tabular-nums",
+            "flex h-5 w-5 min-w-5 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums sm:h-6 sm:w-6 sm:min-w-6 sm:px-1 sm:text-[12px]",
             day === today ? "bg-[var(--accent)] text-[var(--accent-contrast)]" : outside ? "text-faint" : "text-ink"
           )}
         >

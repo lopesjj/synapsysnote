@@ -256,18 +256,20 @@ function InsightsBody() {
     <StudyPage>
       <StudyHeader title={st("nav_insights")} subtitle={st("insights_subtitle")} />
       <div className="mb-5 flex flex-wrap items-center gap-2">
-        <Segmented<Period>
-          size="md"
-          value={period}
-          onChange={setPeriod}
-          ariaLabel={st("period_label")}
-          options={[
-            { value: "30", label: st("period_30") },
-            { value: "90", label: st("period_90") },
-            { value: "365", label: st("period_365") },
-            { value: "all", label: st("period_all") },
-          ]}
-        />
+        <div className="max-w-full overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <Segmented<Period>
+            size="md"
+            value={period}
+            onChange={setPeriod}
+            ariaLabel={st("period_label")}
+            options={[
+              { value: "30", label: st("period_30") },
+              { value: "90", label: st("period_90") },
+              { value: "365", label: st("period_365") },
+              { value: "all", label: st("period_all") },
+            ]}
+          />
+        </div>
         <SelectFilter
           label={st("col_subject")}
           value={subjectId}
@@ -293,7 +295,7 @@ function InsightsBody() {
             <Cell label={st("insight_consistency")} hint={st("consistency_line", { studied: consistency.studied, planned: consistency.planned, percent: percentLabel(consistency.ratio) })}>
               <Big>{percentLabel(consistency.ratio)}</Big>
             </Cell>
-            <Cell label={st("accuracy_label")} hint={totals.questions ? st("questions_count", { count: totals.questions }) : st("no_questions")}>
+            <Cell label={st("accuracy_label")} className="col-span-2 md:col-span-1" hint={totals.questions ? st("questions_count", { count: totals.questions }) : st("no_questions")}>
               {totals.accuracy !== null ? (
                 <span className="inline-flex items-center gap-2">
                   <Big>{percentLabel(totals.accuracy)}</Big>

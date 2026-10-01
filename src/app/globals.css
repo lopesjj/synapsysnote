@@ -2,6 +2,8 @@
 @import "katex/dist/katex.min.css";
 @import "tippy.js/dist/tippy.css";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
@@ -103,6 +105,14 @@
   --sky-chip-soft-ring: rgba(255, 255, 255, 0.8);
   --sky-cta-soft-bg: #10243d;
   --sky-cta-soft-fg: #ffffff;
+  --archive-banner-bg: rgba(245, 158, 11, 0.12);
+  --archive-banner-border: rgba(245, 158, 11, 0.28);
+  --archive-banner-text: #451a03;
+  --archive-banner-icon: #d97706;
+  --archive-btn-bg: #ffffff;
+  --archive-btn-border: #fcd34d;
+  --archive-btn-text: #78350f;
+  --archive-btn-hover: #fef3c7;
 }
 
 .dark {
@@ -170,6 +180,14 @@
   --sky-chip-soft-ring: rgba(255, 255, 255, 0.22);
   --sky-cta-soft-bg: #ffffff;
   --sky-cta-soft-fg: #10243d;
+  --archive-banner-bg: rgba(120, 53, 15, 0.35);
+  --archive-banner-border: rgba(245, 158, 11, 0.3);
+  --archive-banner-text: #fef3c7;
+  --archive-banner-icon: #fbbf24;
+  --archive-btn-bg: rgba(120, 53, 15, 0.5);
+  --archive-btn-border: rgba(217, 119, 6, 0.5);
+  --archive-btn-text: #fef3c7;
+  --archive-btn-hover: rgba(180, 83, 9, 0.6);
 }
 
 [data-density="compact"] {

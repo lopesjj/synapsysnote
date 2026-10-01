@@ -194,22 +194,24 @@ function SubjectsBody() {
           <CoverageMap subjects={planSubjects} coverage={coverage} onPick={pick} />
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Segmented<Filter>
-              size="md"
-              value={filter}
-              onChange={setFilter}
-              ariaLabel={st("subject_topics")}
-              options={(Object.keys(FILTER_KEY) as Filter[]).map((value) => ({
-                value,
-                label: (
-                  <span className="inline-flex items-center gap-1.5">
-                    {st(FILTER_KEY[value])}
-                    <span className="tabular-nums text-faint">{counts[value]}</span>
-                  </span>
-                ),
-              }))}
-            />
-            <label className="relative min-w-[12rem] flex-1 sm:max-w-xs">
+            <div className="max-w-full overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <Segmented<Filter>
+                size="md"
+                value={filter}
+                onChange={setFilter}
+                ariaLabel={st("subject_topics")}
+                options={(Object.keys(FILTER_KEY) as Filter[]).map((value) => ({
+                  value,
+                  label: (
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                      {st(FILTER_KEY[value])}
+                      <span className="tabular-nums text-faint">{counts[value]}</span>
+                    </span>
+                  ),
+                }))}
+              />
+            </div>
+            <label className="relative min-w-[10rem] flex-1 sm:max-w-xs">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
               <Input
                 ref={searchRef}
@@ -241,7 +243,7 @@ function SubjectsBody() {
                 <Kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 max-sm:hidden">/</Kbd>
               )}
             </label>
-            <div className="ml-auto flex items-center gap-1">
+            <div className="flex w-full items-center justify-between gap-1 sm:ml-auto sm:w-auto sm:justify-end">
               <Menu>
                 <MenuTrigger asChild>
                   <Button variant="ghost" size="sm" aria-label={`${st("sort_label")}: ${st(SORT_KEY[sort])}`}>
@@ -419,7 +421,7 @@ function TopicTrack({ topics, color }: { topics: StudyTopic[]; color: string }) 
   const total = topics.length;
   const done = topics.filter((topic) => topic.done).length;
   return (
-    <span className="flex min-w-[8rem] items-center gap-2.5 lg:min-w-0">
+    <span className="flex min-w-[6.5rem] items-center gap-2.5 sm:min-w-[8rem] lg:min-w-0">
       <span
         role="progressbar"
         aria-label={st("col_coverage")}
@@ -560,7 +562,7 @@ function SubjectGroup({
           </Menu>
         </div>
 
-        <div className="col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 pl-[51px] text-[12px] lg:contents">
+        <div className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-9 text-[12px] sm:gap-x-4 sm:pl-[51px] lg:contents">
           <TopicTrack topics={subject.topics} color={subject.color} />
           <span className="tabular-nums text-ink lg:text-right">{agg?.seconds ? duration(agg.seconds) : <span className="text-faint">–</span>}</span>
           <span className="tabular-nums lg:text-right" title={st("questions_label")}>

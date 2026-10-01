@@ -146,32 +146,34 @@ function LogBody() {
         }
       />
 
-      <section className="mb-5 grid grid-cols-1 overflow-hidden rounded-[20px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_1px_2px_rgba(15,44,76,0.04)] md:grid-cols-3">
+      <section className="mb-5 grid grid-cols-1 overflow-hidden rounded-[20px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_1px_2px_rgba(15,44,76,0.04)] sm:grid-cols-3">
         <Stat label={st("time_label")}>
           <DurationFigure seconds={totals.seconds} size="md" />
         </Stat>
-        <Stat label={st("accuracy_label")} className="border-t border-[var(--border)] md:border-l md:border-t-0" hint={totals.questions ? st("questions_count", { count: totals.questions }) : st("no_questions")}>
+        <Stat label={st("accuracy_label")} className="border-t border-[var(--border)] sm:border-l sm:border-t-0" hint={totals.questions ? st("questions_count", { count: totals.questions }) : st("no_questions")}>
           <span className="text-[22px] font-semibold tracking-[-0.03em] text-ink">{percentLabel(totals.accuracy)}</span>
         </Stat>
-        <Stat label={st("summary_sessions")} className="border-t border-[var(--border)] md:border-l md:border-t-0">
+        <Stat label={st("summary_sessions")} className="border-t border-[var(--border)] sm:border-l sm:border-t-0">
           <span className="text-[22px] font-semibold tracking-[-0.03em] text-ink">{formatNumber(totals.sessions, language)}</span>
         </Stat>
       </section>
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
-        <Segmented<Period>
-          size="md"
-          value={period}
-          onChange={setPeriod}
-          ariaLabel={st("period_label")}
-          options={[
-            { value: "7", label: st("period_7") },
-            { value: "30", label: st("period_30") },
-            { value: "90", label: st("period_90") },
-            { value: "365", label: st("period_365") },
-            { value: "all", label: st("period_all") },
-          ]}
-        />
+        <div className="max-w-full overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <Segmented<Period>
+            size="md"
+            value={period}
+            onChange={setPeriod}
+            ariaLabel={st("period_label")}
+            options={[
+              { value: "7", label: st("period_7") },
+              { value: "30", label: st("period_30") },
+              { value: "90", label: st("period_90") },
+              { value: "365", label: st("period_365") },
+              { value: "all", label: st("period_all") },
+            ]}
+          />
+        </div>
         <SelectFilter
           label={st("col_subject")}
           value={subjectId}

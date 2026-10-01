@@ -70,6 +70,7 @@ import {
 import { IconPickerMenu } from "@/components/ui/icon-picker";
 import { CoverPicker } from "./cover-picker";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
+import { unarchivePageTree } from "@/lib/data/archive";
 import { useLibrasStore } from "@/lib/store/libras-store";
 import { FlashcardsIcon } from "@/lib/icons/flashcard-icon";
 import { NoteFlashcardsModal } from "@/components/flashcards/note-flashcards-modal";
@@ -257,7 +258,7 @@ function extractPageText(
 export function PageView({ pageId }: { pageId: string }) {
   const router = useRouter();
   const { t, language } = useTranslation();
-  const { adapter, pages, livePages, notebooks, databases, pageById, ready, flashcards, isPageArchived } = useWorkspace();
+  const { adapter, pages, livePages, archivedPages, notebooks, databases, pageById, ready, flashcards, isPageArchived } = useWorkspace();
   const page = pageById(pageId);
   const isArchived = Boolean(page && isPageArchived(page.id));
   const importOrigin = page ? pageImportOrigin(page) : null;
@@ -616,59 +617,26 @@ export function PageView({ pageId }: { pageId: string }) {
   };
 
   const hasCover = Boolean(page.coverUrl);
+  const showCoverHeader = hasCover && !isArchived;
 
   return (
     <div className="relative">
-      {isArchived ? (
-        <div className="relative z-40 w-full border-b border-amber-500/30 bg-amber-500/15 px-4 py-2 text-amber-950 dark:bg-amber-950/70 dark:border-amber-500/40 dark:text-amber-200">
-          <div className="mx-auto flex max-w-[var(--reading-width,64rem)] items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 text-xs font-medium">
-              <Archive className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span>{t("archived_notice_note")}</span>
-            </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={async () => {
-                await adapter.updatePage(pageId, { archived: false });
-                toast.success(t("page_unarchived"));
-              }}
-              className="h-7 text-xs bg-amber-50 dark:bg-amber-900/60 border-amber-300 dark:border-amber-600/50 text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900"
-            >
-              <RotateCcw className="mr-1.5 size-3" />
-              {t("unarchive")}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {hasCover ? (
-        <CoverPicker
-          coverUrl={page.coverUrl}
-          coverPosition={page.coverPosition}
-          onChange={(coverUrl) => adapter.updatePage(pageId, { coverUrl })}
-          onPositionChange={(pos) => adapter.updatePage(pageId, { coverPosition: pos })}
-          onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
-        />
-      ) : null}
-
-      
       <div
         className={cn(
           "z-30 flex items-center gap-2 px-4 py-2 md:px-8",
-          hasCover
+          showCoverHeader
             ? "absolute inset-x-0 top-0 border-transparent bg-gradient-to-b from-black/45 via-black/20 to-transparent text-white"
-            : "sticky top-0 border-b border-[var(--border)] bg-[var(--canvas)]/85 backdrop-blur-xl",
+            : "sticky top-0 border-b border-[var(--border)] bg-[var(--canvas)]/85 backdrop-blur-xl text-ink",
           zenMode && "border-transparent opacity-0 transition-opacity duration-200 hover:opacity-100 focus-within:opacity-100"
         )}
       >
-        <WorkspaceCrumbs notebook={notebook} page={page} inverted={hasCover} />
+        <WorkspaceCrumbs notebook={notebook} page={page} inverted={showCoverHeader} />
 
         {showSaveIndicator ? (
           <SaveIndicator
             status={status}
             lastSavedAt={lastSavedAt ?? page.updatedAt}
-            inverted={hasCover}
+            inverted={showCoverHeader}
           />
         ) : null}
 
@@ -676,7 +644,7 @@ export function PageView({ pageId }: { pageId: string }) {
           <Button
             variant="ghost"
             size="icon-sm"
-            className={hasCover ? "text-white hover:bg-white/15 hover:text-white" : undefined}
+            className={showCoverHeader ? "text-white hover:bg-white/15 hover:text-white" : undefined}
             onClick={() => adapter.updatePage(pageId, { favorite: !page.favorite })}
             aria-label={t("favorite")}
           >
@@ -690,7 +658,7 @@ export function PageView({ pageId }: { pageId: string }) {
             size="sm"
             className={cn(
               "relative flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium rounded-lg transition-all",
-              hasCover
+              showCoverHeader
                 ? "text-white hover:bg-white/15"
                 : "text-muted hover:text-ink hover:bg-[var(--surface-hover)]"
             )}
@@ -712,7 +680,7 @@ export function PageView({ pageId }: { pageId: string }) {
             <Button
               variant="ghost"
               size="icon-sm"
-              className={hasCover ? "text-white hover:bg-white/15 hover:text-white" : undefined}
+              className={showCoverHeader ? "text-white hover:bg-white/15 hover:text-white" : undefined}
               onClick={handleInterpretLibras}
               aria-label={t("interpret_in_libras")}
             >
@@ -737,7 +705,7 @@ export function PageView({ pageId }: { pageId: string }) {
                 variant={narrating ? "secondary" : "ghost"}
                 size="icon-sm"
                 className={cn(
-                  hasCover ? "text-white hover:bg-white/15 hover:text-white" : undefined,
+                  showCoverHeader ? "text-white hover:bg-white/15 hover:text-white" : undefined,
                   narrating && "text-[var(--accent)] font-semibold border border-[var(--accent)]/30"
                 )}
                 onClick={toggleNarration}
@@ -777,7 +745,7 @@ export function PageView({ pageId }: { pageId: string }) {
             <Button
               variant="ghost"
               size="icon-sm"
-              className={hasCover ? "text-white hover:bg-white/15 hover:text-white" : undefined}
+              className={showCoverHeader ? "text-white hover:bg-white/15 hover:text-white" : undefined}
               aria-label={t("more_actions")}
             >
               <MoreHorizontal />
@@ -785,6 +753,7 @@ export function PageView({ pageId }: { pageId: string }) {
           </MenuTrigger>
           <MenuContent align="end">
             <MenuItem
+              disabled={isArchived}
               onSelect={async () => {
                 const target = resolveNoteCreationTarget(`/home/p/${pageId}`, pages, databases);
                 const newPage = await adapter.createPage({
@@ -808,7 +777,7 @@ export function PageView({ pageId }: { pageId: string }) {
                 <Volume2 /> {narrating ? t("stop_reading") : t("read_note_aloud")}
               </MenuItem>
             ) : null}
-            <MenuItem onSelect={() => fileInput.current?.click()}>
+            <MenuItem onSelect={() => fileInput.current?.click()} disabled={isArchived}>
               <Paperclip /> {t("attach_file")}
             </MenuItem>
             <MenuItem
@@ -819,6 +788,7 @@ export function PageView({ pageId }: { pageId: string }) {
               <FlashcardsIcon /> {t("flashcards")}
             </MenuItem>
             <MenuItem
+              disabled={isArchived}
               onSelect={(event) => {
                 event.preventDefault();
                 setAudioOpen(true);
@@ -828,6 +798,7 @@ export function PageView({ pageId }: { pageId: string }) {
             </MenuItem>
             {hasCover ? (
               <MenuItem
+                disabled={isArchived}
                 onSelect={async () => {
                   await adapter.updatePage(pageId, { coverUrl: null });
                   toast.success(t("remove_cover"));
@@ -869,7 +840,7 @@ export function PageView({ pageId }: { pageId: string }) {
             >
               <Copy /> {t("duplicate_note")}
             </MenuItem>
-            <MenuItem onSelect={() => setMoveOpen(true)}>
+            <MenuItem onSelect={() => setMoveOpen(true)} disabled={isArchived}>
               <FolderInput /> {t("move_to")}
             </MenuItem>
             <MenuItem
@@ -880,8 +851,17 @@ export function PageView({ pageId }: { pageId: string }) {
             </MenuItem>
             <MenuItem
               onSelect={async () => {
-                await adapter.updatePage(pageId, { archived: !isArchived });
-                toast.success(isArchived ? t("page_unarchived") : t("page_archived"));
+                if (isArchived) {
+                  await unarchivePageTree(
+                    adapter,
+                    [...livePages, ...archivedPages],
+                    pageId
+                  );
+                  toast.success(t("page_unarchived"));
+                } else {
+                  await adapter.updatePage(pageId, { archived: true });
+                  toast.success(t("page_archived"));
+                }
               }}
             >
               {isArchived ? <RotateCcw /> : <Archive />}
@@ -902,15 +882,41 @@ export function PageView({ pageId }: { pageId: string }) {
         </Menu>
       </div>
 
-      {!hasCover ? (
-        <CoverPicker
-          coverUrl={page.coverUrl}
-          coverPosition={page.coverPosition}
-          onChange={(coverUrl) => adapter.updatePage(pageId, { coverUrl })}
-          onPositionChange={(pos) => adapter.updatePage(pageId, { coverPosition: pos })}
-          onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
-        />
+      {isArchived ? (
+        <div className="relative z-20 w-full border-b border-[var(--archive-banner-border)] bg-[var(--archive-banner-bg)] px-4 py-2 text-[var(--archive-banner-text)] transition-colors">
+          <div className="mx-auto flex max-w-[var(--reading-width,64rem)] items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 text-xs font-semibold">
+              <Archive className="size-4 shrink-0 text-[var(--archive-banner-icon)]" />
+              <span>{t("archived_notice_note")}</span>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={async () => {
+                await unarchivePageTree(
+                  adapter,
+                  [...livePages, ...archivedPages],
+                  pageId
+                );
+                toast.success(t("page_unarchived"));
+              }}
+              className="h-7 text-xs bg-[var(--archive-btn-bg)] border border-[var(--archive-btn-border)] text-[var(--archive-btn-text)] hover:bg-[var(--archive-btn-hover)] shadow-xs transition-colors"
+            >
+              <RotateCcw className="mr-1.5 size-3" />
+              {t("unarchive")}
+            </Button>
+          </div>
+        </div>
       ) : null}
+
+      <CoverPicker
+        coverUrl={page.coverUrl}
+        coverPosition={page.coverPosition}
+        readOnly={isArchived}
+        onChange={(coverUrl) => adapter.updatePage(pageId, { coverUrl })}
+        onPositionChange={(pos) => adapter.updatePage(pageId, { coverPosition: pos })}
+        onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
+      />
 
       <article
         role="article"
@@ -941,12 +947,14 @@ export function PageView({ pageId }: { pageId: string }) {
             trigger={
               <button
                 type="button"
+                disabled={isArchived}
                 className={cn(
                   "shrink-0 self-start sm:self-center leading-none transition",
                   isIconUrl(page.icon ?? "") ? "rounded-[22px] sm:rounded-[28px]" : "rounded-[10px]",
-                  !hasCover && "hover:bg-[var(--surface-hover)]"
+                  !hasCover && !isArchived && "hover:bg-[var(--surface-hover)]",
+                  isArchived && "cursor-default"
                 )}
-                aria-label={t("page_icon")}
+                aria-label={isArchived ? undefined : t("page_icon")}
               >
                 <WorkspaceIcon
                   icon={page.icon}

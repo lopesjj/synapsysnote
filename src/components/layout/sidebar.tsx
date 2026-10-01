@@ -61,6 +61,7 @@ import type { Notebook } from "@/types/models";
 import { childrenOf, isNestedNotebook, parentIdOf } from "@/lib/data/notebook-tree";
 import { sortNotebooks, sortPageTree } from "@/lib/data/list-sort";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
+import { unarchiveNotebookTree, unarchivePageTree } from "@/lib/data/archive";
 import { MoveItemDialog, type MoveItemTarget } from "./move-dialog";
 import {
   ModuleSwitch,
@@ -277,6 +278,8 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
     flashcards,
     dueFlashcards,
     archivedCount,
+    archivedNotebooks,
+    archivedPages,
   } = useWorkspace();
   const activeModule = useActiveModule();
   const trashedCount = trashedPages.length + trashedDatabases.length + trashedNotebooks.length;
@@ -634,17 +637,23 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
             onRename={(name) => adapter.updateNotebook(notebook.id, { name })}
             onArchive={async () => {
               await adapter.updateNotebook(notebook.id, { archived: true });
-              toast.success(t("notebook_archived"), {
+              toast.success(isNestedNotebook(notebook) ? t("notebook_archived") : t("root_page_archived"), {
                 action: {
                   label: t("undo_action"),
-                  onClick: () => adapter.updateNotebook(notebook.id, { archived: false }),
+                  onClick: () =>
+                    unarchiveNotebookTree(
+                      adapter,
+                      [...notebooks, ...archivedNotebooks],
+                      [...livePages, ...archivedPages],
+                      notebook.id
+                    ),
                 },
               });
               if (active) router.push("/home");
             }}
             onDelete={async () => {
               const name = notebook.name?.trim() || (isNestedNotebook(notebook) ? t("notebook_count_singular") : t("new_page"));
-              if (!window.confirm(t("delete_notebook_confirm", { name }))) return;
+              if (!window.confirm(isNestedNotebook(notebook) ? t("delete_notebook_confirm", { name }) : t("delete_page_confirm", { name }))) return;
               await adapter.deleteNotebook(notebook.id);
               toast.success(isNestedNotebook(notebook) ? t("notebook_deleted") : t("page_deleted"));
               if (active) {
@@ -750,7 +759,12 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               toast.success(t("page_archived"), {
                 action: {
                   label: t("undo_action"),
-                  onClick: () => adapter.updatePage(node.page.id, { archived: false }),
+                  onClick: () =>
+                    unarchivePageTree(
+                      adapter,
+                      [...livePages, ...archivedPages],
+                      node.page.id
+                    ),
                 },
               });
               if (active) router.push("/home");
