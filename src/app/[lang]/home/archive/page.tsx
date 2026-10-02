@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { useTranslation } from "@/lib/i18n/translations";
 import { unarchiveNotebookTree, unarchivePageTree } from "@/lib/data/archive";
-import type { Notebook } from "@/types/models";
+import type { Notebook, Page } from "@/types/models";
 
 type Filter = "all" | "pages" | "notebooks" | "notes";
 type ArchiveKind = "page" | "notebook" | "note" | "subnote";
@@ -60,13 +60,18 @@ export default function ArchivePage() {
     for (const nb of notebooks) allNotebooks.set(nb.id, nb);
     for (const nb of archivedNotebooks) allNotebooks.set(nb.id, nb);
 
+    const allPagesMap = new Map<string, Page>();
+    for (const p of livePages) allPagesMap.set(p.id, p);
+    for (const p of archivedPages) allPagesMap.set(p.id, p);
+
     const pathOf = (notebookId: string | null | undefined): string | null => {
       const names: string[] = [];
       let cursor = notebookId ? allNotebooks.get(notebookId) : undefined;
       let guard = 0;
       while (cursor && guard < 12) {
         names.unshift(cursor.name || untitled);
-        cursor = cursor.parentId ? allNotebooks.get(cursor.parentId) : undefined;
+        const nextId = cursor.parentId ?? cursor.archivedFromParentId;
+        cursor = nextId ? allNotebooks.get(nextId) : undefined;
         guard += 1;
       }
       return names.length ? names.join(" › ") : null;
@@ -75,14 +80,15 @@ export default function ArchivePage() {
     const out: ArchiveRow[] = [];
 
     for (const nb of archivedNotebooks) {
-      const isRootPage = !nb.parentId;
+      const parentId = nb.parentId ?? nb.archivedFromParentId;
+      const isRootPage = !parentId;
       out.push({
         key: `notebook:${nb.id}`,
         id: nb.id,
         kind: isRootPage ? "page" : "notebook",
         title: nb.name || untitled,
         icon: nb.emoji,
-        place: pathOf(nb.parentId),
+        place: pathOf(parentId),
         href: `/home/n/${nb.id}`,
         badgeLabel: isRootPage ? t("trash_kind_page") : t("trash_kind_notebook"),
         openLabel: isRootPage ? t("archived_open_page") : t("archived_open_notebook"),
@@ -107,14 +113,24 @@ export default function ArchivePage() {
     }
 
     for (const page of archivedPages) {
-      const isSubnote = Boolean(page.parentPageId);
+      const parentPageId = page.parentPageId ?? page.archivedFromParentPageId;
+      const notebookId = page.notebookId ?? page.archivedFromNotebookId;
+      const isSubnote = Boolean(parentPageId);
+      const parentPage = parentPageId ? allPagesMap.get(parentPageId) : undefined;
+      const nbPlace = pathOf(notebookId);
+      const place = parentPage
+        ? nbPlace
+          ? `${nbPlace} › ${parentPage.title || untitled}`
+          : parentPage.title || untitled
+        : nbPlace;
+
       out.push({
         key: `page:${page.id}`,
         id: page.id,
         kind: isSubnote ? "subnote" : "note",
         title: page.title || untitled,
         icon: page.icon,
-        place: pathOf(page.notebookId),
+        place,
         href: `/home/p/${page.id}`,
         badgeLabel: isSubnote ? t("trash_kind_subnote") : t("trash_kind_note"),
         openLabel: t("archived_open_note"),

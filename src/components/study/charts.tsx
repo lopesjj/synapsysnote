@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
@@ -88,6 +88,7 @@ export function ColumnChart({
   emptyLabel,
   labelEvery = 1,
   integer = false,
+  variant = "plain",
 }: {
   data: ColumnDatum[];
   height?: number;
@@ -96,28 +97,50 @@ export function ColumnChart({
   emptyLabel?: string;
   labelEvery?: number;
   integer?: boolean;
+  variant?: "plain" | "refined";
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
-  const axisWidth = 40;
-  const bottom = 22;
-  const top = 8;
+  const gradient = useId().replace(/:/g, "");
+  const refined = variant === "refined";
+  const axisWidth = refined ? 38 : 34;
+  const bottom = refined ? 30 : 26;
+  const top = refined ? 12 : 8;
   const plotWidth = Math.max(0, width - axisWidth);
   const plotHeight = height - bottom - top;
+  const base = top + plotHeight;
   const { max, ticks } = niceScale(Math.max(...data.map((entry) => entry.value), 0), { integer });
   const band = data.length ? plotWidth / data.length : 0;
-  const barWidth = Math.min(24, Math.max(3, band * 0.56));
+  const barWidth = refined ? Math.min(52, Math.max(32, band * 0.58)) : Math.min(18, Math.max(3, band * 0.28));
   const allZero = data.every((entry) => entry.value === 0);
 
   return (
     <div ref={ref} className="relative w-full select-none" style={{ height }}>
       {width > 0 ? (
         <svg width={width} height={height} role="img" aria-label={ariaLabel} className="block overflow-visible">
+          {refined ? (
+            <defs>
+              <linearGradient id={`${gradient}bar`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" style={{ stopColor: "color-mix(in oklab, var(--accent) 38%, white)" }} />
+                <stop offset="0.22" stopColor="var(--accent)" />
+                <stop offset="1" style={{ stopColor: "color-mix(in oklab, var(--accent) 82%, black)" }} />
+              </linearGradient>
+            </defs>
+          ) : null}
           {ticks.map((tick) => {
-            const y = top + plotHeight - (tick / max) * plotHeight;
+            const y = base - (tick / max) * plotHeight;
             return (
               <g key={tick}>
-                <line x1={axisWidth} x2={width} y1={y} y2={y} stroke="var(--border)" strokeWidth={1} shapeRendering="crispEdges" />
+                <line
+                  x1={axisWidth}
+                  x2={width}
+                  y1={y}
+                  y2={y}
+                  stroke="var(--border)"
+                  strokeOpacity={refined ? (tick === 0 ? 0.8 : 0.4) : tick === 0 ? 0.9 : 0.45}
+                  strokeWidth={1}
+                  shapeRendering="crispEdges"
+                />
                 <text x={axisWidth - 8} y={y} dy="0.32em" textAnchor="end" className="fill-[var(--text-faint)] text-[10px] tabular-nums">
                   {formatTick(tick)}
                 </text>
@@ -127,24 +150,56 @@ export function ColumnChart({
           {data.map((entry, index) => {
             const x = axisWidth + band * index + band / 2;
             const h = max ? (entry.value / max) * plotHeight : 0;
-            const y = top + plotHeight - h;
-            const radius = Math.min(4, barWidth / 2, h);
+            const y = base - h;
+            const radius = refined ? Math.min(18, barWidth / 2, h) : Math.min(barWidth / 2, h);
             const active = hover === index;
+            const dimmed = hover !== null && !active;
+            const shown = index % labelEvery === 0 || data.length <= 8;
+            const left = x - barWidth / 2;
+            const right = x + barWidth / 2;
+            const opacity = active ? 1 : dimmed ? 0.28 : entry.emphasis ? 1 : entry.emphasis === false ? 0.4 : refined ? 0.82 : 0.72;
             return (
               <g key={entry.key}>
-                {h > 0 ? (
-                  <path
-                    d={`M${x - barWidth / 2},${top + plotHeight} V${y + radius} Q${x - barWidth / 2},${y} ${x - barWidth / 2 + radius},${y} H${x + barWidth / 2 - radius} Q${x + barWidth / 2},${y} ${x + barWidth / 2},${y + radius} V${top + plotHeight} Z`}
-                    fill="var(--accent)"
-                    opacity={hover === null || active ? (entry.emphasis === false ? 0.55 : 1) : 0.45}
-                  />
+                {refined && h <= 0 ? (
+                  <rect x={left} y={base - 6} width={barWidth} height={6} rx={3} fill="var(--surface-2)" opacity={active ? 1 : 0.95} />
                 ) : null}
-                {index % labelEvery === 0 || data.length <= 8 ? (
+                {h > 0 ? (
+                  refined ? (
+                    <g opacity={opacity} className="synapsys-rise transition-opacity duration-200" style={{ animationDelay: `${index * 40}ms` }}>
+                      <path
+                        d={`M${left},${base} V${y + radius} Q${left},${y} ${left + radius},${y} H${right - radius} Q${right},${y} ${right},${y + radius} V${base} Z`}
+                        fill={`url(#${gradient}bar)`}
+                      />
+                      {h > 36 ? (
+                        <path
+                          d={`M${left + 4},${Math.min(base - 8, y + radius + 6)} V${y + radius * 0.65} Q${left + 4},${y + 5} ${left + 4 + Math.min(10, radius)},${y + 5}`}
+                          fill="none"
+                          stroke="#fff"
+                          strokeWidth={2.2}
+                          strokeLinecap="round"
+                          opacity={0.38}
+                        />
+                      ) : null}
+                    </g>
+                  ) : (
+                    <path
+                      d={`M${left},${base} V${y + radius} A${radius} ${radius} 0 0 1 ${left + radius},${y} H${right - radius} A${radius} ${radius} 0 0 1 ${right},${y + radius} V${base} Z`}
+                      fill="var(--accent)"
+                      opacity={opacity}
+                      className="synapsys-rise transition-opacity duration-200"
+                      style={{ animationDelay: `${index * 40}ms` }}
+                    />
+                  )
+                ) : null}
+                {shown ? (
                   <text
                     x={x}
                     y={height - 6}
                     textAnchor="middle"
-                    className={cn("text-[10.5px]", entry.emphasis ? "fill-[var(--text)] font-medium" : "fill-[var(--text-faint)]")}
+                    className={cn(
+                      "text-[10.5px] transition-colors duration-200",
+                      entry.emphasis || (refined && active) ? "fill-[var(--accent)] font-medium" : active ? "fill-[var(--text)] font-medium" : "fill-[var(--text-faint)]"
+                    )}
                   >
                     {entry.label}
                   </text>
@@ -161,15 +216,6 @@ export function ColumnChart({
               </g>
             );
           })}
-          <line
-            x1={axisWidth}
-            x2={width}
-            y1={top + plotHeight}
-            y2={top + plotHeight}
-            stroke="var(--border-strong)"
-            strokeWidth={1}
-            shapeRendering="crispEdges"
-          />
         </svg>
       ) : null}
       {allZero && emptyLabel ? (
@@ -393,7 +439,7 @@ export function Donut({
     <div className="@container">
     <div className="flex flex-col items-center gap-5 @md:flex-row @md:items-center">
       <div className="relative shrink-0" style={{ width: size, height: size }}>
-        <svg width={size} height={size} role="img" aria-label={ariaLabel} className="-rotate-90">
+        <svg width={size} height={size} role="img" aria-label={ariaLabel} className="-rotate-90 overflow-visible">
           <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--surface-2)" strokeWidth={thickness} />
           {total > 0
             ? segments.map((segment) => {
@@ -449,110 +495,6 @@ export function Donut({
         ))}
       </ul>
     </div>
-    </div>
-  );
-}
-
-export interface HeatCell {
-  key: string;
-  level: 0 | 1 | 2 | 3 | 4;
-  status: "studied" | "missed" | "rest" | "pending" | "before" | "future";
-  tooltip: ReactNode;
-}
-
-export const HEAT_MISSED = "color-mix(in oklab, var(--danger) 78%, var(--surface))";
-export const HEAT_REST = "color-mix(in oklab, var(--surface-2) 45%, transparent)";
-
-export function heatColor(cell: Pick<HeatCell, "level" | "status">): string {
-  if (cell.status === "studied" && cell.level) return `var(--heat-${cell.level})`;
-  if (cell.status === "missed") return HEAT_MISSED;
-  if (cell.status === "rest") return HEAT_REST;
-  return "var(--surface-2)";
-}
-
-export function heatWeeks(width: number, labelWidth: number, gap: number, target = 15): number {
-  if (!width) return 26;
-  return Math.max(12, Math.min(53, Math.floor((width - labelWidth + gap) / (target + gap))));
-}
-
-export function Heatmap({
-  weeks,
-  rowLabels,
-  columnLabels,
-  ariaLabel,
-  labelWidth = 30,
-  gap = 4,
-}: {
-  weeks: HeatCell[][];
-  rowLabels: string[];
-  columnLabels: { index: number; label: string }[];
-  ariaLabel: string;
-  labelWidth?: number;
-  gap?: number;
-}) {
-  const [ref, width] = useWidth<HTMLDivElement>();
-  const [hover, setHover] = useState<{ week: number; day: number } | null>(null);
-  const available = Math.max(0, width - labelWidth);
-  const cell = weeks.length ? Math.max(9, Math.min(22, (available - (weeks.length - 1) * gap) / weeks.length)) : 12;
-  const radius = Math.max(2.5, cell * 0.28);
-  const headerHeight = 18;
-
-  return (
-    <div ref={ref} className="relative w-full" role="img" aria-label={ariaLabel}>
-      <div className="relative" style={{ height: headerHeight, marginLeft: labelWidth }}>
-        {columnLabels.map((column) => (
-          <span
-            key={`${column.index}-${column.label}`}
-            className="absolute top-0 text-[11px] capitalize text-faint"
-            style={{ left: column.index * (cell + gap) }}
-          >
-            {column.label}
-          </span>
-        ))}
-      </div>
-      <div className="flex">
-        <div className="flex shrink-0 flex-col" style={{ width: labelWidth, gap }}>
-          {rowLabels.map((label, index) => (
-            <span key={index} className="flex items-center text-[10.5px] capitalize text-faint" style={{ height: cell }}>
-              {label}
-            </span>
-          ))}
-        </div>
-        <div className="flex" style={{ gap }}>
-          {weeks.map((week, weekIndex) => (
-            <div key={weekIndex} className="flex flex-col" style={{ gap }}>
-              {week.map((day, dayIndex) => {
-                const active = hover?.week === weekIndex && hover.day === dayIndex;
-                return (
-                  <span
-                    key={day.key}
-                    onPointerEnter={() => (day.status === "future" ? undefined : setHover({ week: weekIndex, day: dayIndex }))}
-                    onPointerLeave={() => setHover(null)}
-                    className={cn("block transition-transform duration-150", day.status === "future" && "invisible", active && "scale-[1.18]")}
-                    style={{
-                      width: cell,
-                      height: cell,
-                      borderRadius: radius,
-                      backgroundColor: heatColor(day),
-                      boxShadow:
-                        day.status === "pending"
-                          ? "inset 0 0 0 1.5px var(--accent)"
-                          : active
-                            ? "0 0 0 2px var(--surface), 0 0 0 3.5px var(--text-muted)"
-                            : undefined,
-                    }}
-                  />
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-      {hover ? (
-        <ChartTooltip x={labelWidth + hover.week * (cell + gap) + cell / 2} y={headerHeight + hover.day * (cell + gap)} width={width}>
-          {weeks[hover.week]?.[hover.day]?.tooltip}
-        </ChartTooltip>
-      ) : null}
     </div>
   );
 }

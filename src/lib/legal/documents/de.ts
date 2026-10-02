@@ -184,7 +184,7 @@ const de: LegalBundle = {
               rows: [
                 ["Registrierung", "Name, E-Mail, Telefonnummer und Profilbild", "Du oder dein Google-Konto"],
                 ["Zugangsdaten", "Passwort, nur verschlüsselt vom Authentifizierungsanbieter gespeichert", "Du"],
-                ["Inhalte", "Notizen, Seiten, Notizbücher, Lernkarten, Anhänge, Audio und Video; im Lernmodul Ziele, Fächer und Themen (mit den externen Links, die du hinzufügst), Lerneinheiten (mit Material und verknüpften Notizen), Aufgaben, Wiederholungen, Probeprüfungen, Lernpläne, Erinnerungen und Schnellnotizen", "Du und die von dir durchgeführten Importe"],
+                ["Inhalte", "Notizen, Seiten, Notizbücher, Lernkarten, Anhänge, Audio und Video; im Lernmodul Ziele, Fächer und Themen (mit den externen Links, die du hinzufügst), Lerneinheiten (mit Material und verknüpften Notizen), Aufgaben, Wiederholungen, Probeprüfungen, Lernpläne, Erinnerungen, Schnellnotizen und die in deiner Vitrine aufbewahrten Erfolge (mit dem Datum der Aufbewahrung)", "Du und die von dir durchgeführten Importe"],
                 ["Integrationen", "Zugriffstoken für Notion, Evernote und Google Docs", "Der verbundene Dienst, mit deiner Autorisierung"],
                 ["Einstellungen", "Sprache, Design, Barrierefreiheit und Layout", "Du"],
                 ["Zustimmung zu Dokumenten", "Version und Datum, an dem du die Nutzungsbedingungen und diese Richtlinie akzeptiert hast", "Du"],

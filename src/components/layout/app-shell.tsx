@@ -142,6 +142,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname, autoCollapseSidebar]);
 
   useEffect(() => {
+    if (zenMode) useUiStore.getState().setMobileSidebarOpen(false);
+  }, [zenMode]);
+
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 768px)");
+    const closeIfDesktop = () => {
+      if (query.matches) useUiStore.getState().setMobileSidebarOpen(false);
+    };
+    closeIfDesktop();
+    query.addEventListener("change", closeIfDesktop);
+    return () => query.removeEventListener("change", closeIfDesktop);
+  }, []);
+
+  useEffect(() => {
     document.documentElement.style.setProperty("--ui-font-scale", String(uiZoom));
   }, [uiZoom]);
 
@@ -311,14 +325,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (key === "b" && !isEditingText(event.target)) {
+      if ((key === "b" || event.key === "\\") && !isEditingText(event.target)) {
         event.preventDefault();
-        store.toggleSidebar();
-        return;
-      }
-      if (event.key === "\\") {
-        event.preventDefault();
-        store.toggleSidebar();
+        if (window.matchMedia("(max-width: 767px)").matches) {
+          store.setMobileSidebarOpen(!store.mobileSidebarOpen);
+        } else {
+          store.toggleSidebar();
+        }
       }
     },
     [adapter, databases, pages, pathname, router]
@@ -361,39 +374,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {chromeHidden ? null : <DesktopSidebar />}
 
-      <AnimatePresence>
-        {mobileSidebarOpen ? (
-          <motion.div
-            className="fixed inset-0 z-60 md:hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <div
-              className="absolute inset-0 bg-black/50"
-              onClick={() => useUiStore.getState().setMobileSidebarOpen(false)}
-            />
-            <motion.div
-              className="absolute inset-y-0 left-0"
-              initial={{ x: -280 }}
-              animate={{ x: 0 }}
-              exit={{ x: -280 }}
-              transition={reducedMotion ? { duration: 0 } : { duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <Sidebar collapsed={false} width={320} />
-            </motion.div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+      <MobileSidebar />
 
-      <main id="main-content" tabIndex={-1} className="relative flex min-w-0 flex-1 flex-col focus:outline-none">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        inert={mobileSidebarOpen ? true : undefined}
+        className="relative flex min-w-0 flex-1 flex-col focus:outline-none"
+      >
         {chromeHidden || isDocView ? null : (
-          <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface)]/90 px-3.5 py-2.5 backdrop-blur-xl md:hidden">
+          <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface)]/90 px-3.5 pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top,0px))] backdrop-blur-xl md:hidden">
             <button
               type="button"
               onClick={() => useUiStore.getState().setMobileSidebarOpen(true)}
               aria-label={t("open_menu")}
-              className="group flex size-9 items-center justify-center rounded-xl border border-[var(--border)]/80 bg-[var(--surface-2)]/80 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-md transition-all hover:border-[var(--accent)]/40 hover:bg-[var(--surface-3)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/25"
+              className="group flex size-11 items-center justify-center rounded-xl border border-[var(--border)]/80 bg-[var(--surface-2)]/80 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-md transition-all hover:border-[var(--accent)]/40 hover:bg-[var(--surface-3)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/25"
             >
               <span className="flex flex-col items-start justify-center gap-[3.5px]">
                 <span className="h-[2px] w-4 rounded-full bg-current transition-all duration-200 group-hover:w-4.5" />
@@ -410,6 +405,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div
           className={cn(
             "min-h-0 flex-1 overflow-y-auto",
+            mobileSidebarOpen && "max-md:overflow-hidden",
             focusPillVisible ? "pb-[calc(10.5rem+env(safe-area-inset-bottom,0px))] md:pb-[6.75rem]" : "pb-20 md:pb-0"
           )}
         >
@@ -479,7 +475,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
 
       
-      {!chromeHidden ? <BottomNav /> : null}
+      {!chromeHidden ? <BottomNav inert={mobileSidebarOpen} /> : null}
 
       <CommandPalette
         open={paletteOpen}
@@ -582,7 +578,68 @@ function isEditingText(target: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
-function BottomNav() {
+function MobileSidebar() {
+  const { t } = useTranslation();
+  const open = useUiStore((state) => state.mobileSidebarOpen);
+  const reducedMotion = useUiStore((state) => state.reducedMotion);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const frame = requestAnimationFrame(() => panelRef.current?.focus());
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const target = event.target;
+      if (target instanceof Element && target.closest("[role='menu']")) return;
+      if (isEditingText(event.target)) return;
+      event.preventDefault();
+      useUiStore.getState().setMobileSidebarOpen(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey, true);
+      cancelAnimationFrame(frame);
+    };
+  }, [open]);
+
+  return (
+    <AnimatePresence>
+      {open ? (
+        <motion.div
+          className="fixed inset-0 z-60 md:hidden"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={reducedMotion ? { duration: 0 } : { duration: 0.2 }}
+        >
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => useUiStore.getState().setMobileSidebarOpen(false)}
+          />
+          <motion.div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("main_navigation")}
+            tabIndex={-1}
+            className="absolute inset-y-0 left-0 h-full w-[min(20rem,calc(100%-3.25rem))] overflow-hidden shadow-[8px_0_32px_rgba(0,0,0,0.18)] outline-none"
+            initial={{ x: "-100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "-100%" }}
+            transition={reducedMotion ? { duration: 0 } : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <Sidebar collapsed={false} width={320} mobile />
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
+function BottomNav({ inert = false }: { inert?: boolean }) {
   const { t } = useTranslation();
   const { st } = useStudyT();
   const router = useRouter();
@@ -605,7 +662,8 @@ function BottomNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 flex border-t border-[var(--border)] bg-[var(--surface)]/95 py-3.5 pb-[calc(0.875rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl md:hidden"
+      inert={inert ? true : undefined}
+      className="fixed inset-x-0 bottom-0 z-50 flex border-t border-[var(--border)] bg-[var(--surface)]/95 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl md:hidden"
       aria-label={t("main_navigation")}
     >
       <MobileNavItem
@@ -664,7 +722,7 @@ function MobileNavItem({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
+        "flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 text-center text-[10px] font-medium leading-tight transition-colors",
         active ? "text-[var(--accent)]" : "text-muted hover:text-ink"
       )}
       aria-label={label}
@@ -677,7 +735,7 @@ function MobileNavItem({
       >
         {icon}
       </span>
-      {label}
+      <span className="line-clamp-2 w-full">{label}</span>
     </button>
   );
 }

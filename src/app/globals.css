@@ -57,10 +57,6 @@
   --rating-good-text: #0e6e86;
   --rating-easy: #059669;
   --rating-easy-text: #047857;
-  --heat-1: #cfe7ec;
-  --heat-2: #8cc6d2;
-  --heat-3: #3f98ad;
-  --heat-4: #0b5f75;
   --band-low: #c2352f;
   --band-mid: #b7791f;
   --band-high: #2f855a;
@@ -78,6 +74,18 @@
   --sticky-rose: #fbe1e6;
   --sticky-lilac: #ebe3fb;
   --sticky-ink: #2a2a24;
+  --laurel: #9a7b1f;
+  --cover-bg: #f7fafc;
+  --cover-bg-2: #e6eff6;
+  --cover-fg: #0f2c4c;
+  --cover-muted: #4f6274;
+  --cover-faint: #7f8fa0;
+  --cover-line: rgba(15, 44, 76, 0.11);
+  --cover-chip: rgba(255, 255, 255, 0.72);
+  --cover-chip-hover: rgba(255, 255, 255, 0.95);
+  --cover-accent: #0e7490;
+  --cover-accent-contrast: #ffffff;
+  --cover-glow: 16%;
   --shadow-panel: 0 1px 2px rgba(15, 44, 76, 0.04), 0 8px 24px -12px rgba(15, 44, 76, 0.14);
   --shadow-float: 0 12px 48px -12px rgba(15, 44, 76, 0.22);
   --selection: rgba(14, 116, 144, 0.22);
@@ -99,12 +107,6 @@
   --code-syntax-regexp: #0e7490;
   --code-syntax-deletion: #b91c1c;
   --code-syntax-addition: #047857;
-  --sky-dim: 0;
-  --sky-ink-soft: #10243d;
-  --sky-chip-soft: rgba(255, 255, 255, 0.58);
-  --sky-chip-soft-ring: rgba(255, 255, 255, 0.8);
-  --sky-cta-soft-bg: #10243d;
-  --sky-cta-soft-fg: #ffffff;
   --archive-banner-bg: rgba(245, 158, 11, 0.12);
   --archive-banner-border: rgba(245, 158, 11, 0.28);
   --archive-banner-text: #451a03;
@@ -140,10 +142,6 @@
   --rating-good-text: #7dd3fc;
   --rating-easy: #34d399;
   --rating-easy-text: #6ee7b7;
-  --heat-1: #123a47;
-  --heat-2: #19606f;
-  --heat-3: #2b8fa2;
-  --heat-4: #6fd0e0;
   --band-low: #f07167;
   --band-mid: #e9b44c;
   --band-high: #52c28b;
@@ -159,6 +157,18 @@
   --sticky-rose: #43252e;
   --sticky-lilac: #2f2745;
   --sticky-ink: #ece8dc;
+  --laurel: #d4b35a;
+  --cover-bg: #0b1a2a;
+  --cover-bg-2: #122a42;
+  --cover-fg: #eef4f9;
+  --cover-muted: rgba(238, 244, 249, 0.66);
+  --cover-faint: rgba(238, 244, 249, 0.4);
+  --cover-line: rgba(238, 244, 249, 0.12);
+  --cover-chip: rgba(255, 255, 255, 0.07);
+  --cover-chip-hover: rgba(255, 255, 255, 0.14);
+  --cover-accent: #6cc8d6;
+  --cover-accent-contrast: #0b1a2a;
+  --cover-glow: 22%;
   --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 24px 48px -24px rgba(0, 0, 0, 0.8);
   --shadow-float: 0 24px 64px -16px rgba(0, 0, 0, 0.85);
   --selection: rgba(58, 166, 184, 0.32);
@@ -174,12 +184,6 @@
   --code-syntax-regexp: #2dd4bf;
   --code-syntax-deletion: #f87171;
   --code-syntax-addition: #4ade80;
-  --sky-dim: 0.52;
-  --sky-ink-soft: #f1f5f9;
-  --sky-chip-soft: rgba(255, 255, 255, 0.12);
-  --sky-chip-soft-ring: rgba(255, 255, 255, 0.22);
-  --sky-cta-soft-bg: #ffffff;
-  --sky-cta-soft-fg: #10243d;
   --archive-banner-bg: rgba(120, 53, 15, 0.35);
   --archive-banner-border: rgba(245, 158, 11, 0.3);
   --archive-banner-text: #fef3c7;
@@ -320,6 +324,223 @@
   .grain::after {
     content: none;
   }
+
+  .font-display {
+    font-family: var(--font-newsreader), "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    font-feature-settings: "kern", "liga", "onum" 0, "lnum", "tnum";
+  }
+
+  .study-cover {
+    position: relative;
+    isolation: isolate;
+    color: var(--cover-fg);
+    background:
+      radial-gradient(90% 120% at 100% 0%, color-mix(in oklab, var(--cover-accent) var(--cover-glow), transparent) 0%, transparent 55%),
+      radial-gradient(70% 90% at 100% 100%, color-mix(in oklab, var(--cover-accent) calc(var(--cover-glow) / 2), transparent) 0%, transparent 60%),
+      linear-gradient(118deg, var(--cover-bg) 0%, var(--cover-bg-2) 100%);
+  }
+
+  .home-sky {
+    --sky-base: var(--surface-2);
+    --sky-glow: transparent;
+    --sky-ink: var(--text);
+    --sky-muted: var(--text-muted);
+    --sky-ring: rgba(15, 44, 76, 0.13);
+    --sky-cta-bg: #0f2c4c;
+    --sky-cta-fg: #ffffff;
+    --sky-stars: 0;
+    --sky-bar: var(--border-strong);
+    --sky-bar-today: var(--accent);
+    color: var(--sky-ink);
+    background:
+      radial-gradient(300px circle at var(--sky-at, right 120px top 60px), var(--sky-glow), transparent 70%),
+      var(--sky-base);
+  }
+
+  .home-sky[data-phase="night"] {
+    --sky-base: linear-gradient(168deg, #101d45 0%, #1f2f66 52%, #3a3f86 100%);
+    --sky-glow: rgba(200, 210, 255, 0.3);
+    --sky-ink: #ffffff;
+    --sky-muted: rgba(235, 240, 255, 0.76);
+    --sky-ring: rgba(255, 255, 255, 0.16);
+    --sky-cta-bg: #ffffff;
+    --sky-cta-fg: #14224d;
+    --sky-stars: 1;
+    --sky-bar: rgba(214, 222, 255, 0.5);
+    --sky-bar-today: #ffffff;
+  }
+
+  .home-sky[data-phase="dawn"] {
+    --sky-base: linear-gradient(168deg, #2a3a72 0%, #7a5597 40%, #df9294 74%, #f7cfa6 100%);
+    --sky-glow: rgba(255, 214, 170, 0.6);
+    --sky-ink: #ffffff;
+    --sky-muted: rgba(255, 244, 236, 0.84);
+    --sky-ring: rgba(255, 255, 255, 0.22);
+    --sky-cta-bg: #ffffff;
+    --sky-cta-fg: #3b2a5e;
+    --sky-stars: 0.7;
+    --sky-bar: rgba(255, 238, 226, 0.55);
+    --sky-bar-today: #ffffff;
+  }
+
+  .home-sky[data-phase="morning"] {
+    --sky-base: linear-gradient(168deg, #c3e1ff 0%, #e2f1ff 46%, #fdf1da 100%);
+    --sky-glow: rgba(255, 232, 176, 0.95);
+    --sky-ink: #10243d;
+    --sky-muted: #44607c;
+    --sky-ring: rgba(16, 36, 61, 0.14);
+    --sky-cta-bg: #10243d;
+    --sky-cta-fg: #ffffff;
+    --sky-bar: #8db4da;
+    --sky-bar-today: #d38b2c;
+  }
+
+  .home-sky[data-phase="afternoon"] {
+    --sky-base: linear-gradient(168deg, #90c8f3 0%, #c4e3fb 52%, #eef7ff 100%);
+    --sky-glow: rgba(255, 246, 212, 0.9);
+    --sky-ink: #0e2440;
+    --sky-muted: #3d5a78;
+    --sky-ring: rgba(14, 36, 64, 0.14);
+    --sky-cta-bg: #0e2440;
+    --sky-cta-fg: #ffffff;
+    --sky-bar: #86b6dd;
+    --sky-bar-today: #1b5a93;
+  }
+
+  .home-sky[data-phase="dusk"] {
+    --sky-base: linear-gradient(168deg, #2c2b66 0%, #84497e 46%, #e38762 84%, #f6bf7b 100%);
+    --sky-glow: rgba(255, 186, 120, 0.62);
+    --sky-ink: #ffffff;
+    --sky-muted: rgba(255, 240, 228, 0.84);
+    --sky-ring: rgba(255, 255, 255, 0.2);
+    --sky-cta-bg: #ffffff;
+    --sky-cta-fg: #3a2350;
+    --sky-stars: 0.6;
+    --sky-bar: rgba(255, 232, 214, 0.55);
+    --sky-bar-today: #ffe1b8;
+  }
+
+  .dark .home-sky {
+    --sky-ring: rgba(255, 255, 255, 0.12);
+    --sky-cta-bg: #ffffff;
+    --sky-cta-fg: #0b1a2a;
+    --sky-bar: rgba(226, 238, 250, 0.36);
+    --sky-bar-today: var(--accent);
+  }
+
+  .dark .home-sky[data-phase="night"] {
+    --sky-base: linear-gradient(168deg, #060c1f 0%, #0e1a3d 55%, #1d2257 100%);
+    --sky-glow: rgba(180, 194, 255, 0.2);
+    --sky-muted: rgba(220, 228, 250, 0.7);
+    --sky-bar: rgba(196, 206, 255, 0.34);
+    --sky-bar-today: #dfe4ff;
+  }
+
+  .dark .home-sky[data-phase="dawn"] {
+    --sky-base: linear-gradient(168deg, #121a3c 0%, #40305e 44%, #8a586b 78%, #b98468 100%);
+    --sky-glow: rgba(255, 196, 150, 0.32);
+    --sky-muted: rgba(255, 236, 226, 0.74);
+    --sky-bar: rgba(255, 226, 210, 0.36);
+    --sky-bar-today: #ffcda6;
+  }
+
+  .dark .home-sky[data-phase="morning"] {
+    --sky-base: linear-gradient(168deg, #0f2442 0%, #1c4068 56%, #4a5f78 100%);
+    --sky-glow: rgba(255, 214, 150, 0.32);
+    --sky-ink: #f2f7fc;
+    --sky-muted: rgba(226, 238, 250, 0.74);
+    --sky-bar: rgba(190, 216, 242, 0.4);
+    --sky-bar-today: #f2c377;
+  }
+
+  .dark .home-sky[data-phase="afternoon"] {
+    --sky-base: linear-gradient(168deg, #0c2440 0%, #17426a 54%, #285f88 100%);
+    --sky-glow: rgba(255, 238, 196, 0.24);
+    --sky-ink: #f2f7fc;
+    --sky-muted: rgba(226, 238, 250, 0.74);
+    --sky-bar: rgba(190, 216, 242, 0.4);
+    --sky-bar-today: #a5d8f7;
+  }
+
+  .dark .home-sky[data-phase="dusk"] {
+    --sky-base: linear-gradient(168deg, #14143a 0%, #432a52 46%, #8a4d48 84%, #a8714b 100%);
+    --sky-glow: rgba(255, 170, 110, 0.3);
+    --sky-muted: rgba(255, 232, 220, 0.74);
+    --sky-bar: rgba(255, 222, 204, 0.36);
+    --sky-bar-today: #ffc28a;
+  }
+}
+
+@keyframes synapsys-paper {
+  0% {
+    transform: translate3d(0, -24px, 0) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--paper-drift, 0px), 460px, 0) rotate(var(--paper-spin, 540deg));
+    opacity: 0;
+  }
+}
+
+.synapsys-paper {
+  animation-name: synapsys-paper;
+  animation-timing-function: cubic-bezier(0.2, 0.6, 0.4, 1);
+  animation-fill-mode: both;
+}
+
+@keyframes synapsys-stamp {
+  0% {
+    transform: scale(1.5) rotate(-14deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.94) rotate(2deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.synapsys-stamp {
+  animation: synapsys-stamp 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes synapsys-rise {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.synapsys-rise {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: synapsys-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .synapsys-paper {
+    display: none;
+  }
+  .synapsys-stamp,
+  .synapsys-rise {
+    animation: none;
+  }
+}
+
+html[data-reduced-motion="true"] .synapsys-rise {
+  animation: none;
+}
+
+html[data-reduced-motion="true"] .synapsys-paper {
+  display: none;
 }
 
 [class~="text-[9px]"]:not([class*="sm:text-["]):not([class*="md:text-["]):not([class*="lg:text-["]):not([class*="xl:text-["]) { font-size: 0.5625rem; }

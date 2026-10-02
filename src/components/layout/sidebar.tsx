@@ -45,7 +45,7 @@ import {
   Search,
   Star,
   Trash2,
-  Upload,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, compareNatural, isMac } from "@/lib/utils";
@@ -58,10 +58,15 @@ import { useTranslation } from "@/lib/i18n/translations";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { UserMenu } from "./user-menu";
 import type { Notebook } from "@/types/models";
-import { childrenOf, isNestedNotebook, parentIdOf } from "@/lib/data/notebook-tree";
+import { childrenOf, isParkedNotebook, parentIdOf, presentsAsNotebook } from "@/lib/data/notebook-tree";
 import { sortNotebooks, sortPageTree } from "@/lib/data/list-sort";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
-import { unarchiveNotebookTree, unarchivePageTree } from "@/lib/data/archive";
+import {
+  unarchiveNotebookTree,
+  unarchivePageTree,
+  archiveNotebookTree,
+  archivePageTree,
+} from "@/lib/data/archive";
 import { MoveItemDialog, type MoveItemTarget } from "./move-dialog";
 import {
   ModuleSwitch,
@@ -101,8 +106,25 @@ const detectCollisions: CollisionDetection = (args) => {
   return within.length ? within : closestCenter(args);
 };
 
-const GRIP_CLASS =
-  "shrink-0 cursor-grab rounded p-0.5 text-faint hover:text-ink active:cursor-grabbing";
+const GRIP_CLASS = cn(
+  "shrink-0 cursor-grab rounded p-0.5 text-faint hover:text-ink active:cursor-grabbing",
+  "[@media(pointer:coarse)]:flex [@media(pointer:coarse)]:size-9 [@media(pointer:coarse)]:items-center [@media(pointer:coarse)]:justify-center [@media(pointer:coarse)]:p-0"
+);
+
+const ROW_ICON_BUTTON =
+  "flex shrink-0 items-center justify-center rounded p-0.5 text-faint hover:text-ink [@media(pointer:coarse)]:size-9 [@media(pointer:coarse)]:p-0";
+
+const ROW_CHEVRON =
+  "flex size-4 shrink-0 items-center justify-center rounded text-faint transition hover:text-ink [@media(pointer:coarse)]:size-8";
+
+function rowActionsClass(menuOpen: boolean) {
+  return cn(
+    "grid transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+    menuOpen
+      ? "grid-cols-[1fr]"
+      : "grid-cols-[0fr] group-hover:grid-cols-[1fr] [@media(hover:none)]:grid-cols-[1fr] [@media(pointer:coarse)]:grid-cols-[1fr]"
+  );
+}
 
 function sortableIds(nodes: PageTreeNode[]): string[] {
   return nodes.flatMap((node) => [
@@ -260,7 +282,15 @@ function setSessionState<T>(key: string, value: T) {
   } catch {}
 }
 
-export function Sidebar({ collapsed, width }: { collapsed: boolean; width: number }) {
+export function Sidebar({
+  collapsed,
+  width,
+  mobile = false,
+}: {
+  collapsed: boolean;
+  width: number;
+  mobile?: boolean;
+}) {
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
@@ -335,7 +365,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   }, [expanded]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 10 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -363,6 +393,15 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
   const sortedRootNotebooks = useMemo(
     () => sortNotebooks(rootNotebooks, notebooksSort, notebooksSortDirection),
     [rootNotebooks, notebooksSort, notebooksSortDirection]
+  );
+  const parkedNotebooks = useMemo(
+    () =>
+      sortNotebooks(
+        notebooks.filter((notebook) => isParkedNotebook(notebook)),
+        notebooksSort,
+        notebooksSortDirection
+      ),
+    [notebooks, notebooksSort, notebooksSortDirection]
   );
 
   const contents = useMemo(() => {
@@ -405,6 +444,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
     if (parentId) setOpenNotebooks((prev) => ({ ...prev, [parentId]: true }));
     setOpenNotebooks((prev) => ({ ...prev, [notebook.id]: true }));
     toast.success(parentId ? t("notebook_created") : t("page_created"));
+    useUiStore.getState().setMobileSidebarOpen(false);
     router.push(`/home/n/${notebook.id}`);
   };
 
@@ -627,7 +667,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                 const copy = await adapter.duplicateNotebook(notebook.id);
                 setOpenNotebooks((prev) => ({ ...prev, [copy.id]: true }));
                 toast.success(
-                  isNestedNotebook(notebook) ? t("notebook_duplicated") : t("page_duplicated")
+                  presentsAsNotebook(notebook) ? t("notebook_duplicated") : t("page_duplicated")
                 );
                 router.push(`/home/n/${copy.id}`);
               } catch {
@@ -636,8 +676,13 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
             }}
             onRename={(name) => adapter.updateNotebook(notebook.id, { name })}
             onArchive={async () => {
-              await adapter.updateNotebook(notebook.id, { archived: true });
-              toast.success(isNestedNotebook(notebook) ? t("notebook_archived") : t("root_page_archived"), {
+              const result = await archiveNotebookTree(
+                adapter,
+                [...notebooks, ...archivedNotebooks],
+                [...livePages, ...archivedPages],
+                notebook.id
+              );
+              toast.success(result.isRootPage ? t("root_page_archived") : t("notebook_archived"), {
                 action: {
                   label: t("undo_action"),
                   onClick: () =>
@@ -652,10 +697,10 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               if (active) router.push("/home");
             }}
             onDelete={async () => {
-              const name = notebook.name?.trim() || (isNestedNotebook(notebook) ? t("notebook_count_singular") : t("new_page"));
-              if (!window.confirm(isNestedNotebook(notebook) ? t("delete_notebook_confirm", { name }) : t("delete_page_confirm", { name }))) return;
+              const name = notebook.name?.trim() || (presentsAsNotebook(notebook) ? t("notebook_count_singular") : t("new_page"));
+              if (!window.confirm(presentsAsNotebook(notebook) ? t("delete_notebook_confirm", { name }) : t("delete_page_confirm", { name }))) return;
               await adapter.deleteNotebook(notebook.id);
-              toast.success(isNestedNotebook(notebook) ? t("notebook_deleted") : t("page_deleted"));
+              toast.success(presentsAsNotebook(notebook) ? t("notebook_deleted") : t("page_deleted"));
               if (active) {
                 const parent = parentIdOf(notebook);
                 router.push(parent ? `/home/n/${parent}` : "/home");
@@ -755,7 +800,11 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               if (active) router.push("/home");
             }}
             onArchive={async () => {
-              await adapter.updatePage(node.page.id, { archived: true });
+              await archivePageTree(
+                adapter,
+                [...livePages, ...archivedPages],
+                node.page.id
+              );
               toast.success(t("page_archived"), {
                 action: {
                   label: t("undo_action"),
@@ -797,50 +846,84 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
       ? notebooks.find((notebook) => notebook.id === dragging.id)?.emoji
       : livePages.find((page) => page.id === dragging?.id)?.icon;
 
+  const chromeButton = (
+    <button
+      type="button"
+      onClick={() =>
+        mobile
+          ? useUiStore.getState().setMobileSidebarOpen(false)
+          : useUiStore.getState().collapseSidebar()
+      }
+      aria-label={mobile ? t("close") : t("collapse_sidebar")}
+      className={cn("relative flex w-full select-none items-center", CHROME_HIT_CLASS)}
+    >
+      <span className="flex w-[76px] shrink-0 items-center justify-center">
+        <SynapsysMark size={SIDEBAR_MARK_SIZE} />
+      </span>
+      <span className="pointer-events-none absolute inset-y-0 left-[76px] right-9 flex select-none items-center justify-center overflow-hidden">
+        <SynapsysLettering />
+      </span>
+      {mobile ? (
+        <X className="ml-auto size-4 shrink-0 text-ink" strokeWidth={1.75} />
+      ) : (
+        <PanelLeftClose className="ml-auto size-4 shrink-0 text-ink" strokeWidth={1.75} />
+      )}
+    </button>
+  );
+
   return (
     <aside
       data-sidebar
-      className="flex h-full shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]"
-      style={{ width }}
+      className={cn(
+        "flex h-full min-h-0 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]",
+        mobile && "w-full max-w-full"
+      )}
+      style={
+        mobile
+          ? { paddingLeft: "env(safe-area-inset-left, 0px)" }
+          : { width }
+      }
     >
       <div
-        className="relative flex items-center pr-3.5 pt-8 pb-6"
-        style={{ paddingTop: "calc(2rem + env(safe-area-inset-top, 0px))" }}
+        className="relative flex shrink-0 items-center overflow-hidden pr-3.5 pb-6"
+        style={{
+          paddingTop: mobile
+            ? "calc(1.5rem + env(safe-area-inset-top, 0px))"
+            : "calc(2rem + env(safe-area-inset-top, 0px))",
+        }}
       >
-        <Tooltip label={t("collapse_sidebar")} shortcut={isMac() ? "⌘B" : "Ctrl B"} side="right">
-          <button
-            type="button"
-            onClick={() => useUiStore.getState().collapseSidebar()}
-            aria-label={t("collapse_sidebar")}
-            className={cn("relative flex w-full select-none items-center", CHROME_HIT_CLASS)}
-          >
-            <span className="flex w-[76px] shrink-0 items-center justify-center">
-              <SynapsysMark size={SIDEBAR_MARK_SIZE} />
-            </span>
-            <span className="pointer-events-none absolute inset-y-0 left-[76px] right-9 flex select-none items-center justify-center">
-              <SynapsysLettering />
-            </span>
-            <PanelLeftClose className="ml-auto size-4 shrink-0 text-ink" strokeWidth={1.75} />
-          </button>
-        </Tooltip>
+        {mobile ? (
+          chromeButton
+        ) : (
+          <Tooltip label={t("collapse_sidebar")} shortcut={isMac() ? "⌘B" : "Ctrl B"} side="right">
+            {chromeButton}
+          </Tooltip>
+        )}
       </div>
 
-      <div className="px-3 pb-3">
-        <ModuleSwitch />
+      <div
+        className={cn(
+          mobile
+            ? "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain"
+            : "flex min-h-0 flex-1 flex-col"
+        )}
+      >
+      <div className={cn("shrink-0 px-3 pb-3", mobile && "pt-2")}>
+        <ModuleSwitch layoutId={mobile ? "synapsys-module-thumb-mobile" : "synapsys-module-thumb"} />
       </div>
 
       {activeModule === "study" ? (
-        <StudySidebarBody homeLink={homeLink} />
+        <StudySidebarBody homeLink={homeLink} mobile={mobile} />
       ) : (
         <>
-      <div className="space-y-0.5 px-3">
+      <div className="shrink-0 space-y-0.5 px-3">
         <button
           onClick={() => useUiStore.getState().setPaletteOpen(true)}
-          className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
+          className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink [@media(pointer:coarse)]:py-2.5"
         >
-          <Search className="size-3.5" />
-          {t("search")}
-          <Kbd className="ml-auto">{isMac() ? "⌘K" : "Ctrl K"}</Kbd>
+          <Search className="size-3.5 shrink-0" />
+          <span className="truncate">{t("search")}</span>
+          <Kbd className="ml-auto [@media(pointer:coarse)]:hidden">{isMac() ? "⌘K" : "Ctrl K"}</Kbd>
         </button>
         {homeLink}
         <NavLink
@@ -902,7 +985,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
         onDragCancel={onDragCancel}
         onDragEnd={(event) => void onDragEnd(event)}
       >
-        <div className="mt-3 flex-1 space-y-4 overflow-y-auto px-3 pb-4">
+        <div className={cn("mt-3 space-y-4 px-3 pb-4", !mobile && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}>
           {favorites.length ? (
             <Section
               title={t("favorites")}
@@ -910,7 +993,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
                 <Tooltip label={t("view_all_favorites")}>
                   <Link
                     href="/home/notes?favorites=1"
-                    className="rounded p-0.5 text-faint transition hover:text-ink"
+                    className={ROW_ICON_BUTTON}
                     aria-label={t("view_all_favorites")}
                   >
                     <FileStack className="size-3.5" />
@@ -940,7 +1023,7 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
               <Tooltip label={t("new_page")} shortcut={isMac() ? "⌥⇧N" : "Alt ⇧ N"}>
                 <button
                   onClick={() => void createNotebook(null)}
-                  className="rounded p-0.5 text-faint transition hover:text-ink"
+                  className={ROW_ICON_BUTTON}
                   aria-label={t("new_page")}
                 >
                   <FolderPlus className="size-3.5" />
@@ -951,8 +1034,9 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
             {renderNotebooks(sortedRootNotebooks, 0)}
           </Section>
 
-          {orphanPages.length || orphanDatabases.length ? (
+          {parkedNotebooks.length || orphanPages.length || orphanDatabases.length ? (
             <Section title={t("unfiled")}>
+              {parkedNotebooks.length ? renderNotebooks(parkedNotebooks, 0) : null}
               <SortableContext
                 items={sortableIds(orphanPages)}
                 strategy={verticalListSortingStrategy}
@@ -1043,8 +1127,9 @@ export function Sidebar({ collapsed, width }: { collapsed: boolean; width: numbe
       </DndContext>
         </>
       )}
+      </div>
 
-      <div className="border-t border-[var(--border)] pr-3.5 pt-3 pb-[calc(1.125rem+env(safe-area-inset-bottom,0px))]">
+      <div className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] pr-3.5 pt-3 pb-[calc(1.125rem+env(safe-area-inset-bottom,0px))]">
         <UserMenu />
       </div>
 
@@ -1074,8 +1159,9 @@ function NavLink({
       href={href}
       prefetch={true}
       onMouseEnter={() => router.prefetch(href)}
+      onClick={() => useUiStore.getState().setMobileSidebarOpen(false)}
       className={cn(
-        "flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] transition hover:bg-[var(--surface-hover)]",
+        "flex w-full min-w-0 items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] transition hover:bg-[var(--surface-hover)] [&_svg]:shrink-0 [@media(pointer:coarse)]:py-2.5",
         active ? "font-medium text-ink" : "text-muted hover:text-ink"
       )}
     >
@@ -1176,7 +1262,7 @@ function NotebookRow({
         <button
           type="button"
           onClick={onToggle}
-          className="flex size-4 shrink-0 items-center justify-center rounded text-faint transition hover:text-ink"
+          className={ROW_CHEVRON}
           aria-label={open ? "Recolher caderno" : "Expandir caderno"}
         >
           <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
@@ -1194,7 +1280,7 @@ function NotebookRow({
         >
           <SidebarItemIcon
             icon={notebook.emoji}
-            fallback={isNestedNotebook(notebook) ? "📁" : "📓"}
+            fallback={presentsAsNotebook(notebook) ? "📁" : "📓"}
           />
           {renaming ? (
             <input
@@ -1225,14 +1311,14 @@ function NotebookRow({
         <div
           className={cn(
             "grid transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
-            menuOpen ? "grid-cols-[1fr]" : "grid-cols-[0fr] group-hover:grid-cols-[1fr]"
+            rowActionsClass(menuOpen)
           )}
         >
           <div className="flex min-w-0 items-center overflow-hidden">
         <Tooltip label={t("new_notebook")}>
           <button
             onClick={onCreateSubnotebook}
-            className="rounded p-0.5 text-faint hover:text-ink"
+            className={ROW_ICON_BUTTON}
             aria-label={t("new_notebook")}
           >
             <FolderPlus className="size-3.5" />
@@ -1241,7 +1327,7 @@ function NotebookRow({
         <Tooltip label={t("new_note")}>
           <button
             onClick={onCreatePage}
-            className="rounded p-0.5 text-faint hover:text-ink"
+            className={ROW_ICON_BUTTON}
             aria-label={t("new_note")}
           >
             <Plus className="size-3.5" />
@@ -1250,23 +1336,23 @@ function NotebookRow({
         <Menu open={menuOpen} onOpenChange={setMenuOpen}>
           <MenuTrigger asChild>
             <button
-              className="rounded p-0.5 text-faint hover:text-ink"
+              className={ROW_ICON_BUTTON}
               aria-label={`${t("open_menu")}: ${notebook.name || t("untitled")}`}
             >
               <MoreHorizontal className="size-3.5" />
             </button>
           </MenuTrigger>
           <MenuContent align="start">
-            <MenuItem onSelect={() => router.push(`/home/n/${notebook.id}`)}>
-              <FolderPlus /> {isNestedNotebook(notebook) ? t("open_notebook") : t("open_page")}
+            <MenuItem onSelect={() => { closeMenuBar(); router.push(`/home/n/${notebook.id}`); }}>
+              <FolderPlus /> {presentsAsNotebook(notebook) ? t("open_notebook") : t("open_page")}
             </MenuItem>
-            <MenuItem onSelect={() => router.push(`/home/notes?notebook=${notebook.id}`)}>
+            <MenuItem onSelect={() => { closeMenuBar(); router.push(`/home/notes?notebook=${notebook.id}`); }}>
               <FileStack /> {t("all_notes")}
             </MenuItem>
             <MenuItem onSelect={() => setRenaming(true)}>
               <Pencil className="size-4" /> {t("rename")}
             </MenuItem>
-            {isNestedNotebook(notebook) && onMove ? (
+            {presentsAsNotebook(notebook) && onMove ? (
               <MenuItem onSelect={onMove}>
                 <FolderInput className="size-4" /> {t("move_to")}
               </MenuItem>
@@ -1278,7 +1364,7 @@ function NotebookRow({
               <Plus /> {t("new_note")}
             </MenuItem>
             <MenuItem onSelect={() => void onDuplicate()}>
-              <Copy /> {isNestedNotebook(notebook) ? t("duplicate_notebook") : t("duplicate_page")}
+              <Copy /> {presentsAsNotebook(notebook) ? t("duplicate_notebook") : t("duplicate_page")}
             </MenuItem>
             {onArchive ? (
               <MenuItem onSelect={() => void onArchive()}>
@@ -1287,7 +1373,7 @@ function NotebookRow({
             ) : null}
             <MenuSeparator />
             <MenuItem destructive onSelect={() => void onDelete()}>
-              <Trash2 /> {isNestedNotebook(notebook) ? t("delete_notebook") : t("delete_page")}
+              <Trash2 /> {presentsAsNotebook(notebook) ? t("delete_notebook") : t("delete_page")}
             </MenuItem>
           </MenuContent>
         </Menu>
@@ -1396,7 +1482,7 @@ function SortablePageRow({
         type="button"
         onClick={onToggle}
         className={cn(
-          "flex size-4 shrink-0 items-center justify-center rounded text-faint transition hover:text-ink",
+          ROW_CHEVRON,
           !node.children.length && "invisible"
         )}
         aria-label={isOpen ? "Recolher" : "Expandir"}
@@ -1420,7 +1506,7 @@ function SortablePageRow({
       <div
         className={cn(
           "grid transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
-          menuOpen ? "grid-cols-[1fr]" : "grid-cols-[0fr] group-hover:grid-cols-[1fr]"
+          rowActionsClass(menuOpen)
         )}
       >
         <div className="flex min-w-0 items-center overflow-hidden">
@@ -1428,7 +1514,7 @@ function SortablePageRow({
             <button
               type="button"
               onClick={() => void onCreateChild()}
-              className="rounded p-0.5 text-faint hover:text-ink"
+              className={ROW_ICON_BUTTON}
               aria-label={t("new_subpage")}
             >
               <Plus className="size-3.5" />
@@ -1438,7 +1524,7 @@ function SortablePageRow({
             <MenuTrigger asChild>
               <button
                 type="button"
-                className="rounded p-0.5 text-faint hover:text-ink"
+                className={ROW_ICON_BUTTON}
                 aria-label={t("page_actions")}
               >
                 <MoreHorizontal className="size-3.5" />

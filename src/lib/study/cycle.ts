@@ -1,4 +1,4 @@
-import type { AgendaEntry, CycleCompletion, CycleItem, CycleSubjectConfig, DayKey, StudyCycle } from "@/types/study";
+import type { AgendaEntry, CycleCompletion, CycleItem, CycleSubjectConfig, DayKey, StudyCycle, StudySession } from "@/types/study";
 import { occursOn } from "./agenda";
 import { addDays, compareDay, weekdayOf } from "./dates";
 
@@ -119,7 +119,7 @@ export interface PlannedBlock {
 }
 
 export function projectSchedule(
-  cycle: Pick<StudyCycle, "items" | "agenda" | "weekMinutes" | "pointer" | "round" | "history">,
+  cycle: Pick<StudyCycle, "items" | "agenda" | "weekMinutes" | "pointer" | "round" | "history"> & { progress?: Record<string, number> },
   from: DayKey,
   to: DayKey,
   today: DayKey
@@ -153,20 +153,21 @@ export function projectSchedule(
     });
   }
 
-  // Disciplinas em dia fixo aparecem nos seus dias e reservam esse tempo antes da rotação.
   const reserved = new Map<DayKey, number>();
   if (cycle.agenda.length) {
     for (let day = compareDay(from, today) < 0 ? from : today; compareDay(day, to) <= 0; day = addDays(day, 1)) {
       for (const entry of cycle.agenda) {
         if (!occursOn(entry, day) || marked.has(`${entry.id}:${day}`)) continue;
         const past = compareDay(day, today) < 0;
-        if (!past) reserved.set(day, (reserved.get(day) ?? 0) + entry.minutes);
+        const studied = cycle.progress?.[`${entry.id}:${day}`] ?? 0;
+        const remainingMinutes = Math.max(0, entry.minutes - studied);
+        if (!past) reserved.set(day, (reserved.get(day) ?? 0) + remainingMinutes);
         if (compareDay(day, from) < 0) continue;
         push(day, {
           key: `a:${entry.id}:${day}`,
           itemId: entry.id,
           subjectId: entry.subjectId,
-          minutes: entry.minutes,
+          minutes: remainingMinutes,
           round: cycle.round,
           sequence: -1,
           status: past ? "missed" : "planned",
@@ -181,8 +182,6 @@ export function projectSchedule(
   if (!cycle.items.length || compareDay(to, today) < 0) return result;
   if (!cycle.weekMinutes.some((value) => value > 0)) return result;
 
-  // A projeção começa no ponteiro e preenche o tempo livre de cada dia a partir
-  // de hoje; dias anteriores a `from` só consomem a sequência.
   let pointer = cycle.pointer % cycle.items.length;
   let round = cycle.round;
   let first = true;
@@ -196,15 +195,18 @@ export function projectSchedule(
     while (remaining > 0 && guard < 5000) {
       guard += 1;
       const item = cycle.items[pointer];
-      const fits = remaining >= item.minutes * 0.6;
-      const lonely = placed === 0 && remaining === capacity && remaining >= item.minutes * 0.34;
+      const progressKey = `${item.id}:${round}`;
+      const studied = day === today && first ? (cycle.progress?.[progressKey] ?? 0) : 0;
+      const effectiveMinutes = Math.max(0, item.minutes - studied);
+      const fits = remaining >= effectiveMinutes * 0.6;
+      const lonely = placed === 0 && remaining === capacity && remaining >= effectiveMinutes * 0.34;
       if (!fits && !lonely) break;
       if (compareDay(day, from) >= 0) {
         push(day, {
           key: `p:${item.id}:${round}`,
           itemId: item.id,
           subjectId: item.subjectId,
-          minutes: item.minutes,
+          minutes: effectiveMinutes,
           round,
           sequence: pointer,
           status: "planned",
@@ -215,7 +217,7 @@ export function projectSchedule(
       }
       first = false;
       placed += 1;
-      remaining -= item.minutes;
+      remaining -= effectiveMinutes;
       pointer += 1;
       if (pointer >= cycle.items.length) {
         pointer = 0;
@@ -273,7 +275,7 @@ export function remapPointer(
 }
 
 export function advanceCycle(
-  cycle: StudyCycle,
+  cycle: Pick<StudyCycle, "items" | "pointer" | "round" | "history">,
   day: DayKey,
   options: { sessionId?: string | null; skipped?: boolean; at: number }
 ): Pick<StudyCycle, "pointer" | "round" | "history"> | null {
@@ -363,6 +365,128 @@ export function recordAgendaDay(
   return { history: [...cycle.history, completion].slice(-CYCLE_HISTORY_LIMIT) };
 }
 
+export type CycleTally = Pick<StudyCycle, "items" | "agenda" | "pointer" | "round" | "history"> & { progress: Record<string, number> };
+
+type TallySession = Pick<StudySession, "id" | "cycleItemId" | "day" | "durationSec" | "createdAt">;
+
+export function tallyOf(cycle: StudyCycle): CycleTally {
+  return {
+    items: cycle.items,
+    agenda: cycle.agenda,
+    pointer: cycle.pointer,
+    round: cycle.round,
+    history: cycle.history,
+    progress: { ...(cycle.progress ?? {}) },
+  };
+}
+
+export function sessionMinutes(durationSec: number): number {
+  return Math.max(1, Math.round(durationSec / 60));
+}
+
+function turnFor(cycle: Pick<StudyCycle, "items" | "pointer">, subjectId: string, outOfTurn: boolean): number | null {
+  const total = cycle.items.length;
+  const pointer = cycle.pointer % total;
+  if (cycle.items[pointer].subjectId === subjectId) return pointer;
+  if (!outOfTurn) return null;
+  for (let index = pointer + 1; index < total; index += 1) {
+    if (cycle.items[index].subjectId === subjectId) return index;
+  }
+  return null;
+}
+
+export function canCountSession(
+  cycle: Pick<StudyCycle, "items" | "pointer" | "agenda" | "history">,
+  subjectId: string,
+  day: DayKey,
+  outOfTurn: boolean
+): boolean {
+  if (pendingAgendaEntry(cycle, subjectId, day)) return true;
+  return cycle.items.length > 0 && turnFor(cycle, subjectId, outOfTurn) !== null;
+}
+
+export function countSession(
+  cycle: CycleTally,
+  input: { subjectId: string; day: DayKey; durationSec: number },
+  sessionId: string,
+  at: number,
+  options: { outOfTurn?: boolean } = {}
+): { cycle: CycleTally; cycleItemId: string } | null {
+  const minutes = sessionMinutes(input.durationSec);
+  const fixed = pendingAgendaEntry(cycle, input.subjectId, input.day);
+  if (fixed) {
+    const key = `${fixed.id}:${input.day}`;
+    const total = (cycle.progress[key] ?? 0) + minutes;
+    const progress = { ...cycle.progress };
+    if (total >= fixed.minutes) {
+      const marked = recordAgendaDay(cycle, fixed, input.day, { sessionId, at });
+      delete progress[key];
+      return { cycle: { ...cycle, history: marked?.history ?? cycle.history, progress }, cycleItemId: fixed.id };
+    }
+    progress[key] = total;
+    return { cycle: { ...cycle, progress }, cycleItemId: fixed.id };
+  }
+  if (!cycle.items.length) return null;
+  const turn = turnFor(cycle, input.subjectId, Boolean(options.outOfTurn));
+  if (turn === null) return null;
+  cycle = { ...cycle, pointer: turn };
+  const item = cycle.items[turn];
+  const key = `${item.id}:${cycle.round}`;
+  const total = (cycle.progress[key] ?? 0) + minutes;
+  const progress = { ...cycle.progress };
+  if (total >= item.minutes) {
+    const advanced = advanceCycle(cycle, input.day, { sessionId, at });
+    delete progress[key];
+    return { cycle: { ...cycle, ...(advanced ?? {}), progress }, cycleItemId: item.id };
+  }
+  progress[key] = total;
+  return { cycle: { ...cycle, progress }, cycleItemId: item.id };
+}
+
+export function uncountSession(cycle: CycleTally, session: TallySession, others: readonly TallySession[]): CycleTally | null {
+  let state: CycleTally = { ...cycle, progress: { ...cycle.progress } };
+  const peers = others.filter((entry) => entry.id !== session.id && entry.cycleItemId);
+  const setProgress = (key: string, minutes: number) => {
+    if (minutes > 0) state.progress[key] = minutes;
+    else delete state.progress[key];
+  };
+  const linked = cycle.history.filter((entry) => entry.sessionId === session.id);
+  let changed = false;
+  for (const entry of linked) {
+    if (cycle.agenda.some((item) => item.id === entry.itemId)) {
+      state = { ...state, history: state.history.filter((item) => item !== entry) };
+      changed = true;
+      setProgress(
+        `${entry.itemId}:${entry.day}`,
+        peers.filter((peer) => peer.cycleItemId === entry.itemId && peer.day === entry.day).reduce((sum, peer) => sum + sessionMinutes(peer.durationSec), 0)
+      );
+      continue;
+    }
+    const removed = removeCompletion(state, entry);
+    if (!removed) continue;
+    state = { ...state, ...removed };
+    changed = true;
+    const head = state.items.length ? state.items[state.pointer % state.items.length] : null;
+    if (head?.id !== entry.itemId || state.round !== entry.round) continue;
+    const since = Math.max(0, ...state.history.filter((item) => item.itemId === entry.itemId && item.at < entry.at).map((item) => item.at));
+    setProgress(
+      `${entry.itemId}:${entry.round}`,
+      peers
+        .filter((peer) => peer.cycleItemId === entry.itemId && peer.createdAt > since && peer.createdAt <= entry.at)
+        .reduce((sum, peer) => sum + sessionMinutes(peer.durationSec), 0)
+    );
+  }
+  if (!linked.length && session.cycleItemId) {
+    for (const key of [`${session.cycleItemId}:${session.day}`, `${session.cycleItemId}:${cycle.round}`]) {
+      if (!state.progress[key]) continue;
+      setProgress(key, state.progress[key] - sessionMinutes(session.durationSec));
+      changed = true;
+      break;
+    }
+  }
+  return changed ? state : null;
+}
+
 export interface RoundProgress {
   done: number;
   total: number;
@@ -373,7 +497,9 @@ export interface RoundProgress {
   states: LapState[];
 }
 
-export function roundProgress(cycle: Pick<StudyCycle, "items" | "pointer" | "round" | "history">): RoundProgress {
+export function roundProgress(
+  cycle: Pick<StudyCycle, "items" | "pointer" | "round" | "history"> & { progress?: Record<string, number> }
+): RoundProgress {
   const states = lapStates(cycle);
   const total = cycle.items.length;
   let done = 0;
@@ -386,7 +512,9 @@ export function roundProgress(cycle: Pick<StudyCycle, "items" | "pointer" | "rou
       done += 1;
       minutesDone += item.minutes;
     } else if (states[index] !== "skipped") {
-      minutesLeft += item.minutes;
+      const studied = index === cycle.pointer % total ? (cycle.progress?.[`${item.id}:${cycle.round}`] ?? 0) : 0;
+      minutesDone += Math.min(item.minutes, studied);
+      minutesLeft += Math.max(0, item.minutes - studied);
     }
   });
   return { done, total, position: total ? (cycle.pointer % total) + 1 : 0, minutesDone, minutesLeft, minutesTotal, states };

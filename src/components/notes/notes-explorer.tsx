@@ -307,7 +307,7 @@ export function NotesExplorer({
                   </Button>
                 </div>
                 <NoteMeta page={selected} className="mt-2" />
-                <div className="mt-4 sm:mt-6 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-1 py-2 sm:px-4 sm:py-3 dark:border-transparent dark:bg-transparent dark:px-0 dark:py-0 md:px-5">
+                <div className="mt-4 sm:mt-6 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-1 py-2 sm:px-4 sm:py-3 md:px-5">
                   <BlockEditor
                     key={selected.id}
                     page={selected}

@@ -112,7 +112,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
         align={collapsed ? "center" : "start"}
         side={collapsed ? "right" : "top"}
         sideOffset={8}
-        className="w-[min(288px,calc(100vw-24px))] overflow-hidden p-0"
+        className="w-[min(288px,calc(100vw-24px))] max-h-[min(28rem,calc(100dvh-1.5rem))] overflow-y-auto overflow-x-hidden p-0"
       >
         <div className="relative overflow-hidden px-3.5 pb-3 pt-3.5">
           <div
@@ -172,14 +172,24 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
           >
             <KeyRound /> {t("change_password")}
           </MenuItem>
-          <MenuItem onSelect={() => router.push("/home/integrations")}>
+          <MenuItem
+            onSelect={() => {
+              useUiStore.getState().setMobileSidebarOpen(false);
+              router.push("/home/integrations");
+            }}
+          >
             <Plug /> {t("integrations")}
           </MenuItem>
           <MenuItem onSelect={toggle}>
             {theme === "dark" ? <Sun /> : <Moon />}
             {t("theme")}: {theme === "dark" ? t("light") : t("dark")}
           </MenuItem>
-          <MenuItem onSelect={() => useUiStore.getState().toggleZenMode()}>
+          <MenuItem
+            onSelect={() => {
+              useUiStore.getState().setMobileSidebarOpen(false);
+              useUiStore.getState().toggleZenMode();
+            }}
+          >
             <Minimize2 /> {t("focus_mode")}
             <MenuShortcut>{isMac() ? "⌘⇧F" : "Ctrl ⇧ F"}</MenuShortcut>
           </MenuItem>

@@ -38,7 +38,7 @@ import { diffDays } from "@/lib/study/dates";
 import type { StudyAggregate, StudySubject, StudyTopic } from "@/types/study";
 import { Combobox } from "../combobox";
 import { SubjectDialog } from "../subject-dialog";
-import { AccuracyTag, FocusButton, Segmented, StudyEmpty, StudyGate, StudyHeader, StudyPage } from "../ui";
+import { AccuracyTag, CompletionMark, FocusButton, Segmented, StudyEmpty, StudyGate, StudyHeader, StudyPage } from "../ui";
 import { relativeDay } from "../widgets";
 
 type SortKey = "custom" | "time" | "accuracy" | "coverage" | "stale";
@@ -72,10 +72,6 @@ const SORT_KEY: Record<SortKey, StudyKey> = {
 
 function fold(value: string) {
   return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-}
-
-function tint(color: string, amount: number) {
-  return `color-mix(in oklab, ${color} ${amount}%, var(--surface-2))`;
 }
 
 function revealSubject(id: string) {
@@ -399,7 +395,7 @@ function CoverageMap({
                 >
                   <span
                     className="relative h-2.5 w-full overflow-hidden rounded-full transition-[height] duration-200 ease-out group-hover/segment:h-3.5"
-                    style={{ backgroundColor: tint(subject.color, 20) }}
+                    style={{ backgroundColor: `color-mix(in oklab, ${subject.color} 20%, var(--surface-2))` }}
                   >
                     <span
                       className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
@@ -416,7 +412,7 @@ function CoverageMap({
   );
 }
 
-function TopicTrack({ topics, color }: { topics: StudyTopic[]; color: string }) {
+function TopicTrack({ topics }: { topics: StudyTopic[] }) {
   const { st } = useStudyT();
   const total = topics.length;
   const done = topics.filter((topic) => topic.done).length;
@@ -435,14 +431,14 @@ function TopicTrack({ topics, color }: { topics: StudyTopic[]; color: string }) 
             <span
               key={topic.id}
               className="h-full flex-1 rounded-full transition-colors duration-300"
-              style={{ backgroundColor: topic.done ? color : tint(color, 18) }}
+              style={{ backgroundColor: topic.done ? "var(--text-muted)" : "var(--surface-2)" }}
             />
           ))
         ) : (
-          <span className="relative h-full flex-1 overflow-hidden rounded-full" style={{ backgroundColor: tint(color, 18) }}>
+          <span className="relative h-full flex-1 overflow-hidden rounded-full bg-[var(--surface-2)]">
             <span
-              className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
-              style={{ width: `${total ? (done / total) * 100 : 0}%`, backgroundColor: color }}
+              className="absolute inset-y-0 left-0 rounded-full bg-[var(--text-muted)] transition-[width] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
+              style={{ width: `${total ? (done / total) * 100 : 0}%` }}
             />
           </span>
         )}
@@ -518,13 +514,7 @@ function SubjectGroup({
                 <Highlight text={subject.name} query={query} />
               </Link>
               {total > 0 && done === total ? (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-gradient-to-r from-emerald-500/15 via-teal-500/15 to-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold tracking-tight text-emerald-600 shadow-[0_0_8px_rgba(16,185,129,0.18)] dark:text-emerald-400 shrink-0"
-                  title={st("subject_completed_badge")}
-                >
-                  <Check className="size-2.5 stroke-[3]" />
-                  <span>{st("tab_done")}</span>
-                </span>
+                <CompletionMark label={st("subject_complete_mark")} title={st("subject_completed_badge")} />
               ) : null}
             </div>
             <button type="button" onClick={onToggle} tabIndex={-1} className="mt-0.5 block max-w-full truncate text-left text-[11.5px] text-faint transition hover:text-muted">
@@ -563,7 +553,7 @@ function SubjectGroup({
         </div>
 
         <div className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-9 text-[12px] sm:gap-x-4 sm:pl-[51px] lg:contents">
-          <TopicTrack topics={subject.topics} color={subject.color} />
+          <TopicTrack topics={subject.topics} />
           <span className="tabular-nums text-ink lg:text-right">{agg?.seconds ? duration(agg.seconds) : <span className="text-faint">–</span>}</span>
           <span className="tabular-nums lg:text-right" title={st("questions_label")}>
             {agg?.questions ? (

@@ -22,14 +22,18 @@ export function WorkspaceCrumbs({
   inverted?: boolean;
 }) {
   const router = useRouter();
-  const { notebooks, pages } = useWorkspace();
+  const { notebooks, pages, archivedNotebooks, archivedPages } = useWorkspace();
   const { canBack, canForward, goBack, goForward } = useNavArrows();
 
-  const notebookTrail = notebook ? notebookAncestors(notebooks, notebook.id) : [];
+  const allNotebooks = [...notebooks, ...archivedNotebooks];
+  const allPages = [...pages, ...archivedPages];
+
+  const notebookTrail = notebook ? notebookAncestors(allNotebooks, notebook.id) : [];
   const linkedNotebooks = page ? notebookTrail : notebookTrail.slice(0, -1);
+  const pathIds = page?.path?.length ? page.path : (page?.archivedFromPath ?? []);
   const pageTrail = page
-    ? page.path
-        .map((ancestorId) => pages.find((candidate) => candidate.id === ancestorId))
+    ? pathIds
+        .map((ancestorId) => allPages.find((candidate) => candidate.id === ancestorId))
         .filter(Boolean) as Page[]
     : [];
 
@@ -77,7 +81,7 @@ export function WorkspaceCrumbs({
           type="button"
           aria-label="Abrir menu"
           className={cn(
-            "group mr-1.5 flex size-7.5 items-center justify-center rounded-lg border border-[var(--border)]/80 bg-[var(--surface-2)]/80 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-md transition-all hover:bg-[var(--surface-3)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/25 md:hidden",
+            "group mr-1.5 flex size-10 items-center justify-center rounded-lg border border-[var(--border)]/80 bg-[var(--surface-2)]/80 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-md transition-all hover:bg-[var(--surface-3)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/25 md:hidden",
             arrowClass,
             inverted && "border-white/20 bg-white/10 text-white shadow-none hover:bg-white/20"
           )}

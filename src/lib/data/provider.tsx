@@ -23,7 +23,7 @@ import { useAuth } from "@/hooks/use-auth";
 import type { DataAdapter } from "./adapter";
 import { FirestoreAdapter } from "./firestore-adapter";
 import { getLocalAdapter } from "./local-adapter";
-import { childrenOf, notebookAncestors } from "./notebook-tree";
+import { childrenOf, isParkedNotebook, notebookAncestors } from "./notebook-tree";
 import { endOfDay, isCardDueForReview } from "@/lib/flashcards/srs";
 import { compareNatural } from "@/lib/utils";
 import { toast } from "sonner";
@@ -407,7 +407,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       notebookById: (id: string) => liveNotebooks.find((notebook) => notebook.id === id),
       childNotebooks: (parentId: string | null) => childrenOf(liveNotebooks, parentId),
       notebookPath: (notebookId: string) => notebookAncestors(liveNotebooks, notebookId),
-      rootNotebooks: childrenOf(liveNotebooks, null),
+      rootNotebooks: childrenOf(liveNotebooks, null).filter((notebook) => !isParkedNotebook(notebook)),
     };
   }, [
     adapter,

@@ -53,6 +53,7 @@ export function durationText(seconds: number, st: StudyT): string {
   return st("dur_hm", { h, m });
 }
 
+
 export function useStudyT() {
   const { language, textDir } = useTranslation();
   const st = useCallback<StudyT>((key, params) => studyTranslate(language, key, params), [language]);

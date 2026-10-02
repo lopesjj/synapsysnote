@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useState, type ReactNode } from "react";
-import { CalendarDays, ChevronDown, Clock3, Repeat2, Trash2 } from "lucide-react";
+import { CalendarDays, Check, ChevronDown, Clock3, Repeat2, Trash2 } from "lucide-react";
 import { DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from "@/components/ui/menu";
 import { cn } from "@/lib/utils";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
@@ -25,8 +26,6 @@ export interface AgendaDialogState {
   removeItemId?: string;
 }
 
-const BARE =
-  "h-8 cursor-pointer appearance-none rounded-[8px] bg-transparent pl-2 pr-7 text-[13px] text-ink outline-none transition [text-align-last:right] hover:bg-[var(--surface-hover)] focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)]";
 
 export function useAgendaLabels() {
   const { st, locale } = useStudyT();
@@ -99,16 +98,6 @@ function PropertyRow({ icon, label, htmlFor, children }: { icon: ReactNode; labe
   );
 }
 
-function BareSelect({ className, children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <span className="relative inline-flex min-w-0 max-w-full">
-      <select {...props} className={cn(BARE, "min-w-0 max-w-full truncate", className)}>
-        {children}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
-    </span>
-  );
-}
 
 function AgendaForm({
   state,
@@ -177,27 +166,57 @@ function AgendaForm({
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-2 pt-5">
         <p className="pr-8 text-[12px] text-muted">{entry ? st("agenda_title_edit") : st("agenda_title_new")}</p>
 
-        <div className="mt-2 flex items-center gap-2.5">
-          <span aria-hidden className="size-3 shrink-0 rounded-full" style={{ backgroundColor: subject?.color ?? "var(--text-faint)" }} />
-          <span className="relative min-w-0 flex-1">
-            <select
-              aria-label={st("col_subject")}
-              autoFocus
-              value={subjectId}
-              onChange={(event) => {
-                setSubjectId(event.target.value);
-                setTopicId(null);
-              }}
-              className="h-10 w-full cursor-pointer appearance-none truncate rounded-[10px] bg-transparent pr-8 text-[21px] font-semibold tracking-[-0.02em] text-ink outline-none transition hover:bg-[var(--surface-hover)] focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)]"
-            >
-              {planSubjects.map((item) => (
-                <option key={item.id} value={item.id} className="text-[14px] font-normal">
-                  {item.name || st("untitled_subject")}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-4 -translate-y-1/2 text-faint" />
-          </span>
+        <div className="mt-2 flex items-center">
+          <Menu>
+            <MenuTrigger asChild>
+              <button
+                type="button"
+                aria-label={st("col_subject")}
+                className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-[12px] -ml-1.5 px-2 py-1 text-left transition hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)]"
+              >
+                <span
+                  aria-hidden
+                  className="size-3 shrink-0 rounded-full shadow-xs"
+                  style={{ backgroundColor: subject?.color ?? "var(--text-faint)" }}
+                />
+                <span className="min-w-0 flex-1 truncate text-[21px] font-semibold tracking-[-0.02em] text-ink">
+                  {subject ? (subject.name || st("untitled_subject")) : st("untitled_subject")}
+                </span>
+                <ChevronDown className="size-4 shrink-0 text-faint transition group-data-[state=open]:rotate-180" />
+              </button>
+            </MenuTrigger>
+            <MenuContent align="start" className="w-[min(24rem,calc(100vw-3rem))] max-h-80 overflow-y-auto p-1.5 shadow-[var(--shadow-float)]">
+              <MenuLabel>
+                {st("col_subject")}
+              </MenuLabel>
+              {planSubjects.map((item) => {
+                const isSelected = item.id === subjectId;
+                return (
+                  <MenuItem
+                    key={item.id}
+                    onSelect={() => {
+                      setSubjectId(item.id);
+                      setTopicId(null);
+                    }}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-[14px] cursor-pointer transition-colors",
+                      isSelected
+                        ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
+                        : "text-ink hover:bg-[var(--surface-hover)]"
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: item.color ?? "var(--text-faint)" }}
+                    />
+                    <span className="min-w-0 flex-1 truncate">{item.name || st("untitled_subject")}</span>
+                    {isSelected ? <Check className="size-4 shrink-0 text-[var(--accent)]" /> : null}
+                  </MenuItem>
+                );
+              })}
+            </MenuContent>
+          </Menu>
         </div>
 
         <div className="mt-1 pl-[1.375rem]" dir={textDir}>
@@ -240,31 +259,74 @@ function AgendaForm({
             />
           </PropertyRow>
           <PropertyRow icon={<Clock3 />} label={st("agenda_duration_label")} htmlFor="agenda-minutes">
-            <BareSelect id="agenda-minutes" value={minutes} onChange={(event) => setMinutes(Number(event.target.value))} className="tabular-nums">
-              {durations.map((value) => (
-                <option key={value} value={value}>
-                  {duration(value * 60)}
-                </option>
-              ))}
-            </BareSelect>
+            <Menu>
+              <MenuTrigger asChild>
+                <button
+                  id="agenda-minutes"
+                  type="button"
+                  aria-label={st("agenda_duration_label")}
+                  className="inline-flex h-8 max-w-full items-center gap-1.5 rounded-[8px] px-2 text-[13px] tabular-nums text-ink outline-none transition hover:bg-[var(--surface-hover)] focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)]"
+                >
+                  <span className="truncate">{duration(minutes * 60)}</span>
+                  <ChevronDown className="size-3.5 shrink-0 text-faint transition group-data-[state=open]:rotate-180" />
+                </button>
+              </MenuTrigger>
+              <MenuContent align="end" className="max-h-64 w-40 overflow-y-auto p-1 shadow-[var(--shadow-float)]">
+                {durations.map((value) => {
+                  const isSelected = value === minutes;
+                  return (
+                    <MenuItem
+                      key={value}
+                      onSelect={() => setMinutes(value)}
+                      className={cn(
+                        "flex items-center justify-between rounded-[6px] px-2.5 py-1.5 text-[12.5px] tabular-nums cursor-pointer transition-colors",
+                        isSelected ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]" : "text-ink hover:bg-[var(--surface-hover)]"
+                      )}
+                    >
+                      <span>{duration(value * 60)}</span>
+                      {isSelected ? <Check className="size-3.5 text-[var(--accent)]" /> : null}
+                    </MenuItem>
+                  );
+                })}
+              </MenuContent>
+            </Menu>
           </PropertyRow>
           <PropertyRow icon={<Repeat2 />} label={st("agenda_repeat")} htmlFor="agenda-repeat">
-            <BareSelect
-              id="agenda-repeat"
-              value={repeat}
-              onChange={(event) => {
-                const value = event.target.value as AgendaRepeat;
-                setRepeat(value);
-                setError(null);
-                if (value === "custom" && !weekdays.length) setWeekdays([weekdayOf(validStart)]);
-              }}
-            >
-              {repeats.map((value) => (
-                <option key={value} value={value}>
-                  {repeatLabel(value, validStart)}
-                </option>
-              ))}
-            </BareSelect>
+            <Menu>
+              <MenuTrigger asChild>
+                <button
+                  id="agenda-repeat"
+                  type="button"
+                  aria-label={st("agenda_repeat")}
+                  className="inline-flex h-8 max-w-full items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-ink outline-none transition hover:bg-[var(--surface-hover)] focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)]"
+                >
+                  <span className="truncate">{repeatLabel(repeat, validStart)}</span>
+                  <ChevronDown className="size-3.5 shrink-0 text-faint transition group-data-[state=open]:rotate-180" />
+                </button>
+              </MenuTrigger>
+              <MenuContent align="end" className="max-h-64 w-52 overflow-y-auto p-1 shadow-[var(--shadow-float)]">
+                {repeats.map((value) => {
+                  const isSelected = value === repeat;
+                  return (
+                    <MenuItem
+                      key={value}
+                      onSelect={() => {
+                        setRepeat(value);
+                        setError(null);
+                        if (value === "custom" && !weekdays.length) setWeekdays([weekdayOf(validStart)]);
+                      }}
+                      className={cn(
+                        "flex items-center justify-between rounded-[6px] px-2.5 py-1.5 text-[12.5px] cursor-pointer transition-colors",
+                        isSelected ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]" : "text-ink hover:bg-[var(--surface-hover)]"
+                      )}
+                    >
+                      <span className="truncate">{repeatLabel(value, validStart)}</span>
+                      {isSelected ? <Check className="size-3.5 text-[var(--accent)]" /> : null}
+                    </MenuItem>
+                  );
+                })}
+              </MenuContent>
+            </Menu>
           </PropertyRow>
           {repeat === "custom" ? (
             <div role="group" aria-label={st("agenda_weekdays")} className="flex justify-end gap-1 py-2.5">

@@ -483,7 +483,7 @@ function CycleBand({ cycle, progress, week }: { cycle: StudyCycle; progress: Rou
           </div>
           {current ? (
             <div className="col-span-2 flex flex-wrap gap-2 @2xl:col-span-1 @2xl:col-start-2 @2xl:self-start">
-              <FocusButton variant="primary" size="md" subjectId={current.subjectId} topicId={topic?.id ?? null} label={st("next_up_start")} />
+              <FocusButton variant="primary" size="md" subjectId={current.subjectId} topicId={topic?.id ?? null} minutes={current.minutes} label={st("next_up_start")} />
               <Button variant="secondary" onClick={() => void mark(false)}>
                 <Check />
                 {st("cycle_mark_done")}
@@ -649,18 +649,9 @@ function SetupBand({ onSetup }: { onSetup: (mode: WizardMode) => void }) {
               {st("cycle_add_subjects_cta")}
             </Button>
           ) : (
-            <>
-              <Button variant="primary" onClick={() => onSetup("manual")}>
-                {st("schedule_setup_manual")}
-              </Button>
-              <button
-                type="button"
-                onClick={() => onSetup("auto")}
-                className="text-[13px] text-muted underline decoration-[var(--border-strong)] underline-offset-4 transition hover:text-ink hover:decoration-current"
-              >
-                {st("schedule_setup_auto_link")}
-              </button>
-            </>
+            <Button variant="primary" onClick={() => onSetup("manual")}>
+              {st("schedule_setup_manual")}
+            </Button>
           )}
         </div>
       </div>
@@ -974,7 +965,8 @@ function DisciplineItem({ block, day }: { block: PlannedBlock; day: DayKey }) {
               <span
                 className={cn(
                   "line-clamp-2 text-[12px] font-medium leading-snug [overflow-wrap:anywhere]",
-                  planned ? "text-ink" : skipped || missed ? "text-faint" : "text-muted"
+                  planned ? "text-ink" : skipped || missed ? "text-faint" : "text-muted",
+                  block.status === "done" && "line-through decoration-[1.5px] decoration-[color-mix(in_oklab,currentColor_70%,transparent)]"
                 )}
               >
                 {name}
@@ -1006,7 +998,7 @@ function DisciplineItem({ block, day }: { block: PlannedBlock; day: DayKey }) {
               {day <= today ? (
                 <>
                   {day === today ? (
-                    <MenuItem onSelect={() => startFocus({ subjectId: entry.subjectId, topicId: entry.topicId })}>
+                    <MenuItem onSelect={() => startFocus({ subjectId: entry.subjectId, topicId: entry.topicId, minutes: block.minutes })}>
                       <Timer /> {st("next_up_start")}
                     </MenuItem>
                   ) : null}
@@ -1030,7 +1022,7 @@ function DisciplineItem({ block, day }: { block: PlannedBlock; day: DayKey }) {
             <>
               {block.isNext ? (
                 <>
-                  <MenuItem onSelect={() => startFocus({ subjectId: block.subjectId })}>
+                  <MenuItem onSelect={() => startFocus({ subjectId: block.subjectId, minutes: block.minutes })}>
                     <Timer /> {st("next_up_start")}
                   </MenuItem>
                   <MenuItem onSelect={() => markNext(false)}>

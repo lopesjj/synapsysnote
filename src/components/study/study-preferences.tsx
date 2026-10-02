@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, Plus, RotateCcw, Trash2, Volume2, X } from "lucide-react";
+import { Check, ChevronDown, Plus, RotateCcw, Trash2, Volume2, X } from "lucide-react";
 import { toast } from "sonner";
 import { nanoid } from "nanoid";
 import { Button } from "@/components/ui/button";
 import { Input, Switch } from "@/components/ui/primitives";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/menu";
 import { cn } from "@/lib/utils";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT, type StudyKey } from "@/lib/study/i18n";
@@ -24,6 +25,52 @@ function Block({ title, hint, children }: { title: string; hint?: ReactNode; chi
       </div>
       {children}
     </section>
+  );
+}
+
+function ColorPicker({ value, label, onChange }: { value: string; label: string; onChange: (color: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          className="group flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-1.5 outline-none transition hover:bg-[var(--surface-2)] focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)] data-[state=open]:bg-[var(--surface-2)]"
+        >
+          <span className="size-4 rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]" style={{ backgroundColor: value }} />
+          <ChevronDown className="size-3 text-faint transition-transform group-data-[state=open]:rotate-180" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-2.5">
+        <p className="mb-2 px-0.5 text-[11px] font-medium text-muted">{label}</p>
+        <div role="radiogroup" aria-label={label} className="grid grid-cols-6 gap-1.5">
+          {SUBJECT_COLORS.map((color) => {
+            const active = color.toLowerCase() === value.toLowerCase();
+            return (
+              <button
+                key={color}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                aria-label={color}
+                onClick={() => {
+                  onChange(color);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex size-7 items-center justify-center rounded-full outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)]",
+                  active ? "ring-2 ring-[var(--text)] ring-offset-2 ring-offset-[var(--surface)]" : "hover:scale-110"
+                )}
+                style={{ backgroundColor: color }}
+              >
+                {active ? <Check className="size-3.5 text-white drop-shadow" /> : null}
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -81,9 +128,14 @@ export function StudyPreferencesSection() {
 
   const toggleWeekday = (weekday: number) => {
     const set = new Set(settings.studyWeekdays);
-    if (set.has(weekday)) set.delete(weekday);
-    else set.add(weekday);
-    update({ studyWeekdays: [...set].sort() });
+    if (set.has(weekday)) {
+      if (set.size === 1) {
+        toast.info(st("prefs_days_min"));
+        return;
+      }
+      set.delete(weekday);
+    } else set.add(weekday);
+    update({ studyWeekdays: [...set].sort((a, b) => a - b) });
   };
 
   const toggleInterval = (days: number) => {
@@ -258,22 +310,13 @@ export function StudyPreferencesSection() {
             const used = sessions.some((session) => session.categoryId === category.id);
             return (
               <li key={category.id} className="flex items-center gap-2 px-3 py-1.5">
-                <label className="relative size-4 shrink-0 cursor-pointer overflow-hidden rounded-full" style={{ backgroundColor: category.color }}>
-                  <select
-                    aria-label={st("subject_color")}
-                    value={category.color}
-                    onChange={(event) =>
-                      update({ categories: settings.categories.map((entry) => (entry.id === category.id ? { ...entry, color: event.target.value } : entry)) })
-                    }
-                    className="absolute inset-0 cursor-pointer opacity-0"
-                  >
-                    {SUBJECT_COLORS.map((color) => (
-                      <option key={color} value={color}>
-                        {color}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <ColorPicker
+                  value={category.color}
+                  label={st("subject_color")}
+                  onChange={(color) =>
+                    update({ categories: settings.categories.map((entry) => (entry.id === category.id ? { ...entry, color } : entry)) })
+                  }
+                />
                 <input
                   defaultValue={categoryLabel(category)}
                   key={`${category.id}:${category.name}`}

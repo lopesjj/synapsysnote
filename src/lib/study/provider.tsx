@@ -59,12 +59,15 @@ import {
 import { addDays, diffDays, todayKey } from "./dates";
 import {
   advanceCycle,
+  countSession,
   generateCycleItems,
-  pendingAgendaEntry,
   recordAgendaDay,
   remapPointer,
   removeCompletion,
+  tallyOf,
+  uncountSession,
   undoLastCompletion,
+  type CycleTally,
 } from "./cycle";
 import { PlanningProvider } from "./planning";
 
@@ -102,6 +105,7 @@ export interface SessionOptions {
   completeTopic: boolean;
   scheduleReviews: boolean;
   countCycle: boolean;
+  reopenTopic?: boolean;
 }
 
 export interface CreateTargets {
@@ -133,9 +137,10 @@ export interface StudyActions {
   addTopic(subjectId: string, name: string): Promise<string | null>;
   updateTopic(subjectId: string, topicId: string, patch: Partial<StudyTopic>): Promise<void>;
   logSession(input: SessionInput, options: SessionOptions, create?: CreateTargets): Promise<StudySession>;
-  updateSession(id: string, input: SessionInput, options: Pick<SessionOptions, "completeTopic">, create?: CreateTargets): Promise<void>;
+  updateSession(id: string, input: SessionInput, options: SessionOptions, create?: CreateTargets): Promise<void>;
   deleteSession(id: string): Promise<void>;
   resolveReviews(ids: string[], status: "done" | "ignored" | "pending"): Promise<void>;
+  deleteReviews(ids: string[]): Promise<void>;
   rescheduleReview(id: string, day: DayKey): Promise<void>;
   saveExam(input: ExamInput): Promise<string>;
   deleteExam(id: string): Promise<void>;
@@ -155,6 +160,7 @@ export interface StudyActions {
   deleteSticky(id: string): Promise<void>;
   deleteReviewInterval(intervalDays: number): Promise<void>;
   updateSettings(patch: Partial<StudySettings>): Promise<void>;
+  claimAwards(keys: string[]): Promise<void>;
 }
 
 interface StudyState {
@@ -314,6 +320,17 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
   const commit = useCallback((writes: StudyWrite[]) => backend.commit(writes), [backend]);
 
+  const relationsLoaded = loaded.key === backend.key && loaded.collections.has("study_sessions") && loaded.collections.has("study_reviews");
+
+  useEffect(() => {
+    if (!relationsLoaded) return;
+    const known = new Set(state.sessions.map((session) => session.id));
+    const settled = Date.now() - 120_000;
+    const orphans = state.reviews.filter((review) => review.sessionId && !known.has(review.sessionId) && review.createdAt < settled);
+    if (!orphans.length) return;
+    void commit(orphans.map((review) => ({ kind: "delete" as const, collection: "study_reviews" as const, id: review.id })));
+  }, [relationsLoaded, state.sessions, state.reviews, commit]);
+
   const actions = useMemo<StudyActions>(() => {
     const now = () => Date.now();
     const current = () => stateRef.current;
@@ -390,6 +407,50 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       minutes: Math.min(600, Math.max(5, Math.round(item.minutes))),
     });
 
+    const tallyMerge = (tally: CycleTally) => ({
+      pointer: tally.pointer,
+      round: tally.round,
+      history: tally.history,
+      progress: tally.progress,
+      updatedAt: now(),
+    });
+
+    const reviewSets = (input: SessionInput, sessionId: string, intervals: number[]): PlainWrite[] =>
+      intervals.map((interval) => ({
+        kind: "set",
+        collection: "study_reviews",
+        id: backend.newId(),
+        data: {
+          planId: input.planId,
+          subjectId: input.subjectId,
+          topicId: input.topicId,
+          sessionId,
+          intervalDays: interval,
+          dueDay: addDays(input.day, interval),
+          status: "pending",
+          resolvedAt: null,
+          resolvedSessionId: null,
+          createdAt: now(),
+          updatedAt: now(),
+        },
+      }));
+
+    const releaseTopic = (subjectId: string, topicId: string): StudyWrite => ({
+      kind: "transform",
+      collection: "study_subjects",
+      id: subjectId,
+      apply: (raw) => {
+        if (!raw) return {};
+        let dirty = false;
+        const topics = toSubject(raw).topics.map((topic) => {
+          if (topic.id !== topicId || !topic.done) return topic;
+          dirty = true;
+          return { ...topic, done: false, doneAt: null };
+        });
+        return dirty ? { merge: { topics, updatedAt: now() } } : {};
+      },
+    });
+
     const resolveTargets = (input: SessionInput, completeTopic: boolean, create?: CreateTargets) => {
       const snapshot = current();
       const writes: StudyWrite[] = [];
@@ -428,10 +489,10 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             updatedAt: now(),
           },
         });
-        return { subjectId, topicId, writes };
+        return { subjectId, topicId, writes, completesTopic: completeTopic && topicId !== null };
       }
       const subject = snapshot.subjects.find((entry) => entry.id === subjectId);
-      if (!subject) return { subjectId, topicId, writes };
+      if (!subject) return { subjectId, topicId, writes, completesTopic: false };
       let created: StudyTopic | null = null;
       if (create?.topicName && create.topicName.trim()) {
         const clean = create.topicName.replace(/\s+/g, " ").trim().toLowerCase();
@@ -468,7 +529,9 @@ export function StudyProvider({ children }: { children: ReactNode }) {
           },
         });
       }
-      return { subjectId, topicId, writes };
+      const completesTopic =
+        completeTopic && targetTopic !== null && (created !== null || subject.topics.some((topic) => topic.id === targetTopic && !topic.done));
+      return { subjectId, topicId, writes, completesTopic };
     };
 
     return {
@@ -733,10 +796,14 @@ export function StudyProvider({ children }: { children: ReactNode }) {
           ...input,
           id,
           cycleItemId: null,
+          completedTopic: targets.completesTopic,
           createdAt: now(),
           updatedAt: now(),
         };
         const writes: StudyWrite[] = [...targets.writes];
+        if (options.reopenTopic && !options.completeTopic && input.topicId && !create?.subjectName) {
+          writes.push(releaseTopic(input.subjectId, input.topicId));
+        }
         const cycle = cycleOf(input.planId);
         const sessionWrite = (cycleItemId: string | null): PlainWrite => ({
           kind: "set",
@@ -752,45 +819,16 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             apply: (raw) => {
               const latest = raw ? toCycle(raw) : null;
               if (!latest) return { also: [sessionWrite(null)] };
-              // A disciplina marcada para o dia da sessão tem prioridade sobre a rotação.
-              const fixed = pendingAgendaEntry(latest, input.subjectId, input.day);
-              const marked = fixed ? recordAgendaDay(latest, fixed, input.day, { sessionId: id, at: now() }) : null;
-              if (fixed && marked) {
-                session.cycleItemId = fixed.id;
-                return { merge: { ...marked, updatedAt: now() }, also: [sessionWrite(fixed.id)] };
-              }
-              const item = latest.items.length ? latest.items[latest.pointer % latest.items.length] : null;
-              if (!item || item.subjectId !== input.subjectId) return { also: [sessionWrite(null)] };
-              const patch = advanceCycle(latest, input.day, { sessionId: id, at: now() });
-              session.cycleItemId = item.id;
-              return { merge: patch ? { ...patch, updatedAt: now() } : null, also: [sessionWrite(item.id)] };
+              const counted = countSession(tallyOf(latest), input, id, now(), { outOfTurn: true });
+              if (!counted) return { also: [sessionWrite(null)] };
+              session.cycleItemId = counted.cycleItemId;
+              return { merge: tallyMerge(counted.cycle), also: [sessionWrite(counted.cycleItemId)] };
             },
           });
         } else {
           writes.push(sessionWrite(null));
         }
-        if (options.scheduleReviews) {
-          for (const interval of snapshot.settings.reviewIntervals) {
-            writes.push({
-              kind: "set",
-              collection: "study_reviews",
-              id: backend.newId(),
-              data: {
-                planId: input.planId,
-                subjectId: input.subjectId,
-                topicId: input.topicId,
-                sessionId: id,
-                intervalDays: interval,
-                dueDay: addDays(input.day, interval),
-                status: "pending",
-                resolvedAt: null,
-                resolvedSessionId: null,
-                createdAt: now(),
-                updatedAt: now(),
-              },
-            });
-          }
-        }
+        if (options.scheduleReviews) writes.push(...reviewSets(input, id, snapshot.settings.reviewIntervals));
         if (input.reviewId) {
           writes.push({
             kind: "merge",
@@ -806,32 +844,81 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         const snapshot = current();
         const previous = snapshot.sessions.find((session) => session.id === id);
         if (!previous) return;
+        const keepsTopic = options.completeTopic && previous.completedTopic && previous.topicId === rawInput.topicId;
+        if (previous.completedTopic && previous.topicId && !keepsTopic) {
+          await commit([releaseTopic(previous.subjectId, previous.topicId)]);
+        }
         const targets = resolveTargets(rawInput, options.completeTopic, create);
         const input: SessionInput = { ...rawInput, subjectId: targets.subjectId, topicId: targets.topicId };
-        const writes: StudyWrite[] = [
-          ...targets.writes,
-          {
-            kind: "set",
-            collection: "study_sessions",
-            id,
-            data: {
-              ...previous,
-              ...input,
-              reviewId: previous.reviewId,
-              cycleItemId: previous.cycleItemId,
-              source: previous.source,
-              updatedAt: now(),
-            },
+        const writes: StudyWrite[] = [...targets.writes];
+        if (options.reopenTopic && !options.completeTopic && input.topicId && !create?.subjectName && !(previous.completedTopic && previous.topicId === input.topicId)) {
+          writes.push(releaseTopic(input.subjectId, input.topicId));
+        }
+        const completedTopic = options.completeTopic && (targets.completesTopic || keepsTopic);
+        const sessionWrite = (cycleItemId: string | null): PlainWrite => ({
+          kind: "set",
+          collection: "study_sessions",
+          id,
+          data: {
+            ...previous,
+            ...input,
+            reviewId: previous.reviewId,
+            cycleItemId,
+            completedTopic,
+            source: previous.source,
+            updatedAt: now(),
           },
-        ];
-        const shift = diffDays(previous.day, input.day);
-        for (const review of snapshot.reviews) {
-          if (review.sessionId !== id) continue;
-          const data: Record<string, unknown> = {};
-          if (review.subjectId !== input.subjectId) data.subjectId = input.subjectId;
-          if (review.topicId !== input.topicId) data.topicId = input.topicId;
-          if (shift !== 0 && review.status === "pending") data.dueDay = addDays(review.dueDay, shift);
-          if (Object.keys(data).length) writes.push({ kind: "merge", collection: "study_reviews", id: review.id, data: { ...data, updatedAt: now() } });
+        });
+        const cycle = cycleOf(previous.planId);
+        const counted = Boolean(previous.cycleItemId);
+        const moved = previous.subjectId !== input.subjectId || previous.day !== input.day || previous.durationSec !== input.durationSec;
+        const undo = counted && (!options.countCycle || moved);
+        const redo = options.countCycle && (!counted || moved);
+        if (cycle && (undo || redo)) {
+          writes.push({
+            kind: "transform",
+            collection: "study_cycles",
+            id: cycle.id,
+            apply: (raw) => {
+              if (!raw) return { also: [sessionWrite(null)] };
+              let tally = tallyOf(toCycle(raw));
+              let changed = false;
+              let cycleItemId = undo ? null : previous.cycleItemId;
+              if (undo) {
+                const reverted = uncountSession(tally, previous, snapshot.sessions);
+                if (reverted) {
+                  tally = reverted;
+                  changed = true;
+                }
+              }
+              if (redo) {
+                const applied = countSession(tally, input, id, now(), { outOfTurn: true });
+                if (applied) {
+                  tally = applied.cycle;
+                  cycleItemId = applied.cycleItemId;
+                  changed = true;
+                }
+              }
+              return changed ? { merge: tallyMerge(tally), also: [sessionWrite(cycleItemId)] } : { also: [sessionWrite(cycleItemId)] };
+            },
+          });
+        } else {
+          writes.push(sessionWrite(options.countCycle ? previous.cycleItemId : null));
+        }
+        const own = snapshot.reviews.filter((review) => review.sessionId === id);
+        if (!options.scheduleReviews) {
+          for (const review of own) writes.push({ kind: "delete", collection: "study_reviews", id: review.id });
+        } else if (!own.length) {
+          writes.push(...reviewSets(input, id, snapshot.settings.reviewIntervals));
+        } else {
+          const shift = diffDays(previous.day, input.day);
+          for (const review of own) {
+            const data: Record<string, unknown> = {};
+            if (review.subjectId !== input.subjectId) data.subjectId = input.subjectId;
+            if (review.topicId !== input.topicId) data.topicId = input.topicId;
+            if (shift !== 0 && review.status === "pending") data.dueDay = addDays(review.dueDay, shift);
+            if (Object.keys(data).length) writes.push({ kind: "merge", collection: "study_reviews", id: review.id, data: { ...data, updatedAt: now() } });
+          }
         }
         await commit(writes);
       },
@@ -840,24 +927,19 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         const writes: StudyWrite[] = [{ kind: "delete", collection: "study_sessions", id }];
         const owner = snapshot.sessions.find((session) => session.id === id);
         const cycle = owner ? cycleOf(owner.planId) : undefined;
-        if (cycle && cycle.history.some((entry) => entry.sessionId === id)) {
+        if (cycle && owner) {
           writes.push({
             kind: "transform",
             collection: "study_cycles",
             id: cycle.id,
             apply: (raw) => {
               if (!raw) return {};
-              const latest = toCycle(raw);
-              if (!latest.history.some((entry) => entry.sessionId === id)) return {};
-              return {
-                merge: {
-                  history: latest.history.map((entry) => (entry.sessionId === id ? { ...entry, sessionId: null } : entry)),
-                  updatedAt: now(),
-                },
-              };
+              const reverted = uncountSession(tallyOf(toCycle(raw)), owner, snapshot.sessions);
+              return reverted ? { merge: tallyMerge(reverted) } : {};
             },
           });
         }
+        if (owner?.completedTopic && owner.topicId) writes.push(releaseTopic(owner.subjectId, owner.topicId));
         for (const review of snapshot.reviews) {
           if (review.sessionId === id) writes.push({ kind: "delete", collection: "study_reviews", id: review.id });
           else if (review.resolvedSessionId === id) {
@@ -884,6 +966,17 @@ export function StudyProvider({ children }: { children: ReactNode }) {
                 : { status, resolvedAt: now(), updatedAt: now() },
           }))
         );
+      },
+      async deleteReviews(ids) {
+        if (!ids.length) return;
+        const targets = new Set(ids);
+        const writes: StudyWrite[] = ids.map((id) => ({ kind: "delete" as const, collection: "study_reviews" as const, id }));
+        for (const session of current().sessions) {
+          if (session.reviewId && targets.has(session.reviewId)) {
+            writes.push({ kind: "merge", collection: "study_sessions", id: session.id, data: { reviewId: null, updatedAt: now() } });
+          }
+        }
+        await commit(writes);
       },
       async rescheduleReview(id, day) {
         await commit([
@@ -1021,8 +1114,13 @@ export function StudyProvider({ children }: { children: ReactNode }) {
             id: cycle.id,
             apply: (raw) => {
               if (!raw) return {};
-              const patch = advanceCycle(toCycle(raw), day, { skipped, at: now() });
-              return patch ? { merge: { ...patch, updatedAt: now() } } : {};
+              const latest = toCycle(raw);
+              const item = latest.items[latest.pointer % latest.items.length];
+              const key = item ? `${item.id}:${latest.round}` : null;
+              const nextProgress = { ...(latest.progress ?? {}) };
+              if (key) delete nextProgress[key];
+              const patch = advanceCycle(latest, day, { skipped, at: now() });
+              return patch ? { merge: { ...patch, progress: nextProgress, updatedAt: now() } } : {};
             },
           },
         ]);
@@ -1117,8 +1215,11 @@ export function StudyProvider({ children }: { children: ReactNode }) {
               if (!raw) return {};
               const latest = toCycle(raw);
               const entry = latest.agenda.find((item) => item.id === entryId);
+              const key = `${entryId}:${day}`;
+              const nextProgress = { ...(latest.progress ?? {}) };
+              delete nextProgress[key];
               const patch = entry ? recordAgendaDay(latest, entry, day, { skipped, at: now() }) : null;
-              return patch ? { merge: { ...patch, updatedAt: now() } } : {};
+              return patch ? { merge: { ...patch, progress: nextProgress, updatedAt: now() } } : {};
             },
           },
         ]);
@@ -1189,6 +1290,24 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       },
       async updateSettings(patch) {
         await commit([settingsWrite(patch)]);
+      },
+      async claimAwards(keys) {
+        const fresh = keys.filter((key) => key && !current().settings.claimedAwards[key]);
+        if (!fresh.length) return;
+        const stamp = now();
+        await commit([
+          {
+            kind: "transform",
+            collection: "study_meta",
+            id: "settings",
+            apply: (raw) => {
+              const claimed = normalizeSettings(raw as Partial<StudySettings> | undefined).claimedAwards;
+              const next = { ...claimed };
+              for (const key of fresh) if (!next[key]) next[key] = stamp;
+              return { merge: { claimedAwards: next, updatedAt: stamp } };
+            },
+          },
+        ]);
       },
     };
   }, [adapter, backend, commit]);

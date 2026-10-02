@@ -12,7 +12,6 @@ import {
   Flag,
   Layers,
   NotebookText,
-  PenLine,
   Plus,
   RotateCcw,
   Star,
@@ -42,7 +41,8 @@ import { projectSchedule, type PlannedBlock } from "@/lib/study/cycle";
 import { resolvedDayOf } from "@/lib/study/review-queue";
 import { cardStage } from "@/lib/flashcards/srs";
 import { addDays, capitalizeFirst, dayKeyOf, diffDays, formatDay, minuteOfDay, startOfWeek, weekDays, weekdayLabel, weekdayOf } from "@/lib/study/dates";
-import { FocusButton, GoalSwitcher, SubjectDot } from "@/components/study/ui";
+import { secondsByDay } from "@/lib/study/metrics";
+import { FocusButton, GoalSwitcher } from "@/components/study/ui";
 import { KpiBand } from "@/components/study/widgets";
 import { TaskCheck, TaskDialog, type TaskDialogState } from "@/components/study/tasks";
 import type { DayKey, StudyReminder, StudyReview } from "@/types/study";
@@ -57,14 +57,6 @@ const GRAIN =
   "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.6'/></svg>\")";
 
 type SkyPhase = "night" | "dawn" | "morning" | "afternoon" | "dusk";
-
-const SKY: Record<SkyPhase, { base: string; bright: boolean; glow: string }> = {
-  night: { base: "linear-gradient(168deg, #081229 0%, #14224d 52%, #2c2f66 100%)", bright: true, glow: "rgba(196, 208, 255, 0.26)" },
-  dawn: { base: "linear-gradient(168deg, #1c2a57 0%, #6d4a86 42%, #d98a8a 76%, #f4c39b 100%)", bright: true, glow: "rgba(255, 200, 150, 0.55)" },
-  morning: { base: "linear-gradient(168deg, #b9dcff 0%, #d9ecff 46%, #fbefd9 100%)", bright: false, glow: "rgba(255, 236, 186, 0.9)" },
-  afternoon: { base: "linear-gradient(168deg, #86c3f2 0%, #bfe0fa 52%, #eaf5ff 100%)", bright: false, glow: "rgba(255, 246, 210, 0.85)" },
-  dusk: { base: "linear-gradient(168deg, #27265c 0%, #7f4679 46%, #e2835f 84%, #f5bd78 100%)", bright: true, glow: "rgba(255, 178, 112, 0.6)" },
-};
 
 const STARS = Array.from({ length: 26 }, (_, index) => ({
   left: (index * 37 + 11) % 100,
@@ -303,64 +295,38 @@ export default function WorkspaceHome() {
 function SkyHero({ onCreateNote }: { onCreateNote: () => void }) {
   const { user } = useAuth();
   const { t, textDir, language } = useTranslation();
-  const { st, locale, duration } = useStudyT();
-  const { livePages, dueFlashcards } = useWorkspace();
+  const { st, locale } = useStudyT();
   const study = useStudy();
-  const metrics = usePlanMetrics();
   const now = useNow();
   const minute = now === null ? 540 : minuteOfDay(now, study.settings.timeZone);
   const phase = phaseOf(minute);
-  const sky = SKY[phase];
   const serif = SERIF_LANGUAGES.has(language);
 
   const dayT = (minute - 360) / 720;
   const isDay = dayT >= 0 && dayT <= 1;
   const t01 = isDay ? dayT : ((minute >= 1080 ? minute - 1080 : minute + 360) / 720);
   const [bodyX, bodyY] = arcPoint(Math.min(1, Math.max(0, t01)));
-  const glow = `radial-gradient(300px circle at right ${Math.round(32 + ARC.width - bodyX)}px top ${Math.round(30 + bodyY)}px, ${sky.glow}, transparent 70%)`;
+  const glowAt = `right ${Math.round(32 + ARC.width - bodyX)}px top ${Math.round(30 + bodyY)}px`;
 
   const plan = study.activePlan;
-  const examDays = plan?.examDate ? diffDays(study.today, plan.examDate) : null;
-  const weekStart = startOfWeek(study.today, study.settings.weekStartsOn);
-  const notesThisWeek = useMemo(
-    () => livePages.filter((page) => page.updatedAt && dayKeyOf(page.updatedAt, study.settings.timeZone) >= weekStart).length,
-    [livePages, study.settings.timeZone, weekStart]
-  );
-
-  const chips: { key: string; href: string; icon: ReactNode; label: string }[] = [];
-  if (plan && metrics.todaySeconds > 0) {
-    chips.push({ key: "studied", href: "/home/study/log", icon: <Timer />, label: st("home_chip_studied", { time: duration(metrics.todaySeconds) }) });
-  }
-  if (plan && metrics.dueReviews.length) {
-    chips.push({ key: "reviews", href: "/home/study/reviews", icon: <RotateCcw />, label: st("home_agenda_reviews", { count: metrics.dueReviews.length }) });
-  }
-  if (dueFlashcards.length) {
-    chips.push({ key: "cards", href: "/home/flashcards", icon: <Layers />, label: st("home_agenda_cards", { count: dueFlashcards.length }) });
-  }
-  if (plan && examDays !== null && examDays > 0 && examDays <= 365) {
-    chips.push({ key: "exam", href: `/home/study/goals/${plan.id}`, icon: <Flag />, label: st("sidebar_exam_in", { count: examDays }) });
-  }
-  if (notesThisWeek) {
-    chips.push({ key: "notes", href: "/home/notes", icon: <PenLine />, label: st("home_chip_notes", { count: notesThisWeek }) });
-  }
-
+  const today = study.today;
+  const goalName = plan ? plan.name || st("untitled_goal") : "";
+  const examDays = plan?.examDate ? diffDays(today, plan.examDate) : null;
+  const brief: string[] = [];
+  if (plan && examDays !== null && examDays > 0 && examDays <= 365) brief.push(st("home_brief_exam", { count: examDays, goal: goalName }));
+  else if (plan && examDays === 0) brief.push(st("home_brief_exam_today", { goal: goalName }));
   const firstName = user?.displayName?.split(" ")[0] ?? "";
   const greeting = greetingFor(minute, t);
-  const ink = sky.bright ? "#ffffff" : "var(--sky-ink-soft)";
-  const chipStyle: CSSProperties = sky.bright
-    ? { background: "rgba(255,255,255,0.12)", boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.22)" }
-    : { background: "var(--sky-chip-soft)", boxShadow: "inset 0 0 0 1px var(--sky-chip-soft-ring)" };
-  const ctaStyle: CSSProperties = sky.bright
-    ? { background: "#ffffff", color: "#10243d" }
-    : { background: "var(--sky-cta-soft-bg)", color: "var(--sky-cta-soft-fg)" };
+  const showStars = phase === "night" || phase === "dawn" || phase === "dusk";
 
   return (
     <section
-      className="@container relative isolate overflow-hidden rounded-[28px] px-6 pb-6 pt-7 transition-[background] duration-1000 sm:px-9 sm:pb-8 sm:pt-9 3xl:px-12 3xl:pb-10 3xl:pt-12"
-      style={{ background: now === null ? "var(--surface-2)" : `${glow}, ${sky.base}`, color: ink }}
+      data-phase={now === null ? undefined : phase}
+      className="home-sky @container relative isolate overflow-hidden rounded-[28px] px-6 pb-6 pt-7 transition-[background] duration-1000 sm:px-9 sm:pb-8 sm:pt-9 3xl:px-12 3xl:pb-10 3xl:pt-12"
+      style={{ ["--sky-at" as string]: glowAt }}
     >
-      {sky.bright && now !== null ? (
-        <div aria-hidden className="pointer-events-none absolute inset-0">
+      {showStars && now !== null ? (
+        <div aria-hidden className="pointer-events-none absolute inset-0" style={{ opacity: "var(--sky-stars)" }}>
           {STARS.slice(0, phase === "night" ? STARS.length : 10).map((star, index) => (
             <span
               key={index}
@@ -370,54 +336,139 @@ function SkyHero({ onCreateNote }: { onCreateNote: () => void }) {
           ))}
         </div>
       ) : null}
-      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[#040a14]" style={{ opacity: "var(--sky-dim)" }} />
-      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.16] mix-blend-overlay" style={{ backgroundImage: GRAIN }} />
+      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.14] mix-blend-overlay" style={{ backgroundImage: GRAIN }} />
       {now !== null ? <SunArc t={t01} isDay={isDay} /> : null}
 
       <div className="relative @2xl:pr-[15.5rem]">
-        <p className="text-[13px] font-medium opacity-80">
-          {capitalizeFirst(formatDay(study.today, locale, { weekday: "long", day: "numeric", month: "long" }))}
+        <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[var(--sky-muted)]">
+          {capitalizeFirst(formatDay(today, locale, { weekday: "long", day: "numeric", month: "long" }))}
         </p>
         <h1
           dir={textDir}
           className={cn(
-            "mt-2 text-balance text-[2.125rem] leading-[1.04] @lg:text-[2.625rem] @3xl:text-[3.25rem] @6xl:text-[3.75rem]",
+            "mt-2.5 text-balance text-[2.125rem] leading-[1.04] @lg:text-[2.625rem] @3xl:text-[3.25rem] @6xl:text-[3.75rem]",
             serif ? "font-normal tracking-[-0.02em]" : "font-semibold tracking-[-0.035em]"
           )}
           style={serif ? { fontFamily: SERIF } : undefined}
         >
           {firstName ? `${greeting}, ${firstName}` : greeting}
         </h1>
+        <p
+          dir={textDir}
+          aria-hidden={brief.length ? undefined : true}
+          className="mt-3 min-h-[1lh] max-w-xl text-pretty text-[14.5px] leading-relaxed text-[var(--sky-muted)]"
+        >
+          {brief.join(" ")}
+        </p>
       </div>
 
-      <div className="relative mt-6 flex flex-col gap-3 @lg:mt-9 @lg:flex-row @lg:items-end @lg:justify-between @lg:gap-4">
-        {chips.length ? (
-          <div className="-mx-6 flex gap-2 overflow-x-auto px-6 [scrollbar-width:none] @lg:mx-0 @lg:flex-1 @lg:flex-wrap @lg:overflow-visible @lg:px-0 [&::-webkit-scrollbar]:hidden">
-            {chips.map((chip) => (
-              <Link
-                key={chip.key}
-                href={chip.href}
-                prefetch
-                style={chipStyle}
-                className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[12.5px] font-medium backdrop-blur-md transition hover:brightness-110 [&_svg]:size-3.5 [&_svg]:opacity-80"
-              >
-                {chip.icon}
-                {chip.label}
-              </Link>
-            ))}
-          </div>
-        ) : null}
+      <div className="relative mt-6 flex flex-col gap-5 border-t border-[var(--sky-ring)] pt-5 @lg:mt-8 @lg:pt-6 @3xl:flex-row @3xl:items-end @3xl:justify-between @3xl:gap-10">
+        <SkyWeek />
         <button
           type="button"
           onClick={onCreateNote}
-          style={ctaStyle}
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 self-start rounded-full px-4 text-[13px] font-semibold shadow-[0_6px_18px_-8px_rgba(4,10,20,0.45)] transition hover:-translate-y-px active:translate-y-0 @lg:ml-auto @lg:self-auto"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 self-start rounded-full bg-[var(--sky-cta-bg)] px-4 text-[13px] font-semibold text-[var(--sky-cta-fg)] shadow-[0_6px_18px_-8px_rgba(4,10,20,0.45)] transition hover:-translate-y-px active:translate-y-0 @3xl:self-end"
         >
           <Plus className="size-4" />
           {t("new_note")}
         </button>
       </div>
     </section>
+  );
+}
+
+function SkyWeek() {
+  const { st, locale, duration } = useStudyT();
+  const { sessions, exams, settings, today } = useStudy();
+  const days = useMemo(() => weekDays(startOfWeek(today, settings.weekStartsOn)), [settings.weekStartsOn, today]);
+  const byDay = useMemo(() => secondsByDay(sessions, exams), [exams, sessions]);
+  const values = days.map((day) => byDay.get(day) ?? 0);
+  const total = values.reduce((sum, value) => sum + value, 0);
+  const studied = values.filter((value) => value > 0).length;
+  const top = Math.max(...values);
+  const scale = Math.max(top, 1800);
+  const peak = top > 0 ? values.indexOf(top) : -1;
+
+  return (
+    <Link
+      href="/home/study/log"
+      prefetch
+      className="group flex w-full min-w-0 flex-col gap-5 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-[var(--sky-ring)] @lg:flex-row @lg:items-end @lg:gap-9 @3xl:max-w-[42rem]"
+    >
+      <div className="shrink-0 @lg:pb-0.5">
+        <p className="flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-[0.15em] text-[var(--sky-muted)]">
+          {st("home_week_all_title")}
+          <ChevronRight className="size-3 -translate-x-0.5 opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100 rtl:rotate-180" />
+        </p>
+        <p className={cn("mt-2 whitespace-nowrap text-[30px] font-semibold leading-none tracking-[-0.035em] tabular-nums", !total && "opacity-50")}>
+          {duration(total)}
+        </p>
+        <p className="mt-2 text-[12px] leading-snug text-[var(--sky-muted)]">
+          {st("home_week_days_studied", { count: studied })}
+        </p>
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="relative grid h-[5.25rem] grid-cols-7 border-b border-dashed border-[var(--sky-ring)] pt-5">
+          {days.map((day, index) => {
+            const value = values[index];
+            const height = value ? Math.max(8, (value / scale) * 100) : 0;
+            const isToday = day === today;
+            const future = day > today;
+            const showValue = value > 0 && (index === peak || isToday);
+            const label = `${capitalizeFirst(formatDay(day, locale, { weekday: "long", day: "numeric", month: "long" }))}${value ? ` · ${duration(value)}` : ""}`;
+            return (
+              <div key={day} title={label} className="relative flex h-full items-end justify-center">
+                {showValue ? (
+                  <span
+                    className={cn(
+                      "absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[10.5px] font-semibold leading-none tabular-nums",
+                      isToday ? "text-[var(--sky-ink)]" : "text-[var(--sky-muted)]"
+                    )}
+                    style={{ bottom: `calc(${height}% + 7px)` }}
+                  >
+                    {duration(value)}
+                  </span>
+                ) : null}
+                {value ? (
+                  <span
+                    className="block w-2 rounded-full transition-[height] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] @lg:w-2.5"
+                    style={{
+                      height: `${height}%`,
+                      background: isToday
+                        ? "var(--sky-bar-today)"
+                        : "linear-gradient(to top, color-mix(in oklab, var(--sky-bar) 45%, transparent), var(--sky-bar))",
+                      boxShadow: isToday ? "0 0 18px -2px color-mix(in oklab, var(--sky-bar-today) 70%, transparent)" : undefined,
+                    }}
+                  />
+                ) : (
+                  <span
+                    className={cn("mb-[-3px] block size-[5px] rounded-full bg-[var(--sky-muted)]", future ? "opacity-25" : "opacity-50", isToday && "opacity-90")}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-2.5 grid grid-cols-7">
+          {days.map((day) => {
+            const isToday = day === today;
+            return (
+              <span
+                key={day}
+                className={cn(
+                  "text-center text-[10.5px] uppercase leading-none tracking-[0.06em]",
+                  isToday ? "font-bold text-[var(--sky-ink)]" : "text-[var(--sky-muted)]",
+                  day > today && "opacity-60"
+                )}
+              >
+                {weekdayLabel(weekdayOf(day), locale, "short").replace(".", "")}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    </Link>
   );
 }
 
@@ -733,7 +784,7 @@ function WeekStrip({ selected, onSelect }: { selected: DayKey; onSelect: (day: D
 
 function StudyOverview() {
   const router = useRouter();
-  const { st, locale } = useStudyT();
+  const { st } = useStudyT();
   const study = useStudy();
   const plan = study.activePlan;
 
@@ -766,21 +817,11 @@ function StudyOverview() {
     );
   }
 
-  const examDays = plan.examDate ? diffDays(study.today, plan.examDate) : null;
-  const examDate = plan.examDate ? formatDay(plan.examDate, locale, { day: "numeric", month: "short", year: "numeric" }) : "";
-  const examLine = !plan.examDate
-    ? st("goal_no_exam")
-    : examDays !== null && examDays > 0
-      ? st("sidebar_exam_in", { count: examDays })
-      : examDays === 0
-        ? st("countdown_today")
-        : st("countdown_past", { date: examDate });
-
   // O objetivo ativo abre o painel dos números, como o cabeçalho de um projeto no Linear.
   return (
     <section aria-label={plan.name || st("untitled_goal")} className={cn(TILE, "overflow-hidden")}>
       <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-4 px-5 pb-4 pt-5 sm:px-6">
-        <GoalSwitcher detail={<span title={examDate || undefined}>{examLine}</span>} />
+        <GoalSwitcher />
         <div className="flex flex-wrap items-center gap-1.5">
           {/* Sessão nova começa em branco: a disciplina é escolhida no relógio. */}
           <Button variant="primary" size="sm" onClick={openBlankTimer}>
@@ -1401,7 +1442,6 @@ function TodayReviewsTile() {
             <RotateCcw className="size-5" />
           </div>
           <p className="mt-3 text-[14px] font-semibold text-ink">{st("reviews_empty_due")}</p>
-          <p className="mt-1 max-w-xs text-[12px] text-muted">{st("home_today_reviews_empty_hint")}</p>
           <Link
             href="/home/study/reviews"
             prefetch

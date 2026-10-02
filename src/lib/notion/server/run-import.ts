@@ -325,7 +325,7 @@ class ProgressReporter {
     await this.ref.update({
       status: errors.length ? "completed_with_errors" : "completed",
       currentStep: errors.length
-        ? `Concluída com ${errors.length} aviso(s)`
+        ? `Concluído com ${errors.length} aviso(s)`
         : "Importação concluída",
       finishedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),

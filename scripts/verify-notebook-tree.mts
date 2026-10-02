@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import {
   childrenOf,
   isNotebookDescendant,
+  isParkedNotebook,
   notebookAncestors,
   notebookSubtreeIds,
   parentIdOf,
+  presentsAsNotebook,
 } from "../src/lib/data/notebook-tree";
 import { sortNotebooks, sortPageTree, sortPages } from "../src/lib/data/list-sort";
 import type { Notebook, Page } from "../src/types/models";
@@ -38,6 +40,19 @@ assert.deepEqual(
   notebookAncestors(tree, "grand").map((item) => item.id),
   ["root-a", "child", "grand"]
 );
+const parked = notebook("parked", null, 0);
+parked.archivedFromParentId = "root-a";
+assert.equal(isParkedNotebook(parked), true);
+assert.equal(isParkedNotebook(notebook("root-a")), false);
+assert.equal(isParkedNotebook(notebook("child", "root-a")), false);
+assert.equal(presentsAsNotebook(parked), true);
+assert.equal(presentsAsNotebook(notebook("child", "root-a")), true);
+assert.equal(presentsAsNotebook(notebook("root-a")), false);
+assert.deepEqual(
+  notebookAncestors([...tree, parked], "parked").map((item) => item.id),
+  ["parked"]
+);
+assert.equal(isNotebookDescendant([...tree, parked], "parked", "root-a"), true);
 assert.equal(isNotebookDescendant(tree, "grand", "root-a"), true);
 assert.equal(isNotebookDescendant(tree, "root-b", "root-a"), false);
 assert.equal(isNotebookDescendant(tree, "root-a", "root-a"), false);

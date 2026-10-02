@@ -28,7 +28,7 @@ import { toast } from "sonner";
 import { useUiStore } from "@/lib/store/ui-store";
 import { useWorkspace, type PageTreeNode } from "@/lib/data/provider";
 import { childrenOf, isNotebookDescendant, notebookSubtreeIds, parentIdOf } from "@/lib/data/notebook-tree";
-import { unarchiveNotebookTree } from "@/lib/data/archive";
+import { unarchiveNotebookTree, archiveNotebookTree } from "@/lib/data/archive";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState, Tooltip } from "@/components/ui/primitives";
@@ -119,10 +119,15 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
       ),
   });
 
-  const childNotebooks = useMemo(
-    () => childrenOf(isArchived ? [...notebooks, ...archivedNotebooks] : notebooks, notebookId),
-    [notebookId, notebooks, archivedNotebooks, isArchived]
-  );
+  const childNotebooks = useMemo(() => {
+    const pool = isArchived ? [...notebooks, ...archivedNotebooks] : notebooks;
+    return pool.filter(
+      (nb) =>
+        !nb.deletedAt &&
+        (parentIdOf(nb) === notebookId ||
+          (isArchived && nb.archivedFromParentId === notebookId))
+    );
+  }, [notebookId, notebooks, archivedNotebooks, isArchived]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
@@ -144,11 +149,16 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
 
   const noteTree = useMemo(() => {
     if (isArchived) {
-      const scope = archivedPages.filter((p) => p.notebookId === notebookId && !p.deletedAt);
+      const scope = archivedPages.filter(
+        (p) =>
+          !p.deletedAt &&
+          (p.notebookId === notebookId || p.archivedFromNotebookId === notebookId)
+      );
       const scopeIds = new Set(scope.map((p) => p.id));
       const byParent = new Map<string | null, Page[]>();
       for (const page of scope) {
-        const key = page.parentPageId && scopeIds.has(page.parentPageId) ? page.parentPageId : null;
+        const parentId = page.parentPageId ?? page.archivedFromParentPageId;
+        const key = parentId && scopeIds.has(parentId) ? parentId : null;
         if (!byParent.has(key)) byParent.set(key, []);
         byParent.get(key)!.push(page);
       }
@@ -235,7 +245,12 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
   const notes = useMemo(() => {
     const pool = isArchived ? [...livePages, ...archivedPages] : livePages;
     return pool
-      .filter((p) => p.notebookId === notebookId && !p.deletedAt)
+      .filter(
+        (p) =>
+          !p.deletedAt &&
+          (p.notebookId === notebookId ||
+            (isArchived && p.archivedFromNotebookId === notebookId))
+      )
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || compareNatural(a.title, b.title));
   }, [notebookId, livePages, archivedPages, isArchived]);
 
@@ -615,13 +630,13 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
   const empty = !childNotebooks.length && !notes.length && !notebookDatabases.length;
   const hasCover = Boolean(notebook.coverUrl);
   const showCoverHeader = hasCover && !isArchived;
-  const isRootPage = !parentIdOf(notebook);
+  const isRootPage = !parentIdOf(notebook) && !notebook.archivedFromParentId;
 
   return (
     <div className="relative">
       <div
         className={cn(
-          "z-30 flex items-center gap-2 px-4 py-1.5 md:px-8",
+          "z-30 flex items-center gap-2 px-4 py-1.5 max-md:ps-[max(1rem,env(safe-area-inset-left,0px))] max-md:pt-[calc(0.375rem+env(safe-area-inset-top,0px))] md:px-8",
           showCoverHeader
             ? "absolute inset-x-0 top-0 border-transparent bg-gradient-to-b from-black/45 via-black/20 to-transparent text-white"
             : "sticky top-0 border-b border-[var(--border)] bg-[var(--canvas)]/85 backdrop-blur-xl text-ink"
@@ -684,8 +699,14 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
                   );
                   toast.success(result.isRootPage ? t("root_page_unarchived") : t("notebook_unarchived"));
                 } else {
-                  await adapter.updateNotebook(notebookId, { archived: true });
-                  toast.success(isRootPage ? t("root_page_archived") : t("notebook_archived"));
+                  const result = await archiveNotebookTree(
+                    adapter,
+                    [...notebooks, ...archivedNotebooks],
+                    [...livePages, ...archivedPages],
+                    notebookId
+                  );
+                  toast.success(result.isRootPage ? t("root_page_archived") : t("notebook_archived"));
+                  router.push("/home");
                 }
               }}
             >

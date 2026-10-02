@@ -2,7 +2,21 @@ import type { Page } from "@/types/models";
 
 
 export function descendantsOf(pages: Page[], pageId: string): Page[] {
-  return pages.filter((page) => page.path.includes(pageId));
+  const byId = new Map(pages.map((p) => [p.id, p]));
+  return pages.filter((candidate) => {
+    if (candidate.id === pageId) return false;
+    if (candidate.path.includes(pageId)) return true;
+    if (candidate.archivedFromPath && candidate.archivedFromPath.includes(pageId)) return true;
+    let curr = candidate.parentPageId ?? candidate.archivedFromParentPageId ?? null;
+    const localSeen = new Set<string>();
+    while (curr && !localSeen.has(curr)) {
+      if (curr === pageId) return true;
+      localSeen.add(curr);
+      const parent = byId.get(curr);
+      curr = parent?.parentPageId ?? parent?.archivedFromParentPageId ?? null;
+    }
+    return false;
+  });
 }
 
 export function pageSubtree(pages: Page[], pageId: string): Page[] {

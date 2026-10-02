@@ -277,13 +277,12 @@ REJECTED: hint "A formula related to the heart."
 ACCEPTED: hint "Same shape as Ohm's law, with flow replacing current."
 
 Source sentence: "The statute of limitations for simple theft is eight years."
-ACCEPTED with no hint at all: a bare number has no honest retrieval cue, so the "hint" field is omitted.${
-    focus
+ACCEPTED with no hint at all: a bare number has no honest retrieval cue, so the "hint" field is omitted.${focus
       ? `
 
 9. USER FOCUS — HIGHEST PRIORITY. The user asked to concentrate on: "${focus}". Prioritise this aspect above all others when selecting and ordering the cards, while still respecting every rule above.`
       : ""
-  }${existingBlock ? `
+    }${existingBlock ? `
 
 ${existingBlock}` : ""}`;
 }
@@ -424,7 +423,7 @@ function parseFlashcards(raw: string): FlashcardItem[] {
     if (match) {
       try {
         parsed = JSON.parse(match[0]);
-      } catch {}
+      } catch { }
     }
   }
 
@@ -463,7 +462,7 @@ function parseFlashcards(raw: string): FlashcardItem[] {
             hint: hint && !isWeakHint(hint, front, back) ? hint : undefined,
           });
         }
-      } catch {}
+      } catch { }
     }
   }
 
@@ -567,8 +566,8 @@ async function generateFlashcards(req: NextRequest) {
     const videoTranscripts = asTranscripts(body.videoTranscripts);
     const pdfTexts: { name: string; text: string }[] = Array.isArray(body.pdfTexts)
       ? body.pdfTexts.filter(
-          (p: { text?: unknown }) => p && typeof p.text === "string" && p.text.trim()
-        )
+        (p: { text?: unknown }) => p && typeof p.text === "string" && p.text.trim()
+      )
       : [];
     const pdfDocuments: {
       name?: string;
@@ -705,7 +704,6 @@ async function generateFlashcards(req: NextRequest) {
           "gemini-3.6-flash",
           "gemini-3.5-flash",
           "gemini-3.5-flash-lite",
-          "gemini-2.5-flash",
         ].filter(Boolean) as string[]
       )
     );

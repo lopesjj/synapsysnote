@@ -260,6 +260,7 @@ export class LocalAdapter implements DataAdapter {
         ? {
             ...notebook,
             parentId: target.parentId,
+            archivedFromParentId: null,
             order: target.order !== undefined ? target.order : notebook.order,
             updatedAt: nowMs(),
           }

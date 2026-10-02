@@ -184,7 +184,7 @@ const es: LegalBundle = {
               rows: [
                 ["Registro", "Nombre, correo electrónico, teléfono y foto de perfil", "Tú o tu cuenta de Google"],
                 ["Credenciales", "Contraseña, guardada solo de forma cifrada por el proveedor de autenticación", "Tú"],
-                ["Contenido", "Notas, páginas, cuadernos, flashcards, adjuntos, audios y vídeos; en el módulo de estudios, objetivos, materias y temas (con los enlaces externos que añadas), sesiones (con el material y las notas vinculadas), preguntas, repasos, simulacros, cronogramas, recordatorios y notas rápidas", "Tú y las importaciones que hagas"],
+                ["Contenido", "Notas, páginas, cuadernos, flashcards, adjuntos, audios y vídeos; en el módulo de estudios, objetivos, materias y temas (con los enlaces externos que añadas), sesiones (con el material y las notas vinculadas), preguntas, repasos, simulacros, cronogramas, recordatorios, notas rápidas y los logros guardados en la vitrina (con la fecha en que se guardaron)", "Tú y las importaciones que hagas"],
                 ["Integraciones", "Tokens de acceso a Notion, Evernote y Google Docs", "El servicio conectado, con tu autorización"],
                 ["Preferencias", "Idioma, tema, accesibilidad y diseño", "Tú"],
                 ["Datos técnicos", "IP, país aproximado, navegador, dispositivo, fecha y hora de acceso", "Recogida automática"],

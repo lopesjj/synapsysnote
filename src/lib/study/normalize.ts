@@ -22,7 +22,7 @@ import type {
 import type { StudyDoc } from "./backend";
 import { MAX_AGENDA_ENTRIES, MAX_AGENDA_REMOVED } from "./agenda";
 import { isDayKey } from "./dates";
-import { MAX_SESSION_SECONDS, STICKY_COLORS, SUBJECT_COLORS } from "./defaults";
+import { MAX_SESSION_SECONDS, STICKY_COLORS, SUBJECT_COLORS, subjectColorOf } from "./defaults";
 
 function str(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
@@ -93,7 +93,7 @@ export function toSubject(raw: StudyDoc): StudySubject {
     id: raw.id,
     planId: str(raw.planId),
     name: str(raw.name),
-    color: /^#[0-9a-f]{6}$/i.test(color) ? color : SUBJECT_COLORS[0],
+    color: /^#[0-9a-f]{6}$/i.test(color) ? subjectColorOf(color) : SUBJECT_COLORS[0],
     topics,
     notebookId: nullableStr(raw.notebookId),
     order: num(raw.order),
@@ -167,6 +167,7 @@ export function toSession(raw: StudyDoc): StudySession {
     comment: str(raw.comment),
     reviewId: nullableStr(raw.reviewId),
     cycleItemId: nullableStr(raw.cycleItemId),
+    completedTopic: raw.completedTopic === true,
     pageId: nullableStr(raw.pageId),
     source,
     createdAt: num(raw.createdAt),
@@ -309,6 +310,14 @@ export function toCycle(raw: StudyDoc): StudyCycle {
   const agenda = Array.isArray(raw.agenda)
     ? raw.agenda.map(toAgendaEntry).filter((entry): entry is AgendaEntry => Boolean(entry)).slice(0, MAX_AGENDA_ENTRIES)
     : [];
+  const progress =
+    raw.progress && typeof raw.progress === "object"
+      ? Object.fromEntries(
+          Object.entries(raw.progress as Record<string, unknown>)
+            .map(([key, value]): [string, number] => [key, nonNegative(value, 24 * 60)])
+            .filter(([, value]) => value > 0)
+        )
+      : undefined;
   return {
     id: raw.id,
     planId: str(raw.planId) || raw.id,
@@ -321,6 +330,7 @@ export function toCycle(raw: StudyDoc): StudyCycle {
     subjects,
     minBlock: Math.max(10, nonNegative(raw.minBlock) || 30),
     maxBlock: Math.max(15, nonNegative(raw.maxBlock) || 90),
+    progress,
     createdAt: num(raw.createdAt),
     updatedAt: num(raw.updatedAt),
   };

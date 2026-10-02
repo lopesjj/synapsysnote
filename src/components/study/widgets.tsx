@@ -1,39 +1,23 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
-import { Check, ChevronLeft, ChevronRight, Flame, MoreHorizontal, Pencil, Plus, Trash2, Trophy } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { Check, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Link, useRouter } from "@/lib/i18n/navigation";
+import { Link } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Tooltip } from "@/components/ui/primitives";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { cn } from "@/lib/utils";
 import { useStudy } from "@/lib/study/provider";
-import { useStudyT, type StudyKey, type StudyT } from "@/lib/study/i18n";
-import { usePlanMetrics } from "@/lib/study/hooks";
-import { useStudyUi } from "@/lib/study/ui-store";
-import {
-  addDays,
-  capitalizeFirst,
-  diffDays,
-  dayKeyOf,
-  formatDay,
-  orderedWeekdays,
-  startOfWeek,
-  weekDays,
-  weekdayLabel,
-  weekdayOf,
-} from "@/lib/study/dates";
-import { aggregate, dayStatus, performanceBand, percentLabel } from "@/lib/study/metrics";
-import { projectSchedule } from "@/lib/study/cycle";
-import { nextUp } from "@/lib/study/suggest";
-import { usePlanning } from "@/lib/study/planning";
-import type { PlanningTask } from "@/lib/study/planning-bridge";
+import { studyTranslateParts, useStudyT, type StudyKey, type StudyT } from "@/lib/study/i18n";
+import { useAwardBook, usePlanMetrics } from "@/lib/study/hooks";
+import { addDays, capitalizeFirst, compareDay, diffDays, dayKeyOf, formatDay, orderedWeekdays, startOfWeek, weekDays, weekdayLabel, weekdayOf } from "@/lib/study/dates";
+import { aggregate, dayStatus, isPlannedDay, performanceBand, percentLabel, type DayStatus } from "@/lib/study/metrics";
 import { formatHoursTick, formatNumber } from "@/lib/study/format";
 import type { DayKey, StudyReminder, StudyReview } from "@/types/study";
-import { ColumnChart, Donut, HEAT_MISSED, Heatmap, Meter, Sparkbars, heatColor, heatWeeks, useWidth, type HeatCell } from "./charts";
+import { ColumnChart, Donut, Meter, Sparkbars } from "./charts";
 import { PaceDialog, ReminderDialog, GoalDialog } from "./dialogs";
-import { TaskDialog, TaskLine, type TaskDialogState } from "./tasks";
+import { StreakSeal } from "./awards";
 import {
   AccuracyTag,
   BandGlyph,
@@ -43,41 +27,11 @@ import {
   FocusButton,
   Panel,
   PanelLink,
+  RhythmMark,
   Segmented,
-  SubjectDot,
+  SubjectBar,
   bandColor,
 } from "./ui";
-
-function StreakFlame({ active, className }: { active?: boolean; className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      className={cn("size-3.5 shrink-0", active && "animate-[pulse_2.5s_ease-in-out_infinite]", className)}
-      fill="none"
-      aria-hidden
-    >
-      <defs>
-        <linearGradient id="streak-flame-outer" x1="8" y1="1" x2="8" y2="15" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#FBBF24" />
-          <stop offset="45%" stopColor="#F59E0B" />
-          <stop offset="100%" stopColor="#EA580C" />
-        </linearGradient>
-        <linearGradient id="streak-flame-inner" x1="8" y1="7" x2="8" y2="14" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#FEF08A" />
-          <stop offset="100%" stopColor="#F59E0B" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M8.2 1.2c-.3.4-.6.9-.8 1.5-.4 1.2-.2 2.3.2 3.1.1.2 0 .5-.2.6-.2.1-.5 0-.6-.2-.7-1.1-.8-2.5-.4-3.7C4.6 3.6 3 5.8 3 8.3 3 11.5 5.2 14 8 14s5-2.5 5-5.7c0-2.2-1.3-4.2-3.1-5.1-.3-.1-.4-.4-.3-.7.1-.4.4-.7.6-1 .2-.3.1-.7-.2-.9-.2-.1-.5-.1-.8.6z"
-        fill="url(#streak-flame-outer)"
-      />
-      <path
-        d="M8 7.5c-.2.3-.4.7-.5 1.1-.3.8-.1 1.5.1 2 .1.2 0 .4-.2.5-.2.1-.4 0-.5-.2-.4-.7-.5-1.6-.2-2.4C5.8 9 5 10.3 5 11.8 5 13.6 6.3 14 8 14s3-.4 3-2.2c0-1.2-.7-2.3-1.8-2.9-.2-.1-.3-.3-.2-.5.1-.3.3-.5.4-.7.1-.2 0-.4-.1-.5-.1 0-.3 0-.3.4z"
-        fill="url(#streak-flame-inner)"
-      />
-    </svg>
-  );
-}
 
 export function relativeDay(day: DayKey, today: DayKey, locale: string, st: StudyT): string {
   if (day === today) return st("today");
@@ -97,10 +51,10 @@ function KpiCell({
   className?: string;
 }) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-2 px-3.5 py-3 sm:px-5 sm:py-4", className)}>
-      <span className="text-[12px] font-medium text-muted">{label}</span>
-      <div className="min-h-[2.25rem]">{children}</div>
-      {hint ? <div className="text-[11.5px] leading-snug text-faint">{hint}</div> : null}
+    <div className={cn("flex min-w-0 flex-col gap-2.5 px-4 py-4 sm:px-6 sm:py-5", className)}>
+      <span className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-faint">{label}</span>
+      <div className="min-h-[2.5rem]">{children}</div>
+      {hint ? <div className="text-[11.5px] leading-snug text-muted">{hint}</div> : null}
     </div>
   );
 }
@@ -110,10 +64,11 @@ export function KpiBand({ className }: { className?: string }) {
   const { settings, today } = useStudy();
   const metrics = usePlanMetrics();
   const band = performanceBand(metrics.total.accuracy, settings);
+  const isRecord = metrics.streak.current > 0 && metrics.streak.current >= metrics.streak.best && metrics.streak.best > 1;
   return (
     <section
       className={cn(
-        "grid grid-cols-2 overflow-hidden rounded-[20px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_1px_2px_rgba(15,44,76,0.04)] lg:grid-cols-4",
+        "grid grid-cols-2 overflow-hidden rounded-[18px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border)] lg:grid-cols-4",
         className
       )}
     >
@@ -136,7 +91,7 @@ export function KpiBand({ className }: { className?: string }) {
         }
       >
         {metrics.total.accuracy !== null && band ? (
-          <span className="flex items-baseline gap-2">
+          <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
             <Figure value={Math.round(metrics.total.accuracy * 100)} unit="%" />
             <span className="inline-flex items-center gap-1 text-[11.5px] font-medium" style={{ color: bandColor(band) }}>
               <BandGlyph band={band} />
@@ -152,78 +107,58 @@ export function KpiBand({ className }: { className?: string }) {
         className="border-t border-[var(--border)] lg:border-l lg:border-t-0"
         hint={st("kpi_coverage_hint", { done: metrics.coverage.done, total: metrics.coverage.total })}
       >
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           <Figure value={Math.round(metrics.coverage.ratio * 100)} unit="%" />
-          <Meter value={metrics.coverage.done} max={metrics.coverage.total} label={st("kpi_coverage")} />
+          <Meter
+            value={metrics.coverage.done}
+            max={metrics.coverage.total}
+            label={st("kpi_coverage")}
+            tone={metrics.coverage.total > 0 && metrics.coverage.done === metrics.coverage.total ? "var(--laurel)" : undefined}
+          />
         </div>
       </KpiCell>
       <KpiCell
         label={st("kpi_streak")}
-        className={cn(
-          "border-l border-t border-[var(--border)] lg:border-t-0 transition-colors",
-          metrics.streak.current > 0 && "bg-gradient-to-br from-amber-500/[0.04] to-orange-500/[0.02]"
-        )}
+        className="border-l border-t border-[var(--border)] lg:border-t-0"
         hint={
           metrics.streak.best ? (
-            <span className="inline-flex items-center gap-1.5 text-[11px] text-muted">
-              <Trophy className="size-3 text-amber-500/80 shrink-0" />
-              <span>{st("kpi_streak_hint", { count: metrics.streak.best })}</span>
+            <span className={cn(isRecord && "font-medium text-[var(--laurel)]")}>
+              {isRecord ? st("streak_record_badge") : st("kpi_streak_hint", { count: metrics.streak.best })}
             </span>
           ) : undefined
         }
       >
-        <div className="flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-2.5">
           <Figure value={metrics.streak.current} unit={st("countdown_days_label", { count: metrics.streak.current })} />
-          {metrics.streak.current > 0 ? (
-            <div
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-tight transition-all backdrop-blur-sm",
-                metrics.streak.current >= (metrics.streak.best ?? 0) && (metrics.streak.best ?? 0) > 1
-                  ? "border border-amber-500/35 bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-amber-500/10 text-amber-600 shadow-[0_0_12px_rgba(245,158,11,0.22)] dark:text-amber-300"
-                  : "border border-amber-500/25 bg-gradient-to-r from-amber-500/10 via-orange-500/[0.08] to-amber-500/[0.04] text-amber-600 shadow-[0_1px_3px_rgba(245,158,11,0.08)] dark:text-amber-400"
-              )}
-              title={
-                metrics.streak.current >= (metrics.streak.best ?? 0) && (metrics.streak.best ?? 0) > 1
-                  ? st("streak_record_badge")
-                  : st("streak_active_badge")
-              }
-            >
-              <StreakFlame active />
-              <span>
-                {metrics.streak.current >= (metrics.streak.best ?? 0) && (metrics.streak.best ?? 0) > 1
-                  ? st("streak_record_badge")
-                  : st("streak_active_badge")}
-              </span>
-            </div>
-          ) : null}
-        </div>
+          {metrics.streak.current > 0 ? <RhythmMark full={isRecord} /> : null}
+        </span>
       </KpiCell>
     </section>
   );
 }
 
-export function ConsistencyPanel() {
-  const { st, locale, duration } = useStudyT();
-  const { settings, today, activePlan } = useStudy();
-  const metrics = usePlanMetrics();
-  const [measureRef, width] = useWidth<HTMLDivElement>();
-  const weeks = heatWeeks(width, 30, 4);
-  const target = activePlan?.weeklyGoalMinutes ? activePlan.weeklyGoalMinutes / Math.max(1, settings.studyWeekdays.length || 7) : 0;
-  const firstDay = metrics.consistency.firstDay;
+const CHAIN_WEEKS = 4;
 
-  const { grid, columns } = useMemo(() => {
-    const thresholds = target > 0 ? [target * 0.5, target, target * 1.5] : [45, 90, 180];
-    const first = addDays(startOfWeek(today, settings.weekStartsOn), -(weeks - 1) * 7);
-    const grid: HeatCell[][] = [];
-    const columns: { index: number; label: string }[] = [];
-    let lastMonth = "";
-    for (let week = 0; week < weeks; week += 1) {
-      const column: HeatCell[] = [];
-      for (let offset = 0; offset < 7; offset += 1) {
-        const day = addDays(first, week * 7 + offset);
+export function ConsistencyPanel() {
+  const { st, locale, duration, language } = useStudyT();
+  const { settings, today } = useStudy();
+  const metrics = usePlanMetrics();
+  const book = useAwardBook();
+  const firstDay = metrics.consistency.firstDay;
+  const current = metrics.streak.current;
+  const best = metrics.streak.best;
+  const isRecord = current >= best && best > 1;
+  const thisWeek = startOfWeek(today, settings.weekStartsOn);
+  const [lastWeek, setLastWeek] = useState(thisWeek);
+  const start = addDays(lastWeek, -(CHAIN_WEEKS - 1) * 7);
+  const end = addDays(lastWeek, 6);
+  const atToday = compareDay(lastWeek, thisWeek) >= 0;
+
+  const rows = useMemo(() => {
+    const built = Array.from({ length: CHAIN_WEEKS }, (_, row) => {
+      const first = addDays(start, row * 7);
+      const days = weekDays(first).map((day) => {
         const seconds = metrics.byDay.get(day) ?? 0;
-        const minutes = seconds / 60;
-        const level = (minutes <= 0 ? 0 : minutes < thresholds[0] ? 1 : minutes < thresholds[1] ? 2 : minutes < thresholds[2] ? 3 : 4) as HeatCell["level"];
         const status = dayStatus(day, metrics.days, firstDay, today, settings.studyWeekdays);
         const detail =
           status === "studied"
@@ -234,106 +169,163 @@ export function ConsistencyPanel() {
                 ? st("heatmap_rest")
                 : status === "pending"
                   ? st("heatmap_today_pending")
-                  : st("heatmap_before");
-        column.push({
-          key: day,
-          level,
-          status,
-          tooltip: (
-            <span className="flex items-center gap-2">
-              <span className="size-2 shrink-0 rounded-[3px]" style={{ backgroundColor: heatColor({ level, status }) }} />
-              <span className="font-medium">{capitalizeFirst(formatDay(day, locale, { weekday: "short", day: "numeric", month: "short" }))}</span>
-              <span className={status === "missed" ? "text-[var(--danger)]" : "text-muted"}>{detail}</span>
-            </span>
-          ),
-        });
+                  : status === "future"
+                    ? ""
+                    : st("heatmap_before");
+        const dateLabel = capitalizeFirst(formatDay(day, locale, { weekday: "long", day: "numeric", month: "long" }));
+        return { key: day, status, date: Number(day.slice(8)), title: detail ? `${dateLabel} · ${detail}` : dateLabel, linked: false };
+      });
+      const last = addDays(first, 6);
+      const label = first.slice(0, 7) === last.slice(0, 7) ? `${Number(first.slice(8))}–${formatDay(last, locale)}` : `${formatDay(first, locale)} – ${formatDay(last, locale)}`;
+      return { key: first, label, days };
+    });
+    const flat = built.flatMap((row) => row.days);
+    const bridge = (status: DayStatus) => status === "studied" || status === "rest";
+    for (let index = 0; index < flat.length - 1; index += 1) {
+      if (!bridge(flat[index].status) || !bridge(flat[index + 1].status)) continue;
+      if (Math.floor(index / 7) !== Math.floor((index + 1) / 7)) continue;
+      let hasBefore = false;
+      for (let cursor = index; cursor >= 0 && bridge(flat[cursor].status); cursor -= 1) {
+        if (flat[cursor].status === "studied") hasBefore = true;
       }
-      const month = column[0].key.slice(0, 7);
-      if (month !== lastMonth) {
-        columns.push({ index: week, label: formatDay(column[0].key, locale, { month: "short" }).replace(".", "") });
-        lastMonth = month;
+      let hasAfter = false;
+      for (let cursor = index + 1; cursor < flat.length && bridge(flat[cursor].status); cursor += 1) {
+        if (flat[cursor].status === "studied") hasAfter = true;
       }
-      grid.push(column);
+      if (hasBefore && hasAfter) flat[index].linked = true;
     }
-    return { grid, columns: columns.filter((column, index) => index === 0 || column.index - columns[index - 1].index >= 3) };
-  }, [duration, firstDay, locale, metrics.byDay, metrics.days, settings.studyWeekdays, settings.weekStartsOn, st, target, today, weeks]);
+    return built;
+  }, [duration, firstDay, locale, metrics.byDay, metrics.days, settings.studyWeekdays, st, start, today]);
 
-  const rowLabels = orderedWeekdays(settings.weekStartsOn).map((weekday, index) =>
-    index % 2 === 0 ? weekdayLabel(weekday, locale, "short").replace(".", "") : ""
+  const strong = (value: number, unit: string) => (
+    <strong className="font-semibold text-ink">
+      {value} {unit}
+    </strong>
   );
-
-  const message = metrics.streak.current ? st("streak_active", { count: metrics.streak.current }) : st("streak_zero");
-  const { studied, planned, missed, ratio } = metrics.consistency;
-
-  const stats: { key: string; label: string; value: ReactNode; tone?: string }[] = [
-    {
-      key: "streak",
-      label: st("heatmap_stat_streak"),
-      value: (
-        <span className="inline-flex items-center gap-1.5">
-          <Flame className={cn("size-4", metrics.streak.current ? "animate-pulse text-[var(--warning)]" : "text-faint")} strokeWidth={2} />
-          {st("kpi_streak_value", { count: metrics.streak.current })}
-        </span>
-      ),
-    },
-    { key: "best", label: st("heatmap_stat_best"), value: st("kpi_streak_value", { count: metrics.streak.best }) },
-    {
-      key: "kept",
-      label: st("heatmap_stat_kept"),
-      value: planned ? (
-        <span>
-          {st("heatmap_kept_value", { studied, planned })}
-          <span className="ms-1.5 text-[12px] font-normal text-muted">{percentLabel(ratio)}</span>
-        </span>
-      ) : (
-        "—"
-      ),
-    },
-    {
-      key: "missed",
-      label: st("heatmap_stat_missed"),
-      value: st("kpi_streak_value", { count: missed }),
-      tone: missed ? "var(--danger)" : undefined,
-    },
-  ];
+  const headline = current
+    ? studyTranslateParts(language, "consistency_streak_line", { count: current }, { count: strong(current, st("countdown_days_label", { count: current })) })
+    : st("streak_zero");
+  const recordLine = best
+    ? studyTranslateParts(language, "consistency_record_line", { count: best }, { count: strong(best, st("countdown_days_label", { count: best })) })
+    : null;
+  const nextSeal = book?.nextStreak ?? null;
+  const weekdays = orderedWeekdays(settings.weekStartsOn);
 
   return (
     <Panel
       title={st("heatmap_title")}
-      description={st("heatmap_desc")}
+      description={st("pace_range", { start: formatDay(start, locale), end: formatDay(end, locale) })}
       action={
-        <span className="hidden items-center gap-3 text-[11px] text-faint md:flex">
-          <span className="inline-flex items-center gap-1">
-            {st("heatmap_less")}
-            {[0, 1, 2, 3, 4].map((level) => (
-              <span key={level} className="size-2.5 rounded-[3px]" style={{ backgroundColor: level ? `var(--heat-${level})` : "var(--surface-2)" }} />
-            ))}
-            {st("heatmap_more")}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-2.5 rounded-[3px]" style={{ backgroundColor: HEAT_MISSED }} />
-            {st("heatmap_missed")}
-          </span>
-        </span>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon-sm" aria-label={st("prev_period")} onClick={() => setLastWeek(addDays(lastWeek, -CHAIN_WEEKS * 7))}>
+            <ChevronLeft />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={st("next_period")}
+            disabled={atToday}
+            onClick={() => setLastWeek(compareDay(addDays(lastWeek, CHAIN_WEEKS * 7), thisWeek) > 0 ? thisWeek : addDays(lastWeek, CHAIN_WEEKS * 7))}
+          >
+            <ChevronRight />
+          </Button>
+        </div>
       }
     >
-      <div ref={measureRef}>
-        <Heatmap weeks={grid} rowLabels={rowLabels} columnLabels={columns} ariaLabel={st("heatmap_title")} />
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        <p className="flex max-w-xl flex-wrap items-center gap-x-2 gap-y-1 text-[15px] leading-relaxed text-muted">
+          {current ? <RhythmMark full={isRecord} /> : null}
+          <span>
+            {headline}
+            {recordLine ? <> {recordLine}</> : null}
+          </span>
+        </p>
+        {nextSeal ? (
+          <Tooltip label={st("streak_next_seal", { count: nextSeal.threshold - current, threshold: nextSeal.threshold })} side="left">
+            <span tabIndex={0} className="inline-flex items-center gap-2.5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)]">
+              <StreakSeal award={nextSeal} size={38} unit={st("award_seal_unit")} />
+              <span className="text-[11.5px] leading-tight text-faint">
+                <span className="block tabular-nums text-ink">
+                  {current}/{nextSeal.threshold}
+                </span>
+                {st("streak_next_seal", { count: nextSeal.threshold - current, threshold: nextSeal.threshold })}
+              </span>
+            </span>
+          </Tooltip>
+        ) : null}
       </div>
-      <dl className="mt-5 grid grid-cols-2 gap-y-4 border-t border-[var(--border)] pt-4 sm:grid-cols-4">
-        {stats.map((stat, index) => (
-          <div key={stat.key} className={cn("min-w-0 px-0 sm:px-4", index % 2 === 1 && "border-l border-[var(--border)] ps-4", index > 0 && "sm:border-l sm:border-[var(--border)]", index === 0 && "sm:ps-0")}>
-            <dt className="truncate text-[11.5px] text-muted">{stat.label}</dt>
-            <dd className="mt-1 truncate text-[15px] font-semibold tabular-nums tracking-[-0.01em] text-ink" style={{ color: stat.tone }}>
-              {stat.value}
-            </dd>
-          </div>
+
+      <div className="mt-5 grid grid-cols-[repeat(7,minmax(0,1fr))] gap-y-1.5 sm:grid-cols-[6.5rem_repeat(7,minmax(0,1fr))]">
+        <span className="hidden sm:block" />
+        {weekdays.map((weekday) => (
+          <span key={weekday} className="pb-1.5 text-center text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">
+            {weekdayLabel(weekday, locale, "short").replace(".", "")}
+          </span>
         ))}
-      </dl>
-      <p className="mt-4 text-[12.5px] text-muted">
-        {message}
-        {metrics.streak.current && !metrics.streak.studiedToday ? <span> {st("streak_today_pending")}</span> : null}
-      </p>
+        {rows.map((row) => (
+          <Fragment key={row.key}>
+            <span className="hidden self-center whitespace-nowrap pr-3 text-[12px] tabular-nums text-muted sm:block">{row.label}</span>
+            {row.days.map((day) => (
+              <span key={day.key} title={day.title} className="relative flex h-11 items-center justify-center">
+                {day.linked ? (
+                  <span aria-hidden className="absolute left-1/2 top-1/2 h-[6px] w-full -translate-y-1/2 bg-[color-mix(in_oklab,var(--accent)_24%,var(--surface))]" />
+                ) : null}
+                <span
+                  className={cn(
+                    "relative flex size-9 items-center justify-center rounded-full text-[13px] tabular-nums",
+                    day.status === "studied" && "bg-[var(--accent)] text-[var(--accent-contrast)] shadow-[0_1px_2px_rgba(15,44,76,0.18)]",
+                    day.status === "studied" && day.key === today && "synapsys-stamp",
+                    day.status === "missed" && "bg-[color-mix(in_oklab,var(--danger)_14%,var(--surface))] text-[var(--danger)] ring-1 ring-inset ring-[color-mix(in_oklab,var(--danger)_55%,transparent)]",
+                    day.status === "rest" && "bg-[var(--surface-2)] text-faint",
+                    day.status === "pending" && "border-[1.5px] border-dashed border-[var(--accent)] font-semibold text-ink",
+                    day.status === "future" && "text-muted",
+                    day.status === "before" && "text-faint"
+                  )}
+                >
+                  {day.status === "studied" ? (
+                    <svg viewBox="0 0 12 12" className="size-3.5" fill="none" aria-hidden>
+                      <path d="M2.5 6.2 5 8.6 9.5 3.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  ) : day.status === "missed" ? (
+                    <svg viewBox="0 0 12 12" className="size-3" fill="none" aria-hidden>
+                      <path d="m3 3 6 6M9 3 3 9" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+                    </svg>
+                  ) : (
+                    day.date
+                  )}
+                </span>
+              </span>
+            ))}
+          </Fragment>
+        ))}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-[12px] text-muted">
+        <p>{current && !metrics.streak.studiedToday && isPlannedDay(today, settings.studyWeekdays) ? st("streak_today_pending") : null}</p>
+        <span className="inline-flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[11.5px] text-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="flex size-3.5 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-contrast)]">
+              <svg viewBox="0 0 12 12" className="size-2" fill="none" aria-hidden>
+                <path d="M2.5 6.2 5 8.6 9.5 3.6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            {st("heatmap_studied")}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="flex size-3.5 items-center justify-center rounded-full bg-[color-mix(in_oklab,var(--danger)_14%,var(--surface))] text-[var(--danger)] ring-1 ring-inset ring-[color-mix(in_oklab,var(--danger)_55%,transparent)]">
+              <svg viewBox="0 0 12 12" className="size-2" fill="none" aria-hidden>
+                <path d="m3 3 6 6M9 3 3 9" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+              </svg>
+            </span>
+            {st("heatmap_missed")}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-3.5 rounded-full border-[1.5px] border-dashed border-[var(--accent)]" />
+            {st("today")}
+          </span>
+        </span>
+      </div>
+      {!nextSeal && book && book.streaks.length ? <p className="mt-2 text-[12px] font-medium text-[var(--laurel)]">{st("streak_all_seals")}</p> : null}
     </Panel>
   );
 }
@@ -384,130 +376,72 @@ export function CountdownPanel() {
   );
 }
 
-export function NextUpPanel() {
-  const { st, duration } = useStudyT();
-  const { planSubjects, planSessions, planCycle, today, settings } = useStudy();
-  const suggestion = useMemo(
-    () => nextUp(planSubjects, planSessions, planCycle, today, settings),
-    [planCycle, planSessions, planSubjects, settings, today]
-  );
-  if (!suggestion) return null;
-  const reason = suggestion.reason;
-  const reasonText =
-    reason.kind === "cycle"
-      ? st("next_up_reason_cycle", { n: reason.n, total: reason.total })
-      : reason.kind === "never"
-        ? st("next_up_reason_never")
-        : reason.kind === "stale"
-          ? st("next_up_reason_stale", { count: reason.days })
-          : reason.kind === "weak"
-            ? st("next_up_reason_weak", { value: percentLabel(reason.accuracy) })
-            : st("next_up_reason_pending", { count: reason.count });
-  return (
-    <Panel title={st("next_up_title")}>
-      <div className="space-y-3">
-        <div className="flex items-start gap-3">
-          <span className="mt-1.5 block h-8 w-1 shrink-0 rounded-full" style={{ backgroundColor: suggestion.subject.color }} />
-          <div className="min-w-0">
-            <p className="truncate text-[16px] font-semibold tracking-[-0.015em] text-ink">{suggestion.subject.name}</p>
-            {suggestion.topic ? <p className="mt-0.5 line-clamp-2 text-[12.5px] text-muted">{suggestion.topic.name}</p> : null}
-            <p className="mt-1.5 text-[11.5px] text-faint">
-              {reasonText}
-              {suggestion.minutes ? ` · ${duration(suggestion.minutes * 60)}` : ""}
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <FocusButton
-            variant="primary"
-            subjectId={suggestion.subject.id}
-            topicId={suggestion.topic?.id ?? null}
-            label={st("next_up_start")}
-          />
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => useStudyUi.getState().openLog({ subjectId: suggestion.subject.id, topicId: suggestion.topic?.id ?? null })}
-          >
-            {st("logform_title_new")}
-          </Button>
-        </div>
-      </div>
-    </Panel>
-  );
-}
-
-export function SubjectsTablePanel() {
-  const { st, duration } = useStudyT();
+export function SubjectsPanel() {
+  const { st, duration, language, locale } = useStudyT();
   const { planSubjects, settings } = useStudy();
   const metrics = usePlanMetrics();
+  const book = useAwardBook();
+  const completed = book?.subjects.filter((award) => award.earnedAt !== null).length ?? 0;
+  const withTopics = book?.subjects.length ?? 0;
   return (
-    <Panel title={st("nav_subjects")} description={st("subjects_panel_desc")} action={<PanelLink href="/home/study/subjects">{st("view_all")}</PanelLink>} bodyClassName="px-0 pb-1">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[34rem] text-[12.5px]">
-          <thead>
-            <tr className="border-y border-[var(--border)] text-left text-[11px] text-faint">
-              <th className="py-2 pl-5 pr-3 font-medium">{st("col_subject")}</th>
-              <th className="px-3 py-2 text-right font-medium">{st("col_time")}</th>
-              <th className="px-3 py-2 text-right font-medium">{st("correct_label")}</th>
-              <th className="px-3 py-2 text-right font-medium">{st("wrong_label")}</th>
-              <th className="px-3 py-2 font-medium">{st("col_accuracy")}</th>
-              <th className="py-2 pl-3 pr-5 font-medium">{st("col_coverage")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {planSubjects.map((subject) => {
-              const agg = metrics.bySubject.get(subject.id);
-              const done = subject.topics.filter((topic) => topic.done).length;
-              const total = subject.topics.length;
-              return (
-                <tr key={subject.id} className="border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--surface-hover)]">
-                  <td className="max-w-[16rem] py-2.5 pl-5 pr-3">
-                    <Link href={`/home/study/subjects/${subject.id}`} className="flex items-center gap-2 text-ink hover:underline">
-                      <SubjectDot color={subject.color} />
-                      <span className="truncate">{subject.name}</span>
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-ink">{agg?.seconds ? duration(agg.seconds) : "–"}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-muted">{agg?.correct ?? 0}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-muted">{agg?.wrong ?? 0}</td>
-                  <td className="px-3 py-2.5">
-                    <AccuracyTag accuracy={agg?.accuracy ?? null} band={performanceBand(agg?.accuracy ?? null, settings)} />
-                  </td>
-                  <td className="py-2.5 pl-3 pr-5">
-                    <div className="flex items-center gap-2">
-                      <Meter
-                        value={done}
-                        max={total}
-                        tone={total > 0 && done === total ? "var(--accent-emerald, #10b981)" : subject.color ?? undefined}
-                        className={cn("w-16", total > 0 && done === total && "shadow-[0_0_8px_rgba(16,185,129,0.25)]")}
-                        label={st("col_coverage")}
-                      />
-                      <span
-                        className={cn(
-                          "text-[11.5px] tabular-nums",
-                          total > 0 && done === total ? "font-semibold text-emerald-600 dark:text-emerald-400" : "text-faint"
-                        )}
-                      >
-                        {done}/{total}
-                      </span>
-                      {total > 0 && done === total ? (
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-gradient-to-r from-emerald-500/15 via-teal-500/15 to-emerald-500/10 px-2 py-0.5 text-[10.5px] font-semibold tracking-tight text-emerald-600 shadow-[0_0_8px_rgba(16,185,129,0.18)] dark:text-emerald-400"
-                          title={st("subject_completed_badge")}
-                        >
-                          <Check className="size-2.5 stroke-[3]" />
-                          <span>100%</span>
+    <Panel
+      title={st("nav_subjects")}
+      description={withTopics ? st("subjects_completed_count", { done: completed, total: withTopics }) : st("subjects_panel_desc")}
+      action={<PanelLink href="/home/study/subjects">{st("view_all")}</PanelLink>}
+      bodyClassName="px-0 pb-2 sm:px-0 sm:pb-2"
+    >
+      <div className="hidden grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_6rem_7.5rem] gap-3 border-y border-[var(--border)] px-6 py-2 text-[10.5px] font-medium uppercase tracking-[0.12em] text-faint md:grid">
+        <span>{st("col_subject")}</span>
+        <span className="text-right">{st("col_time")}</span>
+        <span className="text-right">{st("questions_label")}</span>
+        <span>{st("col_accuracy")}</span>
+        <span>{st("col_coverage")}</span>
+      </div>
+      <ul className="divide-y divide-[var(--border)]">
+        {planSubjects.map((subject) => {
+          const agg = metrics.bySubject.get(subject.id);
+          const award = book?.subjects.find((entry) => entry.subjectId === subject.id) ?? null;
+          const done = subject.topics.filter((topic) => topic.done).length;
+          const total = subject.topics.length;
+          const complete = award !== null && award.earnedAt !== null;
+          return (
+            <li key={subject.id} className="group relative">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-3 transition-colors hover:bg-[var(--surface-hover)] sm:px-6 md:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_6rem_7.5rem]">
+                <Link href={`/home/study/subjects/${subject.id}`} className="flex min-w-0 items-center gap-3 text-ink">
+                  <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center">
+                    <span aria-hidden className="block h-7 w-1 rounded-full" style={{ backgroundColor: subject.color }} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className={cn("truncate text-[13.5px] group-hover:underline", complete ? "font-semibold" : "font-medium")}>{subject.name}</span>
+                      {complete ? (
+                        <span className="shrink-0 text-[9.5px] font-semibold uppercase tracking-[0.16em]" style={{ color: `color-mix(in oklab, ${subject.color} 72%, var(--text))` }}>
+                          {st("subject_complete_mark")}
                         </span>
                       ) : null}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    </span>
+                    <span className="mt-0.5 block truncate text-[11.5px] text-faint">
+                      {total ? st("kpi_coverage_hint", { done, total }) : st("goal_subject_no_topics")}
+                      {agg?.lastDay ? ` · ${st("subject_last_studied", { date: formatDay(agg.lastDay, locale) })}` : ""}
+                    </span>
+                  </span>
+                </Link>
+                <span className="text-right text-[12.5px] tabular-nums text-ink">{agg?.seconds ? duration(agg.seconds) : "–"}</span>
+                <span className="hidden text-right text-[12.5px] tabular-nums text-muted md:block">
+                  {agg?.questions ? formatNumber(agg.questions, language) : "–"}
+                </span>
+                <span className="hidden md:block">
+                  <AccuracyTag accuracy={agg?.accuracy ?? null} band={performanceBand(agg?.accuracy ?? null, settings)} />
+                </span>
+                <span className="col-span-2 flex items-center gap-2 md:col-span-1">
+                  <Meter value={done} max={total} tone="var(--text-muted)" className="h-[5px] flex-1 md:w-16 md:flex-none" label={st("col_coverage")} />
+                  <span className="w-9 text-right text-[11.5px] tabular-nums text-faint">{total ? `${Math.round((done / total) * 100)}%` : "–"}</span>
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </Panel>
   );
 }
@@ -527,6 +461,7 @@ export function PacePanel() {
       text: activePlan.weeklyGoalMinutes
         ? st("pace_of", { value: duration(metrics.weekSeconds), goal: duration(activePlan.weeklyGoalMinutes * 60) })
         : duration(metrics.weekSeconds),
+      extra: (amount: number) => duration(amount),
     },
     {
       key: "questions",
@@ -536,10 +471,14 @@ export function PacePanel() {
       text: activePlan.weeklyGoalQuestions
         ? st("pace_of", { value: formatNumber(metrics.weekQuestions, language), goal: formatNumber(activePlan.weeklyGoalQuestions, language) })
         : formatNumber(metrics.weekQuestions, language),
+      extra: (amount: number) => formatNumber(amount, language),
     },
   ];
+  const withGoal = rows.filter((row) => row.goal > 0);
+  const allDone = withGoal.length > 0 && withGoal.every((row) => row.value >= row.goal);
   return (
     <Panel
+      className={cn(allDone && "shadow-[0_0_0_1px_color-mix(in_oklab,var(--band-high)_45%,var(--border))]")}
       title={st("pace_title")}
       description={st("pace_range", {
         start: formatDay(metrics.weekStart, locale),
@@ -553,15 +492,35 @@ export function PacePanel() {
         </Tooltip>
       }
     >
+      {allDone ? (
+        <div className="mb-4 flex justify-center">
+          <div className="w-fit max-w-full rounded-[12px] bg-[color-mix(in_oklab,var(--band-high)_12%,transparent)] px-2.5 py-2 text-center ring-1 ring-[color-mix(in_oklab,var(--band-high)_22%,transparent)]">
+            <p className="text-[12.5px] font-medium leading-snug text-[var(--band-high-text)]">{st("pace_all_done")}</p>
+          </div>
+        </div>
+      ) : null}
       <div className="space-y-4">
         {rows.map((row) => {
           const done = row.goal > 0 && row.value >= row.goal;
+          const surplus = done ? row.value - row.goal : 0;
           return (
             <div key={row.key} className="space-y-1.5">
-              <div className="flex items-baseline justify-between gap-2 text-[12.5px]">
-                <span className="font-medium text-ink">{row.label}</span>
-                <span className={cn("tabular-nums", done ? "font-medium text-[var(--band-high)]" : "text-muted")}>
-                  {row.goal > 0 ? (done ? `${st("pace_done")} · ${row.text}` : row.text) : row.text}
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[12.5px]">
+                <span className="flex min-w-0 items-center gap-1.5 font-medium text-ink">
+                  {done ? (
+                    <span className="grid size-4 shrink-0 place-items-center rounded-full bg-[var(--band-high)] text-white dark:text-[#06261a]">
+                      <Check className="size-2.5" strokeWidth={3.5} />
+                    </span>
+                  ) : null}
+                  {row.label}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  {done ? (
+                    <span className="rounded-full bg-[color-mix(in_oklab,var(--band-high)_14%,transparent)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--band-high-text)]">
+                      {surplus > 0 && (row.key === "questions" || surplus >= 60) ? `+${row.extra(surplus)}` : st("pace_done")}
+                    </span>
+                  ) : null}
+                  <span className={cn("tabular-nums", done ? "font-semibold text-[var(--band-high-text)]" : "text-muted")}>{row.text}</span>
                 </span>
               </div>
               {row.goal > 0 ? (
@@ -580,16 +539,23 @@ export function PacePanel() {
 
 function PaceRuler({ value, goal }: { value: number; goal: number }) {
   const ratio = goal > 0 ? Math.min(1, value / goal) : 0;
+  const done = goal > 0 && value >= goal;
   return (
     <div className="relative h-3">
       <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[var(--surface-2)]" />
       <div
-        className="absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[var(--accent)] transition-[width] duration-500"
-        style={{ width: `${ratio * 100}%` }}
+        className={cn("absolute left-0 top-1/2 -translate-y-1/2 rounded-full transition-[width] duration-500", done ? "h-2" : "h-1.5 bg-[var(--accent)]")}
+        style={{
+          width: `${ratio * 100}%`,
+          background: done ? "linear-gradient(90deg, color-mix(in oklab, var(--band-high) 55%, transparent), var(--band-high))" : undefined,
+          boxShadow: done ? "0 0 12px -2px color-mix(in oklab, var(--band-high) 70%, transparent)" : undefined,
+        }}
       />
-      {[0.25, 0.5, 0.75].map((tick) => (
-        <span key={tick} className="absolute top-0 h-3 w-px bg-[var(--surface)]" style={{ left: `${tick * 100}%` }} />
-      ))}
+      {done
+        ? null
+        : [0.25, 0.5, 0.75].map((tick) => (
+            <span key={tick} className="absolute top-0 h-3 w-px bg-[var(--surface)]" style={{ left: `${tick * 100}%` }} />
+          ))}
     </div>
   );
 }
@@ -652,9 +618,10 @@ export function WeekChartPanel() {
     >
       <ColumnChart
         data={data}
-        height={200}
+        height={190}
         ariaLabel={st("week_chart_title")}
         integer={metric === "questions"}
+        variant="refined"
         formatTick={(value) =>
           metric === "time" ? formatHoursTick(value, language, { h: st("unit_h"), min: st("unit_min") }) : formatNumber(value, language)
         }
@@ -766,104 +733,13 @@ export function ReviewRow({ review, compact = false }: { review: StudyReview; co
   );
 }
 
-export function TodayReviewsPanel({ limit = 5 }: { limit?: number }) {
-  const { st } = useStudyT();
-  const metrics = usePlanMetrics();
-  const list = metrics.dueReviews.slice(0, limit);
-  return (
-    <Panel
-      title={st("today_reviews_title")}
-      description={metrics.overdueReviews.length ? st("overdue_badge", { count: metrics.overdueReviews.length }) : undefined}
-      action={<PanelLink href="/home/study/reviews">{st("view_all")}</PanelLink>}
-    >
-      {list.length ? (
-        <div className="divide-y divide-[var(--border)]">
-          {list.map((review) => (
-            <ReviewRow key={review.id} review={review} compact />
-          ))}
-          {metrics.dueReviews.length > limit ? (
-            <Link href="/home/study/reviews" className="block pt-2 text-[11.5px] text-muted hover:text-ink">
-              {st("more_items", { count: metrics.dueReviews.length - limit })}
-            </Link>
-          ) : null}
-        </div>
-      ) : (
-        <p className="py-4 text-[12.5px] text-faint">{st("today_reviews_empty")}</p>
-      )}
-    </Panel>
-  );
-}
-
-export function TodayPlanPanel() {
-  const { st, duration } = useStudyT();
-  const router = useRouter();
-  const { planCycle, today, subjectById } = useStudy();
-  const { tasks } = usePlanning();
-  const [taskDialog, setTaskDialog] = useState<TaskDialogState>({ open: false, task: null, day: null });
-  const blocks = useMemo(
-    () => (planCycle ? (projectSchedule(planCycle, today, today, today).get(today) ?? []) : []),
-    [planCycle, today]
-  );
-  const dayTasks = useMemo(
-    () =>
-      tasks
-        .filter((task) => task.day === today || (task.day && task.day < today && !task.done))
-        .sort((a, b) => Number(a.done) - Number(b.done) || ((a.day ?? "") < (b.day ?? "") ? -1 : 1)),
-    [tasks, today]
-  );
-  const openTask = (task: PlanningTask) => setTaskDialog({ open: true, task, day: task.day });
-  return (
-    <Panel title={st("today_plan_title")} action={<PanelLink href="/home/study/schedule">{st("nav_schedule")}</PanelLink>}>
-      {blocks.length ? (
-        <ul className="space-y-1.5">
-          {blocks.map((block) => {
-            const subject = subjectById(block.subjectId);
-            const done = block.status !== "planned";
-            return (
-              <li key={block.key} className="flex items-center gap-2.5 rounded-[var(--radius-sm)] px-1 py-1.5">
-                <span className="block h-6 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subject?.color ?? "var(--border-strong)", opacity: done ? 0.4 : 1 }} />
-                <span className={cn("min-w-0 flex-1 truncate text-[12.5px]", done ? "text-faint line-through" : "text-ink", block.isNext && "font-medium")}>
-                  {subject?.name ?? st("untitled_subject")}
-                </span>
-                <span className="shrink-0 text-[11.5px] tabular-nums text-muted">{duration(block.minutes * 60)}</span>
-                {block.isNext ? <FocusButton variant="ghost" size="icon-sm" subjectId={block.subjectId} label={st("next_up_start")} /> : null}
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
-      {dayTasks.length ? (
-        <div className={cn(blocks.length && "mt-2 border-t border-[var(--border)] pt-2")}>
-          {dayTasks.slice(0, 6).map((task) => (
-            <TaskLine key={task.id} task={task} onOpen={openTask} meta={task.day && task.day < today ? st("tasks_overdue") : undefined} />
-          ))}
-          {dayTasks.length > 6 ? <p className="px-2 pt-1 text-[11px] text-faint">{st("more_items", { count: dayTasks.length - 6 })}</p> : null}
-        </div>
-      ) : null}
-      {!blocks.length && !dayTasks.length ? (
-        planCycle ? (
-          <p className="py-4 text-[12.5px] text-faint">{st("today_plan_empty")}</p>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-[12.5px] leading-relaxed text-muted">{st("today_plan_create_desc")}</p>
-            <Button variant="secondary" size="sm" onClick={() => router.push("/home/study/schedule?setup=1")}>
-              {st("schedule_setup")}
-            </Button>
-          </div>
-        )
-      ) : null}
-      <TaskDialog state={taskDialog} onOpenChange={(open) => setTaskDialog((value) => ({ ...value, open }))} />
-    </Panel>
-  );
-}
-
 const REMINDER_KEY: Record<StudyReminder["kind"], StudyKey> = {
   exam: "reminder_kind_exam",
   task: "reminder_kind_task",
   event: "reminder_kind_event",
 };
 
-export function RemindersPanel() {
+export function RemindersPanel({ className }: { className?: string }) {
   const { st, locale } = useStudyT();
   const { reminders, activePlan, actions, today } = useStudy();
   const [dialog, setDialog] = useState<{ open: boolean; reminder: StudyReminder | null }>({ open: false, reminder: null });
@@ -874,6 +750,7 @@ export function RemindersPanel() {
   const visible = showDone ? [...pending, ...done] : pending;
   return (
     <Panel
+      className={className}
       title={st("reminders_title")}
       action={
         <Tooltip label={st("reminder_add")}>
@@ -940,20 +817,20 @@ export function RemindersPanel() {
   );
 }
 
-export function RecentActivityPanel({ limit = 7 }: { limit?: number }) {
+export function RecentActivityPanel({ limit = 7, className }: { limit?: number; className?: string }) {
   const { st, locale, duration } = useStudyT();
   const { planSessions, subjectById, topicById, today } = useStudy();
   const recent = planSessions.slice(0, limit);
   return (
-    <Panel title={st("recent_activity_title")} action={<PanelLink href="/home/study/log">{st("nav_log")}</PanelLink>}>
+    <Panel className={className} title={st("recent_activity_title")} action={<PanelLink href="/home/study/log">{st("nav_log")}</PanelLink>}>
       {recent.length ? (
         <ul className="space-y-2.5">
           {recent.map((session) => {
             const subject = subjectById(session.subjectId);
             const topic = topicById(session.subjectId, session.topicId);
             return (
-              <li key={session.id} className="flex items-start gap-2.5">
-                <SubjectDot color={subject?.color} className="mt-1.5" />
+              <li key={session.id} className="flex items-stretch gap-2.5">
+                <SubjectBar color={subject?.color} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[12.5px] text-ink">
                     {subject?.name ?? st("untitled_subject")}

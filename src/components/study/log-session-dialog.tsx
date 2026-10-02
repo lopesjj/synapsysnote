@@ -1,18 +1,18 @@
 "use client";
 
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "@/lib/i18n/navigation";
 import { DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox, Input, Textarea } from "@/components/ui/primitives";
+import { Checkbox, Textarea } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { useStudy, type SessionInput } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
 import { useStudyUi, type LogPrefill } from "@/lib/study/ui-store";
 import { addDays, minuteLabel, parseMinuteLabel } from "@/lib/study/dates";
-import { pendingAgendaEntry } from "@/lib/study/cycle";
+import { canCountSession, pendingAgendaEntry } from "@/lib/study/cycle";
 import { clockLabel, parseDurationInput } from "@/lib/study/format";
 import { accuracyOf } from "@/lib/study/metrics";
 import { useLiveNote } from "@/lib/study/hooks";
@@ -66,6 +66,78 @@ function Group({ title, aside, children, className }: { title: string; aside?: R
   );
 }
 
+function QuestionCounter({
+  id,
+  tone,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  tone: "success" | "danger";
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const color = tone === "success" ? "var(--success)" : "var(--danger)";
+  const current = numeric(value);
+  const step = (delta: number) => {
+    const next = Math.max(0, Math.min(99999, current + delta));
+    onChange(next ? String(next) : "");
+  };
+  return (
+    <div
+      className="flex items-center gap-2.5 rounded-[var(--radius-md)] border px-3 py-2 transition focus-within:ring-2 focus-within:ring-[var(--accent-soft)]"
+      style={{
+        borderColor: `color-mix(in oklab, ${color} ${current ? 38 : 16}%, var(--border))`,
+        backgroundColor: `color-mix(in oklab, ${color} ${current ? 9 : 4}%, transparent)`,
+      }}
+    >
+      <label htmlFor={id} className="min-w-0 flex-1">
+        <span className="block text-[11px] font-medium text-muted">{label}</span>
+        <input
+          id={id}
+          inputMode="numeric"
+          autoComplete="off"
+          value={value}
+          placeholder="0"
+          onChange={(event) => onChange(event.target.value.replace(/[^\d]/g, "").slice(0, 5))}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              step(1);
+            } else if (event.key === "ArrowDown") {
+              event.preventDefault();
+              step(-1);
+            }
+          }}
+          className="block w-full bg-transparent text-[20px] font-semibold leading-tight tabular-nums text-ink outline-none placeholder:text-faint"
+        />
+      </label>
+      <div className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          aria-label={`${label} −1`}
+          disabled={!current}
+          onClick={() => step(-1)}
+          className="flex size-7 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-muted transition hover:text-ink disabled:pointer-events-none disabled:opacity-40"
+        >
+          <Minus className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          aria-label={`${label} +1`}
+          onClick={() => step(1)}
+          className="flex size-7 items-center justify-center rounded-full text-white transition hover:brightness-110"
+          style={{ backgroundColor: color }}
+        >
+          <Plus className="size-3.5" strokeWidth={2.6} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editId: string | null }) {
   const { st, locale, textDir } = useStudyT();
   const router = useRouter();
@@ -115,9 +187,10 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
   const [correct, setCorrect] = useState(editing ? String(editing.correct || "") : "");
   const [wrong, setWrong] = useState(editing ? String(editing.wrong || "") : "");
   const [pageId, setPageId] = useState<string | null>(editing?.pageId ?? prefill?.pageId ?? null);
-  const [completeTopic, setCompleteTopic] = useState(false);
-  const [scheduleReviews, setScheduleReviews] = useState(!editing && !review && settings.autoReviews);
-  const [countCycle, setCountCycle] = useState(true);
+  const ownReviews = editing ? reviews.filter((entry) => entry.sessionId === editing.id) : [];
+  const [completeTopic, setCompleteTopic] = useState(Boolean(editing?.completedTopic));
+  const [scheduleReviews, setScheduleReviews] = useState(editing ? ownReviews.length > 0 : !review && settings.autoReviews);
+  const [countCycle, setCountCycle] = useState(editing ? Boolean(editing.cycleItemId) : true);
   const [saveAnother, setSaveAnother] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -147,9 +220,14 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
     topic?.kind === "existing" ? selectedSubject?.topics.find((entry) => entry.id === topic.id) : undefined;
 
 
-  const cycleItem = planCycle && planCycle.items.length ? planCycle.items[planCycle.pointer % planCycle.items.length] : null;
   const fixedMatch = planCycle && subject?.kind === "existing" ? pendingAgendaEntry(planCycle, subject.id, day) : null;
-  const cycleMatches = Boolean(fixedMatch || (cycleItem && subject?.kind === "existing" && cycleItem.subjectId === subject.id));
+  const cycleMatches = Boolean(
+    (planCycle && subject?.kind === "existing" && canCountSession(planCycle, subject.id, day, true)) ||
+      (editing?.cycleItemId && subject?.kind === "existing" && subject.id === editing.subjectId && day === editing.day)
+  );
+  const ownsTopicDone = Boolean(editing?.completedTopic && topic?.kind === "existing" && topic.id === editing.topicId);
+  const topicAlreadyDone = Boolean(selectedTopic?.done) && !ownsTopicDone;
+  const canReview = settings.reviewIntervals.length > 0 || ownReviews.length > 0;
 
   const correctN = numeric(correct);
   const wrongN = numeric(wrong);
@@ -224,13 +302,28 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
     };
     try {
       if (editing) {
-        await actions.updateSession(editing.id, input, { completeTopic }, create);
+        await actions.updateSession(
+          editing.id,
+          input,
+          {
+            completeTopic,
+            scheduleReviews: scheduleReviews && canReview,
+            countCycle: countCycle && cycleMatches,
+            reopenTopic: topicAlreadyDone && !completeTopic,
+          },
+          create
+        );
         toast.success(st("session_updated"));
         useStudyUi.getState().closeLog();
       } else {
         const saved = await actions.logSession(
           input,
-          { completeTopic, scheduleReviews, countCycle: countCycle && cycleMatches },
+          {
+            completeTopic,
+            scheduleReviews: scheduleReviews && canReview,
+            countCycle: countCycle && cycleMatches,
+            reopenTopic: topicAlreadyDone && !completeTopic,
+          },
           create
         );
         toast.success(st("session_saved"));
@@ -339,12 +432,16 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
               pendingLabel={subject?.kind === "new" ? subject.name : null}
               placeholder={st("logform_subject_placeholder")}
               onSelect={(id) => {
-                if (subject?.kind !== "existing" || subject.id !== id) setTopic(null);
+                if (subject?.kind !== "existing" || subject.id !== id) {
+                  setTopic(null);
+                  if (!editing) setCompleteTopic(false);
+                }
                 setSubject({ kind: "existing", id });
               }}
               onCreate={(name) => {
                 setSubject({ kind: "new", name });
                 setTopic(null);
+                if (!editing) setCompleteTopic(false);
               }}
               createLabel={(name) => st("logform_create_subject", { name })}
             />
@@ -363,9 +460,21 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
               placeholder={st("logform_topic_placeholder")}
               disabled={!subject}
               clearable
-              onClear={() => setTopic(null)}
-              onSelect={(id) => setTopic({ kind: "existing", id })}
-              onCreate={(name) => setTopic({ kind: "new", name })}
+              onClear={() => {
+                setTopic(null);
+                if (!editing) setCompleteTopic(false);
+              }}
+              onSelect={(id) => {
+                setTopic({ kind: "existing", id });
+                if (!editing) {
+                  const found = selectedSubject?.topics.find((entry) => entry.id === id);
+                  setCompleteTopic(Boolean(found?.done));
+                }
+              }}
+              onCreate={(name) => {
+                setTopic({ kind: "new", name });
+                if (!editing) setCompleteTopic(false);
+              }}
               createLabel={(name) => st("logform_create_topic", { name })}
             />
           </div>
@@ -397,63 +506,47 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
 
         <div className="grid grid-cols-1 gap-x-5 gap-y-2.5 rounded-[var(--radius-md)] bg-[var(--surface-2)]/60 px-3.5 py-3 sm:grid-cols-3">
           <Toggle
-            checked={completeTopic || Boolean(selectedTopic?.done)}
-            disabled={!topic || Boolean(selectedTopic?.done)}
+            checked={completeTopic}
+            disabled={!topic}
             onChange={setCompleteTopic}
             label={st("logform_topic_done")}
-            hint={st("logform_topic_done_hint")}
+            hint={st(topicAlreadyDone ? "logform_topic_reopen" : "logform_topic_done_hint")}
           />
-          {!editing ? (
-            <Toggle
-              checked={countCycle && cycleMatches}
-              disabled={!cycleMatches}
-              onChange={setCountCycle}
-              label={st("logform_cycle")}
-              hint={st(fixedMatch ? "logform_cycle_hint_fixed" : "logform_cycle_hint")}
-            />
-          ) : null}
-          {!editing ? (
-            <Toggle
-              checked={scheduleReviews && intervals.length > 0}
-              disabled={!intervals.length}
-              onChange={setScheduleReviews}
-              label={st("logform_reviews")}
-              hint={
-                intervals.length
+          <Toggle
+            checked={countCycle && cycleMatches}
+            disabled={!cycleMatches}
+            onChange={setCountCycle}
+            label={st("logform_cycle")}
+            hint={st(fixedMatch ? "logform_cycle_hint_fixed" : "logform_cycle_hint")}
+          />
+          <Toggle
+            checked={scheduleReviews && canReview}
+            disabled={!canReview}
+            onChange={setScheduleReviews}
+            label={st("logform_reviews")}
+            hint={
+              editing && ownReviews.length
+                ? st("logform_reviews_existing", { count: ownReviews.length })
+                : intervals.length
                   ? st("logform_reviews_hint", { intervals: intervalsText, count: intervals[intervals.length - 1] })
                   : st("logform_reviews_none")
-              }
-            />
-          ) : null}
+            }
+          />
         </div>
-
         <Group
           title={st("logform_questions")}
           aside={accuracy !== null ? st("logform_accuracy_preview", { value: `${Math.round(accuracy * 100)}%` }) : undefined}
         >
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <FieldLabel htmlFor="log-correct">{st("correct_label")}</FieldLabel>
-              <Input
-                id="log-correct"
-                inputMode="numeric"
-                value={correct}
-                placeholder="0"
-                onChange={(event) => setCorrect(event.target.value.replace(/[^\d]/g, "").slice(0, 5))}
-                className="tabular-nums"
-              />
-            </div>
-            <div>
-              <FieldLabel htmlFor="log-wrong">{st("wrong_label")}</FieldLabel>
-              <Input
-                id="log-wrong"
-                inputMode="numeric"
-                value={wrong}
-                placeholder="0"
-                onChange={(event) => setWrong(event.target.value.replace(/[^\d]/g, "").slice(0, 5))}
-                className="tabular-nums"
-              />
-            </div>
+          <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
+            <QuestionCounter id="log-correct" tone="success" label={st("correct_label")} value={correct} onChange={setCorrect} />
+            <QuestionCounter id="log-wrong" tone="danger" label={st("wrong_label")} value={wrong} onChange={setWrong} />
+          </div>
+          <div aria-hidden className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]">
+            <span className="h-full bg-[var(--success)] transition-[width] duration-300" style={{ width: `${accuracy === null ? 0 : accuracy * 100}%` }} />
+            <span
+              className="h-full bg-[var(--danger)] transition-[width] duration-300"
+              style={{ width: `${accuracy === null ? 0 : (1 - accuracy) * 100}%` }}
+            />
           </div>
         </Group>
 

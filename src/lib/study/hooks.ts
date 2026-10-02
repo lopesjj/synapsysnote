@@ -14,6 +14,7 @@ import {
   studiedDays,
 } from "./metrics";
 import { addDays, startOfWeek } from "./dates";
+import { buildAwardBook, type AwardBook } from "./awards";
 
 export function useLiveNote() {
   const { pageById } = useWorkspace();
@@ -73,6 +74,27 @@ export function usePlanMetrics() {
       todaySeconds: planSessions.filter((session) => session.day === today).reduce((sum, session) => sum + session.durationSec, 0),
     };
   }, [planExams, planReviews, planSessions, planSubjects, settings.studyWeekdays, settings.weekStartsOn, today]);
+}
+
+export function useAwardBook(): AwardBook | null {
+  const { activePlan, planSubjects, settings, today } = useStudy();
+  const metrics = usePlanMetrics();
+  return useMemo(
+    () =>
+      activePlan
+        ? buildAwardBook({
+            plan: activePlan,
+            subjects: planSubjects,
+            studied: metrics.days,
+            today,
+            weekdays: settings.studyWeekdays,
+            timeZone: settings.timeZone,
+            currentStreak: metrics.streak.current,
+            claims: settings.claimedAwards,
+          })
+        : null,
+    [activePlan, metrics.days, metrics.streak, planSubjects, settings.claimedAwards, settings.studyWeekdays, settings.timeZone, today]
+  );
 }
 
 export function useIconUploads() {

@@ -12,6 +12,18 @@ export function isNestedNotebook(notebook: Pick<Notebook, "parentId">): boolean 
   return Boolean(parentIdOf(notebook));
 }
 
+export function isParkedNotebook(
+  notebook: Pick<Notebook, "parentId"> & { archivedFromParentId?: string | null }
+): boolean {
+  return !parentIdOf(notebook) && Boolean(notebook.archivedFromParentId);
+}
+
+export function presentsAsNotebook(
+  notebook: Pick<Notebook, "parentId"> & { archivedFromParentId?: string | null }
+): boolean {
+  return isNestedNotebook(notebook) || isParkedNotebook(notebook);
+}
+
 export function childrenOf(notebooks: Notebook[], parentId: string | null): Notebook[] {
   return notebooks
     .filter((notebook) => parentIdOf(notebook) === parentId)
@@ -33,23 +45,27 @@ export function notebookAncestors(notebooks: Notebook[], notebookId: string): No
 }
 
 export function isNotebookDescendant(
-  notebooks: Array<Pick<Notebook, "id" | "parentId">>,
+  notebooks: Array<Pick<Notebook, "id" | "parentId"> & { archivedFromParentId?: string | null }>,
   candidateId: string,
   ancestorId: string
 ): boolean {
   if (candidateId === ancestorId) return false;
   const byId = new Map(notebooks.map((notebook) => [notebook.id, notebook]));
   const seen = new Set<string>();
-  let current = byId.get(candidateId)?.parentId ?? null;
+  const initial = byId.get(candidateId);
+  let current = initial?.parentId ?? initial?.archivedFromParentId ?? null;
   while (current && !seen.has(current)) {
     if (current === ancestorId) return true;
     seen.add(current);
-    current = byId.get(current)?.parentId ?? null;
+    const parent = byId.get(current);
+    current = parent?.parentId ?? parent?.archivedFromParentId ?? null;
   }
   return false;
 }
 
-export function descendantNotebooks<T extends Pick<Notebook, "id" | "parentId">>(
+export function descendantNotebooks<
+  T extends Pick<Notebook, "id" | "parentId"> & { archivedFromParentId?: string | null }
+>(
   notebooks: T[],
   notebookId: string
 ): T[] {

@@ -302,7 +302,7 @@ export function SubjectDot({ color, className }: { color?: string | null; classN
   return (
     <span
       aria-hidden
-      className={cn("inline-block size-2 shrink-0 rounded-full", className)}
+      className={cn("inline-block h-3.5 w-[4px] shrink-0 rounded-full", className)}
       style={{ backgroundColor: color ?? "var(--text-faint)" }}
     />
   );
@@ -310,6 +310,28 @@ export function SubjectDot({ color, className }: { color?: string | null; classN
 
 export function SubjectBar({ color }: { color?: string | null }) {
   return <span aria-hidden className="block w-[3px] shrink-0 self-stretch rounded-full" style={{ backgroundColor: color ?? "var(--border-strong)" }} />;
+}
+
+export function RhythmMark({ full = false, className }: { full?: boolean; className?: string }) {
+  return (
+    <svg viewBox="0 0 18 12" className={cn("h-3.5 w-[21px] shrink-0 text-[var(--band-mid)]", className)} fill="currentColor" aria-hidden>
+      <rect x="0" y="6" width="4" height="6" rx="1" opacity={full ? 1 : 0.38} />
+      <rect x="7" y="3" width="4" height="9" rx="1" opacity={full ? 1 : 0.66} />
+      <rect x="14" y="0" width="4" height="12" rx="1" />
+    </svg>
+  );
+}
+
+export function CompletionMark({ label, title }: { label: string; title?: string }) {
+  return (
+    <span title={title ?? label} className="inline-flex shrink-0 items-center gap-1.5 text-[var(--band-high-text)]">
+      <svg viewBox="0 0 14 14" className="size-3.5 shrink-0" fill="none" aria-hidden>
+        <rect x="0.7" y="0.7" width="12.6" height="12.6" rx="3" stroke="currentColor" strokeWidth="1.2" />
+        <path d="M3.8 7.15 6 9.25 10.2 4.7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span className="text-[10px] font-medium uppercase leading-none tracking-[0.16em]">{label}</span>
+    </span>
+  );
 }
 
 export function DurationFigure({ seconds, className, size = "lg" }: { seconds: number; className?: string; size?: "lg" | "md" | "sm" }) {
@@ -578,14 +600,27 @@ export function useStartFocus() {
   const router = useRouter();
   const materialNote = useMaterialNote();
   return useCallback(
-    ({ subjectId, topicId, reviewId }: { subjectId?: string | null; topicId?: string | null; reviewId?: string | null }) => {
+    ({
+      subjectId,
+      topicId,
+      reviewId,
+      minutes,
+    }: {
+      subjectId?: string | null;
+      topicId?: string | null;
+      reviewId?: string | null;
+      minutes?: number | null;
+    }) => {
       const store = useStudyUi.getState();
-      const idle = store.timer.status === "idle";
+      const idle = store.timer.status === "idle" || store.timer.finished || (store.timer.status === "paused" && store.timer.elapsedMs === 0);
       const pageId = reviewId ? materialNote({ reviewId, subjectId, topicId }) : null;
       if (idle) {
-        // Revisão abre sempre no cronômetro e parada: quem dá o play é a pessoa.
         store.resetTimer({
-          ...(reviewId ? { mode: "stopwatch" as const } : null),
+          ...(reviewId
+            ? { mode: "stopwatch" as const }
+            : minutes && minutes > 0
+              ? { mode: "countdown" as const, countdownMs: Math.round(minutes * 60_000) }
+              : null),
           subjectId: subjectId ?? null,
           topicId: topicId ?? null,
           reviewId: reviewId ?? null,
@@ -607,6 +642,7 @@ export function FocusButton({
   subjectId,
   topicId,
   reviewId,
+  minutes,
   label,
   variant = "secondary",
   size = "sm",
@@ -615,6 +651,7 @@ export function FocusButton({
   subjectId?: string | null;
   topicId?: string | null;
   reviewId?: string | null;
+  minutes?: number | null;
   label?: string;
   variant?: "secondary" | "ghost" | "primary" | "subtle";
   size?: "sm" | "md" | "icon-sm";
@@ -622,7 +659,7 @@ export function FocusButton({
 }) {
   const { st } = useStudyT();
   const startFocus = useStartFocus();
-  const start = () => startFocus({ subjectId, topicId, reviewId });
+  const start = () => startFocus({ subjectId, topicId, reviewId, minutes });
   return (
     <Button variant={variant} size={size} onClick={start} className={className} aria-label={label ?? st("sidebar_focus_idle")}>
       <Timer />

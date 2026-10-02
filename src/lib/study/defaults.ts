@@ -7,19 +7,51 @@ import type {
 } from "@/types/study";
 
 export const SUBJECT_COLORS = [
-  "#2a78d6",
-  "#e0662f",
-  "#129c6d",
-  "#b98200",
-  "#d2548a",
-  "#5f8a1c",
-  "#7a68d8",
-  "#d94444",
-  "#0e8aa0",
-  "#a4643c",
-  "#b5519e",
-  "#607489",
+  "#9bb8d6",
+  "#d2b19a",
+  "#93c0a8",
+  "#cfc08e",
+  "#d2a8b6",
+  "#b0be94",
+  "#b4abd2",
+  "#d2ada8",
+  "#94bec8",
+  "#c8b29a",
+  "#c8a8c2",
+  "#a4aeb8",
 ] as const;
+
+export const LEGACY_SUBJECT_COLORS: Readonly<Record<string, string>> = {
+  "#2a78d6": SUBJECT_COLORS[0],
+  "#e0662f": SUBJECT_COLORS[1],
+  "#129c6d": SUBJECT_COLORS[2],
+  "#b98200": SUBJECT_COLORS[3],
+  "#d2548a": SUBJECT_COLORS[4],
+  "#5f8a1c": SUBJECT_COLORS[5],
+  "#7a68d8": SUBJECT_COLORS[6],
+  "#d94444": SUBJECT_COLORS[7],
+  "#0e8aa0": SUBJECT_COLORS[8],
+  "#a4643c": SUBJECT_COLORS[9],
+  "#b5519e": SUBJECT_COLORS[10],
+  "#607489": SUBJECT_COLORS[11],
+  "#6f9ddb": SUBJECT_COLORS[0],
+  "#e39a72": SUBJECT_COLORS[1],
+  "#67bd98": SUBJECT_COLORS[2],
+  "#d5b267": SUBJECT_COLORS[3],
+  "#e18fae": SUBJECT_COLORS[4],
+  "#9ebb6e": SUBJECT_COLORS[5],
+  "#a797dc": SUBJECT_COLORS[6],
+  "#e28a86": SUBJECT_COLORS[7],
+  "#6fb7c6": SUBJECT_COLORS[8],
+  "#c99c7f": SUBJECT_COLORS[9],
+  "#c38dc0": SUBJECT_COLORS[10],
+  "#8d9dae": SUBJECT_COLORS[11],
+};
+
+export function subjectColorOf(color: string): string {
+  const key = color.toLowerCase();
+  return LEGACY_SUBJECT_COLORS[key] ?? key;
+}
 
 export const BUILT_IN_CATEGORIES: readonly BuiltInCategoryId[] = [
   "theory",
@@ -28,9 +60,9 @@ export const BUILT_IN_CATEGORIES: readonly BuiltInCategoryId[] = [
 ];
 
 export const DEFAULT_CATEGORIES: StudyCategory[] = [
-  { id: "theory", name: "", color: "#2a78d6" },
-  { id: "practice", name: "", color: "#129c6d" },
-  { id: "review", name: "", color: "#e0662f" },
+  { id: "theory", name: "", color: SUBJECT_COLORS[0] },
+  { id: "practice", name: "", color: SUBJECT_COLORS[2] },
+  { id: "review", name: "", color: SUBJECT_COLORS[1] },
 ];
 
 export const REVIEW_INTERVAL_PRESETS = [1, 3, 7, 15, 30, 60, 90, 120, 180, 270, 365] as const;
@@ -54,6 +86,7 @@ export const DEFAULT_STUDY_SETTINGS: StudySettings = {
   pomodoroShort: 5,
   pomodoroLong: 15,
   pomodoroRounds: 4,
+  claimedAwards: {},
   updatedAt: 0,
 };
 
@@ -82,7 +115,7 @@ function cleanCategories(value: unknown): StudyCategory[] {
     list.push({
       id,
       name: typeof raw.name === "string" ? raw.name.slice(0, 60) : "",
-      color: typeof raw.color === "string" && /^#[0-9a-f]{6}$/i.test(raw.color) ? raw.color : "#607489",
+      color: typeof raw.color === "string" && /^#[0-9a-f]{6}$/i.test(raw.color) ? subjectColorOf(raw.color) : SUBJECT_COLORS[11],
     });
   }
   for (const builtIn of DEFAULT_CATEGORIES) {
@@ -120,8 +153,19 @@ export function normalizeSettings(raw: Partial<StudySettings> | null | undefined
     pomodoroShort: clampInt(source.pomodoroShort, 1, 60, DEFAULT_STUDY_SETTINGS.pomodoroShort),
     pomodoroLong: clampInt(source.pomodoroLong, 1, 90, DEFAULT_STUDY_SETTINGS.pomodoroLong),
     pomodoroRounds: clampInt(source.pomodoroRounds, 2, 8, DEFAULT_STUDY_SETTINGS.pomodoroRounds),
+    claimedAwards: cleanClaims(source.claimedAwards),
     updatedAt: Number(source.updatedAt) || 0,
   };
+}
+
+function cleanClaims(value: unknown): Record<string, number> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Record<string, number> = {};
+  for (const [key, stamp] of Object.entries(value as Record<string, unknown>).slice(0, 2000)) {
+    const at = Number(stamp);
+    if (key && key.length <= 200 && Number.isFinite(at) && at > 0) out[key] = at;
+  }
+  return out;
 }
 
 export function nextSubjectColor(used: string[]): string {

@@ -11,6 +11,7 @@ import {
   MoreHorizontal,
   Plus,
   SlidersHorizontal,
+  Trash2,
   Undo2,
   type LucideIcon,
 } from "lucide-react";
@@ -37,7 +38,6 @@ import {
   type ReviewBuckets,
   type ReviewPeriod,
   type ReviewStage,
-  type ReviewStep,
   type ReviewTab,
 } from "@/lib/study/review-queue";
 import type { DayKey, StudyReview, StudySession } from "@/types/study";
@@ -168,6 +168,17 @@ function ReviewQueue() {
     setSelected(new Set());
   };
 
+  const removeSelected = async () => {
+    if (!selectedIds.length || !window.confirm(st("reviews_delete_confirm", { count: selectedIds.length }))) return;
+    try {
+      await actions.deleteReviews(selectedIds);
+      toast.success(st("reviews_deleted_toast", { count: selectedIds.length }));
+      setSelected(new Set());
+    } catch {
+      toast.error(st("error_generic"));
+    }
+  };
+
   return (
     <div className="@container/reviews">
       <QueueTabs buckets={buckets} hints={hints} tab={tab} onSelect={selectTab} />
@@ -202,6 +213,10 @@ function ReviewQueue() {
                     </Button>
                   </>
                 )}
+                <Button size="sm" variant="ghost" className="text-[var(--danger)] hover:text-[var(--danger)]" onClick={() => void removeSelected()}>
+                  <Trash2 />
+                  {st("delete")}
+                </Button>
               </div>
             ) : null}
             <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:ml-auto sm:w-auto sm:justify-end">
@@ -615,6 +630,20 @@ function ReviewRow({
                 <Undo2 /> {st("review_restore")}
               </MenuItem>
             )}
+            <MenuItem
+              className="text-[var(--danger)]"
+              onSelect={async () => {
+                if (!window.confirm(st("reviews_delete_confirm", { count: 1 }))) return;
+                try {
+                  await actions.deleteReviews([review.id]);
+                  toast.success(st("reviews_deleted_toast", { count: 1 }));
+                } catch {
+                  toast.error(st("error_generic"));
+                }
+              }}
+            >
+              <Trash2 /> {st("delete")}
+            </MenuItem>
             <MenuSeparator />
             <MenuItem disabled className="text-[11px] text-faint">
               {formatDay(review.dueDay, locale, { day: "numeric", month: "long", year: "numeric" })}
@@ -637,12 +666,6 @@ function ReviewRow({
       </div>
     </li>
   );
-}
-
-function stepColor(step: ReviewStep, current: boolean): string {
-  if (step.status === "done") return "var(--accent)";
-  if (step.status === "ignored") return "color-mix(in oklab, var(--text-faint) 45%, transparent)";
-  return current ? "var(--text)" : "var(--border-strong)";
 }
 
 function StageMark({ review, stage }: { review: StudyReview; stage?: ReviewStage }) {

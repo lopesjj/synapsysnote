@@ -11,7 +11,7 @@ import { WORKSPACE_ICONS } from "@/lib/icons/catalog";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
 import { useIconUploads } from "@/lib/study/hooks";
-import type { ReminderKind, StudyPlan, StudyReminder } from "@/types/study";
+import type { StudyPlan, StudyReminder } from "@/types/study";
 import { GoalMark, Segmented } from "./ui";
 
 export function DialogFrame({
@@ -287,7 +287,7 @@ function ReminderForm({ reminder, onClose }: { reminder: StudyReminder | null; o
   const { st, textDir } = useStudyT();
   const { actions, activePlan, today } = useStudy();
   const [title, setTitle] = useState(reminder?.title ?? "");
-  const [kind, setKind] = useState<ReminderKind>(reminder?.kind ?? "task");
+  const [kind, setKind] = useState<"task" | "event">(reminder?.kind === "event" ? "event" : "task");
   const [day, setDay] = useState(reminder?.day ?? today);
   const submit = async () => {
     if (!title.trim()) return;
@@ -342,12 +342,11 @@ function ReminderForm({ reminder, onClose }: { reminder: StudyReminder | null; o
       </Field>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label={st("reminder_kind")}>
-          <Segmented<ReminderKind>
+          <Segmented<"task" | "event">
             size="md"
             value={kind}
             onChange={setKind}
             options={[
-              { value: "exam", label: st("reminder_kind_exam") },
               { value: "task", label: st("reminder_kind_task") },
               { value: "event", label: st("reminder_kind_event") },
             ]}

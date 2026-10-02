@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Download, MessageSquareText, Pencil, Search, Trash2 } from "lucide-react";
+import { MessageSquareText, Pencil, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input, Tooltip } from "@/components/ui/primitives";
@@ -20,12 +20,6 @@ import { relativeDay } from "../widgets";
 
 type Period = "7" | "30" | "90" | "365" | "all";
 
-function csvCell(value: string | number, delimiter: string) {
-  const raw = String(value ?? "");
-  const text = typeof value === "string" && /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
-  return /["\n\r]/.test(text) || text.includes(delimiter) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
 export function LogPage() {
   const { st } = useStudyT();
   return (
@@ -38,7 +32,7 @@ export function LogPage() {
 function LogBody() {
   const { st, locale, duration, language } = useStudyT();
   const categoryLabel = useCategoryLabel();
-  const { planSessions, planSubjects, settings, subjectById, topicById, actions, today, activePlan } = useStudy();
+  const { planSessions, planSubjects, settings, subjectById, topicById, actions, today } = useStudy();
   const liveNote = useLiveNote();
   const materialText = useCallback(
     (session: StudySession) =>
@@ -83,46 +77,6 @@ function LogBody() {
     return [...map.entries()];
   }, [filtered]);
 
-  const exportCsv = () => {
-    const delimiter = ["en", "ja", "zh"].includes(language) ? "," : ";";
-    const header = [
-      st("csv_day"),
-      st("csv_start"),
-      st("csv_minutes"),
-      st("csv_subject"),
-      st("csv_topic"),
-      st("csv_category"),
-      st("csv_correct"),
-      st("csv_wrong"),
-      st("csv_material"),
-      st("csv_comment"),
-    ];
-    const rows = [...filtered]
-      .sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : (a.startMinute ?? 0) - (b.startMinute ?? 0)))
-      .map((session) => [
-        session.day,
-        minuteLabel(session.startMinute),
-        Math.round(session.durationSec / 60),
-        subjectById(session.subjectId)?.name ?? "",
-        topicById(session.subjectId, session.topicId)?.name ?? "",
-        categoryLabel(session.categoryId),
-        session.correct,
-        session.wrong,
-        materialText(session),
-        session.comment,
-      ]);
-    const csv = [header, ...rows].map((row) => row.map((cell) => csvCell(cell, delimiter)).join(delimiter)).join("\r\n");
-    const blob = new Blob([String.fromCharCode(0xfeff), csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${(activePlan?.name || "synapsys").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 60)}-${today}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
-
   const remove = async (session: StudySession) => {
     if (!window.confirm(st("session_delete_confirm"))) return;
     try {
@@ -135,16 +89,7 @@ function LogBody() {
 
   return (
     <StudyPage>
-      <StudyHeader
-        title={st("log_title")}
-        subtitle={st("log_subtitle")}
-        actions={
-          <Button variant="secondary" onClick={exportCsv} disabled={!filtered.length}>
-            <Download />
-            {st("log_export")}
-          </Button>
-        }
-      />
+      <StudyHeader title={st("log_title")} subtitle={st("log_subtitle")} />
 
       <section className="mb-5 grid grid-cols-1 overflow-hidden rounded-[20px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_1px_2px_rgba(15,44,76,0.04)] sm:grid-cols-3">
         <Stat label={st("time_label")}>

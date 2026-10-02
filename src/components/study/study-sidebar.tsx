@@ -42,13 +42,19 @@ export function useSwitchModule() {
   }, []);
 }
 
-export function ModuleSwitch({ className }: { className?: string }) {
+export function ModuleSwitch({
+  className,
+  layoutId = "synapsys-module-thumb",
+}: {
+  className?: string;
+  layoutId?: string;
+}) {
   const { st } = useStudyT();
   const active = useActiveModule();
   const switchModule = useSwitchModule();
   const options: { id: StudyModule; label: string; icon: ReactNode }[] = [
-    { id: "notes", label: st("module_notes"), icon: <NotebookText className="size-3.5" /> },
-    { id: "study", label: st("module_study"), icon: <StudyIcon className="size-3.5" /> },
+    { id: "notes", label: st("module_notes"), icon: <NotebookText className="size-3.5 shrink-0" /> },
+    { id: "study", label: st("module_study"), icon: <StudyIcon className="size-3.5 shrink-0" /> },
   ];
   return (
     <div
@@ -68,19 +74,19 @@ export function ModuleSwitch({ className }: { className?: string }) {
               if (!selected) switchModule(option.id);
             }}
             className={cn(
-              "relative z-0 flex h-7 items-center justify-center gap-1.5 rounded-[7px] text-[12.5px] font-medium transition-colors",
+              "relative z-0 flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-[7px] px-1.5 text-[12.5px] font-medium transition-colors [@media(pointer:fine)]:h-7",
               selected ? "text-ink" : "text-muted hover:text-ink"
             )}
           >
             {selected ? (
               <motion.span
-                layoutId="synapsys-module-thumb"
+                layoutId={layoutId}
                 transition={{ type: "spring", stiffness: 480, damping: 38 }}
                 className="absolute inset-0 -z-10 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_1px_2px_rgba(15,44,76,0.08)]"
               />
             ) : null}
             {option.icon}
-            {option.label}
+            <span className="truncate">{option.label}</span>
           </button>
         );
       })}
@@ -143,12 +149,12 @@ function FocusDock() {
   }
   return (
     <div className="grid grid-cols-[1fr_auto_auto] gap-1.5">
-      <Button variant="primary" size="sm" className="h-8 justify-center gap-2 leading-none" onClick={openBlankTimer}>
+      <Button variant="primary" size="sm" className="h-10 justify-center gap-2 leading-none [@media(pointer:fine)]:h-8" onClick={openBlankTimer}>
         <Timer className="size-4 shrink-0" />
         <span className="truncate leading-none">{st("sidebar_focus_idle")}</span>
       </Button>
       <Tooltip label={st("logform_title_new")}>
-        <Button variant="secondary" size="icon" className="size-8" disabled={!activePlan} onClick={() => useStudyUi.getState().openLog()} aria-label={st("logform_title_new")}>
+        <Button variant="secondary" size="icon" className="size-10 [@media(pointer:fine)]:size-8" disabled={!activePlan} onClick={() => useStudyUi.getState().openLog()} aria-label={st("logform_title_new")}>
           <Plus />
         </Button>
       </Tooltip>
@@ -156,7 +162,7 @@ function FocusDock() {
         <Button
           variant="secondary"
           size="icon"
-          className="size-8"
+          className="size-10 [@media(pointer:fine)]:size-8"
           onClick={() => useStudyUi.getState().setPadOpen(!useStudyUi.getState().padOpen)}
           aria-label={st("nav_scratchpad")}
         >
@@ -188,7 +194,7 @@ function SidebarLink({
       onMouseEnter={() => router.prefetch(href)}
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] transition hover:bg-[var(--surface-hover)]",
+        "flex w-full min-w-0 items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] transition hover:bg-[var(--surface-hover)] [&_svg]:shrink-0 [@media(pointer:coarse)]:py-2.5",
         active ? "bg-[var(--surface-hover)] font-medium text-ink" : "text-muted hover:text-ink"
       )}
     >
@@ -198,7 +204,7 @@ function SidebarLink({
   );
 }
 
-export function StudySidebarBody({ homeLink }: { homeLink: ReactNode }) {
+export function StudySidebarBody({ homeLink, mobile = false }: { homeLink: ReactNode; mobile?: boolean }) {
   const { st } = useStudyT();
   const { t } = useTranslation();
   const pathname = usePathname();
@@ -206,16 +212,16 @@ export function StudySidebarBody({ homeLink }: { homeLink: ReactNode }) {
   const closeMobile = () => useUiStore.getState().setMobileSidebarOpen(false);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className={cn("flex flex-col", !mobile && "min-h-0 flex-1")}>
       <div className="space-y-0.5 px-3">
         <button
           type="button"
           onClick={() => useUiStore.getState().setPaletteOpen(true)}
-          className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
+          className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink [@media(pointer:coarse)]:py-2.5"
         >
-          <Search className="size-3.5" />
-          <span>{t("search")}</span>
-          <Kbd className="ml-auto">{isMac() ? "⌘K" : "Ctrl K"}</Kbd>
+          <Search className="size-3.5 shrink-0" />
+          <span className="truncate">{t("search")}</span>
+          <Kbd className="ml-auto [@media(pointer:coarse)]:hidden">{isMac() ? "⌘K" : "Ctrl K"}</Kbd>
         </button>
         {homeLink}
         {STUDY_NAV.map((item) => (
@@ -226,7 +232,7 @@ export function StudySidebarBody({ homeLink }: { homeLink: ReactNode }) {
             icon={item.icon}
             onClick={closeMobile}
           >
-            {st(item.key)}
+            <span className="min-w-0 flex-1 truncate">{st(item.key)}</span>
             {item.key === "nav_reviews" && due ? (
               <span className="ml-auto rounded-full bg-[color-mix(in_oklab,var(--accent)_16%,transparent)] px-1.5 text-[10px] font-semibold tabular-nums text-[var(--accent)]">
                 {due}
@@ -236,7 +242,7 @@ export function StudySidebarBody({ homeLink }: { homeLink: ReactNode }) {
         ))}
       </div>
 
-      <div className="mt-4 flex-1 space-y-4 overflow-y-auto px-3 pb-4">
+      <div className={cn("mt-4 space-y-4 px-3 pb-4", !mobile && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}>
         <div>
           <p className="px-2 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-faint">{st("sidebar_tools")}</p>
           <FocusDock />

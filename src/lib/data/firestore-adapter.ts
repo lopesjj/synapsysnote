@@ -616,6 +616,7 @@ export class FirestoreAdapter implements DataAdapter {
     }
     await updateDoc(this.docRef("notebooks", id), {
       parentId: target.parentId,
+      archivedFromParentId: null,
       ...(target.order !== undefined ? { order: target.order } : {}),
       updatedAt: serverTimestamp(),
     });

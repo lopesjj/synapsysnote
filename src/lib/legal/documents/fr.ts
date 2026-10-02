@@ -184,7 +184,7 @@ const fr: LegalBundle = {
               rows: [
                 ["Inscription", "Nom, e-mail, numéro de téléphone et photo de profil", "Vous ou votre compte Google"],
                 ["Identifiants", "Mot de passe, conservé uniquement sous forme chiffrée par le fournisseur d'authentification", "Vous"],
-                ["Contenu", "Notes, pages, carnets, flashcards, pièces jointes, fichiers audio et vidéos ; dans le module d'étude, objectifs, matières et sujets (avec les liens externes que vous ajoutez), séances (avec le support et les notes liées), questions, révisions, examens blancs, plannings, rappels et notes rapides", "Vous et les importations que vous effectuez"],
+                ["Contenu", "Notes, pages, carnets, flashcards, pièces jointes, fichiers audio et vidéos ; dans le module d'étude, objectifs, matières et sujets (avec les liens externes que vous ajoutez), séances (avec le support et les notes liées), questions, révisions, examens blancs, plannings, rappels, notes rapides et les réussites rangées dans votre vitrine (avec leur date)", "Vous et les importations que vous effectuez"],
                 ["Intégrations", "Jetons d'accès à Notion, Evernote et Google Docs", "Le service connecté, avec votre autorisation"],
                 ["Préférences", "Langue, thème, accessibilité et disposition", "Vous"],
                 ["Données techniques", "Adresse IP, pays approximatif, navigateur, appareil, date et heure d'accès", "Collecte automatique"],

@@ -212,6 +212,7 @@ export interface Notebook {
   order: number;
   notionPageId?: string | null;
   archived?: boolean;
+  archivedFromParentId?: string | null;
   /** Na lixeira desde quando; `null`/ausente = caderno ativo. */
   deletedAt?: ISOTimestamp | null;
   /** Caderno cuja exclusao levou este para a lixeira junto. */
@@ -243,6 +244,9 @@ export interface Page {
   embeddingUpdatedAt?: ISOTimestamp | null;
   favorite: boolean;
   archived: boolean;
+  archivedFromNotebookId?: string | null;
+  archivedFromParentPageId?: string | null;
+  archivedFromPath?: string[] | null;
   deletedAt: ISOTimestamp | null;
   /** Caderno cuja exclusao levou esta nota para a lixeira junto. */
   trashedWith?: string | null;

@@ -78,6 +78,8 @@ interface StudyUiState {
   homePendingOnly: boolean;
   /** Nome digitado no estado vazio de Objetivos, levado para a criação (não persiste). */
   newGoalDraft: string;
+  /** Conquistas cuja comemoração já foi vista e guardada na vitrine. */
+  celebrated: string[];
   setModule: (module: StudyModule) => void;
   setTimer: (patch: Partial<TimerState>) => void;
   resetTimer: (keep?: Partial<TimerState>) => void;
@@ -109,6 +111,7 @@ export const useStudyUi = create<StudyUiState>()(
       goalSubjectSort: "syllabus",
       homePendingOnly: false,
       newGoalDraft: "",
+      celebrated: [],
       setModule: (module) => set({ module }),
       setTimer: (patch) => set({ timer: { ...get().timer, ...patch } }),
       resetTimer: (keep) =>
@@ -145,6 +148,7 @@ export const useStudyUi = create<StudyUiState>()(
           const { plan = true, reviews = true, tasks = true } = state.scheduleLayers;
           state.scheduleLayers = { plan, reviews, tasks };
         }
+        if (!Array.isArray(state.celebrated)) state.celebrated = [];
         delete state.lastNotesRoute;
         delete state.lastStudyRoute;
         return state as StudyUiState;
@@ -157,6 +161,7 @@ export const useStudyUi = create<StudyUiState>()(
         goalsArchivedOpen: state.goalsArchivedOpen,
         goalSubjectSort: state.goalSubjectSort,
         homePendingOnly: state.homePendingOnly,
+        celebrated: state.celebrated,
       }),
     }
   )

@@ -70,7 +70,7 @@ import {
 import { IconPickerMenu } from "@/components/ui/icon-picker";
 import { CoverPicker } from "./cover-picker";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
-import { unarchivePageTree } from "@/lib/data/archive";
+import { unarchivePageTree, archivePageTree } from "@/lib/data/archive";
 import { useLibrasStore } from "@/lib/store/libras-store";
 import { FlashcardsIcon } from "@/lib/icons/flashcard-icon";
 import { NoteFlashcardsModal } from "@/components/flashcards/note-flashcards-modal";
@@ -623,7 +623,7 @@ export function PageView({ pageId }: { pageId: string }) {
     <div className="relative">
       <div
         className={cn(
-          "z-30 flex items-center gap-2 px-4 py-2 md:px-8",
+          "z-30 flex items-center gap-2 px-4 py-2 max-md:ps-[max(1rem,env(safe-area-inset-left,0px))] max-md:pt-[calc(0.5rem+env(safe-area-inset-top,0px))] md:px-8",
           showCoverHeader
             ? "absolute inset-x-0 top-0 border-transparent bg-gradient-to-b from-black/45 via-black/20 to-transparent text-white"
             : "sticky top-0 border-b border-[var(--border)] bg-[var(--canvas)]/85 backdrop-blur-xl text-ink",
@@ -859,8 +859,13 @@ export function PageView({ pageId }: { pageId: string }) {
                   );
                   toast.success(t("page_unarchived"));
                 } else {
-                  await adapter.updatePage(pageId, { archived: true });
+                  await archivePageTree(
+                    adapter,
+                    [...livePages, ...archivedPages],
+                    pageId
+                  );
                   toast.success(t("page_archived"));
+                  router.push("/home");
                 }
               }}
             >
@@ -1051,7 +1056,7 @@ export function PageView({ pageId }: { pageId: string }) {
         </div>
 
         
-        <div className="vlibras-ignore mt-4 sm:mt-6 -mx-4 sm:mx-0 rounded-none sm:rounded-[var(--radius-lg)] border-x-0 sm:border border-y border-[var(--border)] bg-[var(--surface)] px-2 py-2 sm:px-4 sm:py-3 dark:border-transparent dark:bg-transparent dark:px-0 dark:py-0 md:px-5">
+        <div className="vlibras-ignore mt-4 sm:mt-6 -mx-4 sm:mx-0 rounded-none sm:rounded-[var(--radius-lg)] border-x-0 sm:border border-y border-[var(--border)] bg-[var(--surface)] px-2 py-2 sm:px-4 sm:py-3 md:px-5">
           <BlockEditor
             key={`${page.id}-${editorKey}`}
             page={page}

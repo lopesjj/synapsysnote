@@ -77,6 +77,7 @@ export interface StudySession {
   comment: string;
   reviewId: string | null;
   cycleItemId: string | null;
+  completedTopic: boolean;
   pageId: string | null;
   source: SessionSource;
   createdAt: number;
@@ -182,6 +183,7 @@ export interface StudyCycle {
   subjects: CycleSubjectConfig[];
   minBlock: number;
   maxBlock: number;
+  progress?: Record<string, number>;
   createdAt: number;
   updatedAt: number;
 }
@@ -227,6 +229,7 @@ export interface StudySettings {
   pomodoroShort: number;
   pomodoroLong: number;
   pomodoroRounds: number;
+  claimedAwards: Record<string, number>;
   updatedAt: number;
 }
 

@@ -1,5 +1,5 @@
 import type { Notebook, Page } from "@/types/models";
-import { childrenOf, isNotebookDescendant, parentIdOf } from "@/lib/data/notebook-tree";
+import { childrenOf, isNotebookDescendant, isParkedNotebook, parentIdOf } from "@/lib/data/notebook-tree";
 
 
 export type DragKind = "notebook" | "page";
@@ -112,7 +112,11 @@ export function planSidebarDrop(
 
     if (draggedParent === null) {
       if (intent === "inside" || targetParent !== null) return null;
-      const without = siblings.filter((n) => n.id !== dragged.id);
+      if (isParkedNotebook(dragged) !== isParkedNotebook(target)) return null;
+      const group = childrenOf(notebooks, null).filter(
+        (notebook) => isParkedNotebook(notebook) === isParkedNotebook(dragged)
+      );
+      const without = group.filter((n) => n.id !== dragged.id);
       const targetIdx = without.findIndex((n) => n.id === target.id);
       if (targetIdx < 0) return null;
       let insertAt = targetIdx;
@@ -121,12 +125,12 @@ export function planSidebarDrop(
       } else if (intent === "before") {
         insertAt = targetIdx;
       } else {
-        const from = siblings.findIndex((n) => n.id === dragged.id);
+        const from = group.findIndex((n) => n.id === dragged.id);
         insertAt = from >= 0 && from < targetIdx ? targetIdx + 1 : targetIdx;
       }
       const ordered = without.map((n) => n.id);
       ordered.splice(insertAt, 0, dragged.id);
-      const from = siblings.findIndex((n) => n.id === dragged.id);
+      const from = group.findIndex((n) => n.id === dragged.id);
       const to = ordered.findIndex((id) => id === dragged.id);
       if (from === to) return null;
       return {

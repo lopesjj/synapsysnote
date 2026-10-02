@@ -253,10 +253,11 @@ export function dayStatus(
   today: DayKey,
   weekdays: readonly number[]
 ): DayStatus {
-  if (compareDay(day, today) > 0) return "future";
   if (studied.has(day)) return "studied";
+  if (!isPlannedDay(day, weekdays)) return "rest";
+  if (compareDay(day, today) > 0) return "future";
   if (day === today) return "pending";
   if (!firstDay || compareDay(day, firstDay) < 0) return "before";
-  return isPlannedDay(day, weekdays) ? "missed" : "rest";
+  return "missed";
 }
 
