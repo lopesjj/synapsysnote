@@ -419,7 +419,7 @@ function parseOutline(content: string): OutlineNode[] | null {
     if (numberAt > 0 && !/[\s;]/.test(text.charAt(numberAt - 1))) continue;
     const before = text.slice(Math.max(0, numberAt - 24), numberAt);
     const after = text.slice(match.index + match[0].length, match.index + match[0].length + 48).trimStart();
-    const citation = /(?:^|[^\p{L}])(?:cf|cp|cpp|cpc|clt|cdc|ctb)\.?\s*$/i.test(before) && !/^\p{Lu}[\p{L}]{3,}/u.test(after);
+    const citation = /(?:^|[^\p{L}])(?:cf|cp|cpp|cpc|clt|cdc|ctb)\.?\s*$/iu.test(before) && !/^\p{Lu}[\p{L}]{3,}/u.test(after);
     if (STRONG_REFERENCE.test(before) || citation) continue;
     if (WEAK_REFERENCE.test(before) && !/^\p{Lu}[\p{L}]{2,}/u.test(after)) continue;
     if (text.charAt(match.index + match[0].length) === "/") continue;
