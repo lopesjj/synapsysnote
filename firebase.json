@@ -5,6 +5,7 @@
       "rootDir": ".",
       "ignore": [
         "node_modules",
+        ".next",
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log",

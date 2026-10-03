@@ -19,8 +19,8 @@ export function CoverPicker({
 }: {
   coverUrl?: string | null;
   coverPosition?: number | null;
-  onChange: (coverUrl: string | null) => void | Promise<void>;
-  onPositionChange?: (coverPosition: number) => void;
+  onChange: (coverUrl: string | null) => void | Promise<unknown>;
+  onPositionChange?: (coverPosition: number) => void | Promise<unknown>;
   onUploadImage?: (file: File) => Promise<string>;
   onRemoveUpload?: (url: string) => void | Promise<void>;
   readOnly?: boolean;
