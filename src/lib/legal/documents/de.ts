@@ -184,7 +184,7 @@ const de: LegalBundle = {
               rows: [
                 ["Registrierung", "Name, E-Mail, Telefonnummer und Profilbild", "Du oder dein Google-Konto"],
                 ["Zugangsdaten", "Passwort, nur verschlüsselt vom Authentifizierungsanbieter gespeichert", "Du"],
-                ["Inhalte", "Notizen, Seiten, Notizbücher, Lernkarten, Anhänge, Audio und Video; im Lernmodul Ziele, Fächer und Themen (mit den externen Links, die du hinzufügst), Lerneinheiten (mit Material und verknüpften Notizen), Aufgaben, Wiederholungen, Probeprüfungen, Lernpläne, Erinnerungen, Schnellnotizen und die in deiner Vitrine aufbewahrten Erfolge (mit dem Datum der Aufbewahrung)", "Du und die von dir durchgeführten Importe"],
+                ["Inhalte", "Notizen, Seiten, Notizbücher, Lernkarten, Anhänge, Audio und Video; im Lernmodul Ziele, Fächer und Themen (mit den externen Links, die du hinzufügst), Lerneinheiten (mit Material und verknüpften Notizen), Aufgaben, Wiederholungen, Probeprüfungen, Lernpläne, Erinnerungen, Notizblock und die in deiner Vitrine aufbewahrten Erfolge (mit dem Datum der Aufbewahrung und der Reihenfolge, in der du sie anordnest)", "Du und die von dir durchgeführten Importe"],
                 ["Integrationen", "Zugriffstoken für Notion, Evernote und Google Docs", "Der verbundene Dienst, mit deiner Autorisierung"],
                 ["Einstellungen", "Sprache, Design, Barrierefreiheit und Layout", "Du"],
                 ["Zustimmung zu Dokumenten", "Version und Datum, an dem du die Nutzungsbedingungen und diese Richtlinie akzeptiert hast", "Du"],
@@ -408,7 +408,7 @@ const de: LegalBundle = {
               "einen Zähler für Anmeldeversuche, mit dem reCAPTCHA bei Bedarf angezeigt wird;",
               "Einstellungen der Oberfläche wie Design, Seitenleiste, zuletzt verwendete Notizbücher und die für Transkripte und Lernkarten gewählten Sprachen;",
               "den Zustand des Lernmoduls, etwa einen laufenden Fokus-Timer, die zuletzt geöffnete Ansicht und die sichtbaren Ebenen der Planung;",
-              "eine Kopie deiner Notizen und Notizbücher, damit sich die App schneller öffnet und auch offline funktioniert.",
+              "eine Kopie deiner Notizen, Notizbücher und Lerndaten, damit sich die App schneller öffnet und auch offline funktioniert.",
             ],
           },
           "Diese Informationen verbleiben nur in deinem Browser und werden gelöscht, wenn du dich abmeldest, die Sitzung abläuft oder du die Website-Daten löschst.",

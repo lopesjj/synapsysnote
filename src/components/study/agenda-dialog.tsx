@@ -11,8 +11,10 @@ import { useStudyT } from "@/lib/study/i18n";
 import { capitalizeFirst, formatDay, isDayKey, orderedWeekdays, weekdayLabel, weekdayOf } from "@/lib/study/dates";
 import type { AgendaDraft } from "@/lib/study/agenda";
 import type { AgendaEntry, AgendaRepeat, DayKey } from "@/types/study";
+import { DateField } from "@/components/ui/pickers";
 import { Combobox } from "./combobox";
 import { DialogFrame } from "./dialogs";
+import { SubjectDot } from "./ui";
 
 export const AGENDA_DURATIONS = [15, 20, 25, 30, 40, 45, 50, 60, 75, 90, 120, 150, 180, 240];
 
@@ -174,11 +176,7 @@ function AgendaForm({
                 aria-label={st("col_subject")}
                 className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-[12px] -ml-1.5 px-2 py-1 text-left transition hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)]"
               >
-                <span
-                  aria-hidden
-                  className="size-3 shrink-0 rounded-full shadow-xs"
-                  style={{ backgroundColor: subject?.color ?? "var(--text-faint)" }}
-                />
+                <SubjectDot color={subject?.color} className="h-5" />
                 <span className="min-w-0 flex-1 truncate text-[21px] font-semibold tracking-[-0.02em] text-ink">
                   {subject ? (subject.name || st("untitled_subject")) : st("untitled_subject")}
                 </span>
@@ -205,11 +203,7 @@ function AgendaForm({
                         : "text-ink hover:bg-[var(--surface-hover)]"
                     )}
                   >
-                    <span
-                      aria-hidden
-                      className="size-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: item.color ?? "var(--text-faint)" }}
-                    />
+                    <SubjectDot color={item.color} />
                     <span className="min-w-0 flex-1 truncate">{item.name || st("untitled_subject")}</span>
                     {isSelected ? <Check className="size-4 shrink-0 text-[var(--accent)]" /> : null}
                   </MenuItem>
@@ -249,13 +243,12 @@ function AgendaForm({
 
         <div className="mt-4 divide-y divide-[var(--border)] border-y border-[var(--border)]">
           <PropertyRow icon={<CalendarDays />} label={st("reminder_date")} htmlFor="agenda-start">
-            <input
+            <DateField
               id="agenda-start"
-              type="date"
-              required
+              variant="ghost"
               value={start}
-              onChange={(event) => setStart(event.target.value)}
-              className="h-8 rounded-[8px] bg-transparent px-2 text-right text-[13px] tabular-nums text-ink outline-none transition hover:bg-[var(--surface-hover)] focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)]"
+              onChange={(next) => next && setStart(next)}
+              aria-label={st("reminder_date")}
             />
           </PropertyRow>
           <PropertyRow icon={<Clock3 />} label={st("agenda_duration_label")} htmlFor="agenda-minutes">

@@ -184,7 +184,7 @@ const fr: LegalBundle = {
               rows: [
                 ["Inscription", "Nom, e-mail, numéro de téléphone et photo de profil", "Vous ou votre compte Google"],
                 ["Identifiants", "Mot de passe, conservé uniquement sous forme chiffrée par le fournisseur d'authentification", "Vous"],
-                ["Contenu", "Notes, pages, carnets, flashcards, pièces jointes, fichiers audio et vidéos ; dans le module d'étude, objectifs, matières et sujets (avec les liens externes que vous ajoutez), séances (avec le support et les notes liées), questions, révisions, examens blancs, plannings, rappels, notes rapides et les réussites rangées dans votre vitrine (avec leur date)", "Vous et les importations que vous effectuez"],
+                ["Contenu", "Notes, pages, carnets, flashcards, pièces jointes, fichiers audio et vidéos ; dans le module d'étude, objectifs, matières et sujets (avec les liens externes que vous ajoutez), séances (avec le support et les notes liées), questions, révisions, examens blancs, plannings, rappels, bloc-notes et les réussites rangées dans votre vitrine (avec leur date et l'ordre dans lequel vous les rangez)", "Vous et les importations que vous effectuez"],
                 ["Intégrations", "Jetons d'accès à Notion, Evernote et Google Docs", "Le service connecté, avec votre autorisation"],
                 ["Préférences", "Langue, thème, accessibilité et disposition", "Vous"],
                 ["Données techniques", "Adresse IP, pays approximatif, navigateur, appareil, date et heure d'accès", "Collecte automatique"],
@@ -408,7 +408,7 @@ const fr: LegalBundle = {
               "un compteur de tentatives de connexion, utilisé pour afficher le reCAPTCHA si nécessaire ;",
               "les préférences d'interface, comme le thème, la barre latérale, les carnets récents et les langues de transcription et des flashcards ;",
               "l'état du module d'étude, comme un minuteur de concentration en cours, le dernier écran ouvert et les calques visibles de la Planification ;",
-              "une copie de vos notes et carnets, pour que l'application s'ouvre plus vite et continue de fonctionner hors ligne.",
+              "une copie de vos notes, carnets et données d'étude, pour que l'application s'ouvre plus vite et continue de fonctionner hors ligne.",
             ],
           },
           "Ces informations restent uniquement dans votre navigateur et sont supprimées lorsque vous vous déconnectez, lorsque la session expire ou lorsque vous effacez les données du site.",

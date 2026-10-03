@@ -3,7 +3,7 @@ import "server-only";
 import { requireWorkspaceEditor } from "@/lib/api/session";
 import { jsonError } from "@/lib/api/errors";
 import { adminBucket, adminDb, isAdminConfigured } from "@/lib/firebase/admin";
-import { extractStoragePath } from "@/lib/trash/purge-core";
+import { extractStoragePath, quarantineDocId } from "@/lib/trash/purge-core";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -53,13 +53,20 @@ export async function POST(request: Request) {
       );
 
       const db = adminDb();
-      const attachmentsCol = db.collection("workspaces").doc(workspaceId).collection("attachments");
+      const ws = db.collection("workspaces").doc(workspaceId);
+      const attachmentsCol = ws.collection("attachments");
+      const trashedCol = ws.collection("trashed_media");
       const paths = [...pathsToDelete];
       for (let start = 0; start < paths.length; start += 30) {
         const snap = await attachmentsCol.where("storagePath", "in", paths.slice(start, start + 30)).get();
         if (snap.empty) continue;
         const batch = db.batch();
         for (const doc of snap.docs) batch.delete(doc.ref);
+        await batch.commit();
+      }
+      for (let start = 0; start < paths.length; start += 400) {
+        const batch = db.batch();
+        for (const path of paths.slice(start, start + 400)) batch.delete(trashedCol.doc(quarantineDocId(path)));
         await batch.commit();
       }
     }

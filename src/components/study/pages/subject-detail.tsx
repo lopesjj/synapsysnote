@@ -13,9 +13,10 @@ import { useStudy } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
 import { useStudyUi } from "@/lib/study/ui-store";
 import { addDays, formatDay, minuteLabel } from "@/lib/study/dates";
-import { aggregate, groupSessions, percentLabel, performanceBand, topicKey } from "@/lib/study/metrics";
+import { absorbExamQuestions, aggregate, groupSessions, percentLabel, performanceBand, topicKey } from "@/lib/study/metrics";
 import { formatNumber, clockLabel } from "@/lib/study/format";
 import { safeUrl } from "@/lib/study/normalize";
+import { subjectTone } from "@/lib/study/defaults";
 import type { StudyAggregate, StudySession, StudySubject, StudyTopic } from "@/types/study";
 import { Meter, Sparkbars } from "../charts";
 import { SubjectDialog } from "../subject-dialog";
@@ -24,24 +25,31 @@ import { ReviewRow } from "../widgets";
 
 export function SubjectDetailPage({ subjectId }: { subjectId: string }) {
   const { st, textDir, language } = useStudyT();
-  const { ready, subjects, sessions, reviews, plans, settings, today } = useStudy();
+  const { ready, subjects, sessions, exams, reviews, plans, settings, today } = useStudy();
   const subject = subjects.find((entry) => entry.id === subjectId) ?? null;
   const [editing, setEditing] = useState(false);
 
   const data = useMemo(() => {
     const own = sessions.filter((session) => session.subjectId === subjectId);
+    const planId = subjects.find((entry) => entry.id === subjectId)?.planId;
+    const planSubjects = subjects.filter((entry) => entry.planId === planId);
     const byDay = new Map<string, number>();
     for (const session of own) byDay.set(session.day, (byDay.get(session.day) ?? 0) + session.durationSec);
     return {
       sessions: own,
-      total: aggregate(own),
+      total: absorbExamQuestions(
+        aggregate(own),
+        exams.filter((exam) => exam.planId === planId),
+        planSubjects,
+        subjectId
+      ),
       byTopic: groupSessions(own, (session) => topicKey(session.subjectId, session.topicId)),
       byDay,
       pending: reviews
         .filter((review) => review.subjectId === subjectId && review.status === "pending" && review.dueDay <= addDays(today, 7))
         .sort((a, b) => (a.dueDay < b.dueDay ? -1 : a.dueDay > b.dueDay ? 1 : 0)),
     };
-  }, [reviews, sessions, subjectId, today]);
+  }, [exams, reviews, sessions, subjectId, subjects, today]);
 
   if (!ready) return <StudyLoading />;
   if (!subject) {
@@ -73,7 +81,7 @@ export function SubjectDetailPage({ subjectId }: { subjectId: string }) {
       </Link>
       <header className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-b border-[var(--border)] pb-5">
         <div className="flex min-w-0 flex-[1_1_22rem] items-stretch gap-4">
-          <span className="block w-1.5 shrink-0 rounded-full" style={{ backgroundColor: subject.color }} />
+          <span className="block w-1.5 shrink-0 rounded-full" style={{ backgroundColor: subjectTone(subject.color) }} />
           <div className="min-w-0">
             <h1 dir={textDir} className="text-[26px] font-semibold leading-tight tracking-[-0.025em] text-ink sm:text-[28px]">
               {subject.name}

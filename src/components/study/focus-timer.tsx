@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, FileText, Maximize2, Minimize2, Minus, Pause, Play, Plus, RotateCcw, Square, Volume2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { useStudy } from "@/lib/study/provider";
-import { useLiveNote, usePlanMetrics } from "@/lib/study/hooks";
+import { useLiveNote } from "@/lib/study/hooks";
 import { useRouter } from "@/lib/i18n/navigation";
 import { useStudyT, type StudyKey } from "@/lib/study/i18n";
 import {
@@ -20,7 +20,7 @@ import {
   type TimerMode,
   type TimerState,
 } from "@/lib/study/ui-store";
-import { clockLabel, splitDuration } from "@/lib/study/format";
+import { clockLabel, maskClock, parseDurationInput, splitDuration } from "@/lib/study/format";
 import { dayKeyOf, minuteOfDay } from "@/lib/study/dates";
 import { playTimerSound } from "@/lib/study/sound";
 import { setTitlePrefix } from "@/lib/document-title";
@@ -241,19 +241,94 @@ function Dial({
   );
 }
 
+const COUNTDOWN_MIN_MS = 60_000;
+const COUNTDOWN_MAX_MS = 6 * 3_600_000;
+
+function caretAfterDigits(text: string, digits: number): number {
+  if (digits <= 0) return 0;
+  let seen = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] >= "0" && text[index] <= "9") {
+      seen += 1;
+      if (seen === digits) return index + 1;
+    }
+  }
+  return text.length;
+}
+
+function CountdownEntry({ seconds, size, onCommit }: { seconds: number; size: number; onCommit: (ms: number) => void }) {
+  const { st } = useStudyT();
+  const ref = useRef<HTMLInputElement>(null);
+  const caret = useRef<number | null>(null);
+  const keepSelection = useRef(false);
+  const [draft, setDraft] = useState<string | null>(null);
+  const value = draft ?? clockLabel(seconds, true);
+
+  useLayoutEffect(() => {
+    const input = ref.current;
+    if (caret.current === null || !input || document.activeElement !== input) return;
+    input.setSelectionRange(caret.current, caret.current);
+    caret.current = null;
+  });
+
+  return (
+    <input
+      ref={ref}
+      dir="ltr"
+      inputMode="numeric"
+      autoComplete="off"
+      aria-label={st("timer_countdown_length")}
+      value={value}
+      onFocus={(event) => {
+        setDraft(clockLabel(seconds, true));
+        event.currentTarget.select();
+        keepSelection.current = true;
+      }}
+      onMouseUp={(event) => {
+        if (!keepSelection.current) return;
+        keepSelection.current = false;
+        event.preventDefault();
+      }}
+      onKeyDown={(event) => {
+        keepSelection.current = false;
+        if (event.key === "Enter") event.currentTarget.blur();
+      }}
+      onChange={(event) => {
+        const input = event.currentTarget;
+        const raw = input.value;
+        const inputType = (event.nativeEvent as InputEvent).inputType ?? "";
+        const masked = maskClock(raw, inputType.startsWith("delete"));
+        const position = input.selectionStart ?? raw.length;
+        caret.current =
+          masked === value ? null : position >= raw.length ? masked.length : caretAfterDigits(masked, raw.slice(0, position).replace(/\D/g, "").length);
+        setDraft(masked);
+      }}
+      onBlur={() => {
+        keepSelection.current = false;
+        const parsed = parseDurationInput(draft ?? "");
+        setDraft(null);
+        if (parsed === null || parsed <= 0) return;
+        onCommit(parsed * 1000);
+      }}
+      className="w-[8.2ch] max-w-[calc(100vw-3rem)] bg-transparent text-center font-extralight tabular-nums leading-none tracking-[-0.05em] text-ink outline-none [field-sizing:content]"
+      style={{ fontSize: Math.round(size * 0.2) }}
+    />
+  );
+}
+
 function ClockFace({ seconds, size, muted }: { seconds: number; size: number; muted: boolean }) {
   const { h, m, s } = splitDuration(seconds);
   const pad = (value: number) => String(value).padStart(2, "0");
   return (
     <span
-      className={cn("flex items-baseline font-extralight tabular-nums leading-none tracking-[-0.05em] transition-colors", muted ? "text-muted" : "text-ink")}
+      className={cn("flex items-center font-extralight tabular-nums leading-none tracking-[-0.05em] transition-colors", muted ? "text-muted" : "text-ink")}
       style={{ fontSize: Math.round(size * 0.2) }}
       aria-label={clockLabel(seconds, true)}
     >
       <span className={cn(h === 0 && "text-faint")}>{pad(h)}</span>
-      <span className="mx-[0.02em] -translate-y-[0.06em] text-faint">:</span>
+      <span className="mx-[0.02em] text-faint">:</span>
       <span>{pad(m)}</span>
-      <span className="mx-[0.02em] -translate-y-[0.06em] text-faint">:</span>
+      <span className="mx-[0.02em] text-faint">:</span>
       <span>{pad(s)}</span>
     </span>
   );
@@ -287,11 +362,10 @@ function SideControl({
 }
 
 export function FocusOverlay() {
-  const { st, duration } = useStudyT();
+  const { st } = useStudyT();
   const open = useStudyUi((state) => state.timerOpen);
   const timer = useStudyUi((state) => state.timer);
   const { settings, planSubjects, subjectById, actions } = useStudy();
-  const metrics = usePlanMetrics();
   const liveNote = useLiveNote();
   const router = useRouter();
   const now = useNow(open && timer.status === "running");
@@ -331,7 +405,6 @@ export function FocusOverlay() {
   const countdownDone = timer.finished && timer.mode === "countdown";
   const resting = timer.mode === "pomodoro" && timer.phase !== "focus";
   const tone = resting || countdownDone ? "var(--success)" : "var(--accent)";
-  const todayTotal = metrics.todaySeconds + focusSeconds(timer, now);
 
   const setMode = (mode: TimerMode) => {
     if (!idle || mode === timer.mode) return;
@@ -339,7 +412,7 @@ export function FocusOverlay() {
   };
 
   const setCountdown = (ms: number) =>
-    useStudyUi.getState().setTimer({ countdownMs: Math.max(5 * 60_000, Math.min(6 * 3600_000, ms)), finished: false });
+    useStudyUi.getState().setTimer({ countdownMs: Math.max(COUNTDOWN_MIN_MS, Math.min(COUNTDOWN_MAX_MS, ms)), finished: false });
   const shiftCountdown = (minutes: number) => setCountdown(useStudyUi.getState().timer.countdownMs + minutes * 60_000);
 
   const discard = () => {
@@ -489,7 +562,8 @@ export function FocusOverlay() {
               </button>
             ) : null}
 
-            <div className="relative isolate mt-6 flex items-center justify-center" style={{ width: size, height: size }}>
+            <div className="mt-6 flex flex-col items-center">
+            <div className="relative isolate" style={{ width: size, height: size }}>
               <div
                 aria-hidden
                 className={cn("pointer-events-none absolute inset-[-42%] -z-10 rounded-full transition-[background] duration-700", running && "synapsys-breathe")}
@@ -503,24 +577,35 @@ export function FocusOverlay() {
                 orbitKey={String(timer.startedAt ?? "paused")}
                 seconds={elapsed / 1000}
               />
-              <div className="flex flex-col items-center">
-                <span className="mb-3 h-5 text-[13px] font-medium" style={{ color: tone }}>
-                  {timer.mode === "pomodoro" ? st(PHASE_KEY[timer.phase]) : countdownDone ? st("timer_countdown_done") : ""}
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                {timer.mode === "countdown" && idle ? (
+                  <div className="pointer-events-auto">
+                    <CountdownEntry seconds={Math.round(timer.countdownMs / 1000)} size={size} onCommit={setCountdown} />
+                  </div>
+                ) : (
+                  <ClockFace seconds={shownSeconds} size={size} muted={!running && !idle} />
+                )}
+              </div>
+              {timer.mode === "pomodoro" || countdownDone ? (
+                <span className="absolute left-1/2 top-[16%] -translate-x-1/2 whitespace-nowrap text-[13px] font-medium" style={{ color: tone }}>
+                  {timer.mode === "pomodoro" ? st(PHASE_KEY[timer.phase]) : st("timer_countdown_done")}
                 </span>
-                <ClockFace seconds={shownSeconds} size={size} muted={!running && !idle} />
-                <div className="mt-4 flex h-8 items-center">
+              ) : null}
+            </div>
+              {timer.mode === "pomodoro" || (timer.mode === "countdown" && idle) ? (
+                <div className="mt-4 flex h-8 max-w-[calc(100vw-2rem)] items-center justify-center">
                   {timer.mode === "pomodoro" ? (
-                    <span className="text-[12.5px] tabular-nums text-muted">
+                    <span className="truncate text-[12.5px] tabular-nums text-muted">
                       {roundLabel}
                       {timer.focusMs > 0 ? ` · ${st("timer_focus_total", { time: clockLabel(focusSeconds(timer, now), true) })}` : ""}
                     </span>
-                  ) : timer.mode === "countdown" && idle ? (
+                  ) : (
                     <div className="flex items-center gap-1" aria-label={st("timer_countdown_length")}>
                       <button
                         type="button"
                         aria-label="-5"
                         onClick={() => shiftCountdown(-5)}
-                        className="flex size-7 items-center justify-center rounded-full text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
+                        className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
                       >
                         <Minus className="size-3.5" />
                       </button>
@@ -530,7 +615,7 @@ export function FocusOverlay() {
                           type="button"
                           onClick={() => setCountdown(minutes * 60_000)}
                           className={cn(
-                            "h-7 rounded-full px-2.5 text-[12px] tabular-nums transition",
+                            "h-7 shrink-0 whitespace-nowrap rounded-full px-2.5 text-[12px] tabular-nums transition",
                             timer.countdownMs === minutes * 60_000 ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]" : "text-muted hover:text-ink"
                           )}
                         >
@@ -541,16 +626,14 @@ export function FocusOverlay() {
                         type="button"
                         aria-label="+5"
                         onClick={() => shiftCountdown(5)}
-                        className="flex size-7 items-center justify-center rounded-full text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
+                        className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
                       >
                         <Plus className="size-3.5" />
                       </button>
                     </div>
-                  ) : (
-                    <span className="text-[12.5px] tabular-nums text-muted">{st("home_chip_studied", { time: duration(todayTotal) })}</span>
                   )}
                 </div>
-              </div>
+              ) : null}
             </div>
 
             <div className="mt-8 flex items-start justify-center gap-6 sm:gap-10">

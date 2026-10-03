@@ -184,7 +184,7 @@ const it: LegalBundle = {
               rows: [
                 ["Registrazione", "Nome, email, numero di telefono e foto del profilo", "Tu o il tuo account Google"],
                 ["Credenziali", "Password, archiviata solo in forma crittografata dal fornitore di autenticazione", "Tu"],
-                ["Contenuti", "Note, pagine, quaderni, flashcard, allegati, audio e video; nel modulo di studio, obiettivi, materie e argomenti (con i link esterni che aggiungi), sessioni (con il materiale e le note collegate), quesiti, ripassi, simulazioni, calendari, promemoria, appunti rapidi e i traguardi conservati nella vetrina (con la data in cui sono stati conservati)", "Tu e le importazioni che esegui"],
+                ["Contenuti", "Note, pagine, quaderni, flashcard, allegati, audio e video; nel modulo di studio, obiettivi, materie e argomenti (con i link esterni che aggiungi), sessioni (con il materiale e le note collegate), quesiti, ripassi, simulazioni, calendari, promemoria, blocco note e i traguardi conservati nella vetrina (con la data in cui sono stati conservati e l'ordine in cui li disponi)", "Tu e le importazioni che esegui"],
                 ["Integrazioni", "Token di accesso per Notion, Evernote e Google Docs", "Il servizio collegato, con la tua autorizzazione"],
                 ["Preferenze", "Lingua, tema, accessibilità e layout", "Tu"],
                 ["Accettazione dei documenti", "Versione e data in cui hai accettato i Termini d'uso e questa informativa", "Tu"],
@@ -408,7 +408,7 @@ const it: LegalBundle = {
               "un contatore di tentativi di accesso, usato per mostrare reCAPTCHA quando necessario;",
               "preferenze dell'interfaccia, come tema, barra laterale, quaderni recenti e le lingue scelte per trascrizioni e flashcard;",
               "lo stato del modulo di studio, come un timer di concentrazione in corso, l'ultima schermata aperta e i livelli visibili della Pianificazione;",
-              "una copia delle tue note e dei quaderni, perché l'app si apra più velocemente e continui a funzionare offline.",
+              "una copia delle tue note, dei quaderni e dei dati di studio, perché l'app si apra più velocemente e continui a funzionare offline.",
             ],
           },
           "Queste informazioni rimangono solo nel tuo browser e vengono cancellate quando esci dall'account, quando la sessione scade o quando elimini i dati del sito.",

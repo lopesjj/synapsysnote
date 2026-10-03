@@ -38,6 +38,7 @@ import {
   type StudyWrite,
 } from "./backend";
 import { MAX_AGENDA_ENTRIES } from "./agenda";
+import { readStudyCache, rememberStudyCollection } from "./cache";
 import {
   toCycle,
   toExam,
@@ -203,7 +204,60 @@ const EMPTY_STATE: StudyState = {
   settings: DEFAULT_STUDY_SETTINGS,
 };
 
-const REQUIRED_FOR_READY: StudyCollection[] = ["study_plans", "study_subjects", "study_meta"];
+const REQUIRED_FOR_READY: StudyCollection[] = [
+  "study_plans",
+  "study_subjects",
+  "study_meta",
+  "study_sessions",
+  "study_exams",
+  "study_reviews",
+  "study_cycles",
+  "study_reminders",
+];
+
+function applyCollection(previous: StudyState, name: StudyCollection, docs: StudyDoc[]): StudyState {
+  switch (name) {
+    case "study_plans":
+      return { ...previous, plans: docs.map(toPlan).sort(byOrder) };
+    case "study_subjects":
+      return { ...previous, subjects: docs.map(toSubject).sort(byOrder) };
+    case "study_sessions":
+      return {
+        ...previous,
+        sessions: docs
+          .map(toSession)
+          .sort((a, b) => (a.day === b.day ? b.createdAt - a.createdAt : a.day < b.day ? 1 : -1)),
+      };
+    case "study_reviews":
+      return { ...previous, reviews: docs.map(toReview).sort((a, b) => (a.dueDay < b.dueDay ? -1 : a.dueDay > b.dueDay ? 1 : 0)) };
+    case "study_exams":
+      return { ...previous, exams: docs.map(toExam).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : a.createdAt - b.createdAt)) };
+    case "study_cycles":
+      return { ...previous, cycles: docs.map(toCycle) };
+    case "study_reminders":
+      return { ...previous, reminders: docs.map(toReminder).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)) };
+    case "study_stickies":
+      return { ...previous, stickies: docs.map(toSticky).sort(byOrder) };
+    case "study_meta": {
+      const raw = docs.find((entry) => entry.id === "settings");
+      return { ...previous, settings: normalizeSettings(raw as Partial<StudySettings> | undefined) };
+    }
+    default:
+      return previous;
+  }
+}
+
+function stateFromCache(collections: Partial<Record<StudyCollection, StudyDoc[]>>) {
+  let data = EMPTY_STATE;
+  const loaded = new Set<StudyCollection>();
+  for (const name of STUDY_COLLECTIONS) {
+    const docs = collections[name];
+    if (!docs) continue;
+    data = applyCollection(data, name, docs);
+    loaded.add(name);
+  }
+  return { data, loaded };
+}
 
 function byOrder<T extends { order: number; createdAt: number }>(a: T, b: T) {
   return a.order - b.order || a.createdAt - b.createdAt;
@@ -232,11 +286,22 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   const { adapter } = useWorkspace();
   const backend = useMemo(() => studyBackendFor(adapter.mode, adapter.workspaceId), [adapter.mode, adapter.workspaceId]);
   const [stored, setStored] = useState<{ key: string; data: StudyState }>({ key: "", data: EMPTY_STATE });
-  const state = stored.key === backend.key ? stored.data : EMPTY_STATE;
   const [loaded, setLoaded] = useState<{ key: string; collections: Set<StudyCollection> }>({
     key: "",
     collections: new Set(),
   });
+  if (stored.key !== backend.key) {
+    const cached = readStudyCache(backend.key);
+    if (cached) {
+      const built = stateFromCache(cached);
+      setStored({ key: backend.key, data: built.data });
+      setLoaded({ key: backend.key, collections: built.loaded });
+    } else {
+      setStored({ key: backend.key, data: EMPTY_STATE });
+      setLoaded({ key: backend.key, collections: new Set() });
+    }
+  }
+  const state = stored.key === backend.key ? stored.data : EMPTY_STATE;
   const [clock, setClock] = useState(() => Date.now());
   const stateRef = useRef<StudyState>(state);
 
@@ -257,38 +322,11 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     };
     const handle = (name: StudyCollection, docs: StudyDoc[]) => {
       if (cancelled) return;
-      const apply = (previous: StudyState): StudyState => {
-        switch (name) {
-          case "study_plans":
-            return { ...previous, plans: docs.map(toPlan).sort(byOrder) };
-          case "study_subjects":
-            return { ...previous, subjects: docs.map(toSubject).sort(byOrder) };
-          case "study_sessions":
-            return {
-              ...previous,
-              sessions: docs
-                .map(toSession)
-                .sort((a, b) => (a.day === b.day ? b.createdAt - a.createdAt : a.day < b.day ? 1 : -1)),
-            };
-          case "study_reviews":
-            return { ...previous, reviews: docs.map(toReview).sort((a, b) => (a.dueDay < b.dueDay ? -1 : a.dueDay > b.dueDay ? 1 : 0)) };
-          case "study_exams":
-            return { ...previous, exams: docs.map(toExam).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : a.createdAt - b.createdAt)) };
-          case "study_cycles":
-            return { ...previous, cycles: docs.map(toCycle) };
-          case "study_reminders":
-            return { ...previous, reminders: docs.map(toReminder).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)) };
-          case "study_stickies":
-            return { ...previous, stickies: docs.map(toSticky).sort(byOrder) };
-          case "study_meta": {
-            const raw = docs.find((entry) => entry.id === "settings");
-            return { ...previous, settings: normalizeSettings(raw as Partial<StudySettings> | undefined) };
-          }
-          default:
-            return previous;
-        }
-      };
-      setStored((current) => ({ key: backend.key, data: apply(current.key === backend.key ? current.data : EMPTY_STATE) }));
+      rememberStudyCollection(backend.key, name, docs);
+      setStored((current) => ({
+        key: backend.key,
+        data: applyCollection(current.key === backend.key ? current.data : EMPTY_STATE, name, docs),
+      }));
       markLoaded(name);
     };
     for (const name of STUDY_COLLECTIONS) {
@@ -334,9 +372,18 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   const actions = useMemo<StudyActions>(() => {
     const now = () => Date.now();
     const current = () => stateRef.current;
-    const releaseIcons = (icons: (string | null | undefined)[]) => {
-      const files = icons.filter((icon): icon is string => Boolean(icon && /^https?:\/\//.test(icon)));
-      if (files.length) void adapter.quarantineMedia(files);
+    const releaseIcons = async (icons: (string | null | undefined)[], ownerId?: string) => {
+      const live = new Set(
+        current()
+          .plans.filter((plan) => plan.id !== ownerId)
+          .map((plan) => plan.icon)
+          .filter((icon): icon is string => Boolean(icon))
+      );
+      const files = icons.filter((icon): icon is string => Boolean(icon && /^https?:\/\//.test(icon) && !live.has(icon)));
+      if (!files.length) return;
+      try {
+        await adapter.deleteMedia(files);
+      } catch {}
     };
 
     const settingsWrite = (patch: Partial<StudySettings>): StudyWrite => ({
@@ -544,7 +591,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         if (!existing && !activeValid) writes.push(settingsWrite({ activePlanId: id }));
         await commit(writes);
         const nextIcon = input.icon === undefined ? existing?.icon : input.icon;
-        if (existing?.icon && existing.icon !== nextIcon) releaseIcons([existing.icon]);
+        if (existing?.icon && existing.icon !== nextIcon) await releaseIcons([existing.icon], id);
         return id;
       },
       async createPlanWithSubjects(input, drafts) {
@@ -589,7 +636,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         }
         await commit(writes);
         const removed = snapshot.plans.find((plan) => plan.id === id);
-        if (removed?.icon) releaseIcons([removed.icon]);
+        if (removed?.icon) await releaseIcons([removed.icon], id);
       },
       async saveSubject(planId, input) {
         const snapshot = current();

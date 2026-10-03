@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/primitives";
+import { DateField } from "@/components/ui/pickers";
 import { IconPickerMenu } from "@/components/ui/icon-picker";
 import { WORKSPACE_ICONS } from "@/lib/icons/catalog";
 import { useStudy } from "@/lib/study/provider";
@@ -117,18 +118,26 @@ function GoalForm({
     }
     setSaving(true);
     try {
-      const id = await actions.savePlan({
-        id: plan?.id,
-        name: name.trim(),
-        institution: institution.trim(),
-        role: role.trim(),
-        examDate: examDate || null,
-        icon,
-        notes,
-        weeklyGoalMinutes: Math.round(Math.max(0, Number(hours.replace(",", ".")) || 0) * 60),
-        weeklyGoalQuestions: Math.max(0, Math.round(Number(questions) || 0)),
-      });
-      icons.settle(icon);
+      const staged = icon?.startsWith("blob:") ?? false;
+      const storedIcon = await icons.materialize(icon);
+      let id: string;
+      try {
+        id = await actions.savePlan({
+          id: plan?.id,
+          name: name.trim(),
+          institution: institution.trim(),
+          role: role.trim(),
+          examDate: examDate || null,
+          icon: storedIcon,
+          notes,
+          weeklyGoalMinutes: Math.round(Math.max(0, Number(hours.replace(",", ".")) || 0) * 60),
+          weeklyGoalQuestions: Math.max(0, Math.round(Number(questions) || 0)),
+        });
+      } catch (error) {
+        if (staged) await icons.releaseStored(storedIcon);
+        throw error;
+      }
+      icons.discard();
       toast.success(plan ? st("goal_updated") : st("goal_created"));
       onSaved?.(id);
       onClose();
@@ -194,7 +203,7 @@ function GoalForm({
           <Input id="goal-role" dir={textDir} value={role} onChange={(event) => setRole(event.target.value)} placeholder={st("goal_role_placeholder")} maxLength={160} />
         </Field>
         <Field label={st("goal_exam_date")} htmlFor="goal-exam">
-          <Input id="goal-exam" autoFocus={focus === "examDate"} type="date" value={examDate} onChange={(event) => setExamDate(event.target.value)} />
+          <DateField id="goal-exam" autoFocus={focus === "examDate"} clearable value={examDate} onChange={setExamDate} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label={st("goal_weekly_hours")} htmlFor="goal-hours">
@@ -353,7 +362,7 @@ function ReminderForm({ reminder, onClose }: { reminder: StudyReminder | null; o
           />
         </Field>
         <Field label={st("reminder_date")} htmlFor="reminder-day">
-          <Input id="reminder-day" type="date" value={day} onChange={(event) => setDay(event.target.value)} />
+          <DateField id="reminder-day" clearable value={day} onChange={setDay} />
         </Field>
       </div>
     </DialogFrame>

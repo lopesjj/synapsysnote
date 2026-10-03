@@ -1,6 +1,20 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { ArrowRight, Clock, X } from "lucide-react";
 import { Link } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,7 +25,7 @@ import { useStudyT, type StudyT } from "@/lib/study/i18n";
 import { useAwardBook } from "@/lib/study/hooks";
 import { useStudyUi } from "@/lib/study/ui-store";
 import { formatDay } from "@/lib/study/dates";
-import { CLAIM_WINDOW_DAYS, sortAwards, type Award, type StreakAward } from "@/lib/study/awards";
+import { CLAIM_WINDOW_DAYS, arrangeAwards, sortAwards, type Award, type StreakAward } from "@/lib/study/awards";
 import { GoalMark, Panel } from "./ui";
 
 const SEAL_TONES = ["#c96d42", "#1f7b78", "#4b56a4", "#8d3657", "#2f7049", "#b8860b", "#52606f", "#1c1e26"] as const;
@@ -93,8 +107,8 @@ export function Rosette({ color, size = 64, className }: { color: string; size?:
         </linearGradient>
         <linearGradient id={`${uid}-face`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" style={{ stopColor: deep }} />
-          <stop offset="60%" style={{ stopColor: color }} />
-          <stop offset="100%" style={{ stopColor: light }} />
+          <stop offset="55%" style={{ stopColor: `color-mix(in oklab, ${color} 58%, ${tone})` }} />
+          <stop offset="100%" style={{ stopColor: `color-mix(in oklab, ${tone} 64%, #fff)` }} />
         </linearGradient>
         <radialGradient id={`${uid}-shine`} cx="30%" cy="22%" r="65%">
           <stop offset="0%" stopColor="#fff" stopOpacity="0.55" />
@@ -168,7 +182,7 @@ export function Laurel({ size = 96, className, children, color = "var(--laurel)"
         <Branch side={-1} color={color} />
         <Branch side={1} color={color} />
       </svg>
-      <span className="relative flex items-center justify-center" style={{ width: size * 0.46, height: size * 0.46 }}>
+      <span className="relative flex items-center justify-center" style={{ width: size * 0.54, height: size * 0.54 }}>
         {children}
       </span>
     </span>
@@ -281,7 +295,7 @@ export function AwardArt({ award, size = 64, className }: { award: Award; size?:
   return (
     <Laurel size={size} className={className} color={earned ? "var(--laurel)" : "var(--border-strong)"}>
       {activePlan ? (
-        <GoalMark icon={activePlan.icon} name={activePlan.name} seed={activePlan.id} size={Math.round(size * 0.4)} raised={earned} className={cn(!earned && "opacity-50 grayscale")} />
+        <GoalMark icon={activePlan.icon} name={activePlan.name} seed={activePlan.id} size={Math.round(size * 0.5)} raised={earned} soft={earned} className={cn(!earned && "opacity-50 grayscale")} />
       ) : null}
     </Laurel>
   );
@@ -343,31 +357,73 @@ export function awardDetail(award: Award, st: StudyT, locale: string): string {
   return st("award_streak_locked", { current: award.current, count: award.threshold });
 }
 
-function AwardTile({ award }: { award: Award }) {
+function AwardTile({ award, lifted = false }: { award: Award; lifted?: boolean }) {
   const { st, locale } = useStudyT();
   const earned = award.earnedAt !== null;
   const title = awardTitle(award, st);
   const detail = awardDetail(award, st, locale);
   const body = (
-    <div className={cn("flex w-[4.6rem] flex-col items-center gap-2 text-center", !earned && "opacity-80")}>
-      <span className={cn("flex h-[4.2rem] items-center justify-center transition-transform duration-300 ease-[var(--ease-luxury)]", earned && "hover:-translate-y-0.5 hover:scale-[1.04]")}>
+    <div className={cn("flex w-[4.6rem] flex-col items-center gap-2 text-center", !earned && !lifted && "opacity-80")}>
+      <span
+        className={cn(
+          "flex h-[4.2rem] items-center justify-center",
+          lifted
+            ? "motion-safe:-rotate-6 motion-safe:scale-[1.08] drop-shadow-[0_18px_22px_rgba(15,44,76,0.28)]"
+            : cn("transition-transform duration-300 ease-[var(--ease-luxury)]", earned && "group-hover/award:-translate-y-0.5 group-hover/award:scale-[1.04]")
+        )}
+      >
         <AwardArt award={award} size={award.kind === "subject" ? 54 : 60} />
       </span>
       <span className={cn("line-clamp-2 text-[11px] leading-[1.25]", earned ? "font-medium text-ink" : "text-muted")}>{title}</span>
     </div>
   );
+  if (lifted) return body;
   return (
     <Tooltip label={`${title} · ${detail}`} side="top">
       {award.kind === "subject" ? (
-        <Link href={`/home/study/subjects/${award.subjectId}`} className="rounded-[10px] outline-none focus-visible:bg-[var(--surface-hover)]">
+        <Link href={`/home/study/subjects/${award.subjectId}`} className="group/award rounded-[10px] outline-none focus-visible:bg-[var(--surface-hover)]">
           {body}
         </Link>
       ) : (
-        <span tabIndex={0} className="rounded-[10px] outline-none focus-visible:bg-[var(--surface-hover)]">
+        <span tabIndex={0} className="group/award rounded-[10px] outline-none focus-visible:bg-[var(--surface-hover)]">
           {body}
         </span>
       )}
     </Tooltip>
+  );
+}
+
+const EMPTY_ORDER: string[] = [];
+
+function SortableAward({ award, enabled, onClickCapture }: { award: Award; enabled: boolean; onClickCapture: (event: MouseEvent) => void }) {
+  const { st } = useStudyT();
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: award.id,
+    disabled: !enabled,
+  });
+  const title = awardTitle(award, st);
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Translate.toString(transform),
+        transition: isDragging ? undefined : transition || "transform 320ms cubic-bezier(0.16, 1, 0.3, 1)",
+      }}
+      className={cn(
+        "relative select-none rounded-[14px]",
+        enabled && "cursor-grab touch-manipulation active:cursor-grabbing",
+        isDragging && "z-10 cursor-grabbing"
+      )}
+      {...attributes}
+      {...listeners}
+      aria-label={enabled ? st("awards_drag_item", { name: title }) : undefined}
+      onClickCapture={onClickCapture}
+    >
+      {isDragging ? <span className="pointer-events-none absolute inset-x-1 top-1 h-[4.2rem] rounded-[16px] border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)]" /> : null}
+      <div className={cn("transition-transform duration-300", isDragging && "scale-90 opacity-20")}>
+        <AwardTile award={award} />
+      </div>
+    </div>
   );
 }
 
@@ -378,9 +434,59 @@ export function usePendingAwards(): Award[] {
 
 export function AwardsPanel() {
   const { st } = useStudyT();
+  const { activePlan, settings, actions } = useStudy();
   const book = useAwardBook();
+  const planId = activePlan?.id ?? "";
+  const stored = settings.awardOrder[planId] ?? EMPTY_ORDER;
+  const [draft, setDraft] = useState<{ planId: string; ids: string[] } | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const suppressClick = useRef(false);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+  const earned = useMemo(() => {
+    if (!book) return [];
+    const ids = draft?.planId === planId ? draft.ids : stored;
+    return arrangeAwards(sortAwards(book.kept), ids);
+  }, [book, draft, planId, stored]);
+  const dragging = earned.find((award) => award.id === draggingId) ?? null;
+  const canSort = earned.length > 1;
+
+  useEffect(() => {
+    if (!draft || draft.planId !== planId) return;
+    if (draft.ids.join("\0") === stored.join("\0")) setDraft(null);
+  }, [draft, planId, stored]);
+
+  const releaseClick = () => {
+    window.setTimeout(() => {
+      suppressClick.current = false;
+    }, 0);
+  };
+
+  const onDragStart = (event: DragStartEvent) => {
+    suppressClick.current = true;
+    setDraggingId(String(event.active.id));
+  };
+
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setDraggingId(null);
+    releaseClick();
+    if (!over || active.id === over.id || !planId) return;
+    const ids = earned.map((award) => award.id);
+    const from = ids.indexOf(String(active.id));
+    const to = ids.indexOf(String(over.id));
+    if (from < 0 || to < 0 || from === to) return;
+    const next = arrayMove(ids, from, to);
+    setDraft({ planId, ids: next });
+    void actions.updateSettings({ awardOrder: { ...settings.awardOrder, [planId]: next } }).catch(() => {
+      setDraft((current) => (current?.planId === planId && current.ids.join("\0") === next.join("\0") ? null : current));
+    });
+  };
+
   if (!book) return null;
-  const earned = sortAwards(book.kept);
   const locked = [
     ...(book.goal && book.goal.earnedAt === null ? [book.goal] : []),
     ...book.subjects.filter((award) => award.earnedAt === null).sort((a, b) => b.progress - a.progress).slice(0, 3),
@@ -389,11 +495,69 @@ export function AwardsPanel() {
   return (
     <Panel title={st("awards_title")} description={st("awards_desc", { earned: earned.length, total: book.all.length })}>
       {earned.length ? (
-        <div className="-mx-1 flex flex-wrap gap-x-1 gap-y-4">
-          {earned.map((award) => (
-            <AwardTile key={award.id} award={award} />
-          ))}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={onDragStart}
+          onDragCancel={() => {
+            setDraggingId(null);
+            releaseClick();
+          }}
+          onDragEnd={onDragEnd}
+          accessibility={{
+            screenReaderInstructions: { draggable: st("awards_drag_keys") },
+            announcements: {
+              onDragStart({ active }) {
+                const award = earned.find((entry) => entry.id === active.id);
+                return st("awards_drag_start", { name: award ? awardTitle(award, st) : "" });
+              },
+              onDragOver({ active, over }) {
+                const award = earned.find((entry) => entry.id === active.id);
+                const index = over ? earned.findIndex((entry) => entry.id === over.id) : -1;
+                return st("awards_drag_over", {
+                  name: award ? awardTitle(award, st) : "",
+                  position: index >= 0 ? index + 1 : earned.length,
+                  total: earned.length,
+                });
+              },
+              onDragEnd({ active, over }) {
+                const award = earned.find((entry) => entry.id === active.id);
+                const index = over ? earned.findIndex((entry) => entry.id === over.id) : -1;
+                return st("awards_drag_end", {
+                  name: award ? awardTitle(award, st) : "",
+                  position: index >= 0 ? index + 1 : earned.length,
+                });
+              },
+              onDragCancel() {
+                return st("awards_drag_cancel");
+              },
+            },
+          }}
+        >
+          <SortableContext items={earned.map((award) => award.id)} strategy={rectSortingStrategy}>
+            <div className="-mx-1 flex flex-wrap gap-x-1 gap-y-4">
+              {earned.map((award) => (
+                <SortableAward
+                  key={award.id}
+                  award={award}
+                  enabled={canSort}
+                  onClickCapture={(event) => {
+                    if (!suppressClick.current) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                />
+              ))}
+            </div>
+          </SortableContext>
+          <DragOverlay dropAnimation={{ duration: 320, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }}>
+            {dragging ? (
+              <div className="cursor-grabbing">
+                <AwardTile award={dragging} lifted />
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       ) : (
         <p className="text-[12.5px] leading-relaxed text-muted">{st("awards_empty")}</p>
       )}

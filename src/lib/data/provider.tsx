@@ -147,7 +147,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [pages, setPages] = useState<Page[]>(() =>
     readLocalStore<Page[]>(`synapsys.cache.pages.${userKey}`, [])
   );
-  const [databases, setDatabases] = useState<AppDatabase[]>([]);
+  const [databases, setDatabases] = useState<AppDatabase[]>(() =>
+    readLocalStore<AppDatabase[]>(`synapsys.cache.databases.${userKey}`, [])
+  );
   const [flashcards, setFlashcards] = useState<Flashcard[]>(() =>
     readLocalStore<Flashcard[]>(`synapsys.cache.flashcards.${userKey}`, [])
   );
@@ -178,10 +180,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const cachedNbs = readLocalStore<Notebook[]>(`synapsys.cache.notebooks.${user.uid}`, []);
       const cachedPgs = readLocalStore<Page[]>(`synapsys.cache.pages.${user.uid}`, []);
       const cachedFcs = readLocalStore<Flashcard[]>(`synapsys.cache.flashcards.${user.uid}`, []);
+      const cachedDbs = readLocalStore<AppDatabase[]>(`synapsys.cache.databases.${user.uid}`, []);
       // Cache vazio nao apaga o que ja esta em tela.
       if (cachedNbs.length > 0) setNotebooks(cachedNbs);
       if (cachedPgs.length > 0) setPages(cachedPgs);
       if (cachedFcs.length > 0) setFlashcards(cachedFcs);
+      if (cachedDbs.length > 0) setDatabases(cachedDbs);
     }
   }
 
@@ -225,6 +229,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         adapter.subscribeDatabases((next) => {
           if (cancelled) return;
           setDatabases(next);
+          writeLocalStore(`synapsys.cache.databases.${userKey}`, () => next);
         }),
         adapter.subscribeFlashcards((next) => {
           if (cancelled) return;

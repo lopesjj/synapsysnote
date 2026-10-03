@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { usePathname } from "@/lib/i18n/navigation";
-import { isStudyPath, useStudyUi } from "@/lib/study/ui-store";
+import { hydrateStudyUiSync, isStudyPath, useStudyUi } from "@/lib/study/ui-store";
 import { FocusEngine, FocusOverlay, TimerTitle } from "./focus-timer";
 import { LogSessionDialog } from "./log-session-dialog";
 import { Scratchpad } from "./scratchpad";
@@ -17,7 +17,10 @@ function ModuleTracker() {
     url.searchParams.delete("entry");
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
   }, [pathname]);
-  useEffect(() => {
+  useLayoutEffect(() => {
+    hydrateStudyUiSync();
+  }, []);
+  useLayoutEffect(() => {
     if (!pathname?.startsWith("/home") || pathname === "/home") return;
     const store = useStudyUi.getState();
     const next = isStudyPath(pathname) ? "study" : "notes";

@@ -1,15 +1,19 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
+  type DraggableAttributes,
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -67,6 +71,7 @@ import {
   weekdayOf,
 } from "@/lib/study/dates";
 import { projectSchedule, roundProgress, type LapState, type PlannedBlock, type RoundProgress } from "@/lib/study/cycle";
+import { subjectTone } from "@/lib/study/defaults";
 import {
   deleteAgendaEntry,
   dropAgendaDay,
@@ -112,6 +117,22 @@ interface WeekTotals {
   done: number;
   planned: number;
   available: number;
+}
+
+function dragListeners(listeners: ReturnType<typeof useSortable>["listeners"]) {
+  if (!listeners) return {};
+  const rest = { ...listeners };
+  delete rest.onPointerDown;
+  return rest;
+}
+
+function reorderSubset<T>(source: T[], idOf: (item: T) => string, nextIds: string[]): T[] {
+  const rank = new Map(nextIds.map((id, index) => [id, index]));
+  const present = source.filter((item) => rank.has(idOf(item)));
+  if (present.length < 2) return source;
+  const sorted = [...present].sort((a, b) => (rank.get(idOf(a)) ?? 0) - (rank.get(idOf(b)) ?? 0));
+  let cursor = 0;
+  return source.map((item) => (rank.has(idOf(item)) ? sorted[cursor++] : item));
 }
 
 function tint(color: string, amount: number) {
@@ -384,27 +405,25 @@ function ScheduleBody() {
 
         {planCycle?.items.length && progress ? <CycleBand cycle={planCycle} progress={progress} week={week} /> : <SetupBand onSetup={openWizard} />}
 
-        <div className="@container">
-          <div className="grid grid-cols-1 gap-5 @6xl:grid-cols-[minmax(0,1fr)_21rem]">
-            <CalendarSheet
-              view={view}
-              title={title}
-              days={days}
-              byDay={byDay}
-              month={startOfMonth(anchor)}
-              onShift={shift}
-              onToday={() => setAnchor(today)}
-              onOpenDay={(day) => {
-                setAnchor(day);
-                useStudyUi.getState().setScheduleView("week");
-              }}
-              onOpenTask={openTask}
-              onOpenReminder={openReminder}
-            />
-            <div className="grid min-w-0 content-start gap-5 @3xl:grid-cols-2 @6xl:grid-cols-1">
-              <TasksPanel onOpen={openTask} />
-              {planCycle && progress ? <CycleSequence cycle={planCycle} progress={progress} onReconfigure={openWizard} /> : null}
-            </div>
+        <div className="@container space-y-5">
+          <CalendarSheet
+            view={view}
+            title={title}
+            days={days}
+            byDay={byDay}
+            month={startOfMonth(anchor)}
+            onShift={shift}
+            onToday={() => setAnchor(today)}
+            onOpenDay={(day) => {
+              setAnchor(day);
+              useStudyUi.getState().setScheduleView("week");
+            }}
+            onOpenTask={openTask}
+            onOpenReminder={openReminder}
+          />
+          <div className={cn("grid min-w-0 content-start gap-5", planCycle && progress && "lg:grid-cols-2")}>
+            <TasksPanel onOpen={openTask} />
+            {planCycle && progress ? <CycleSequence cycle={planCycle} progress={progress} onReconfigure={openWizard} /> : null}
           </div>
         </div>
 
@@ -463,7 +482,7 @@ function CycleBand({ cycle, progress, week }: { cycle: StudyCycle; progress: Rou
                 </h2>
                 <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] tabular-nums text-muted">
                   <span className="inline-flex items-center gap-1.5">
-                    <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: subject?.color ?? "var(--text-faint)" }} />
+                    <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: subject?.color ? subjectTone(subject.color) : "var(--text-faint)" }} />
                     {duration(current.minutes * 60)}
                   </span>
                   <span aria-hidden className="text-faint">·</span>
@@ -554,7 +573,7 @@ export function CycleWheel({
                   cy={size / 2}
                   r={radius}
                   fill="none"
-                  stroke={strokeFor(subject?.color ?? "var(--text-faint)", state)}
+                  stroke={strokeFor(subject?.color ? subjectTone(subject.color) : "var(--text-faint)", state)}
                   strokeWidth={compact ? thickness : state === "current" ? thickness + 7 : hover === index ? thickness + 3 : thickness}
                   strokeDasharray={`${dash} ${circumference - dash}`}
                   strokeDashoffset={-offset}
@@ -835,28 +854,32 @@ function DayColumn({
         {empty ? (
           <p className="py-0.5 text-[11.5px] text-faint @3xl:px-1.5">{planCycle && !data?.capacity ? st("day_free") : ""}</p>
         ) : (
-          <ul className="space-y-1.5">
+          <div className="space-y-1.5">
             {data?.exam ? (
-              <li className="flex items-center gap-1.5 rounded-[8px] bg-[color-mix(in_oklab,var(--band-low)_12%,transparent)] px-2 py-1 text-[11.5px] font-semibold text-[var(--band-low)]">
-                <Flag className="size-3.5 shrink-0" />
-                <span className="truncate">{st("reminder_kind_exam")}</span>
-              </li>
+              <ul>
+                <li className="flex items-center gap-1.5 rounded-[8px] bg-[color-mix(in_oklab,var(--band-low)_12%,transparent)] px-2 py-1 text-[11.5px] font-semibold text-[var(--band-low)]">
+                  <Flag className="size-3.5 shrink-0" />
+                  <span className="truncate">{st("reminder_kind_exam")}</span>
+                </li>
+              </ul>
             ) : null}
-            {blocks.map((block) => (
-              <DisciplineItem key={block.key} block={block} day={day} />
-            ))}
-            {reviews.map(({ review, late }) => (
-              <ReviewItem key={review.id} review={review} late={late} />
-            ))}
-            {tasks.map((task) => (
-              <li key={task.id}>
-                <TaskLine task={task} onOpen={onOpenTask} dense />
-              </li>
-            ))}
-            {reminders.map((reminder) => (
-              <ReminderItem key={reminder.id} reminder={reminder} onOpen={onOpenReminder} />
-            ))}
-          </ul>
+            <DayDisciplines blocks={blocks} day={day} />
+            {reviews.length || tasks.length || reminders.length ? (
+              <ul className="space-y-1.5">
+                {reviews.map(({ review, late }) => (
+                  <ReviewItem key={review.id} review={review} late={late} />
+                ))}
+                {tasks.map((task) => (
+                  <li key={task.id}>
+                    <TaskLine task={task} onOpen={onOpenTask} dense />
+                  </li>
+                ))}
+                {reminders.map((reminder) => (
+                  <ReminderItem key={reminder.id} reminder={reminder} onOpen={onOpenReminder} />
+                ))}
+              </ul>
+            ) : null}
+          </div>
         )}
         <DayAddMenu
           day={day}
@@ -904,14 +927,216 @@ function DayMeter({ data, className }: { data?: DayData; className?: string }) {
   );
 }
 
-function DisciplineItem({ block, day }: { block: PlannedBlock; day: DayKey }) {
+function DayDisciplines({ blocks, day }: { blocks: PlannedBlock[]; day: DayKey }) {
+  const settled = blocks.filter((block) => block.completion);
+  const live = blocks.filter((block) => !block.completion);
+  return (
+    <>
+      {settled.length ? (
+        <ul className="space-y-1.5">
+          {settled.map((block) => (
+            <DisciplineItem key={block.key} block={block} day={day} />
+          ))}
+        </ul>
+      ) : null}
+      {live.length > 1 ? (
+        <SortableDisciplines blocks={live} day={day} />
+      ) : live.length ? (
+        <ul className="space-y-1.5">
+          {live.map((block) => (
+            <DisciplineItem key={block.key} block={block} day={day} />
+          ))}
+        </ul>
+      ) : null}
+    </>
+  );
+}
+
+function SortableDisciplines({ blocks, day }: { blocks: PlannedBlock[]; day: DayKey }) {
+  const { st } = useStudyT();
+  const { planCycle, subjectById, actions } = useStudy();
+  const [override, setOverride] = useState<string[] | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const suppressClick = useRef(false);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+  const liveKey = blocks.map((block) => block.key).join("\0");
+  const byKey = useMemo(() => new Map(blocks.map((block) => [block.key, block])), [blocks]);
+  const shown = useMemo(() => {
+    if (!override) return blocks;
+    const next = override.map((key) => byKey.get(key)).filter((block): block is PlannedBlock => Boolean(block));
+    return next.length === blocks.length ? next : blocks;
+  }, [blocks, byKey, override]);
+
+  useEffect(() => {
+    if (!override) return;
+    const current = new Set(liveKey ? liveKey.split("\0") : []);
+    const aligned = override.length === current.size && override.every((key) => current.has(key));
+    if (!aligned || override.join("\0") === liveKey) setOverride(null);
+  }, [liveKey, override]);
+
+  const releaseClick = () => {
+    window.setTimeout(() => {
+      suppressClick.current = false;
+    }, 0);
+  };
+  const nameOf = (block: PlannedBlock | undefined) => {
+    if (!block) return "";
+    return subjectById(block.subjectId)?.name || st("untitled_subject");
+  };
+  const onDragStart = (event: DragStartEvent) => {
+    suppressClick.current = true;
+    setDraggingId(String(event.active.id));
+  };
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setDraggingId(null);
+    releaseClick();
+    const planId = planCycle?.planId;
+    if (!over || active.id === over.id || !planId) return;
+    const ids = shown.map((block) => block.key);
+    const from = ids.indexOf(String(active.id));
+    const to = ids.indexOf(String(over.id));
+    if (from < 0 || to < 0) return;
+    const moving = shown[from];
+    const target = shown[to];
+    if (!moving || !target || moving.fixed !== target.fixed) return;
+    const next = arrayMove(shown, from, to);
+    const nextKeys = next.map((block) => block.key);
+    setOverride(nextKeys);
+    const orderedIds = next.filter((block) => block.fixed === moving.fixed).map((block) => block.itemId);
+    const save = moving.fixed
+      ? actions.editAgenda(planId, (agenda) => reorderSubset(agenda, (entry) => entry.id, orderedIds))
+      : actions.editCycleItems(planId, (items) => reorderSubset(items, (item) => item.id, orderedIds));
+    void save.catch(() => {
+      setOverride((current) => (current?.join("\0") === nextKeys.join("\0") ? null : current));
+      toast.error(st("error_generic"));
+    });
+  };
+  const dragging = shown.find((block) => block.key === draggingId) ?? null;
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      modifiers={[restrictToVerticalAxis]}
+      onDragStart={onDragStart}
+      onDragCancel={() => {
+        setDraggingId(null);
+        releaseClick();
+      }}
+      onDragEnd={onDragEnd}
+      accessibility={{
+        screenReaderInstructions: { draggable: st("schedule_drag_keys") },
+        announcements: {
+          onDragStart({ active }) {
+            return st("schedule_drag_start", { name: nameOf(shown.find((block) => block.key === active.id)) });
+          },
+          onDragOver({ active, over }) {
+            const index = over ? shown.findIndex((block) => block.key === over.id) : -1;
+            return st("schedule_drag_over", {
+              name: nameOf(shown.find((block) => block.key === active.id)),
+              position: index >= 0 ? index + 1 : shown.length,
+              total: shown.length,
+            });
+          },
+          onDragEnd({ active, over }) {
+            const index = over ? shown.findIndex((block) => block.key === over.id) : -1;
+            return st("schedule_drag_end", {
+              name: nameOf(shown.find((block) => block.key === active.id)),
+              position: index >= 0 ? index + 1 : shown.length,
+            });
+          },
+          onDragCancel() {
+            return st("schedule_drag_cancel");
+          },
+        },
+      }}
+    >
+      <SortableContext items={shown.map((block) => block.key)} strategy={verticalListSortingStrategy}>
+        <ul className="space-y-1.5">
+          {shown.map((block) => (
+            <SortableDiscipline
+              key={block.key}
+              block={block}
+              day={day}
+              onClickCapture={(event) => {
+                if (!suppressClick.current) return;
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+            />
+          ))}
+        </ul>
+      </SortableContext>
+      <DragOverlay dropAnimation={{ duration: 320, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }}>
+        {dragging ? (
+          <div className="cursor-grabbing">
+            <DisciplineItem block={dragging} day={day} lifted />
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
+  );
+}
+
+function SortableDiscipline({
+  block,
+  day,
+  onClickCapture,
+}: {
+  block: PlannedBlock;
+  day: DayKey;
+  onClickCapture: (event: MouseEvent<HTMLButtonElement>) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.key });
+  return (
+    <DisciplineItem
+      block={block}
+      day={day}
+      drag={{
+        setNodeRef,
+        style: {
+          transform: CSS.Transform.toString(transform),
+          transition: isDragging ? undefined : transition || "transform 320ms cubic-bezier(0.16, 1, 0.3, 1)",
+        },
+        attributes,
+        listeners,
+        isDragging,
+        onClickCapture,
+      }}
+    />
+  );
+}
+
+function DisciplineItem({
+  block,
+  day,
+  drag,
+  lifted,
+}: {
+  block: PlannedBlock;
+  day: DayKey;
+  drag?: {
+    setNodeRef: (node: HTMLElement | null) => void;
+    style: CSSProperties;
+    attributes: DraggableAttributes;
+    listeners: ReturnType<typeof useSortable>["listeners"];
+    isDragging: boolean;
+    onClickCapture: (event: MouseEvent<HTMLButtonElement>) => void;
+  };
+  lifted?: boolean;
+}) {
   const { st, locale, duration } = useStudyT();
   const { subjectById, topicById, planCycle, actions, today } = useStudy();
   const startFocus = useStartFocus();
   const commands = useScheduleCommands();
   const { summary } = useAgendaLabels();
   const subject = subjectById(block.subjectId);
-  const color = subject?.color ?? "var(--text-faint)";
+  const color = subject?.color ? subjectTone(subject.color) : "var(--text-faint)";
   const name = subject?.name ?? st("untitled_subject");
   const planned = block.status === "planned";
   const missed = block.status === "missed";
@@ -921,6 +1146,11 @@ function DisciplineItem({ block, day }: { block: PlannedBlock; day: DayKey }) {
   const topicText = (entry?.topicId ? topicById(block.subjectId, entry.topicId)?.name : null) ?? (entry?.note || null);
   const planId = planCycle?.planId;
   const shortDate = formatDay(day, locale, { day: "numeric", month: "short" });
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuGuard = useRef({ block: false, moved: false });
+  useEffect(() => {
+    if (drag?.isDragging) setMenuOpen(false);
+  }, [drag?.isDragging]);
 
   const run = async (task: () => Promise<void>, message: string) => {
     try {
@@ -945,45 +1175,107 @@ function DisciplineItem({ block, day }: { block: PlannedBlock; day: DayKey }) {
         ? st("next_up_reason_cycle", { n: block.sequence + 1, total: planCycle.items.length })
         : duration(block.minutes * 60);
 
+  const cardClass = cn(
+    "flex w-full min-w-0 gap-2 rounded-[9px] border py-1.5 pl-1.5 pr-2 text-left outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--accent)] data-[state=open]:ring-2 data-[state=open]:ring-[var(--accent-soft)]",
+    (skipped || missed) && "border-dashed",
+    drag && "cursor-grab touch-manipulation active:cursor-grabbing",
+    drag?.isDragging && "scale-[0.98] border-dashed opacity-35 shadow-none",
+    lifted && "cursor-grabbing shadow-[var(--shadow-float)] ring-1 ring-[var(--border)] motion-safe:-rotate-2 motion-safe:scale-[1.04]"
+  );
+  const cardStyle: CSSProperties = drag?.isDragging
+    ? { backgroundColor: "color-mix(in oklab, var(--surface-2) 80%, transparent)", borderColor: "var(--border-strong)" }
+    : {
+        backgroundColor: planned ? tint(color, 9) : "transparent",
+        borderColor: block.isNext ? "var(--accent)" : planned ? `color-mix(in oklab, ${color} 24%, var(--border))` : "var(--border)",
+      };
+  const face = (
+    <span className={cn("contents", drag?.isDragging && "invisible")}>
+      <span aria-hidden className="w-[3px] shrink-0 self-stretch rounded-full" style={{ backgroundColor: color, opacity: planned ? 1 : 0.4 }} />
+      <span className="min-w-0 flex-1">
+        <span
+          className={cn(
+            "line-clamp-2 text-[12px] font-medium leading-snug [overflow-wrap:anywhere]",
+            planned ? "text-ink" : skipped || missed ? "text-faint" : "text-muted",
+            block.status === "done" && "line-through decoration-[1.5px] decoration-[color-mix(in_oklab,currentColor_70%,transparent)]"
+          )}
+        >
+          {name}
+        </span>
+        {topicText ? <span className="mt-0.5 block truncate text-[10.5px] text-faint">{topicText}</span> : null}
+        <span className="mt-0.5 flex flex-wrap items-center gap-x-1 text-[11px] tabular-nums text-muted">
+          {block.status === "done" ? <Check className="size-3 text-[var(--accent)]" strokeWidth={2.5} aria-hidden /> : null}
+          {skipped ? <SkipForward className="size-3 text-faint" aria-hidden /> : null}
+          <span className={cn((skipped || missed) && "text-faint")}>{duration(block.minutes * 60)}</span>
+          {block.fixed ? <Pin className="size-3 text-faint" aria-label={st("agenda_fixed")} /> : null}
+          {block.isNext ? <span className="ml-auto font-medium text-[var(--accent)]">{st("cycle_state_current")}</span> : null}
+          {missed ? <span className="ml-auto text-[var(--band-low)]">{st("agenda_missed")}</span> : null}
+        </span>
+      </span>
+    </span>
+  );
+
+  if (lifted) {
+    return (
+      <div className={cardClass} style={cardStyle}>
+        {face}
+      </div>
+    );
+  }
+
   return (
-    <li>
-      <Menu>
+    <li
+      ref={drag?.setNodeRef}
+      style={drag?.style}
+      className={cn(drag?.isDragging && "relative z-10")}
+    >
+      <Menu
+        open={drag ? menuOpen && !drag.isDragging : undefined}
+        onOpenChange={(next) => {
+          if (menuGuard.current.block) return;
+          setMenuOpen(next);
+        }}
+      >
         <MenuTrigger asChild>
           <button
             type="button"
-            className={cn(
-              "flex w-full min-w-0 gap-2 rounded-[9px] border py-1.5 pl-1.5 pr-2 text-left outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--accent)] data-[state=open]:ring-2 data-[state=open]:ring-[var(--accent-soft)]",
-              (skipped || missed) && "border-dashed"
-            )}
-            style={{
-              backgroundColor: planned ? tint(color, 9) : "transparent",
-              borderColor: block.isNext ? "var(--accent)" : planned ? `color-mix(in oklab, ${color} 24%, var(--border))` : "var(--border)",
+            className={cardClass}
+            style={cardStyle}
+            title={drag ? st("schedule_drag_item", { name }) : undefined}
+            {...drag?.attributes}
+            {...dragListeners(drag?.listeners)}
+            onPointerDown={(event) => {
+              drag?.listeners?.onPointerDown?.(event);
+              if (!drag || event.button !== 0) return;
+              menuGuard.current = { block: true, moved: false };
+              const originX = event.clientX;
+              const originY = event.clientY;
+              const move = (pointer: PointerEvent) => {
+                const dx = pointer.clientX - originX;
+                const dy = pointer.clientY - originY;
+                if (dx * dx + dy * dy > 64) menuGuard.current.moved = true;
+              };
+              const up = () => {
+                const moved = menuGuard.current.moved;
+                menuGuard.current.block = false;
+                menuGuard.current.moved = false;
+                window.removeEventListener("pointermove", move);
+                window.removeEventListener("pointerup", up);
+                if (!moved) setMenuOpen((open) => !open);
+              };
+              window.addEventListener("pointermove", move);
+              window.addEventListener("pointerup", up);
             }}
+            onClick={(event) => {
+              if (!drag) return;
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onClickCapture={drag?.onClickCapture}
           >
-            <span aria-hidden className="w-[3px] shrink-0 self-stretch rounded-full" style={{ backgroundColor: color, opacity: planned ? 1 : 0.4 }} />
-            <span className="min-w-0 flex-1">
-              <span
-                className={cn(
-                  "line-clamp-2 text-[12px] font-medium leading-snug [overflow-wrap:anywhere]",
-                  planned ? "text-ink" : skipped || missed ? "text-faint" : "text-muted",
-                  block.status === "done" && "line-through decoration-[1.5px] decoration-[color-mix(in_oklab,currentColor_70%,transparent)]"
-                )}
-              >
-                {name}
-              </span>
-              {topicText ? <span className="mt-0.5 block truncate text-[10.5px] text-faint">{topicText}</span> : null}
-              <span className="mt-0.5 flex flex-wrap items-center gap-x-1 text-[11px] tabular-nums text-muted">
-                {block.status === "done" ? <Check className="size-3 text-[var(--accent)]" strokeWidth={2.5} aria-hidden /> : null}
-                {skipped ? <SkipForward className="size-3 text-faint" aria-hidden /> : null}
-                <span className={cn((skipped || missed) && "text-faint")}>{duration(block.minutes * 60)}</span>
-                {block.fixed ? <Pin className="size-3 text-faint" aria-label={st("agenda_fixed")} /> : null}
-                {block.isNext ? <span className="ml-auto font-medium text-[var(--accent)]">{st("cycle_state_current")}</span> : null}
-                {missed ? <span className="ml-auto text-[var(--band-low)]">{st("agenda_missed")}</span> : null}
-              </span>
-            </span>
+            {face}
           </button>
         </MenuTrigger>
-        <MenuContent align="start" className="w-64">
+        {drag?.isDragging ? null : <MenuContent align="start" className="w-64">
           <div className="px-2 pb-2 pt-1.5">
             <p className="line-clamp-2 text-[12.5px] font-medium leading-snug text-ink">{name}</p>
             <p className="mt-0.5 text-[11.5px] text-muted">{context}</p>
@@ -1061,7 +1353,7 @@ function DisciplineItem({ block, day }: { block: PlannedBlock; day: DayKey }) {
               </MenuItem>
             </>
           )}
-        </MenuContent>
+        </MenuContent>}
       </Menu>
     </li>
   );
@@ -1094,7 +1386,7 @@ function ReviewItem({ review, late }: { review: StudyReview; late: boolean }) {
             title={topic ? `${name} · ${topic.name}` : name}
             className="flex w-full min-w-0 items-center gap-2 rounded-[7px] px-1.5 py-1 text-left text-[11.5px] transition hover:bg-[var(--surface-hover)] data-[state=open]:bg-[var(--surface-hover)]"
           >
-            <span aria-hidden className="size-[9px] shrink-0 rounded-full border-2" style={{ borderColor: subject?.color ?? "var(--text-faint)" }} />
+            <span aria-hidden className="size-[9px] shrink-0 rounded-full border-2" style={{ borderColor: subject?.color ? subjectTone(subject.color) : "var(--text-faint)" }} />
             <span className={cn("min-w-0 flex-1 truncate", late ? "text-[var(--band-low)]" : "text-muted")}>{name}</span>
             <span className="shrink-0 tabular-nums text-faint">+{review.intervalDays}</span>
           </button>
@@ -1235,7 +1527,7 @@ function MonthCell({
               key={block.key}
               className={cn("flex min-w-0 items-center gap-1.5 text-[11px] text-muted", block.status !== "planned" && "opacity-50")}
             >
-              <span aria-hidden className="h-2.5 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subject?.color }} />
+              <span aria-hidden className="h-2.5 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subject?.color ? subjectTone(subject.color) : undefined }} />
               <span className="truncate">{subject?.name}</span>
             </span>
           );
@@ -1246,13 +1538,16 @@ function MonthCell({
       </span>
       {blocks.length ? (
         <span aria-hidden className="flex flex-wrap gap-[3px] @2xl:hidden">
-          {blocks.slice(0, 6).map((block) => (
-            <span
-              key={block.key}
-              className={cn("size-1.5 rounded-full", block.status !== "planned" && "opacity-40")}
-              style={{ backgroundColor: subjectById(block.subjectId)?.color }}
-            />
-          ))}
+          {blocks.slice(0, 6).map((block) => {
+            const tone = subjectById(block.subjectId)?.color;
+            return (
+              <span
+                key={block.key}
+                className={cn("size-1.5 rounded-full", block.status !== "planned" && "opacity-40")}
+                style={{ backgroundColor: tone ? subjectTone(tone) : undefined }}
+              />
+            );
+          })}
         </span>
       ) : null}
       {reviews || tasks ? (
@@ -1546,7 +1841,7 @@ function CycleSequence({
               const name = subject?.name ?? st("untitled_subject");
               return (
                 <li key={entry.id} className="group/fixed flex items-center gap-2 rounded-[10px] py-1 pl-2 pr-1 transition hover:bg-[var(--surface-hover)]">
-                  <span aria-hidden className="h-7 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subject?.color ?? "var(--border-strong)" }} />
+                  <span aria-hidden className="h-7 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subject?.color ? subjectTone(subject.color) : "var(--border-strong)" }} />
                   <button type="button" onClick={() => commands.editAgenda(entry, null)} className="min-w-0 flex-1 text-left">
                     <span className="block truncate text-[12.5px] text-ink">{name}</span>
                     <span className="block truncate text-[11px] text-faint">{summary(entry)}</span>
@@ -1663,7 +1958,7 @@ function SequenceRow({
       <span
         aria-hidden
         className="h-4 w-[3px] shrink-0 rounded-full"
-        style={{ backgroundColor: subject?.color ?? "var(--border-strong)", opacity: finished ? 0.4 : 1 }}
+        style={{ backgroundColor: subject?.color ? subjectTone(subject.color) : "var(--border-strong)", opacity: finished ? 0.4 : 1 }}
       />
       <span
         title={state === "done" ? st("cycle_state_done") : state === "skipped" ? st("cycle_state_skipped") : name}

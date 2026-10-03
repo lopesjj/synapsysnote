@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/primitives";
+import { DateField } from "@/components/ui/pickers";
 import { cn } from "@/lib/utils";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
@@ -32,10 +33,10 @@ function toNumber(value: string): number {
   return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
-function toRow(draft: RowDraft): MockExamRow {
+function toRow(draft: RowDraft, style: MockExamStyle): MockExamRow {
   const total = Math.round(toNumber(draft.total));
   const correct = Math.min(total, Math.round(toNumber(draft.correct)));
-  const wrong = Math.min(total - correct, Math.round(toNumber(draft.wrong)));
+  const wrong = style === "multiple" ? Math.max(0, total - correct) : Math.min(Math.max(0, total - correct), Math.round(toNumber(draft.wrong)));
   return {
     id: draft.id,
     subjectId: draft.subjectId,
@@ -44,7 +45,7 @@ function toRow(draft: RowDraft): MockExamRow {
     total,
     correct,
     wrong,
-    blank: Math.max(0, total - correct - wrong),
+    blank: style === "multiple" ? 0 : Math.max(0, total - correct - wrong),
   };
 }
 
@@ -89,7 +90,8 @@ function ExamForm({ exam, onClose }: { exam: MockExam | null; onClose: () => voi
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const parsed = useMemo(() => rows.map(toRow), [rows]);
+  const parsed = useMemo(() => rows.map((row) => toRow(row, style)), [rows, style]);
+  const trueFalse = style === "truefalse";
   const totals = examTotals({ rows: parsed, style });
 
   const update = (id: string, patch: Partial<RowDraft>) => setRows((list) => list.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -100,7 +102,11 @@ function ExamForm({ exam, onClose }: { exam: MockExam | null; onClose: () => voi
       setError(st("exam_name_required"));
       return;
     }
-    const invalid = rows.find((row) => toNumber(row.correct) + toNumber(row.wrong) > toNumber(row.total));
+    const invalid = rows.find((row) => {
+      const total = toNumber(row.total);
+      const correct = toNumber(row.correct);
+      return trueFalse ? correct + toNumber(row.wrong) > total : correct > total;
+    });
     if (invalid) {
       setError(st("exam_invalid_row", { name: invalid.name || st("exam_row_name_placeholder") }));
       return;
@@ -155,7 +161,7 @@ function ExamForm({ exam, onClose }: { exam: MockExam | null; onClose: () => voi
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-[9.5rem_minmax(0,1fr)_minmax(0,0.8fr)_7.5rem]">
           <Field label={st("exam_date")} htmlFor="exam-day">
-            <Input id="exam-day" type="date" value={day} max={today} onChange={(event) => event.target.value && setDay(event.target.value)} />
+            <DateField id="exam-day" value={day} max={today} onChange={(next) => next && setDay(next)} />
           </Field>
           <Field label={st("exam_name")} htmlFor="exam-name">
             <Input id="exam-name" dir={textDir} value={name} onChange={(event) => setName(event.target.value)} placeholder={st("exam_name_placeholder")} maxLength={160} />
@@ -182,7 +188,7 @@ function ExamForm({ exam, onClose }: { exam: MockExam | null; onClose: () => voi
         </div>
 
         <div className="overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border)]">
-          <table className="w-full min-w-[40rem] text-[12.5px]">
+          <table className={cn("w-full text-[12.5px]", trueFalse ? "min-w-[40rem]" : "min-w-[34rem]")}>
             <thead>
               <tr className="border-b border-[var(--border)] bg-[var(--surface-2)]/50 text-[11px] text-faint">
                 <th className="px-3 py-2 text-left font-medium">{st("col_subject")}</th>
@@ -190,7 +196,7 @@ function ExamForm({ exam, onClose }: { exam: MockExam | null; onClose: () => voi
                 <th className="w-20 px-1.5 py-2 font-medium">{st("col_total")}</th>
                 <th className="w-20 px-1.5 py-2 font-medium">{st("correct_label")}</th>
                 <th className="w-20 px-1.5 py-2 font-medium">{st("wrong_label")}</th>
-                <th className="w-20 px-1.5 py-2 font-medium">{st("blank_label")}</th>
+                {trueFalse ? <th className="w-20 px-1.5 py-2 font-medium">{st("blank_label")}</th> : null}
                 <th className="w-16 px-1.5 py-2 font-medium">%</th>
                 <th className="w-8" />
               </tr>
@@ -198,7 +204,7 @@ function ExamForm({ exam, onClose }: { exam: MockExam | null; onClose: () => voi
             <tbody>
               {rows.map((row, index) => {
                 const value = parsed[index];
-                const over = toNumber(row.correct) + toNumber(row.wrong) > toNumber(row.total);
+                const over = trueFalse ? toNumber(row.correct) + toNumber(row.wrong) > toNumber(row.total) : toNumber(row.correct) > toNumber(row.total);
                 const subject = subjectById(row.subjectId);
                 const rowPercent = value.total
                   ? (style === "truefalse" ? value.correct - value.wrong : value.correct) / value.total
@@ -230,9 +236,13 @@ function ExamForm({ exam, onClose }: { exam: MockExam | null; onClose: () => voi
                       <input aria-label={st("correct_label")} inputMode="numeric" value={row.correct} placeholder="0" onChange={(event) => update(row.id, { correct: event.target.value.replace(/[^\d]/g, "").slice(0, 4) })} className={cn(cellInput, over && "border-[var(--danger)]")} />
                     </td>
                     <td className="px-1.5 py-1.5">
-                      <input aria-label={st("wrong_label")} inputMode="numeric" value={row.wrong} placeholder="0" onChange={(event) => update(row.id, { wrong: event.target.value.replace(/[^\d]/g, "").slice(0, 4) })} className={cn(cellInput, over && "border-[var(--danger)]")} />
+                      {trueFalse ? (
+                        <input aria-label={st("wrong_label")} inputMode="numeric" value={row.wrong} placeholder="0" onChange={(event) => update(row.id, { wrong: event.target.value.replace(/[^\d]/g, "").slice(0, 4) })} className={cn(cellInput, over && "border-[var(--danger)]")} />
+                      ) : (
+                        <input aria-label={st("wrong_label")} aria-readonly value={String(value.wrong)} readOnly tabIndex={-1} className={cn(cellInput, "pointer-events-none cursor-default select-none text-muted")} />
+                      )}
                     </td>
-                    <td className="px-1.5 py-1.5 text-center tabular-nums text-muted">{value.blank}</td>
+                    {trueFalse ? <td className="px-1.5 py-1.5 text-center tabular-nums text-muted">{value.blank}</td> : null}
                     <td className="px-1.5 py-1.5 text-center tabular-nums text-muted">{percentLabel(rowPercent)}</td>
                     <td className="pr-2">
                       <button
@@ -255,7 +265,7 @@ function ExamForm({ exam, onClose }: { exam: MockExam | null; onClose: () => voi
                 <td className="px-1.5 py-2 text-center tabular-nums text-ink">{totals.total}</td>
                 <td className="px-1.5 py-2 text-center tabular-nums text-[var(--band-high)]">{totals.correct}</td>
                 <td className="px-1.5 py-2 text-center tabular-nums text-[var(--band-low)]">{totals.wrong}</td>
-                <td className="px-1.5 py-2 text-center tabular-nums text-muted">{totals.blank}</td>
+                {trueFalse ? <td className="px-1.5 py-2 text-center tabular-nums text-muted">{totals.blank}</td> : null}
                 <td className="px-1.5 py-2 text-center tabular-nums text-ink">{percentLabel(totals.percent)}</td>
                 <td />
               </tr>

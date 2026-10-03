@@ -19,7 +19,8 @@ import { toast } from "sonner";
 import { useRouter } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { DialogShell } from "@/components/ui/dialog";
-import { Checkbox, Input, Tooltip } from "@/components/ui/primitives";
+import { Checkbox, Tooltip } from "@/components/ui/primitives";
+import { DateField } from "@/components/ui/pickers";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/data/provider";
@@ -41,6 +42,7 @@ import {
   type ReviewTab,
 } from "@/lib/study/review-queue";
 import type { DayKey, StudyReview, StudySession } from "@/types/study";
+import { subjectTone } from "@/lib/study/defaults";
 import { CategoryChip, FocusButton, MaterialLink, Segmented, SelectFilter, StudyGate, StudyHeader, StudyPage } from "../ui";
 
 const PANEL = "rounded-xl border border-[var(--border)] bg-[var(--surface)]";
@@ -463,13 +465,7 @@ function RescheduleDialog({
             {st("agenda_more_options")}
           </span>
           <div className="mt-1.5">
-            <Input
-              type="date"
-              value={targetDay}
-              min={today}
-              onChange={(e) => setTargetDay(e.target.value)}
-              className="h-9 w-full rounded-[var(--radius-sm)] bg-[var(--surface)] text-[13px] text-ink"
-            />
+            <DateField value={targetDay} min={today} onChange={(next) => next && setTargetDay(next)} />
           </div>
         </div>
 
@@ -544,7 +540,7 @@ function ReviewRow({
       />
 
       <div className="col-start-2 row-start-1 flex min-w-0 items-center gap-3">
-        <span aria-hidden className="h-9 w-[3.5px] shrink-0 rounded-full" style={{ backgroundColor: subject?.color ?? "var(--border-strong)" }} />
+        <span aria-hidden className="h-9 w-[3.5px] shrink-0 rounded-full" style={{ backgroundColor: subject?.color ? subjectTone(subject.color) : "var(--border-strong)" }} />
         <div className="min-w-0">
           <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-ink [overflow-wrap:anywhere] @3xl/list:line-clamp-1">{name}</p>
           <p className={cn("truncate text-[12px] leading-snug", topic ? "text-muted" : "text-faint")}>{topic?.name ?? st("no_topic")}</p>

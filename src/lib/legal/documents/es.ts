@@ -184,7 +184,7 @@ const es: LegalBundle = {
               rows: [
                 ["Registro", "Nombre, correo electrónico, teléfono y foto de perfil", "Tú o tu cuenta de Google"],
                 ["Credenciales", "Contraseña, guardada solo de forma cifrada por el proveedor de autenticación", "Tú"],
-                ["Contenido", "Notas, páginas, cuadernos, flashcards, adjuntos, audios y vídeos; en el módulo de estudios, objetivos, materias y temas (con los enlaces externos que añadas), sesiones (con el material y las notas vinculadas), preguntas, repasos, simulacros, cronogramas, recordatorios, notas rápidas y los logros guardados en la vitrina (con la fecha en que se guardaron)", "Tú y las importaciones que hagas"],
+                ["Contenido", "Notas, páginas, cuadernos, flashcards, adjuntos, audios y vídeos; en el módulo de estudios, objetivos, materias y temas (con los enlaces externos que añadas), sesiones (con el material y las notas vinculadas), preguntas, repasos, simulacros, cronogramas, recordatorios, bloc de notas y los logros guardados en la vitrina (con la fecha en que se guardaron y el orden en que los organizas)", "Tú y las importaciones que hagas"],
                 ["Integraciones", "Tokens de acceso a Notion, Evernote y Google Docs", "El servicio conectado, con tu autorización"],
                 ["Preferencias", "Idioma, tema, accesibilidad y diseño", "Tú"],
                 ["Datos técnicos", "IP, país aproximado, navegador, dispositivo, fecha y hora de acceso", "Recogida automática"],
@@ -408,7 +408,7 @@ const es: LegalBundle = {
               "un contador de intentos de inicio de sesión, usado para mostrar el reCAPTCHA cuando es necesario;",
               "preferencias de interfaz, como tema, barra lateral, cuadernos recientes e idiomas de transcripción y flashcards;",
               "el estado del módulo de estudios, como el temporizador de enfoque en marcha, la última pantalla abierta y las capas visibles de la Planificación;",
-              "una copia de tus notas y cuadernos, para que la aplicación se abra más rápido y siga funcionando sin internet.",
+              "una copia de tus notas, cuadernos y datos de estudio, para que la aplicación se abra más rápido y siga funcionando sin internet.",
             ],
           },
           "Esta información se queda solo en tu navegador y se borra cuando cierras sesión, cuando la sesión expira o cuando eliminas los datos del sitio.",

@@ -30,7 +30,7 @@ import { useWorkspace } from "@/lib/data/provider";
 import { childrenOf } from "@/lib/data/notebook-tree";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
-import { SUBJECT_COLORS, MAX_TOPICS_PER_SUBJECT } from "@/lib/study/defaults";
+import { SUBJECT_COLORS, MAX_TOPICS_PER_SUBJECT, subjectTone } from "@/lib/study/defaults";
 import { topicListFromText } from "@/lib/study/syllabus";
 import type { StudySubject, StudyTopic } from "@/types/study";
 import type { Notebook } from "@/types/models";
@@ -247,7 +247,7 @@ function SubjectForm({ planId, subject, onClose }: { planId: string; subject: St
                     "size-5 rounded-full transition",
                     color === swatch ? "ring-2 ring-[var(--text)] ring-offset-2 ring-offset-[var(--surface)]" : "hover:scale-110"
                   )}
-                  style={{ backgroundColor: swatch }}
+                  style={{ backgroundColor: subjectTone(swatch) }}
                 />
               ))}
             </div>

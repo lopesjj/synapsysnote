@@ -28,10 +28,10 @@ export function DialogShell({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onOpenChange(false);
-      }
+      if (e.key !== "Escape") return;
+      if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
+      e.preventDefault();
+      onOpenChange(false);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);

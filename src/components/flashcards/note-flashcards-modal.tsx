@@ -659,7 +659,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
   const selectedGeneratedCount = generated.filter((c) => c.selected).length;
   const activeLanguage = getLanguageDefinition(targetLanguage);
 
-  const tabs: { id: TabMode; label: string; icon: React.ReactNode }[] = [
+  const tabs: { id: TabMode; label: string; icon: React.ReactNode | null }[] = [
     {
       id: "list",
       label: t("cards_count", { count: noteCards.length }),
@@ -670,7 +670,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
       label: editingId ? t("edit_card") : t("create_manually"),
       icon: editingId ? <Pencil className="size-3.5" /> : <Plus className="size-3.5" />,
     },
-    { id: "ai", label: t("generate_ai"), icon: <SparkIcon className="size-3.5" /> },
+    { id: "ai", label: t("generate_ai"), icon: <SparkIcon className="size-[1.125rem]" /> },
   ];
 
   return (
@@ -679,43 +679,45 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      className="max-w-3xl"
+      className="max-h-[min(92dvh,52rem)] w-full max-w-3xl"
       closeAriaLabel={t("close")}
     >
       <DialogHeader
+        className="pe-12"
         title={t("note_flashcards")}
         description={
-          <span className="flex items-center gap-1.5">
-            <span className="truncate">{page.title || t("untitled")}</span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 truncate">{page.title || t("untitled")}</span>
             <span aria-hidden="true">&middot;</span>
             <span className="font-medium text-ink tabular-nums">
               {t("cards_count", { count: noteCards.length })}
             </span>
           </span>
         }
-        icon={<FlashcardsIcon className="size-[18px]" />}
-        iconClassName="border-[var(--accent)]/25 bg-[var(--accent-soft)] text-[var(--accent)] shadow-none"
       />
 
-      <div className="shrink-0 border-b border-[var(--border)] px-5 pt-3">
-        <div className="flex gap-1">
+      <div className="shrink-0 border-b border-[var(--border)] px-3 pt-3 sm:px-5">
+        <div className="-mx-3 flex gap-0.5 overflow-x-auto px-3 [scrollbar-width:none] sm:mx-0 sm:gap-1 sm:px-0 [&::-webkit-scrollbar]:hidden" role="tablist">
           {tabs.map((item) => (
             <button
               key={item.id}
               type="button"
+              role="tab"
               onClick={() => {
                 if (item.id !== "editor") resetEditor();
                 setTab(item.id);
               }}
-              aria-current={tab === item.id}
+              aria-selected={tab === item.id}
               className={cn(
-                "relative flex items-center gap-1.5 px-3 pb-2.5 pt-1 text-[12.5px] font-medium transition-colors",
+                "relative flex shrink-0 items-center gap-1.5 px-2.5 pb-2.5 pt-1 text-[12px] font-medium transition-colors sm:px-3 sm:text-[12.5px]",
                 tab === item.id ? "text-ink" : "text-muted hover:text-ink"
               )}
             >
-              <span className={tab === item.id ? "text-[var(--accent)]" : undefined}>
-                {item.icon}
-              </span>
+              {item.icon ? (
+                <span className={tab === item.id ? "text-[var(--accent)]" : undefined}>
+                  {item.icon}
+                </span>
+              ) : null}
               <span className="truncate">{item.label}</span>
               {tab === item.id ? (
                 <span className="absolute inset-x-1 -bottom-px h-[2px] rounded-full bg-[var(--accent)]" />
@@ -725,36 +727,32 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
         </div>
       </div>
 
-      <div className="min-h-[22rem] flex-1 overflow-y-auto px-5 py-4">
+      <div className="@container/cards min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5">
         {tab === "list" ? (
           noteCards.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-14 text-center">
-              <span className="mb-4 flex size-12 items-center justify-center rounded-[var(--radius-lg)] border border-[var(--accent)]/20 bg-[var(--accent-soft)] text-[var(--accent)]">
-                <FlashcardsIcon className="size-6" />
-              </span>
+            <div className="flex flex-col items-center justify-center px-2 py-14 text-center">
               <h3 className="text-[14.5px] font-semibold text-ink">{t("no_flashcards")}</h3>
               <p className="mt-1.5 max-w-sm text-[12.5px] leading-relaxed text-muted">
                 {t("no_note_flashcards_desc")}
               </p>
-              <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-                <Button variant="secondary" size="sm" onClick={() => setTab("editor")}>
+              <div className="mt-5 flex w-full max-w-xs flex-col items-stretch justify-center gap-2 min-[380px]:max-w-none min-[380px]:flex-row min-[380px]:flex-wrap min-[380px]:items-center">
+                <Button variant="secondary" size="sm" className="h-10 sm:h-7" onClick={() => setTab("editor")}>
                   <Plus className="size-3.5" />
                   {t("create_manually")}
                 </Button>
                 <Button
                   variant="primary"
                   size="sm"
-                  className="font-semibold"
+                  className="h-10 font-semibold sm:h-7"
                   onClick={() => setTab("ai")}
                 >
-                  <SparkIcon className="size-3.5" />
                   {t("generate_ai")}
                 </Button>
               </div>
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-col gap-2 @min-[36rem]/cards:flex-row @min-[36rem]/cards:flex-wrap @min-[36rem]/cards:items-center @min-[36rem]/cards:justify-between">
                 <button
                   type="button"
                   disabled={visibleCards.length === 0}
@@ -774,12 +772,12 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                   {allRevealed ? t("hide_all_answers") : t("show_all_answers")}
                 </button>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex w-full flex-wrap items-center gap-1.5 @min-[36rem]/cards:w-auto">
                   <Button
                     variant="ghost"
                     size="icon-sm"
                     className={cn(
-                      "text-faint hover:text-ink",
+                      "size-10 text-faint hover:text-ink sm:size-7",
                       searchOpen && "bg-[var(--surface-2)] text-ink"
                     )}
                     onClick={toggleSearch}
@@ -792,7 +790,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="gap-1.5 text-faint hover:text-[var(--danger)]"
+                    className="h-10 gap-1.5 text-faint hover:text-[var(--danger)] sm:h-7"
                     onClick={() => setConfirmDeleteAll(true)}
                   >
                     <Trash2 className="size-3.5" />
@@ -801,7 +799,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                   <Button
                     variant="primary"
                     size="sm"
-                    className="gap-1.5 font-semibold"
+                    className="ms-auto h-10 flex-1 gap-1.5 font-semibold @min-[36rem]/cards:ms-0 @min-[36rem]/cards:h-7 @min-[36rem]/cards:flex-none"
                     onClick={() => setStudying(true)}
                   >
                     <StudyIcon className="size-3" />
@@ -812,7 +810,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
 
               {searchOpen ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="relative min-w-[12rem] flex-1">
+                  <div className="relative min-w-0 w-full flex-1 sm:min-w-[12rem]">
                     <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
                     <input
                       type="text"
@@ -827,7 +825,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                       }}
                       placeholder={t("search_cards_placeholder")}
                       aria-label={t("search_cards")}
-                      className="h-8 w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] pl-8 pr-7 text-[12.5px] text-ink placeholder:text-faint transition focus:border-[var(--accent)] focus:bg-[var(--surface)] focus:outline-none"
+                      className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] pl-8 pr-7 text-base text-ink placeholder:text-faint transition focus:border-[var(--accent)] focus:bg-[var(--surface)] focus:outline-none sm:h-8 sm:text-[12.5px]"
                     />
                     {cardQuery ? (
                       <button
@@ -907,7 +905,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                             aria-expanded={isOpen}
                             className="min-w-0 flex-1 text-left"
                           >
-                            <span className="block text-[13px] font-medium leading-snug text-ink">
+                            <span className="block break-words text-[13px] font-medium leading-snug text-ink">
                               {card.front.trim() || t("untitled")}
                             </span>
                             <span
@@ -938,7 +936,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              className="text-faint hover:text-ink"
+                              className="size-10 text-faint hover:text-ink sm:size-7"
                               onClick={() => startEdit(card)}
                               aria-label={t("edit_card")}
                               title={t("edit_card")}
@@ -948,7 +946,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              className="text-faint hover:text-[var(--danger)]"
+                              className="size-10 text-faint hover:text-[var(--danger)] sm:size-7"
                               onClick={() => setConfirmDeleteId(card.id)}
                               aria-label={t("delete_card")}
                               title={t("delete_card")}
@@ -960,7 +958,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
 
                         {isOpen ? (
                           <div className="border-t border-[var(--border)] bg-[var(--surface-2)]/50 px-3 py-2.5 pl-11">
-                            <p className="text-[12.5px] leading-relaxed text-ink">{card.back}</p>
+                            <p className="break-words text-[12.5px] leading-relaxed text-ink">{card.back}</p>
                             {card.hint ? (
                               <span className="mt-1.5 inline-flex items-center gap-1.5 text-[11.5px] text-muted">
                                 <HintIcon className="size-3 text-[var(--warning)]" />
@@ -1002,7 +1000,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
         ) : null}
 
         {tab === "editor" ? (
-          <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-2">
+          <div className="grid grid-cols-1 items-start gap-5 @min-[40rem]/cards:grid-cols-2">
             <div className="space-y-3.5">
               <div>
                 <label
@@ -1017,7 +1015,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                   onChange={(e) => setFront(e.target.value)}
                   placeholder={t("card_front_placeholder")}
                   rows={3}
-                  className="text-[13px]"
+                  className="text-base sm:text-[13px]"
                 />
               </div>
 
@@ -1034,7 +1032,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                   onChange={(e) => setBack(e.target.value)}
                   placeholder={t("card_back_placeholder")}
                   rows={3}
-                  className="text-[13px]"
+                  className="text-base sm:text-[13px]"
                 />
               </div>
 
@@ -1050,6 +1048,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                   value={hint}
                   onChange={(e) => setHint(e.target.value)}
                   placeholder={t("card_hint_placeholder")}
+                  className="h-10 text-base sm:h-9 sm:text-[13px]"
                 />
               </div>
 
@@ -1057,7 +1056,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                 <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.07em] text-faint">
                   {t("add_image")}
                 </span>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 @min-[22rem]/cards:grid-cols-2">
                   {(["front", "back"] as CardSide[]).map((side) => (
                     <ImageSlot
                       key={side}
@@ -1073,11 +1072,11 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex flex-col gap-2 pt-1 @min-[22rem]/cards:flex-row @min-[22rem]/cards:items-center">
                 <Button
                   variant="primary"
                   size="md"
-                  className="flex-1 gap-2 font-semibold"
+                  className="h-10 w-full gap-2 font-semibold @min-[22rem]/cards:h-9 @min-[22rem]/cards:w-auto @min-[22rem]/cards:flex-1"
                   onClick={() => void handleSubmit()}
                   disabled={saving || !canSave}
                 >
@@ -1094,6 +1093,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                   <Button
                     variant="secondary"
                     size="md"
+                    className="h-10 w-full @min-[22rem]/cards:h-9 @min-[22rem]/cards:w-auto"
                     onClick={() => {
                       resetEditor();
                       setTab("list");
@@ -1141,7 +1141,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                 </span>
 
                 <span className="flex flex-1 flex-col items-center justify-center gap-2.5 py-3 text-center">
-                  <span className="text-[15px] font-medium leading-snug text-ink">
+                  <span className="break-words text-[15px] font-medium leading-snug text-ink">
                     {previewFlipped
                       ? back || t("card_preview_answer")
                       : front || t("card_preview_question")}
@@ -1173,18 +1173,13 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
         {tab === "ai" ? (
           <div className="space-y-5">
             <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-2)]/45 p-4">
-              <div className="flex items-start gap-3">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--accent)]/25 bg-[var(--accent-soft)] text-[var(--accent)]">
-                  <SparkIcon className="size-4" />
-                </span>
-                <div className="min-w-0">
-                  <h3 className="text-[13px] font-semibold tracking-[-0.01em] text-ink">
-                    {t("ai_generation_title")}
-                  </h3>
-                  <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
-                    {t("ai_generation_desc")}
-                  </p>
-                </div>
+              <div className="min-w-0">
+                <h3 className="text-[13px] font-semibold tracking-[-0.01em] text-ink">
+                  {t("ai_generation_title")}
+                </h3>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
+                  {t("ai_generation_desc")}
+                </p>
               </div>
 
               {noteCards.length > 0 ? (
@@ -1238,7 +1233,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                         onClick={() => setAiCount(option)}
                         aria-pressed={aiCount === option}
                         className={cn(
-                          "h-9 rounded-[var(--radius-sm)] border text-[12.5px] font-semibold transition tabular-nums",
+                          "flex h-10 min-w-0 items-center justify-center rounded-[var(--radius-sm)] border px-0.5 text-center text-[11px] font-semibold leading-tight whitespace-normal transition tabular-nums sm:h-9 sm:text-[12.5px]",
                           aiCount === option
                             ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-contrast)] shadow-[0_1px_2px_rgba(0,0,0,0.14)]"
                             : "border-[var(--border)] bg-[var(--surface-2)] text-muted hover:border-[var(--border-strong)] hover:text-ink"
@@ -1250,7 +1245,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 @min-[36rem]/cards:grid-cols-2">
                   <div>
                     <span className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.07em] text-faint">
                       <Globe className="size-3.5" />
@@ -1260,7 +1255,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                       <MenuTrigger asChild>
                         <button
                           type="button"
-                          className="flex h-9 w-full items-center justify-between gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-ink outline-none transition hover:border-[var(--border-strong)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)]"
+                          className="flex h-10 w-full items-center justify-between gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 text-base text-ink outline-none transition hover:border-[var(--border-strong)] focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)] sm:h-9 sm:text-[13px]"
                         >
                           <span className="truncate font-medium">{activeLanguage.nativeName}</span>
                           <ChevronDown className="size-3.5 shrink-0 text-faint" />
@@ -1295,6 +1290,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                       value={aiFocus}
                       onChange={(e) => setAiFocus(e.target.value)}
                       placeholder={t("ai_focus_placeholder")}
+                      className="h-10 text-base sm:h-9 sm:text-[13px]"
                     />
                   </div>
                 </div>
@@ -1328,11 +1324,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                   onClick={() => void handleGenerate()}
                   disabled={aiLoading}
                 >
-                  {aiLoading ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <SparkIcon className="size-4" />
-                  )}
+                  {aiLoading ? <Loader2 className="size-4 animate-spin" /> : null}
                   <span>{aiLoading ? t("generating_cards") : t("generate_cards_button")}</span>
                 </Button>
               </div>
@@ -1364,7 +1356,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                   </div>
                 </div>
 
-                <ul className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+                <ul className="space-y-1.5 @min-[40rem]/cards:max-h-72 @min-[40rem]/cards:overflow-y-auto @min-[40rem]/cards:pr-1">
                   {generated.map((card, idx) => (
                     <li key={`${idx}-${card.front.slice(0, 24)}`}>
                       <button
@@ -1395,10 +1387,10 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                           {card.selected ? <Check className="size-3" strokeWidth={3} /> : null}
                         </span>
                         <span className="min-w-0 flex-1 space-y-1">
-                          <span className="block text-[12.5px] font-medium leading-snug text-ink">
+                          <span className="block break-words text-[12.5px] font-medium leading-snug text-ink">
                             {card.front}
                           </span>
-                          <span className="block text-[12px] leading-snug text-muted">
+                          <span className="block break-words text-[12px] leading-snug text-muted">
                             {card.back}
                           </span>
                           {card.hint ? (
@@ -1468,7 +1460,7 @@ function ImageSlot({
             onClick={onClear}
             aria-label={removeLabel}
             title={removeLabel}
-            className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white transition hover:bg-black/90"
+            className="absolute right-1 top-1 flex size-8 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black/90"
           >
             <X className="size-3" />
           </button>
@@ -1505,13 +1497,13 @@ function DetectedChip({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] px-2.5 py-1 text-[11.5px]",
+        "inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--border)] px-2.5 py-1 text-[11.5px]",
         value > 0 ? "bg-[var(--surface)]" : "bg-transparent opacity-55"
       )}
     >
       <span className="shrink-0 text-faint">{icon}</span>
       <span className="font-semibold text-ink tabular-nums">{value}</span>
-      <span className="text-muted">{label}</span>
+      <span className="min-w-0 break-words text-muted">{label}</span>
     </span>
   );
 }

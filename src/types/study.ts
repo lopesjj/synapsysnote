@@ -230,6 +230,7 @@ export interface StudySettings {
   pomodoroLong: number;
   pomodoroRounds: number;
   claimedAwards: Record<string, number>;
+  awardOrder: Record<string, string[]>;
   updatedAt: number;
 }
 

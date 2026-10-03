@@ -18,7 +18,7 @@ export const LEGAL_ENTITY = {
 };
 
 export const LEGAL_VERSION = "1.1";
-export const LEGAL_UPDATED_AT = "2026-09-29";
+export const LEGAL_UPDATED_AT = "2026-10-02";
 
 /**
  * Prazos citados nos documentos. Os que existem no código vêm de lá, e o

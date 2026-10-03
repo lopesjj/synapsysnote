@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Check, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "@/lib/i18n/navigation";
@@ -20,6 +20,7 @@ import { ClockInput } from "./clock-input";
 import { Combobox, type ComboOption } from "./combobox";
 import { StudySelect, SubjectDot, useCategoryLabel } from "./ui";
 import { MaterialInput } from "./material-input";
+import { DateField, TimeField } from "@/components/ui/pickers";
 
 type Choice = { kind: "existing"; id: string } | { kind: "new"; name: string } | null;
 
@@ -192,9 +193,9 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
   const [scheduleReviews, setScheduleReviews] = useState(editing ? ownReviews.length > 0 : !review && settings.autoReviews);
   const [countCycle, setCountCycle] = useState(editing ? Boolean(editing.cycleItemId) : true);
   const [saveAnother, setSaveAnother] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dateRef = useRef<HTMLInputElement>(null);
 
   const subjectOptions: ComboOption[] = useMemo(
     () =>
@@ -236,7 +237,7 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
     setDayMode(mode);
     if (mode === "today") setDay(today);
     else if (mode === "yesterday") setDay(addDays(today, -1));
-    else window.setTimeout(() => dateRef.current?.showPicker?.(), 30);
+    else setDateOpen(true);
   };
 
   const reset = (savedSubjectId: string) => {
@@ -392,13 +393,13 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
             ))}
           </div>
           {dayMode === "other" ? (
-            <input
-              ref={dateRef}
-              type="date"
+            <DateField
               value={day}
               max={today}
-              onChange={(event) => event.target.value && setDay(event.target.value)}
-              className="h-8 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2 text-[12.5px] text-ink outline-none focus:border-[var(--accent)]"
+              open={dateOpen}
+              onOpenChange={setDateOpen}
+              onChange={(next) => next && setDay(next)}
+              className="h-8 w-auto px-2 text-[12.5px]"
               aria-label={st("other_day")}
             />
           ) : (
@@ -412,13 +413,7 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
             <label htmlFor="log-start" className="text-[11.5px] font-medium text-muted">
               {st("logform_start")}
             </label>
-            <input
-              id="log-start"
-              type="time"
-              value={start}
-              onChange={(event) => setStart(event.target.value)}
-              className="h-8 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2 text-[12.5px] tabular-nums text-ink outline-none focus:border-[var(--accent)]"
-            />
+            <TimeField id="log-start" value={start} onChange={setStart} clearable aria-label={st("logform_start")} />
           </div>
         </div>
 

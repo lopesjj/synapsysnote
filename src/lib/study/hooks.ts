@@ -5,10 +5,11 @@ import { useWorkspace } from "@/lib/data/provider";
 import { useStudy } from "./provider";
 import { materialNoteId, type MaterialTarget } from "./material";
 import {
+  absorbExamQuestions,
   aggregate,
   consistencyInfo,
   coverageOf,
-  groupSessions,
+  groupWithExams,
   secondsByDay,
   streakInfo,
   studiedDays,
@@ -40,7 +41,7 @@ export function useMaterialNote() {
 export function usePlanMetrics() {
   const { planSessions, planExams, planSubjects, planReviews, settings, today } = useStudy();
   return useMemo(() => {
-    const total = aggregate(planSessions);
+    const total = absorbExamQuestions(aggregate(planSessions), planExams, planSubjects);
     const examSeconds = planExams.reduce((sum, exam) => sum + exam.durationSec, 0);
     const days = studiedDays(planSessions, planExams);
     const seconds = total.seconds + examSeconds;
@@ -49,7 +50,11 @@ export function usePlanMetrics() {
     const weekStart = startOfWeek(today, settings.weekStartsOn);
     const weekEnd = addDays(weekStart, 6);
     const weekSessions = planSessions.filter((session) => session.day >= weekStart && session.day <= weekEnd);
-    const week = aggregate(weekSessions);
+    const week = absorbExamQuestions(
+      aggregate(weekSessions),
+      planExams.filter((exam) => exam.day >= weekStart && exam.day <= weekEnd),
+      planSubjects
+    );
     const weekExamSeconds = planExams
       .filter((exam) => exam.day >= weekStart && exam.day <= weekEnd)
       .reduce((sum, exam) => sum + exam.durationSec, 0);
@@ -62,7 +67,7 @@ export function usePlanMetrics() {
       streak: streakInfo(days, today, settings.studyWeekdays),
       consistency: consistencyInfo(days, today, settings.studyWeekdays),
       coverage: coverageOf(planSubjects),
-      bySubject: groupSessions(planSessions, (session) => session.subjectId),
+      bySubject: groupWithExams(planSessions, planExams, planSubjects),
       byDay: secondsByDay(planSessions, planExams),
       dueReviews,
       overdueReviews: dueReviews.filter((review) => review.dueDay < today),
@@ -99,35 +104,56 @@ export function useAwardBook(): AwardBook | null {
 
 export function useIconUploads() {
   const { adapter } = useWorkspace();
-  const uploads = useRef<Set<string>>(new Set());
+  const pending = useRef<Map<string, File>>(new Map());
+
+  const drop = useCallback((url: string) => {
+    const file = pending.current.get(url);
+    if (!file) return;
+    URL.revokeObjectURL(url);
+    pending.current.delete(url);
+  }, []);
 
   const upload = useCallback(
     async (file: File) => {
-      const url = await adapter.uploadWorkspaceIcon(file);
-      uploads.current.add(url);
+      for (const url of pending.current.keys()) drop(url);
+      const url = URL.createObjectURL(file);
+      pending.current.set(url, file);
       return url;
+    },
+    [drop]
+  );
+
+  const materialize = useCallback(
+    async (kept: string | null | undefined) => {
+      const file = kept ? pending.current.get(kept) : undefined;
+      if (!file) return kept ?? null;
+      return adapter.uploadWorkspaceIcon(file);
     },
     [adapter]
   );
 
-  const settle = useCallback(
-    (kept: string | null | undefined) => {
-      const discarded = [...uploads.current].filter((url) => url !== kept);
-      uploads.current.clear();
-      if (discarded.length) void adapter.quarantineMedia(discarded);
+  const discard = useCallback(() => {
+    for (const url of [...pending.current.keys()]) drop(url);
+  }, [drop]);
+
+  const releaseStored = useCallback(
+    async (url: string | null | undefined) => {
+      if (!url || !/^https?:\/\//.test(url)) return;
+      try {
+        await adapter.deleteMedia([url]);
+      } catch {}
     },
     [adapter]
   );
 
   useEffect(() => {
-    const pending = uploads.current;
+    const files = pending.current;
     return () => {
-      const leftover = [...pending];
-      pending.clear();
-      if (leftover.length) void adapter.quarantineMedia(leftover);
+      for (const url of files.keys()) URL.revokeObjectURL(url);
+      files.clear();
     };
-  }, [adapter]);
+  }, []);
 
-  return { upload, settle };
+  return { upload, materialize, discard, releaseStored };
 }
 

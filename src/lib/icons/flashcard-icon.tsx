@@ -103,11 +103,12 @@ export function LearningIcon({ className, strokeWidth }: IconProps) {
   );
 }
 
-export function SparkIcon({ className, strokeWidth }: IconProps) {
+export function SparkIcon({ className }: IconProps) {
+  const gem = "M0-1Q.4-.4 1 0Q.4.4 0 1Q-.4.4-1 0Q-.4-.4 0-1Z";
   return (
-    <svg {...base(strokeWidth)} className={className}>
-      <path d="M12 2.75c.55 3.9 2.6 5.95 6.5 6.5-3.9.55-5.95 2.6-6.5 6.5-.55-3.9-2.6-5.95-6.5-6.5 3.9-.55 5.95-2.6 6.5-6.5z" />
-      <path d="M18.15 16.1c.28 1.55 1.1 2.35 2.6 2.6-1.5.25-2.32 1.05-2.6 2.55-.27-1.5-1.1-2.3-2.6-2.55 1.5-.25 2.33-1.05 2.6-2.6z" opacity="0.6" />
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+      <path d={gem} transform="translate(9.7 15.55) scale(5.35)" />
+      <path d={gem} transform="translate(15.9 6.9) scale(3.75)" />
     </svg>
   );
 }

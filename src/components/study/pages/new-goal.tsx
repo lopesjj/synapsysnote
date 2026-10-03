@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, ClipboardPaste, FileSpreadsheet, ImagePlus, Loader2, NotebookTabs, X } from "lucide-react";
+import { ChevronRight, ClipboardPaste, FileSpreadsheet, ImagePlus, Loader2, NotebookTabs, X } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useRouter } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { useStudyUi } from "@/lib/study/ui-store";
 import { subjectsFromCsv } from "@/lib/study/syllabus";
 import type { Notebook, Page } from "@/types/models";
 import { DraftEditor, PasteImporter, draftsFromParsed, useDraftMerge } from "../syllabus-import";
+import { DateField } from "@/components/ui/pickers";
 import { GoalMark, StudyPage, StudySelect } from "../ui";
 
 type Panel = "paste" | "notebook" | "csv";
@@ -44,15 +45,20 @@ export function draftsFromNotebook(root: Notebook, notebooks: Notebook[], pages:
 }
 
 const FIELD =
-  "-mx-2 h-9 w-[calc(100%+1rem)] rounded-[8px] bg-transparent px-2 text-[13.5px] text-ink outline-none transition placeholder:text-faint hover:bg-[var(--surface-hover)] focus:bg-[var(--surface)] focus:shadow-[0_0_0_1px_var(--accent),0_0_0_4px_var(--accent-soft)]";
+  "h-10 w-full min-w-0 rounded-[8px] bg-transparent px-2 text-[13.5px] text-ink outline-none transition placeholder:text-faint hover:bg-[var(--surface-hover)] focus:bg-[var(--surface)] focus:shadow-[0_0_0_1px_var(--accent),0_0_0_4px_var(--accent-soft)] sm:h-9";
 
 function Property({ label, htmlFor, children, top }: { label: string; htmlFor: string; children: ReactNode; top?: boolean }) {
   return (
-    <div className={cn("grid gap-1 py-2 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-4", top ? "sm:items-start" : "sm:items-center")}>
-      <label htmlFor={htmlFor} className={cn("text-[12.5px] text-muted", top && "sm:pt-2")}>
+    <div
+      className={cn(
+        "grid gap-1 py-2.5 sm:grid-cols-[minmax(7.5rem,11.5rem)_minmax(0,1fr)] sm:gap-x-4 lg:grid-cols-[minmax(9rem,14rem)_minmax(0,1fr)]",
+        top ? "sm:items-start" : "sm:items-center"
+      )}
+    >
+      <label htmlFor={htmlFor} className={cn("text-[12.5px] leading-snug text-muted", top && "sm:pt-2")}>
         {label}
       </label>
-      <div className="min-w-0 px-2 sm:px-0">{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
@@ -133,22 +139,29 @@ export function NewGoalPage() {
       const cleaned = drafts
         .map((draft) => ({ ...draft, name: draft.name.trim(), topics: draft.topics.filter((topic) => topic.name.trim()) }))
         .filter((draft) => draft.name);
-      const id = await actions.createPlanWithSubjects(
-        {
-          name: name.trim(),
-          institution: institution.trim(),
-          role: role.trim(),
-          examDate: examDate || null,
-          icon,
-          notes,
-          weeklyGoalMinutes: Math.round(Math.max(0, Number(hours.replace(",", ".")) || 0) * 60),
-          weeklyGoalQuestions: Math.max(0, Math.round(Number(questions) || 0)),
-        },
-        cleaned
-      );
-      icons.settle(icon);
-      toast.success(st("goal_created"));
-      router.push(`/home/study/goals/${id}`);
+      const staged = icon?.startsWith("blob:") ?? false;
+      const storedIcon = await icons.materialize(icon);
+      try {
+        const id = await actions.createPlanWithSubjects(
+          {
+            name: name.trim(),
+            institution: institution.trim(),
+            role: role.trim(),
+            examDate: examDate || null,
+            icon: storedIcon,
+            notes,
+            weeklyGoalMinutes: Math.round(Math.max(0, Number(hours.replace(",", ".")) || 0) * 60),
+            weeklyGoalQuestions: Math.max(0, Math.round(Number(questions) || 0)),
+          },
+          cleaned
+        );
+        icons.discard();
+        toast.success(st("goal_created"));
+        router.push(`/home/study/goals/${id}`);
+      } catch (error) {
+        if (staged) await icons.releaseStored(storedIcon);
+        throw error;
+      }
     } catch {
       toast.error(st("error_generic"));
       setSaving(false);
@@ -156,13 +169,14 @@ export function NewGoalPage() {
   };
 
   return (
-    <StudyPage className="max-w-3xl pb-0 xl:max-w-3xl 2xl:max-w-3xl">
-      <nav className="mb-8 flex items-center gap-1 text-[12.5px] text-muted">
-        <Link href="/home/study/goals" prefetch className="transition hover:text-ink">
+    <StudyPage className="flex min-h-0 min-w-0 max-w-3xl flex-col px-4 pb-0 pt-5 sm:px-5 sm:pt-7 md:min-h-full md:px-8 lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl">
+      <div className="md:flex-1">
+      <nav className="mb-6 flex min-w-0 items-center gap-1 text-[12.5px] text-muted sm:mb-8">
+        <Link href="/home/study/goals" prefetch className="shrink-0 transition hover:text-ink">
           {st("nav_goals")}
         </Link>
-        <ChevronRight className="size-3.5 text-faint" />
-        <span className="text-ink">{st("goal_form_new")}</span>
+        <ChevronRight className="size-3.5 shrink-0 text-faint rtl:rotate-180" />
+        <span className="min-w-0 truncate text-ink">{st("goal_form_new")}</span>
       </nav>
 
       <IconPickerMenu
@@ -208,7 +222,7 @@ export function NewGoalPage() {
         }}
         placeholder={st("goal_name_placeholder")}
         aria-invalid={nameError || undefined}
-        className="mt-4 block w-full resize-none bg-transparent text-[2rem] font-semibold leading-[1.15] tracking-[-0.03em] text-ink outline-none [field-sizing:content] placeholder:text-[var(--text-faint)] placeholder:opacity-60 sm:text-[2.5rem]"
+        className="mt-4 block w-full min-w-0 resize-none break-words bg-transparent text-[1.65rem] font-semibold leading-[1.2] tracking-[-0.03em] text-ink outline-none [field-sizing:content] placeholder:text-[var(--text-faint)] placeholder:opacity-60 min-[480px]:text-[2rem] lg:text-[2.35rem] xl:text-[2.5rem]"
       />
       {nameError ? <p className="mt-1 text-[12.5px] font-medium text-[var(--danger)]">{st("goal_name_required")}</p> : null}
 
@@ -236,7 +250,14 @@ export function NewGoalPage() {
           />
         </Property>
         <Property label={st("goal_exam_date")} htmlFor="new-goal-exam">
-          <input id="new-goal-exam" type="date" value={examDate} onChange={(event) => setExamDate(event.target.value)} className={cn(FIELD, "sm:w-52")} />
+          <DateField
+            id="new-goal-exam"
+            variant="ghost"
+            clearable
+            value={examDate}
+            onChange={setExamDate}
+            className="h-10 w-full max-w-full justify-start sm:h-9 sm:w-auto sm:max-w-56"
+          />
         </Property>
         <Property label={st("goal_weekly_hours")} htmlFor="new-goal-hours">
           <input
@@ -245,7 +266,7 @@ export function NewGoalPage() {
             value={hours}
             onChange={(event) => setHours(event.target.value.replace(/[^\d.,]/g, "").slice(0, 5))}
             placeholder="0"
-            className={cn(FIELD, "tabular-nums sm:w-32")}
+            className={cn(FIELD, "tabular-nums sm:max-w-32")}
           />
         </Property>
         <Property label={st("goal_weekly_questions")} htmlFor="new-goal-questions">
@@ -255,7 +276,7 @@ export function NewGoalPage() {
             value={questions}
             onChange={(event) => setQuestions(event.target.value.replace(/[^\d]/g, "").slice(0, 6))}
             placeholder="0"
-            className={cn(FIELD, "tabular-nums sm:w-32")}
+            className={cn(FIELD, "tabular-nums sm:max-w-32")}
           />
         </Property>
         <Property label={st("goal_notes")} htmlFor="new-goal-notes" top>
@@ -267,14 +288,14 @@ export function NewGoalPage() {
             maxLength={4000}
             onChange={(event) => setNotes(event.target.value)}
             placeholder={st("goal_notes_placeholder")}
-            className={cn(FIELD, "h-auto min-h-9 resize-none py-2 leading-relaxed [field-sizing:content]")}
+            className={cn(FIELD, "h-auto min-h-10 resize-none py-2 leading-relaxed [field-sizing:content] sm:min-h-9")}
           />
         </Property>
       </div>
 
-      <section className="mt-12" aria-labelledby="new-goal-structure">
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-          <h2 id="new-goal-structure" className="text-[19px] font-semibold tracking-[-0.02em] text-ink">
+      <section className="mt-10 sm:mt-12" aria-labelledby="new-goal-structure">
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+          <h2 id="new-goal-structure" className="text-[17px] font-semibold tracking-[-0.02em] text-ink sm:text-[19px]">
             {st("newgoal_structure")}
           </h2>
           {subjectsTotal ? (
@@ -282,8 +303,9 @@ export function NewGoalPage() {
           ) : null}
         </div>
 
-        <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-[12.5px] text-muted">{st("newgoal_fill_from")}</span>
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <span className="text-[12.5px] text-muted">{st("newgoal_fill_from")}</span>
+          <div className="flex flex-wrap gap-1.5">
           {sources.map((source) => {
             const active = panel === source.id;
             return (
@@ -293,26 +315,27 @@ export function NewGoalPage() {
                 aria-expanded={active}
                 onClick={() => setPanel(active ? null : source.id)}
                 className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium transition",
+                  "inline-flex h-10 max-w-full items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium transition sm:h-8",
                   active
                     ? "bg-[var(--text)] text-[var(--surface)]"
                     : "bg-[var(--surface)] text-muted shadow-[inset_0_0_0_1px_var(--border)] hover:text-ink hover:shadow-[inset_0_0_0_1px_var(--border-strong)]"
                 )}
               >
                 {source.icon}
-                {source.label}
+                <span className="truncate">{source.label}</span>
               </button>
             );
           })}
+          </div>
         </div>
 
         {panel ? (
-          <div className="relative mb-4 rounded-[18px] bg-[var(--surface-2)] p-4 pr-12 shadow-[inset_0_0_0_1px_var(--border)]">
+          <div className="relative mb-4 rounded-[18px] bg-[var(--surface-2)] p-3 pe-12 shadow-[inset_0_0_0_1px_var(--border)] sm:p-4 sm:pe-12">
             <button
               type="button"
               onClick={() => setPanel(null)}
               aria-label={st("close")}
-              className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-full text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink"
+              className="absolute end-3 top-3 flex size-8 items-center justify-center rounded-full text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink sm:size-7"
             >
               <X className="size-4" />
             </button>
@@ -331,7 +354,7 @@ export function NewGoalPage() {
                   <label htmlFor="new-goal-root" className="mb-1.5 block text-[12.5px] font-medium text-ink">
                     {st("notebook_pick")}
                   </label>
-                  <div className="max-w-sm">
+                  <div className="w-full max-w-sm">
                     <StudySelect
                       ariaLabel={st("notebook_pick")}
                       value={rootId}
@@ -374,15 +397,16 @@ export function NewGoalPage() {
 
         <DraftEditor drafts={drafts} onChange={setDrafts} />
       </section>
+      </div>
 
-      <div className="sticky bottom-0 z-10 -mx-5 mt-10 flex items-center justify-end gap-2 border-t border-[var(--border)] bg-[var(--canvas)]/85 px-5 py-3.5 backdrop-blur-md md:-mx-8 md:px-8">
-        <span className="mr-auto hidden text-[12.5px] tabular-nums text-muted sm:block">
+      <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-10 -mx-4 mt-8 flex flex-wrap items-center justify-end gap-2 border-t border-[var(--border)] bg-[var(--canvas)]/90 px-4 py-3 backdrop-blur-md sm:-mx-5 sm:px-5 md:bottom-0 md:-mx-8 md:mt-auto md:px-8 md:py-3.5">
+        <span className="me-auto hidden min-w-0 truncate text-[12.5px] tabular-nums text-muted sm:block">
           {subjectsTotal ? st("preview_summary", { subjects: subjectsTotal, topics: topicsTotal }) : null}
         </span>
-        <Button variant="ghost" onClick={() => router.push("/home/study/goals")}>
+        <Button variant="ghost" className="max-md:min-h-11" onClick={() => router.push("/home/study/goals")}>
           {st("cancel")}
         </Button>
-        <Button variant="primary" disabled={saving} onClick={() => void create()}>
+        <Button variant="primary" className="max-md:min-h-11" disabled={saving} onClick={() => void create()}>
           {saving ? <Loader2 className="animate-spin" /> : null}
           {saving ? st("creating") : st("create_goal_cta")}
         </Button>

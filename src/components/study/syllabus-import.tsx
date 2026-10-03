@@ -10,6 +10,7 @@ import { firebaseJson } from "@/lib/firebase/auth-headers";
 import { useWorkspace } from "@/lib/data/provider";
 import { useStudyT } from "@/lib/study/i18n";
 import { MAX_TOPIC_LENGTH } from "@/lib/study/defaults";
+import { SubjectDot } from "@/components/study/ui";
 import { linesFromText, mergeDrafts, parseSyllabus } from "@/lib/study/syllabus";
 import type { SubjectDraft } from "@/lib/study/provider";
 
@@ -122,7 +123,7 @@ export function DraftEditor({ drafts, onChange }: { drafts: SubjectDraft[]; onCh
               const expanded = open.has(index);
               return (
                 <li key={index}>
-                  <div className="group flex items-center gap-2 py-1.5 pl-2 pr-3">
+                  <div className="group flex min-w-0 items-center gap-1.5 py-1.5 ps-1.5 pe-2 sm:gap-2 sm:ps-2 sm:pe-3">
                     <button
                       type="button"
                       onClick={() => toggle(index)}
@@ -132,7 +133,7 @@ export function DraftEditor({ drafts, onChange }: { drafts: SubjectDraft[]; onCh
                     >
                       <ChevronRight className={cn("size-3.5 transition-transform duration-200", expanded && "rotate-90")} />
                     </button>
-                    <span className="size-2.5 shrink-0 rounded-full" style={{ background: draft.color ?? "var(--text-faint)" }} />
+                    <SubjectDot color={draft.color} />
                     <input
                       value={draft.name}
                       dir={textDir}
@@ -145,7 +146,7 @@ export function DraftEditor({ drafts, onChange }: { drafts: SubjectDraft[]; onCh
                     <button
                       type="button"
                       onClick={() => toggle(index)}
-                      className="shrink-0 text-[12px] tabular-nums text-faint transition hover:text-ink"
+                      className="max-w-[38%] shrink truncate text-[12px] tabular-nums text-faint transition hover:text-ink sm:max-w-[9rem]"
                     >
                       {st("topics_count", { count: draft.topics.length })}
                     </button>
@@ -159,9 +160,9 @@ export function DraftEditor({ drafts, onChange }: { drafts: SubjectDraft[]; onCh
                     </button>
                   </div>
                   {expanded ? (
-                    <div className="pb-2.5 pl-[3.35rem] pr-3">
+                    <div className="pb-2.5 pe-2 ps-8 sm:pe-3 sm:ps-[3.35rem]">
                       {draft.topics.length ? (
-                        <ul className="border-l border-[var(--border)] pl-3">
+                        <ul className="border-s border-[var(--border)] ps-3">
                           {draft.topics.map((topic, topicIndex) => (
                             <li key={topicIndex} className="group/topic flex items-center gap-2">
                               <input
@@ -196,7 +197,7 @@ export function DraftEditor({ drafts, onChange }: { drafts: SubjectDraft[]; onCh
                           ))}
                         </ul>
                       ) : null}
-                      <div className={cn(draft.topics.length && "pl-3")}>
+                      <div className={cn(draft.topics.length && "ps-3")}>
                         <AddLine
                           size="sm"
                           limit={MAX_TOPIC_LENGTH}

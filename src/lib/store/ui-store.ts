@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { ImportProvider } from "@/lib/import/parse-file";
@@ -278,14 +278,28 @@ export const useUiStore = create<UiState>()(
   )
 );
 
-export function useRehydrateUiStore(): void {
-  useEffect(() => {
-    void Promise.resolve(useUiStore.persist.rehydrate()).then(() => {
-      const store = useUiStore.getState();
-      if (store.sidebarWidth) {
-        store.setSidebarWidth(store.sidebarWidth);
+export function hydrateUiStoreSync(): void {
+  if (typeof window === "undefined" || useUiStore.persist.hasHydrated()) return;
+  try {
+    const raw = window.localStorage.getItem("synapsys.ui.v1");
+    if (raw) {
+      const parsed = JSON.parse(raw) as { state?: unknown; version?: number };
+      const options = useUiStore.persist.getOptions();
+      const migrated = options.migrate ? options.migrate(parsed.state, parsed.version ?? 0) : parsed.state;
+      if (migrated && typeof migrated === "object" && !(migrated instanceof Promise)) {
+        useUiStore.setState(migrated as Partial<UiState>);
       }
-    });
+    }
+  } catch {
+    return;
+  }
+  const store = useUiStore.getState();
+  if (store.sidebarWidth) store.setSidebarWidth(store.sidebarWidth);
+}
+
+export function useRehydrateUiStore(): void {
+  useLayoutEffect(() => {
+    hydrateUiStoreSync();
   }, []);
 }
 

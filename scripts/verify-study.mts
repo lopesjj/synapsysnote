@@ -4,12 +4,16 @@ import { STUDY_DICTIONARIES } from "../src/lib/study/i18n/dictionaries";
 import { SUPPORTED_LANGUAGES } from "../src/lib/i18n/languages";
 import { formatTranslation } from "../src/lib/i18n/translations";
 import {
+  absorbExamQuestions,
   accuracyOf,
   aggregate,
   consistencyInfo,
   coverageOf,
   dayStatus,
+  EXAM_OTHER_SUBJECT,
   examTotals,
+  groupWithExams,
+  resolveExamSubjectId,
   pagesPerHour,
   performanceBand,
   streakInfo,
@@ -184,6 +188,15 @@ assert.equal(consistency.planned, 5);
 assert.equal(consistency.studied, 5);
 assert.equal(consistency.ratio, 1);
 assert.equal(studiedDays([session({ id: "z", durationSec: 0, correct: 0, wrong: 0 })]).size, 0);
+assert.equal(studiedDays([session({ id: "short", durationSec: 14 * 60, correct: 20, wrong: 0 })]).size, 0);
+assert.equal(studiedDays([session({ id: "min", durationSec: 15 * 60, correct: 0, wrong: 0 })]).size, 1);
+assert.equal(
+  studiedDays([
+    session({ id: "a", day: "2026-09-21", durationSec: 8 * 60 }),
+    session({ id: "b", day: "2026-09-21", durationSec: 7 * 60 }),
+  ]).size,
+  1
+);
 
 const tf = examTotals({
   style: "truefalse",
@@ -197,6 +210,41 @@ assert.equal(tf.maxScore, 90);
 assert.equal(tf.blank, 15);
 const mc = examTotals({ style: "multiple", rows: [{ id: "r", subjectId: null, name: "A", weight: 1, total: 10, correct: 7, wrong: 3, blank: 0 }] });
 assert.equal(mc.percent, 0.7);
+const examSubjects = [
+  { id: "ing", name: "Inglês" },
+  { id: "dir", name: "Direito" },
+];
+const mixedExam = {
+  id: "e1",
+  planId: "p",
+  day: "2026-10-02" as const,
+  name: "Simulado",
+  style: "multiple" as const,
+  board: "",
+  durationSec: 3600,
+  comment: "",
+  createdAt: 0,
+  updatedAt: 0,
+  rows: [
+    { id: "a", subjectId: "ing", name: "Inglês", weight: 1, total: 50, correct: 40, wrong: 10, blank: 0 },
+    { id: "b", subjectId: null, name: "direito", weight: 1, total: 20, correct: 10, wrong: 5, blank: 5 },
+    { id: "c", subjectId: null, name: "testando", weight: 1, total: 150, correct: 100, wrong: 50, blank: 0 },
+    { id: "d", subjectId: null, name: "vazia", weight: 1, total: 10, correct: 0, wrong: 0, blank: 10 },
+  ],
+};
+assert.equal(resolveExamSubjectId(mixedExam.rows[0], examSubjects), "ing");
+assert.equal(resolveExamSubjectId(mixedExam.rows[1], examSubjects), "dir");
+assert.equal(resolveExamSubjectId(mixedExam.rows[2], examSubjects), EXAM_OTHER_SUBJECT);
+const grouped = groupWithExams([], [mixedExam], examSubjects);
+assert.equal(grouped.get("ing")?.questions, 50);
+assert.equal(grouped.get("ing")?.correct, 40);
+assert.equal(grouped.get("dir")?.questions, 15);
+assert.equal(grouped.get(EXAM_OTHER_SUBJECT)?.questions, 150);
+assert.equal(grouped.get(EXAM_OTHER_SUBJECT)?.wrong, 50);
+const absorbed = absorbExamQuestions(aggregate([]), [mixedExam], examSubjects);
+assert.equal(absorbed.questions, 215);
+assert.equal(absorbed.correct, 150);
+assert.equal(absorbed.accuracy, 150 / 215);
 
 const subject = toSubject({
   id: "a",

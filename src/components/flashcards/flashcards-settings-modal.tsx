@@ -3,12 +3,14 @@
 import { Fragment, useMemo, useState } from "react";
 import { Bell, Check, ChevronDown, Minus, Plus, RotateCcw, Settings } from "lucide-react";
 import { toast } from "sonner";
-import type { FlashcardSettings } from "@/types/models";
+import type { Flashcard, FlashcardSettings, FlashcardStudyOrder, Page } from "@/types/models";
 import { Button } from "@/components/ui/button";
 import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
 import { Switch } from "@/components/ui/primitives";
+import { TimeField } from "@/components/ui/pickers";
 import { cn } from "@/lib/utils";
+import { childrenOf, notebookAncestors } from "@/lib/data/notebook-tree";
 import { useWorkspace } from "@/lib/data/provider";
 import { useTranslation } from "@/lib/i18n/translations";
 import {
@@ -49,6 +51,107 @@ const PACE_OPTIONS = [
     descKey: "settings_pace_spaced_desc",
   },
 ] as const;
+
+const ORDER_OPTIONS: {
+  value: FlashcardStudyOrder;
+  labelKey:
+    | "settings_order_created"
+    | "settings_order_notebook"
+    | "settings_order_random";
+  descKey:
+    | "settings_order_created_desc"
+    | "settings_order_notebook_desc"
+    | "settings_order_random_desc";
+}[] = [
+  {
+    value: "created",
+    labelKey: "settings_order_created",
+    descKey: "settings_order_created_desc",
+  },
+  {
+    value: "notebook",
+    labelKey: "settings_order_notebook",
+    descKey: "settings_order_notebook_desc",
+  },
+  {
+    value: "random",
+    labelKey: "settings_order_random",
+    descKey: "settings_order_random_desc",
+  },
+];
+
+function scopeLabel(value: string | null | undefined, untitled: string) {
+  const name = value?.trim().replace(/\s+/g, " ") ?? "";
+  return name || untitled;
+}
+
+function scopeKey(label: string) {
+  return label.toLocaleLowerCase();
+}
+
+type ResetScopeRow = {
+  id: string;
+  label: string;
+  count: number;
+  trail: string[];
+  notes: string[];
+};
+
+function noteTitlesFor(
+  notebookId: string,
+  flashcards: Flashcard[],
+  notebookByPage: Map<string, string>,
+  pagesById: Map<string, Page>,
+  untitled: string
+) {
+  const titles: string[] = [];
+  const seen = new Set<string>();
+  for (const card of flashcards) {
+    if ((notebookByPage.get(card.pageId) ?? "unfiled") !== notebookId) continue;
+    const title = scopeLabel(pagesById.get(card.pageId)?.title, untitled);
+    const key = scopeKey(title);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    titles.push(title);
+  }
+  titles.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  return titles;
+}
+
+function scopeCandidate(row: ResetScopeRow, level: number) {
+  const trail = row.trail.filter(Boolean);
+  const path = level === 0 ? (trail[0] ?? "") : trail.join(" · ");
+  if (level < 2) return path;
+  const notes = row.notes.slice(0, 2).join(", ");
+  return [path, notes].filter(Boolean).join(" · ");
+}
+
+function scopeHints(rows: ResetScopeRow[]) {
+  const hints = new Map<string, string | null>();
+  for (const row of rows) hints.set(row.id, null);
+  const groups = new Map<string, ResetScopeRow[]>();
+  for (const row of rows) {
+    const list = groups.get(scopeKey(row.label)) ?? [];
+    list.push(row);
+    groups.set(scopeKey(row.label), list);
+  }
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    let level = 0;
+    while (level < 2 && !scopeGroupDistinct(group, level)) level += 1;
+    for (const row of group) {
+      const hint = scopeCandidate(row, level);
+      hints.set(row.id, hint || null);
+    }
+  }
+  return hints;
+}
+
+function scopeGroupDistinct(group: ResetScopeRow[], level: number) {
+  const values = group.map((row) => scopeCandidate(row, level));
+  if (values.some((value) => value.length === 0)) return false;
+  return new Set(values.map(scopeKey)).size === group.length;
+}
 
 export function FlashcardsSettingsModal({
   open,
@@ -104,6 +207,9 @@ function SettingsForm({
   const [pace, setPace] = useState(
     settings.intervalModifier || DEFAULT_FLASHCARD_SETTINGS.intervalModifier
   );
+  const [studyOrder, setStudyOrder] = useState<FlashcardStudyOrder>(
+    settings.studyOrder || DEFAULT_FLASHCARD_SETTINGS.studyOrder
+  );
   const [notificationsOn, setNotificationsOn] = useState(Boolean(settings.enableNotifications));
   const [notificationTime, setNotificationTime] = useState(
     settings.notificationTime || DEFAULT_FLASHCARD_SETTINGS.notificationTime
@@ -147,19 +253,64 @@ function SettingsForm({
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
 
-    const options = [{ id: "all", label: t("reset_scope_all"), count: flashcards.length }];
+    const untitled = t("untitled");
+    const pagesById = new Map(pages.map((page) => [page.id, page]));
+    const rows: ResetScopeRow[] = [];
+    const seen = new Set<string>();
+    const visit = (parentId: string | null, trail: string[]) => {
+      for (const notebook of childrenOf(notebooks, parentId)) {
+        seen.add(notebook.id);
+        const count = counts.get(notebook.id) ?? 0;
+        const label = scopeLabel(notebook.name, untitled);
+        if (count > 0) {
+          rows.push({
+            id: notebook.id,
+            label,
+            count,
+            trail,
+            notes: noteTitlesFor(notebook.id, flashcards, notebookByPage, pagesById, untitled),
+          });
+        }
+        visit(notebook.id, [...trail, label]);
+      }
+    };
+    visit(null, []);
     for (const notebook of notebooks) {
+      if (seen.has(notebook.id)) continue;
       const count = counts.get(notebook.id) ?? 0;
-      if (count > 0) options.push({ id: notebook.id, label: notebook.name, count });
+      if (count <= 0) continue;
+      const label = scopeLabel(notebook.name, untitled);
+      const trail = notebookAncestors(notebooks, notebook.id)
+        .slice(0, -1)
+        .map((item) => scopeLabel(item.name, untitled));
+      rows.push({
+        id: notebook.id,
+        label,
+        count,
+        trail,
+        notes: noteTitlesFor(notebook.id, flashcards, notebookByPage, pagesById, untitled),
+      });
     }
+
+    const hints = scopeHints(rows);
+    const options = [
+      { id: "all", label: t("reset_scope_all"), count: flashcards.length, hint: null as string | null },
+      ...rows.map((row) => ({
+        id: row.id,
+        label: row.label,
+        count: row.count,
+        hint: hints.get(row.id) ?? null,
+      })),
+    ];
     const unfiled = counts.get("unfiled") ?? 0;
-    if (unfiled > 0) options.push({ id: "unfiled", label: t("unfiled"), count: unfiled });
+    if (unfiled > 0) options.push({ id: "unfiled", label: t("unfiled"), count: unfiled, hint: null });
     return options;
-  }, [flashcards, notebookByPage, notebooks, t]);
+  }, [flashcards, notebookByPage, notebooks, pages, t]);
 
   const activeReset = resetOptions.find((option) => option.id === resetScope) ?? resetOptions[0];
   const resetCount = activeReset?.count ?? 0;
   const activePace = PACE_OPTIONS.find((option) => option.value === pace) ?? PACE_OPTIONS[1];
+  const activeOrder = ORDER_OPTIONS.find((option) => option.value === studyOrder) ?? ORDER_OPTIONS[0];
 
   const adjustGoal = (delta: number) => {
     setDailyGoal((prev) => Math.max(5, Math.min(200, (Number(prev) || 20) + delta)));
@@ -208,6 +359,7 @@ function SettingsForm({
     onSave({
       dailyGoal: Math.max(5, Math.min(200, Number(dailyGoal) || 20)),
       intervalModifier: pace,
+      studyOrder,
       enableNotifications: notificationsOn,
       notificationTime,
     });
@@ -293,6 +445,34 @@ function SettingsForm({
               })}
             </div>
           </div>
+        </section>
+
+        <section className="space-y-2.5">
+          <SectionLabel>{t("settings_section_order")}</SectionLabel>
+
+          <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/50 p-1">
+            {ORDER_OPTIONS.map((option) => {
+              const isSelected = studyOrder === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setStudyOrder(option.value)}
+                  aria-pressed={isSelected}
+                  className={cn(
+                    "min-h-10 rounded-lg px-1.5 py-2 text-center text-[12px] font-medium leading-snug transition-all",
+                    isSelected
+                      ? "border border-[var(--border-strong)]/50 bg-[var(--surface)] font-semibold text-ink shadow-xs"
+                      : "text-muted hover:bg-[var(--surface-hover)] hover:text-ink"
+                  )}
+                >
+                  {t(option.labelKey)}
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="px-0.5 text-[12px] leading-relaxed text-muted">{t(activeOrder.descKey)}</p>
         </section>
 
         <section className="space-y-2.5">
@@ -382,17 +562,13 @@ function SettingsForm({
                   >
                     {t("settings_notification_time")}
                   </label>
-                  <input
+                  <TimeField
                     id="flashcards-notification-time"
-                    type="time"
-                    required
                     value={notificationTime}
-                    onChange={(e) => {
-                      // O campo fica vazio enquanto o usuário apaga; guardar
-                      // "" desligaria o lembrete sem ninguém perceber.
-                      if (e.target.value) setNotificationTime(e.target.value);
+                    onChange={(next) => {
+                      if (next) setNotificationTime(next);
                     }}
-                    className="h-8 shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-[12.5px] font-medium text-ink shadow-2xs outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] tabular-nums"
+                    aria-label={t("settings_notification_time")}
                   />
                 </div>
 
@@ -430,9 +606,17 @@ function SettingsForm({
                   <button
                     type="button"
                     disabled={flashcards.length === 0}
-                    className="flex h-8.5 min-w-0 flex-1 items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-[12px] text-ink outline-none transition hover:border-[var(--border-strong)] disabled:opacity-45 sm:max-w-[15rem]"
+                    className="flex h-8.5 min-w-0 flex-1 items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-[12px] text-ink outline-none transition hover:border-[var(--border-strong)] disabled:opacity-45 sm:max-w-[20rem]"
+                    title={activeReset?.hint ? `${activeReset.label} · ${activeReset.hint}` : activeReset?.label}
                   >
-                    <span className="truncate font-medium">{activeReset?.label}</span>
+                    <span className="flex min-w-0 items-center gap-1">
+                      <span className="min-w-0 truncate font-medium">{activeReset?.label}</span>
+                      {activeReset?.hint ? (
+                        <span className="min-w-0 max-w-[52%] shrink truncate text-[11px] font-normal text-muted">
+                          · {activeReset.hint}
+                        </span>
+                      ) : null}
+                    </span>
                     <span className="flex shrink-0 items-center gap-1.5 text-faint">
                       <span className="rounded-full bg-[var(--surface-2)] px-1.5 py-0.5 text-[10.5px] font-semibold tabular-nums">
                         {resetCount}
@@ -443,7 +627,7 @@ function SettingsForm({
                 </MenuTrigger>
                 <MenuContent
                   align="start"
-                  className="max-h-64 w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto rounded-xl"
+                  className="max-h-72 w-[min(22rem,calc(100vw-1.5rem))] min-w-[min(var(--radix-dropdown-menu-trigger-width),calc(100vw-1.5rem))] overflow-y-auto rounded-xl"
                 >
                   {resetOptions.map((option) => (
                     <MenuItem
@@ -452,9 +636,17 @@ function SettingsForm({
                         setResetScope(option.id);
                         setConfirmingReset(false);
                       }}
-                      className="justify-between gap-3 text-[12px]"
+                      title={option.hint ? `${option.label} · ${option.hint}` : option.label}
+                      className="items-center justify-between gap-3 py-1.5 text-[12px]"
                     >
-                      <span className="truncate">{option.label}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium leading-tight">{option.label}</span>
+                        {option.hint ? (
+                          <span className="mt-0.5 block truncate text-[11px] font-normal leading-tight text-muted">
+                            {option.hint}
+                          </span>
+                        ) : null}
+                      </span>
                       <span className="flex shrink-0 items-center gap-1.5">
                         <span className="text-[11px] text-faint tabular-nums">
                           {option.count}

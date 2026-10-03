@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, type ReactNode } from "react";
+import { useCallback, type ComponentType, type ReactNode } from "react";
 import {
-  BookOpenText,
   CalendarDays,
   Check,
   ChevronDown,
@@ -14,11 +13,11 @@ import {
   RotateCcw,
   Settings2,
   Timer,
-  type LucideIcon,
 } from "lucide-react";
 import { Link, useRouter } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
+import { DisciplinesIcon } from "@/lib/icons/study-icons";
 import { WorkspaceIcon, isIconUrl } from "@/lib/icons/workspace-icon";
 import { cn } from "@/lib/utils";
 import { useStudy } from "@/lib/study/provider";
@@ -26,7 +25,7 @@ import { useStudyT, type StudyKey } from "@/lib/study/i18n";
 import { useStudyUi } from "@/lib/study/ui-store";
 import { useLiveNote, useMaterialNote } from "@/lib/study/hooks";
 import { splitDuration } from "@/lib/study/format";
-import { BUILT_IN_CATEGORIES, SUBJECT_COLORS } from "@/lib/study/defaults";
+import { BUILT_IN_CATEGORIES, SUBJECT_COLORS, subjectTone } from "@/lib/study/defaults";
 import type { PerformanceBand, StudyCategory } from "@/types/study";
 
 const MONOGRAM_SKIP = new Set(["de", "da", "do", "das", "dos", "e", "a", "o", "the", "of", "and", "la", "le", "el", "di", "del", "der", "die", "und"]);
@@ -67,6 +66,7 @@ export function GoalMark({
   size,
   className,
   raised = size >= 40,
+  soft = false,
 }: {
   icon: string | null | undefined;
   name: string;
@@ -74,8 +74,12 @@ export function GoalMark({
   size: number;
   className?: string;
   raised?: boolean;
+  soft?: boolean;
 }) {
   const borderRadius = Math.max(4, Math.round(size * (raised ? 0.27 : 0.24)));
+  const lift = soft
+    ? "inset 0 0 0 1px rgba(15, 44, 76, 0.08), 0 8px 16px -14px rgba(15, 44, 76, 0.28)"
+    : `inset 0 0 0 1px rgba(15, 44, 76, 0.12), ${MARK_LIFT}`;
   if (icon && isIconUrl(icon)) {
     return (
       <span
@@ -85,7 +89,7 @@ export function GoalMark({
           height: size,
           borderRadius,
           padding: size >= 28 ? Math.round(size * 0.12) : 1,
-          boxShadow: raised ? `inset 0 0 0 1px rgba(15, 44, 76, 0.12), ${MARK_LIFT}` : "inset 0 0 0 1px var(--border)",
+          boxShadow: raised ? lift : "inset 0 0 0 1px var(--border)",
         }}
         aria-hidden
       >
@@ -101,7 +105,7 @@ export function GoalMark({
           width: size,
           height: size,
           borderRadius,
-          ...(raised ? { backgroundColor: "var(--surface-2)", boxShadow: `inset 0 0 0 1px var(--border), ${MARK_LIFT}` } : null),
+          ...(raised ? { backgroundColor: "var(--surface-2)", boxShadow: soft ? lift : `inset 0 0 0 1px var(--border), ${MARK_LIFT}` } : null),
         }}
         aria-hidden
       >
@@ -124,7 +128,9 @@ export function GoalMark({
           ? `linear-gradient(160deg, color-mix(in oklab, ${color} 26%, var(--surface)), color-mix(in oklab, ${color} 11%, var(--surface)))`
           : `color-mix(in oklab, ${color} 13%, var(--surface))`,
         boxShadow: raised
-          ? `inset 0 0 0 1px color-mix(in oklab, ${color} 34%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 10px 22px -12px color-mix(in oklab, ${color} 80%, transparent)`
+          ? soft
+            ? `inset 0 0 0 1px color-mix(in oklab, ${color} 22%, transparent), 0 8px 16px -14px color-mix(in oklab, ${color} 40%, transparent)`
+            : `inset 0 0 0 1px color-mix(in oklab, ${color} 34%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 10px 22px -12px color-mix(in oklab, ${color} 80%, transparent)`
           : `inset 0 0 0 1px color-mix(in oklab, ${color} 26%, transparent)`,
       }}
       aria-hidden
@@ -303,13 +309,13 @@ export function SubjectDot({ color, className }: { color?: string | null; classN
     <span
       aria-hidden
       className={cn("inline-block h-3.5 w-[4px] shrink-0 rounded-full", className)}
-      style={{ backgroundColor: color ?? "var(--text-faint)" }}
+      style={{ backgroundColor: color ? subjectTone(color) : "var(--text-faint)" }}
     />
   );
 }
 
 export function SubjectBar({ color }: { color?: string | null }) {
-  return <span aria-hidden className="block w-[3px] shrink-0 self-stretch rounded-full" style={{ backgroundColor: color ?? "var(--border-strong)" }} />;
+  return <span aria-hidden className="block w-[3px] shrink-0 self-stretch rounded-full" style={{ backgroundColor: color ? subjectTone(color) : "var(--border-strong)" }} />;
 }
 
 export function RhythmMark({ full = false, className }: { full?: boolean; className?: string }) {
@@ -463,7 +469,7 @@ export function CategoryChip({ id, className }: { id: string; className?: string
         className
       )}
     >
-      <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: subjectTone(color) }} />
       <span className="truncate">{label(id)}</span>
     </span>
   );
@@ -543,9 +549,9 @@ export function StudyEmpty({
 
 export type StudyEmptyIcon = "goal" | "subjects" | "schedule" | "reviews" | "exams" | "log";
 
-const EMPTY_ICONS: Record<StudyEmptyIcon, LucideIcon> = {
+const EMPTY_ICONS: Record<StudyEmptyIcon, ComponentType<{ className?: string; strokeWidth?: number }>> = {
   goal: Flag,
-  subjects: BookOpenText,
+  subjects: DisciplinesIcon,
   schedule: CalendarDays,
   reviews: RotateCcw,
   exams: ClipboardCheck,

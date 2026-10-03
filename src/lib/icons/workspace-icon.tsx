@@ -39,7 +39,7 @@ export function flagCountryCode(value: string): string | null {
 }
 
 export function isIconUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value) || value.startsWith("data:image/");
+  return /^https?:\/\//i.test(value) || value.startsWith("data:image/") || value.startsWith("blob:");
 }
 
 export function isExpiredNotionUrl(url: string): boolean {

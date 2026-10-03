@@ -184,7 +184,7 @@ const en: LegalBundle = {
               rows: [
                 ["Registration", "Name, email, phone number and profile photo", "You or your Google account"],
                 ["Credentials", "Password, stored only in encrypted form by the authentication provider", "You"],
-                ["Content", "Notes, pages, notebooks, flashcards, attachments, audio and video; in the study module, goals, subjects and topics (with any external links you add), sessions (with their material and linked notes), questions, reviews, mock exams, schedules, reminders, quick notes and the achievements kept in your showcase (with the date they were kept)", "You and the imports you make"],
+                ["Content", "Notes, pages, notebooks, flashcards, attachments, audio and video; in the study module, goals, subjects and topics (with any external links you add), sessions (with their material and linked notes), questions, reviews, mock exams, schedules, reminders, notepad and the achievements kept in your showcase (with the date they were kept and the order you arrange them)", "You and the imports you make"],
                 ["Integrations", "Access tokens for Notion, Evernote and Google Docs", "The connected service, with your authorization"],
                 ["Preferences", "Language, theme, accessibility and layout", "You"],
                 ["Technical data", "IP address, approximate country, browser, device, date and time of access", "Collected automatically"],
@@ -408,7 +408,7 @@ const en: LegalBundle = {
               "a counter of sign-in attempts, used to show reCAPTCHA when needed;",
               "interface preferences, such as theme, sidebar, recent notebooks and the languages for transcriptions and flashcards;",
               "the state of the study module, such as a running focus timer, the last screen you opened and the visible layers of Planning;",
-              "a copy of your notes and notebooks, so the app opens faster and keeps working offline.",
+              "a copy of your notes, notebooks and study data, so the app opens faster and keeps working offline.",
             ],
           },
           "This information stays only in your browser and is erased when you sign out, when the session expires or when you clear the site's data.",

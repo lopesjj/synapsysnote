@@ -141,6 +141,7 @@ export const useStudyUi = create<StudyUiState>()(
       name: "synapsys.study.ui.v1",
       version: 4,
       storage: createJSONStorage(() => localStorage),
+      skipHydration: true,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<StudyUiState> & { lastNotesRoute?: string; lastStudyRoute?: string };
         if (version < 2 && state.scheduleLayers) state.scheduleLayers = { ...state.scheduleLayers, tasks: true };
@@ -209,6 +210,23 @@ export function openBlankTimer() {
   const store = useStudyUi.getState();
   if (store.timer.status === "idle" && !isTimerArmed(store.timer)) store.resetTimer({ subjectId: null, topicId: null });
   store.setTimerOpen(true);
+}
+
+export function hydrateStudyUiSync(): void {
+  if (typeof window === "undefined" || useStudyUi.persist.hasHydrated()) return;
+  try {
+    const raw = window.localStorage.getItem("synapsys.study.ui.v1");
+    if (raw) {
+      const parsed = JSON.parse(raw) as { state?: unknown; version?: number };
+      const options = useStudyUi.persist.getOptions();
+      const migrated = options.migrate ? options.migrate(parsed.state, parsed.version ?? 0) : parsed.state;
+      if (migrated && typeof migrated === "object" && !(migrated instanceof Promise)) {
+        useStudyUi.setState(migrated as Partial<StudyUiState>);
+      }
+    }
+  } catch {
+    return;
+  }
 }
 
 export function isStudyPath(pathname: string | null | undefined): boolean {

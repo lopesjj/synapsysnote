@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/menu";
 import { cn } from "@/lib/utils";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT, type StudyKey } from "@/lib/study/i18n";
-import { BUILT_IN_CATEGORIES, REVIEW_INTERVAL_PRESETS, SUBJECT_COLORS, TIMER_SOUNDS } from "@/lib/study/defaults";
+import { BUILT_IN_CATEGORIES, REVIEW_INTERVAL_PRESETS, SUBJECT_COLORS, TIMER_SOUNDS, subjectTone } from "@/lib/study/defaults";
 import { availableTimeZones, capitalizeFirst, orderedWeekdays, weekdayLabel, zoneOffsetLabel } from "@/lib/study/dates";
 import { playTimerSound } from "@/lib/study/sound";
 import type { StudyCategory, StudySettings, TimerSound } from "@/types/study";
@@ -38,7 +38,7 @@ function ColorPicker({ value, label, onChange }: { value: string; label: string;
           aria-label={label}
           className="group flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-1.5 outline-none transition hover:bg-[var(--surface-2)] focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)] data-[state=open]:bg-[var(--surface-2)]"
         >
-          <span className="size-4 rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]" style={{ backgroundColor: value }} />
+          <span className="size-4 rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]" style={{ backgroundColor: subjectTone(value) }} />
           <ChevronDown className="size-3 text-faint transition-transform group-data-[state=open]:rotate-180" />
         </button>
       </PopoverTrigger>
@@ -62,7 +62,7 @@ function ColorPicker({ value, label, onChange }: { value: string; label: string;
                   "flex size-7 items-center justify-center rounded-full outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)]",
                   active ? "ring-2 ring-[var(--text)] ring-offset-2 ring-offset-[var(--surface)]" : "hover:scale-110"
                 )}
-                style={{ backgroundColor: color }}
+                style={{ backgroundColor: subjectTone(color) }}
               >
                 {active ? <Check className="size-3.5 text-white drop-shadow" /> : null}
               </button>

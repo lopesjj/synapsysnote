@@ -513,11 +513,14 @@ export interface SearchHit {
 
 export type FlashcardRating = "again" | "hard" | "good" | "easy";
 
+export type FlashcardStudyOrder = "created" | "notebook" | "random";
+
 export interface FlashcardSettings {
   dailyGoal: number;
   intervalModifier: number;
   enableNotifications: boolean;
   notificationTime: string;
+  studyOrder: FlashcardStudyOrder;
 }
 
 export interface Flashcard {

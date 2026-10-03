@@ -82,7 +82,7 @@ export function ModuleSwitch({
               <motion.span
                 layoutId={layoutId}
                 transition={{ type: "spring", stiffness: 480, damping: 38 }}
-                className="absolute inset-0 -z-10 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_1px_2px_rgba(15,44,76,0.08)]"
+                className="pointer-events-none absolute inset-0 -z-10 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_1px_2px_rgba(15,44,76,0.08)]"
               />
             ) : null}
             {option.icon}

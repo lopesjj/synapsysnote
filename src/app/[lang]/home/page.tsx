@@ -38,8 +38,9 @@ import { openBlankTimer, useStudyUi } from "@/lib/study/ui-store";
 import { usePlanning } from "@/lib/study/planning";
 import type { PlanningTask } from "@/lib/study/planning-bridge";
 import { projectSchedule, type PlannedBlock } from "@/lib/study/cycle";
+import { subjectTone } from "@/lib/study/defaults";
 import { resolvedDayOf } from "@/lib/study/review-queue";
-import { cardStage } from "@/lib/flashcards/srs";
+import { cardStage, startOfDay } from "@/lib/flashcards/srs";
 import { addDays, capitalizeFirst, dayKeyOf, diffDays, formatDay, minuteOfDay, startOfWeek, weekDays, weekdayLabel, weekdayOf } from "@/lib/study/dates";
 import { secondsByDay } from "@/lib/study/metrics";
 import { FocusButton, GoalSwitcher } from "@/components/study/ui";
@@ -89,13 +90,12 @@ function subscribeClock(callback: () => void) {
   return () => window.clearInterval(id);
 }
 
-function useNow(): number | null {
-  const minute = useSyncExternalStore(
+function useNow(): number {
+  return useSyncExternalStore(
     subscribeClock,
-    () => Math.floor(Date.now() / 60_000),
-    () => -1
+    () => Math.floor(Date.now() / 60_000) * 60_000,
+    () => Math.floor(Date.now() / 60_000) * 60_000
   );
-  return minute < 0 ? null : minute * 60_000;
 }
 
 function greetingFor(minute: number, t: (key: TranslationKey) => string) {
@@ -188,6 +188,7 @@ export default function WorkspaceHome() {
   const router = useRouter();
   const { t } = useTranslation();
   const { livePages, adapter, notebooks, notebookById, rootNotebooks, ready } = useWorkspace();
+  const studyReady = useStudy().ready;
 
   const recent = useMemo(() => [...livePages].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 10), [livePages]);
   const notebooksSort = useUiStore((state) => state.notebooksSort);
@@ -207,6 +208,10 @@ export default function WorkspaceHome() {
     const notebook = await adapter.createNotebook({ name: t("new_page") });
     router.push(`/home/n/${notebook.id}`);
   };
+
+  if (!ready || !studyReady) {
+    return <div className="mx-auto w-full max-w-[70rem] px-4 pb-20 pt-4 sm:px-6 sm:pt-6 lg:px-8 2xl:max-w-[78rem] 3xl:max-w-[92rem] 4xl:max-w-[104rem]" />;
+  }
 
   return (
     <div className="mx-auto w-full max-w-[70rem] px-4 pb-20 pt-4 sm:px-6 sm:pt-6 lg:px-8 2xl:max-w-[78rem] 3xl:max-w-[92rem] 4xl:max-w-[104rem]">
@@ -231,12 +236,6 @@ export default function WorkspaceHome() {
             <SectionTitle title={t("continue_where_left")} action={recent.length ? <QuietLink href="/home/notes">{t("view_all")}</QuietLink> : null} />
             {recent.length ? (
               <PaperShelf pages={recent} notebookById={notebookById} onCreate={() => void createNote()} />
-            ) : !ready ? (
-              <div className="flex gap-4 overflow-hidden">
-                {Array.from({ length: 5 }, (_, index) => (
-                  <div key={index} className="h-[14.5rem] w-[11.25rem] shrink-0 animate-pulse rounded-[18px] bg-[var(--surface-2)]" />
-                ))}
-              </div>
             ) : (
               <EmptyState
                 title={t("workspace_empty")}
@@ -252,41 +251,39 @@ export default function WorkspaceHome() {
           </section>
         </Reveal>
 
-        {ready ? (
-          <Reveal delay={0.2}>
-            <section aria-label={t("pages")}>
-              <SectionTitle
-                title={t("pages")}
-                action={
-                  <button
-                    type="button"
-                    onClick={() => void createRootPage()}
-                    className="inline-flex items-center gap-1 text-[13px] text-muted transition hover:text-ink"
-                  >
-                    <Plus className="size-3.5" />
-                    {t("new_page")}
-                  </button>
-                }
-              />
-              {sortedRootNotebooks.length ? (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 3xl:grid-cols-4">
-                  {sortedRootNotebooks.map((notebook) => (
-                    <PageCard key={notebook.id} notebook={notebook} notebooks={notebooks} livePages={livePages} />
-                  ))}
-                </div>
-              ) : (
+        <Reveal delay={0.2}>
+          <section aria-label={t("pages")}>
+            <SectionTitle
+              title={t("pages")}
+              action={
                 <button
                   type="button"
                   onClick={() => void createRootPage()}
-                  className="flex h-36 w-full flex-col items-center justify-center gap-1.5 rounded-[20px] border border-dashed border-[var(--border-strong)] text-[13px] text-muted transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                  className="inline-flex items-center gap-1 text-[13px] text-muted transition hover:text-ink"
                 >
-                  <Plus className="size-[18px]" />
+                  <Plus className="size-3.5" />
                   {t("new_page")}
                 </button>
-              )}
-            </section>
-          </Reveal>
-        ) : null}
+              }
+            />
+            {sortedRootNotebooks.length ? (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 3xl:grid-cols-4">
+                {sortedRootNotebooks.map((notebook) => (
+                  <PageCard key={notebook.id} notebook={notebook} notebooks={notebooks} livePages={livePages} />
+                ))}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void createRootPage()}
+                className="flex h-36 w-full flex-col items-center justify-center gap-1.5 rounded-[20px] border border-dashed border-[var(--border-strong)] text-[13px] text-muted transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+              >
+                <Plus className="size-[18px]" />
+                {t("new_page")}
+              </button>
+            )}
+          </section>
+        </Reveal>
       </div>
     </div>
   );
@@ -298,7 +295,7 @@ function SkyHero({ onCreateNote }: { onCreateNote: () => void }) {
   const { st, locale } = useStudyT();
   const study = useStudy();
   const now = useNow();
-  const minute = now === null ? 540 : minuteOfDay(now, study.settings.timeZone);
+  const minute = minuteOfDay(now, study.settings.timeZone);
   const phase = phaseOf(minute);
   const serif = SERIF_LANGUAGES.has(language);
 
@@ -321,11 +318,12 @@ function SkyHero({ onCreateNote }: { onCreateNote: () => void }) {
 
   return (
     <section
-      data-phase={now === null ? undefined : phase}
+      data-phase={phase}
+      suppressHydrationWarning
       className="home-sky @container relative isolate overflow-hidden rounded-[28px] px-6 pb-6 pt-7 transition-[background] duration-1000 sm:px-9 sm:pb-8 sm:pt-9 3xl:px-12 3xl:pb-10 3xl:pt-12"
       style={{ ["--sky-at" as string]: glowAt }}
     >
-      {showStars && now !== null ? (
+      {showStars ? (
         <div aria-hidden className="pointer-events-none absolute inset-0" style={{ opacity: "var(--sky-stars)" }}>
           {STARS.slice(0, phase === "night" ? STARS.length : 10).map((star, index) => (
             <span
@@ -337,13 +335,14 @@ function SkyHero({ onCreateNote }: { onCreateNote: () => void }) {
         </div>
       ) : null}
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.14] mix-blend-overlay" style={{ backgroundImage: GRAIN }} />
-      {now !== null ? <SunArc t={t01} isDay={isDay} /> : null}
+      <SunArc t={t01} isDay={isDay} />
 
       <div className="relative @2xl:pr-[15.5rem]">
-        <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[var(--sky-muted)]">
+        <p suppressHydrationWarning className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[var(--sky-muted)]">
           {capitalizeFirst(formatDay(today, locale, { weekday: "long", day: "numeric", month: "long" }))}
         </p>
         <h1
+          suppressHydrationWarning
           dir={textDir}
           className={cn(
             "mt-2.5 text-balance text-[2.125rem] leading-[1.04] @lg:text-[2.625rem] @3xl:text-[3.25rem] @6xl:text-[3.75rem]",
@@ -379,9 +378,10 @@ function SkyHero({ onCreateNote }: { onCreateNote: () => void }) {
 
 function SkyWeek() {
   const { st, locale, duration } = useStudyT();
-  const { sessions, exams, settings, today } = useStudy();
+  const { sessions, exams, settings, today, ready } = useStudy();
   const days = useMemo(() => weekDays(startOfWeek(today, settings.weekStartsOn)), [settings.weekStartsOn, today]);
   const byDay = useMemo(() => secondsByDay(sessions, exams), [exams, sessions]);
+  if (!ready) return <div className="h-[5.25rem] w-full min-w-0 @3xl:max-w-[42rem]" />;
   const values = days.map((day) => byDay.get(day) ?? 0);
   const total = values.reduce((sum, value) => sum + value, 0);
   const studied = values.filter((value) => value > 0).length;
@@ -691,7 +691,8 @@ function WeekStrip({ selected, onSelect }: { selected: DayKey; onSelect: (day: D
         const subject = subjectById(block.subjectId);
         if (!subject || block.status === "skipped" || block.status === "missed") continue;
         if (block.status === "planned") minutes += block.minutes;
-        if (!colors.includes(subject.color)) colors.push(subject.color);
+        const tone = subjectTone(subject.color);
+        if (!colors.includes(tone)) colors.push(tone);
       }
       if (colors.length) map.set(day, { colors, minutes });
     }
@@ -751,6 +752,7 @@ function WeekStrip({ selected, onSelect }: { selected: DayKey; onSelect: (day: D
             {isSelected ? (
               <motion.span
                 layoutId="home-week-selected"
+                initial={false}
                 aria-hidden
                 className="absolute inset-0 rounded-[12px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_8px_18px_-10px_rgba(15,44,76,0.5)]"
                 transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42, mass: 0.9 }}
@@ -843,7 +845,7 @@ type AgendaItem =
   | { kind: "exam"; key: string }
   | { kind: "study"; key: string; block: PlannedBlock }
   | { kind: "review"; key: string; review: StudyReview }
-  | { kind: "cards"; key: string; total: number; fresh: number }
+  | { kind: "cards"; key: string; total: number; fresh: number; done: boolean }
   | { kind: "reminder"; key: string; reminder: StudyReminder }
   | { kind: "task"; key: string; task: PlanningTask; overdue: boolean };
 
@@ -856,7 +858,39 @@ function agendaItemDone(item: AgendaItem): boolean {
   if (item.kind === "review") return item.review.status === "done";
   if (item.kind === "reminder") return item.reminder.done;
   if (item.kind === "task") return item.task.done;
+  if (item.kind === "cards") return item.done;
   return false;
+}
+
+const CARD_DAY_KEY = "synapsys.home.cardDay";
+
+function readCardDay(day: string): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(CARD_DAY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as { day?: unknown; ids?: unknown };
+    if (parsed.day !== day || !Array.isArray(parsed.ids)) return [];
+    return parsed.ids.filter((id): id is string => typeof id === "string");
+  } catch {
+    return [];
+  }
+}
+
+function writeCardDay(day: string, ids: string[]) {
+  try {
+    window.localStorage.setItem(CARD_DAY_KEY, JSON.stringify({ day, ids }));
+  } catch {}
+}
+
+function reviewedTodayIds(cards: { id: string; lastReviewedAt: number | null }[], due: Set<string>) {
+  const start = startOfDay();
+  return cards
+    .filter((card) => {
+      const at = Number(card.lastReviewedAt) || 0;
+      return at >= start && !due.has(card.id);
+    })
+    .map((card) => card.id);
 }
 
 /**
@@ -869,10 +903,23 @@ function Agenda({ anchor, direction, pendingOnly }: { anchor: DayKey; direction:
   const { st, locale } = useStudyT();
   const reduceMotion = useReducedMotion();
   const study = useStudy();
-  const { dueFlashcards } = useWorkspace();
+  const { dueFlashcards, flashcards, flashcardsReady } = useWorkspace();
   const { tasks } = usePlanning();
   const [dialog, setDialog] = useState<TaskDialogState>({ open: false, task: null, day: null });
+  const [rememberedCards, setRememberedCards] = useState<string[]>(() => readCardDay(study.today));
   const { today, activePlan: plan, planCycle, planReviews, reminders, settings, subjectById } = study;
+
+  useEffect(() => {
+    if (!flashcardsReady) return;
+    const known = new Set(flashcards.map((card) => card.id));
+    const dueIds = dueFlashcards.map((card) => card.id);
+    const due = new Set(dueIds);
+    const stored = readCardDay(today).filter((id) => known.has(id));
+    let next = [...new Set([...stored, ...dueIds])];
+    if (!next.length) next = reviewedTodayIds(flashcards, due);
+    writeCardDay(today, next);
+    setRememberedCards((current) => (current.join("\0") === next.join("\0") ? current : next));
+  }, [flashcardsReady, today, dueFlashcards, flashcards]);
 
   const items = useMemo(() => {
     const list: AgendaItem[] = [];
@@ -905,22 +952,32 @@ function Agenda({ anchor, direction, pendingOnly }: { anchor: DayKey; direction:
       if (reminder.day !== anchor || (reminder.planId && reminder.planId !== plan?.id)) continue;
       list.push({ kind: "reminder", key: reminder.id, reminder });
     }
-    if (dueFlashcards.length && anchor === today) {
-      list.push({
-        kind: "cards",
-        key: "cards",
-        total: dueFlashcards.length,
-        fresh: dueFlashcards.filter((card) => cardStage(card) === "new").length,
-      });
+    if (anchor === today) {
+      const known = new Set(flashcards.map((card) => card.id));
+      const dueIds = dueFlashcards.map((card) => card.id);
+      const due = new Set(dueIds);
+      let queue = [...new Set([...rememberedCards.filter((id) => known.has(id)), ...dueIds])];
+      if (!queue.length) queue = reviewedTodayIds(flashcards, due);
+      const finished = queue.filter((id) => !due.has(id));
+      const done = dueFlashcards.length === 0 && finished.length > 0;
+      if (dueFlashcards.length > 0 || done) {
+        list.push({
+          kind: "cards",
+          key: "cards",
+          total: done ? finished.length : dueFlashcards.length,
+          fresh: done ? 0 : dueFlashcards.filter((card) => cardStage(card) === "new").length,
+          done,
+        });
+      }
     }
     // Ordem estável por tipo: marcar algo como feito não faz a linha pular de lugar.
     return list.sort((a, b) => AGENDA_ORDER[a.kind] - AGENDA_ORDER[b.kind]);
-  }, [anchor, dueFlashcards, plan, planCycle, planReviews, reminders, settings.timeZone, subjectById, tasks, today]);
+  }, [anchor, dueFlashcards, flashcards, plan, planCycle, planReviews, rememberedCards, reminders, settings.timeZone, subjectById, tasks, today]);
 
   const visible = pendingOnly ? items.filter((item) => !agendaItemDone(item)) : items;
   const shown = visible.slice(0, DAY_LIMIT);
   const hidden = visible.length - shown.length;
-  const trackable = items.filter((item) => item.kind !== "exam" && item.kind !== "cards");
+  const trackable = items.filter((item) => item.kind !== "exam");
   const doneCount = trackable.filter(agendaItemDone).length;
   const offset = reduceMotion ? 0 : 20;
   const title =
@@ -1007,7 +1064,6 @@ function AgendaRow({
   const reduceMotion = useReducedMotion();
   const study = useStudy();
   const done = agendaItemDone(item);
-  // As linhas entram em cascata ao trocar de dia e saem suavemente com "Só pendentes".
   const motionProps = reduceMotion
     ? {}
     : {
@@ -1046,7 +1102,7 @@ function AgendaRow({
       ) : null;
     return (
       <motion.li {...motionProps} className={cn(row, "group/study items-center")}>
-        {rail(subject?.color ?? "var(--text-faint)", planned ? 1 : 0.45)}
+        {rail(subject?.color ? subjectTone(subject.color) : "var(--text-faint)", planned ? 1 : 0.45)}
         <Link href="/home/study/schedule" prefetch className="min-w-0 flex-1">
           <span className={cn("block truncate text-[13.5px] leading-5", planned ? "text-ink" : "text-faint", block.status === "done" && "line-through")}>
             {subject?.name || st("untitled_subject")}
@@ -1154,14 +1210,25 @@ function AgendaRow({
 
   if (item.kind === "cards") {
     const reviewCards = item.total - item.fresh;
-    const split = item.fresh && reviewCards ? `${st("reviews_cards_new", { count: item.fresh })} · ${st("reviews_cards_review", { count: reviewCards })}` : null;
+    const split = !item.done && item.fresh && reviewCards ? `${st("reviews_cards_new", { count: item.fresh })} · ${st("reviews_cards_review", { count: reviewCards })}` : null;
+    const meta = item.done
+      ? st("reviews_cards_done", { count: item.total })
+      : [st("reviews_cards_count", { count: item.total }), split].filter(Boolean).join(" · ");
     return (
       <motion.li {...motionProps}>
         <Link href="/home/flashcards" prefetch className={cn(row, "items-center")}>
-          <span className="flex w-4 shrink-0 justify-center text-[var(--accent)]">
+          <span className={cn("flex w-4 shrink-0 justify-center", item.done ? "text-faint" : "text-[var(--accent)]")}>
             <Layers className="size-3.5" />
           </span>
-          {text(st("reviews_cards_title"), [st("reviews_cards_count", { count: item.total }), split].filter(Boolean).join(" · "))}
+          <span className="min-w-0 flex-1">
+            <span className={cn("block truncate text-[13.5px] leading-5", item.done ? "text-faint line-through" : "text-ink")}>
+              {st("reviews_cards_title")}
+            </span>
+            <span className="flex min-w-0 items-center gap-1 text-[12px] leading-4 text-faint">
+              {item.done ? <Check className="size-3 shrink-0 text-[var(--accent)]" strokeWidth={2.5} aria-hidden /> : null}
+              <span className={cn("min-w-0 truncate", item.done && "line-through")}>{meta}</span>
+            </span>
+          </span>
         </Link>
       </motion.li>
     );
@@ -1365,7 +1432,7 @@ function TodayReviewsTile() {
 
                   <span
                     className="h-8 w-[3px] shrink-0 rounded-full"
-                    style={{ backgroundColor: subject?.color || "var(--accent)" }}
+                    style={{ backgroundColor: subject?.color ? subjectTone(subject.color) : "var(--accent)" }}
                   />
 
                   <div className="min-w-0 flex-1">

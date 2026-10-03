@@ -212,3 +212,17 @@ export function sortAwards(list: readonly Award[]): Award[] {
     return (b.earnedAt ?? 0) - (a.earnedAt ?? 0);
   });
 }
+
+export function arrangeAwards(list: readonly Award[], order: readonly string[]): Award[] {
+  if (!order.length) return [...list];
+  const byId = new Map(list.map((award) => [award.id, award]));
+  const seen = new Set<string>();
+  const placed: Award[] = [];
+  for (const id of order) {
+    const award = byId.get(id);
+    if (!award || seen.has(id)) continue;
+    seen.add(id);
+    placed.push(award);
+  }
+  return [...placed, ...list.filter((award) => !seen.has(award.id))];
+}

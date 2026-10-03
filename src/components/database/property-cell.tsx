@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Calendar, Check, Link as LinkIcon } from "lucide-react";
 import type { PropertyDef, PropertyValue } from "@/types/models";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
+import { DatePopover } from "@/components/ui/pickers";
 import { cn, hashHue } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/translations";
 import { translateDatabaseText } from "./database-i18n";
@@ -86,7 +87,7 @@ function DateCell({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(() => formatIsoToDisplay(value));
   const inputRef = useRef<HTMLInputElement>(null);
-  const datePickerRef = useRef<HTMLInputElement>(null);
+  const skipBlur = useRef(false);
 
   useEffect(() => {
     if (!editing) {
@@ -112,6 +113,19 @@ function DateCell({
       ? value.slice(0, 10)
       : "";
 
+  const applyPicked = (next: string) => {
+    skipBlur.current = true;
+    if (!next) {
+      setDraft("");
+      onChange(null);
+      setEditing(false);
+      return;
+    }
+    setDraft(formatIsoToDisplay(next));
+    onChange(next);
+    setEditing(false);
+  };
+
   if (editing) {
     return (
       <div className={cn(base, "relative flex items-center gap-1 p-0.5 ring-1 ring-[var(--accent)] rounded-[4px] bg-[var(--surface-primary)]")}>
@@ -122,10 +136,16 @@ function DateCell({
           value={draft}
           onChange={(e) => setDraft(applyDateMask(e.target.value))}
           onBlur={(e) => {
-            if (e.relatedTarget && (e.relatedTarget as HTMLElement).dataset?.datepicker) {
-              return;
-            }
-            commit();
+            const next = e.relatedTarget as HTMLElement | null;
+            if (next?.dataset?.datepicker || next?.closest("[data-radix-popper-content-wrapper]")) return;
+            window.setTimeout(() => {
+              if (skipBlur.current) {
+                skipBlur.current = false;
+                return;
+              }
+              if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
+              commit();
+            }, 0);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -137,38 +157,18 @@ function DateCell({
           }}
           className="w-full bg-transparent px-1.5 py-0.5 text-[12.5px] text-ink outline-none tabular-nums font-mono"
         />
-        <button
-          type="button"
-          data-datepicker="true"
-          tabIndex={-1}
-          onClick={(e) => {
-            e.stopPropagation();
-            try {
-              datePickerRef.current?.showPicker();
-            } catch {
-              datePickerRef.current?.focus();
-            }
-          }}
-          className="shrink-0 p-1 text-faint hover:text-ink transition rounded"
-          title={t("open_calendar")}
-        >
-          <Calendar className="size-3.5" />
-        </button>
-        <input
-          ref={datePickerRef}
-          type="date"
-          tabIndex={-1}
-          value={isoForPicker}
-          onChange={(e) => {
-            const nextIso = e.target.value;
-            if (nextIso) {
-              setDraft(formatIsoToDisplay(nextIso));
-              onChange(nextIso);
-              setEditing(false);
-            }
-          }}
-          className="sr-only pointer-events-none"
-        />
+        <DatePopover value={isoForPicker} clearable onChange={applyPicked}>
+          <button
+            type="button"
+            data-datepicker="true"
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
+            className="shrink-0 rounded p-1 text-faint transition hover:text-ink"
+            title={t("open_calendar")}
+          >
+            <Calendar className="size-3.5" />
+          </button>
+        </DatePopover>
       </div>
     );
   }
@@ -192,36 +192,18 @@ function DateCell({
           <span className="text-faint">-</span>
         )}
       </button>
-      <button
-        type="button"
-        tabIndex={-1}
-        onClick={(e) => {
-          e.stopPropagation();
-          try {
-            datePickerRef.current?.showPicker();
-          } catch {
-            setEditing(true);
-          }
-        }}
-        className="p-1 text-faint hover:text-ink opacity-40 group-hover/date:opacity-100 transition-opacity rounded"
-        title={t("open_calendar")}
-      >
-        <Calendar className="size-3.5" />
-      </button>
-      <input
-        ref={datePickerRef}
-        type="date"
-        tabIndex={-1}
-        value={isoForPicker}
-        onChange={(e) => {
-          const nextIso = e.target.value;
-          if (nextIso) {
-            setDraft(formatIsoToDisplay(nextIso));
-            onChange(nextIso);
-          }
-        }}
-        className="sr-only pointer-events-none"
-      />
+      <DatePopover value={isoForPicker} clearable onChange={applyPicked}>
+        <button
+          type="button"
+          data-datepicker="true"
+          tabIndex={-1}
+          onClick={(e) => e.stopPropagation()}
+          className="rounded p-1 text-faint opacity-40 transition-opacity hover:text-ink group-hover/date:opacity-100"
+          title={t("open_calendar")}
+        >
+          <Calendar className="size-3.5" />
+        </button>
+      </DatePopover>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { CalendarDays, Check, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { DialogShell } from "@/components/ui/dialog";
@@ -12,6 +12,7 @@ import { usePlanning } from "@/lib/study/planning";
 import { addDays, formatDay, startOfWeek } from "@/lib/study/dates";
 import type { PlanningTask, TaskState } from "@/lib/study/planning-bridge";
 import type { DayKey } from "@/types/study";
+import { DatePopover } from "@/components/ui/pickers";
 import { DialogFrame } from "./dialogs";
 
 export interface TaskDialogState {
@@ -39,7 +40,6 @@ function TaskForm({ task, day, onClose }: { task: PlanningTask | null; day: DayK
   const [state, setState] = useState<TaskState>(task?.state ?? "todo");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
-  const picker = useRef<HTMLInputElement>(null);
 
   const presets = [
     { key: "today", day: today, label: st("today") },
@@ -48,17 +48,6 @@ function TaskForm({ task, day, onClose }: { task: PlanningTask | null; day: DayK
   ];
   const custom = Boolean(date) && !presets.some((preset) => preset.day === date);
   const short = (value: string) => formatDay(value, locale, { day: "numeric", month: "short" });
-
-  const openPicker = () => {
-    const input = picker.current;
-    if (!input) return;
-    try {
-      input.showPicker();
-    } catch {
-      input.focus();
-      input.click();
-    }
-  };
 
   const submit = async () => {
     const clean = title.replace(/\s+/g, " ").trim();
@@ -179,19 +168,12 @@ function TaskForm({ task, day, onClose }: { task: PlanningTask | null; day: DayK
               <span className="font-normal opacity-70">{short(preset.day)}</span>
             </button>
           ))}
-          <button type="button" onClick={openPicker} className={chip(custom)} aria-pressed={custom}>
-            <CalendarDays className="size-3.5" />
-            {custom ? short(date) : st("task_pick_date")}
-            <input
-              ref={picker}
-              type="date"
-              tabIndex={-1}
-              aria-label={st("task_pick_date")}
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-              className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
-            />
-          </button>
+          <DatePopover value={date} onChange={setDate}>
+            <button type="button" className={chip(custom)} aria-pressed={custom} aria-label={st("task_pick_date")}>
+              <CalendarDays className="size-3.5" />
+              {custom ? short(date) : st("task_pick_date")}
+            </button>
+          </DatePopover>
           <button type="button" onClick={() => setDate("")} className={chip(!date)} aria-pressed={!date}>
             {st("task_no_date")}
           </button>

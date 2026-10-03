@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, useSyncExternalStore } from "react";
 import { Plus } from "lucide-react";
 import { Link, useRouter } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
@@ -13,12 +13,12 @@ import { dayStatus, isPlannedDay, performanceBand } from "@/lib/study/metrics";
 import { capitalizeFirst, diffDays, formatDay, startOfWeek, weekDays, weekdayLabel, weekdayOf } from "@/lib/study/dates";
 import { splitDuration } from "@/lib/study/format";
 import { dailyMotto } from "@/lib/study/mottos";
+import { subjectTone } from "@/lib/study/defaults";
 import {
   ConsistencyPanel,
   CountdownPanel,
   DistributionPanel,
   KpiBand,
-  PacePanel,
   RecentActivityPanel,
   RemindersPanel,
   SubjectsPanel,
@@ -71,22 +71,19 @@ function OverviewBody() {
 
   return (
     <StudyPage className="pt-6 md:pt-7">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <h1 className="text-[22px] font-semibold leading-none tracking-[-0.02em] text-ink">{st("nav_overview")}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="max-sm:hidden">
-            <GoalSwitcher />
-          </div>
-          <Button variant="primary" size="md" onClick={() => useStudyUi.getState().openLog()}>
-            <Plus />
-            {st("logform_title_new")}
-          </Button>
+      <div className="mb-5 flex flex-wrap items-center justify-end gap-2">
+        <div className="max-sm:hidden">
+          <GoalSwitcher />
         </div>
+        <Button variant="primary" size="md" onClick={() => useStudyUi.getState().openLog()}>
+          <Plus />
+          {st("logform_title_new")}
+        </Button>
       </div>
       <div className="space-y-4">
         <Cover />
         <CelebrationBanner />
-        <KpiBand />
+        <KpiBand pace />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
           <div className="contents lg:col-span-8 lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
             <div className="order-1 min-w-0 lg:order-none">
@@ -110,12 +107,9 @@ function OverviewBody() {
               <CountdownPanel />
             </div>
             <div className="order-6 min-w-0 lg:order-none">
-              <PacePanel />
-            </div>
-            <div className="order-7 min-w-0 lg:order-none">
               <DistributionPanel />
             </div>
-            <div className="order-8 flex min-w-0 lg:order-none lg:flex-1">
+            <div className="order-8 min-w-0 lg:order-none">
               <RemindersPanel className="w-full" />
             </div>
           </div>
@@ -125,11 +119,28 @@ function OverviewBody() {
   );
 }
 
+function coverMarkSize(): number {
+  return window.matchMedia("(min-width: 640px)").matches ? 104 : 84;
+}
+
+function useCoverMarkSize() {
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      const query = window.matchMedia("(min-width: 640px)");
+      query.addEventListener("change", onStoreChange);
+      return () => query.removeEventListener("change", onStoreChange);
+    },
+    coverMarkSize,
+    () => 84
+  );
+}
+
 function Cover() {
   const { st, duration, locale, textDir, language } = useStudyT();
   const { activePlan, planSubjects, settings, today } = useStudy();
   const metrics = usePlanMetrics();
   const book = useAwardBook();
+  const markSize = useCoverMarkSize();
   if (!activePlan) return null;
 
   const parts: string[] = [];
@@ -159,13 +170,19 @@ function Cover() {
       <div className="grid gap-8 px-6 py-6 sm:px-8 sm:py-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,21rem)] lg:gap-10">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--cover-faint)]">{dateLabel}</p>
-          <div className="mt-4 flex items-start gap-5">
+          <div className="mt-4 flex items-center gap-4 sm:gap-6">
             {goalComplete && book?.goal ? (
-              <span className="synapsys-stamp shrink-0">
-                <AwardArt award={book.goal} size={104} />
+              <span className="relative shrink-0">
+                <span aria-hidden className="pointer-events-none absolute -inset-3 rounded-full bg-[color-mix(in_oklab,var(--laurel)_10%,transparent)] blur-xl sm:-inset-4" />
+                <AwardArt award={book.goal} size={Math.round(markSize * 1.5)} />
               </span>
             ) : (
-              <GoalMark icon={activePlan.icon} name={goalName} seed={activePlan.id} size={64} />
+              <span className="relative shrink-0">
+                <span aria-hidden className="pointer-events-none absolute -inset-2 rounded-[1.8rem] bg-[color-mix(in_oklab,var(--cover-accent)_6%,transparent)] blur-2xl sm:-inset-2.5" />
+                <span className="relative inline-flex rounded-[1.65rem] bg-[var(--cover-chip)] p-1.5 shadow-[0_0_0_1px_var(--cover-line),0_6px_14px_-12px_color-mix(in_oklab,var(--cover-fg)_10%,transparent)] sm:rounded-[1.9rem] sm:p-2">
+                  <GoalMark icon={activePlan.icon} name={goalName} seed={activePlan.id} size={markSize} soft />
+                </span>
+              </span>
             )}
             <div className="min-w-0 flex-1">
               {goalComplete ? (
@@ -182,7 +199,7 @@ function Cover() {
           <GoalProgress />
         </div>
 
-        <div className="flex min-w-0 flex-col gap-6 lg:border-l lg:border-[var(--cover-line)] lg:pl-10">
+        <div className="flex min-w-0 flex-col gap-6 lg:h-full lg:border-l lg:border-[var(--cover-line)] lg:pl-10">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--cover-faint)]">{st("today")}</p>
             <p className="mt-2 flex items-baseline gap-1 leading-none text-[var(--cover-fg)]">
@@ -220,8 +237,8 @@ function Cover() {
 
           <WeekDots />
 
-          <figure dir={textDir} className="border-t border-[var(--cover-line)] pt-5">
-            <blockquote>
+          <figure dir={textDir} className="border-t border-[var(--cover-line)] pt-5 lg:flex lg:min-h-0 lg:flex-1 lg:items-center">
+            <blockquote className="w-full min-w-0">
               <p className="font-display text-pretty text-[15px] italic leading-[1.5] text-[var(--cover-fg)]">
                 <span aria-hidden className="select-none text-[var(--cover-accent)]">
                   {motto.open}
@@ -269,12 +286,12 @@ function GoalProgress() {
               <span
                 key={segment.subject.id}
                 className="relative block h-full min-w-[6px] overflow-hidden rounded-full"
-                style={{ flexGrow: segment.total, backgroundColor: `color-mix(in oklab, ${segment.subject.color} 22%, transparent)` }}
+                style={{ flexGrow: segment.total, backgroundColor: `color-mix(in oklab, ${subjectTone(segment.subject.color)} 22%, transparent)` }}
                 title={`${segment.subject.name} · ${st("kpi_coverage_hint", { done: segment.done, total: segment.total })}`}
               >
                 <span
                   className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-[var(--ease-luxury)]"
-                  style={{ width: `${(segment.done / segment.total) * 100}%`, backgroundColor: segment.subject.color }}
+                  style={{ width: `${(segment.done / segment.total) * 100}%`, backgroundColor: subjectTone(segment.subject.color) }}
                 />
               </span>
             ))}
@@ -282,7 +299,7 @@ function GoalProgress() {
           <ul className="mt-3.5 flex flex-wrap gap-x-5 gap-y-2">
             {segments.map((segment) => (
               <li key={segment.subject.id} className="flex min-w-0 items-center gap-2">
-                <span aria-hidden className="block h-4 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: segment.subject.color }} />
+                <span aria-hidden className="block h-4 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subjectTone(segment.subject.color) }} />
                 <Link href={`/home/study/subjects/${segment.subject.id}`} dir={textDir} className="truncate text-[12.5px] font-medium text-[var(--cover-fg)] hover:underline">
                   {segment.subject.name}
                 </Link>
@@ -300,7 +317,7 @@ function GoalProgress() {
               const agg = metrics.bySubject.get(subject.id);
               return (
                 <li key={subject.id} className="flex min-w-0 items-center gap-2">
-                  <span aria-hidden className="block h-4 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subject.color }} />
+                  <span aria-hidden className="block h-4 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subjectTone(subject.color) }} />
                   <span dir={textDir} className="truncate text-[12.5px] font-medium text-[var(--cover-fg)]">{subject.name}</span>
                   <span className="shrink-0 text-[11.5px] tabular-nums text-[var(--cover-faint)]">{agg?.seconds ? duration(agg.seconds) : "–"}</span>
                 </li>
@@ -407,7 +424,7 @@ function WeekDots() {
               <span
                 className={cn(
                   "flex size-8 items-center justify-center rounded-full",
-                  status === "studied" && "synapsys-stamp bg-[var(--cover-accent)] text-[var(--cover-accent-contrast)]",
+                  status === "studied" && "bg-[var(--cover-accent)] text-[var(--cover-accent-contrast)]",
                   status === "missed" && "bg-[color-mix(in_oklab,var(--danger)_16%,transparent)] text-[var(--danger)] ring-1 ring-inset ring-[color-mix(in_oklab,var(--danger)_55%,transparent)]",
                   status === "pending" && "border-[1.5px] border-dashed border-[var(--cover-accent)]",
                   status === "rest" && "border-[1.5px] border-[color-mix(in_oklab,var(--cover-fg)_22%,transparent)] text-[var(--cover-faint)]",

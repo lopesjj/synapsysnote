@@ -11,6 +11,7 @@ import {
   DEFAULT_FLASHCARD_SETTINGS,
   readStoredSettings,
   sanitizeModifier,
+  sanitizeStudyOrder,
   writeStoredSettings,
 } from "@/lib/flashcards/srs";
 import { useFlashcardSettings } from "@/lib/flashcards/use-flashcard-settings";
@@ -48,6 +49,7 @@ export function FlashcardSettingsSync() {
         Math.min(200, Number(remote.dailyGoal) || DEFAULT_FLASHCARD_SETTINGS.dailyGoal)
       ),
       intervalModifier: sanitizeModifier(remote.intervalModifier),
+      studyOrder: sanitizeStudyOrder(remote.studyOrder),
       enableNotifications: Boolean(remote.enableNotifications),
       notificationTime:
         typeof remote.notificationTime === "string" &&

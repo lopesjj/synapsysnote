@@ -52,6 +52,74 @@ export function aggregate(sessions: readonly StudySession[]): StudyAggregate {
   return finish(result);
 }
 
+export const EXAM_OTHER_SUBJECT = "exam-other";
+
+function foldSubjectName(value: string): string {
+  return value.normalize("NFD").replace(/\p{M}/gu, "").trim().toLowerCase();
+}
+
+export function resolveExamSubjectId(
+  row: Pick<MockExam["rows"][number], "subjectId" | "name">,
+  subjects: readonly Pick<StudySubject, "id" | "name">[]
+): string {
+  if (row.subjectId && subjects.some((subject) => subject.id === row.subjectId)) return row.subjectId;
+  const name = foldSubjectName(row.name);
+  if (name) {
+    const match = subjects.find((subject) => foldSubjectName(subject.name) === name);
+    if (match) return match.id;
+  }
+  return EXAM_OTHER_SUBJECT;
+}
+
+export function absorbExamQuestions(
+  target: StudyAggregate,
+  exams: readonly MockExam[],
+  subjects: readonly Pick<StudySubject, "id" | "name">[],
+  subjectId?: string | null
+): StudyAggregate {
+  let touched = false;
+  for (const exam of exams) {
+    for (const row of exam.rows) {
+      if (subjectId && resolveExamSubjectId(row, subjects) !== subjectId) continue;
+      const answered = row.correct + row.wrong;
+      if (answered <= 0) continue;
+      target.correct += row.correct;
+      target.wrong += row.wrong;
+      target.questions += answered;
+      if (!target.lastDay || compareDay(exam.day, target.lastDay) > 0) target.lastDay = exam.day;
+      touched = true;
+    }
+  }
+  if (touched) target.accuracy = accuracyOf(target.correct, target.wrong);
+  return target;
+}
+
+export function groupWithExams(
+  sessions: readonly StudySession[],
+  exams: readonly MockExam[],
+  subjects: readonly Pick<StudySubject, "id" | "name">[]
+): Map<string, StudyAggregate> {
+  const map = groupSessions(sessions, (session) => session.subjectId);
+  for (const exam of exams) {
+    for (const row of exam.rows) {
+      const answered = row.correct + row.wrong;
+      if (answered <= 0) continue;
+      const key = resolveExamSubjectId(row, subjects);
+      let entry = map.get(key);
+      if (!entry) {
+        entry = emptyAggregate();
+        map.set(key, entry);
+      }
+      entry.correct += row.correct;
+      entry.wrong += row.wrong;
+      entry.questions += answered;
+      if (!entry.lastDay || compareDay(exam.day, entry.lastDay) > 0) entry.lastDay = exam.day;
+      entry.accuracy = accuracyOf(entry.correct, entry.wrong);
+    }
+  }
+  return map;
+}
+
 export function groupSessions<K>(
   sessions: readonly StudySession[],
   keyOf: (session: StudySession) => K | null
@@ -107,10 +175,14 @@ export function coverageOf(subjects: readonly StudySubject[]): CoverageInfo {
   return { done, total, ratio: total ? done / total : 0 };
 }
 
+export const STUDY_CHECKIN_SECONDS = 15 * 60;
+
 export function studiedDays(sessions: readonly StudySession[], exams: readonly MockExam[] = []): Set<DayKey> {
+  const seconds = new Map<DayKey, number>();
+  for (const session of sessions) seconds.set(session.day, (seconds.get(session.day) ?? 0) + Math.max(0, session.durationSec));
+  for (const exam of exams) seconds.set(exam.day, (seconds.get(exam.day) ?? 0) + Math.max(0, exam.durationSec));
   const set = new Set<DayKey>();
-  for (const session of sessions) if (session.durationSec > 0 || session.correct + session.wrong > 0) set.add(session.day);
-  for (const exam of exams) if (exam.durationSec > 0) set.add(exam.day);
+  for (const [day, total] of seconds) if (total >= STUDY_CHECKIN_SECONDS) set.add(day);
   return set;
 }
 

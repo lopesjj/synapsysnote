@@ -9,7 +9,7 @@ import type {
   StudySubject,
 } from "@/types/study";
 import { addDays, compareDay, dayKeyOf, diffDays, startOfWeek } from "./dates";
-import { aggregate, coverageOf, examTotals, groupSessions, topicKey, type CoverageInfo } from "./metrics";
+import { absorbExamQuestions, aggregate, coverageOf, examTotals, groupWithExams, studiedDays, topicKey, type CoverageInfo } from "./metrics";
 
 export interface SubjectSummary {
   subject: StudySubject;
@@ -37,7 +37,7 @@ export interface GoalSummary {
   daysToExam: number | null;
   lastDay: DayKey | null;
   pendingReviews: number;
-  /** Minutos e questões da semana atual (simulados entram no tempo). */
+  /** Minutos e questões da semana atual. Simulados entram no tempo e nas questões. */
   weekMinutes: number;
   weekQuestions: number;
   studiedDays: Set<DayKey>;
@@ -62,8 +62,8 @@ export function goalSummary(
     .filter((exam) => exam.planId === plan.id)
     .sort((a, b) => compareDay(a.day, b.day) || a.createdAt - b.createdAt);
   const pending = data.reviews.filter((review) => review.planId === plan.id && review.status === "pending" && compareDay(review.dueDay, today) <= 0);
-  const bySubject = groupSessions(sessions, (session) => session.subjectId);
-  const total = aggregate(sessions);
+  const bySubject = groupWithExams(sessions, exams, subjects);
+  const total = absorbExamQuestions(aggregate(sessions), exams, subjects);
   const examSeconds = exams.reduce((sum, exam) => sum + exam.durationSec, 0);
   const touched = new Set(sessions.filter((session) => session.topicId).map((session) => topicKey(session.subjectId, session.topicId)));
 
@@ -77,12 +77,14 @@ export function goalSummary(
     weekSeconds += session.durationSec;
     weekQuestions += session.correct + session.wrong;
   }
-  for (const exam of exams) if (inWeek(exam.day)) weekSeconds += exam.durationSec;
+  for (const exam of exams) {
+    if (!inWeek(exam.day)) continue;
+    weekSeconds += exam.durationSec;
+    for (const row of exam.rows) weekQuestions += row.correct + row.wrong;
+  }
 
-  const studiedDays = new Set<DayKey>();
-  for (const session of sessions) if (session.durationSec > 0 || session.correct + session.wrong > 0) studiedDays.add(session.day);
-  for (const exam of exams) if (exam.durationSec > 0) studiedDays.add(exam.day);
-  const lastDays = [...studiedDays].filter((day) => compareDay(day, today) <= 0).sort(compareDay);
+  const checkedIn = studiedDays(sessions, exams);
+  const lastDays = [...checkedIn].filter((day) => compareDay(day, today) <= 0).sort(compareDay);
 
   return {
     subjects: subjects.map((subject) => {
@@ -111,7 +113,7 @@ export function goalSummary(
     pendingReviews: pending.length,
     weekMinutes: Math.round(weekSeconds / 60),
     weekQuestions,
-    studiedDays,
+    studiedDays: checkedIn,
   };
 }
 
@@ -168,7 +170,15 @@ export function goalTimeline(
     days.set(day, entry);
   };
   for (const session of sessions) bump(session.day, session.durationSec / 60, session.correct + session.wrong, session.correct);
-  for (const exam of exams) if (exam.durationSec > 0) bump(exam.day, exam.durationSec / 60, 0, 0);
+  for (const exam of exams) {
+    let correct = 0;
+    let answered = 0;
+    for (const row of exam.rows) {
+      correct += row.correct;
+      answered += row.correct + row.wrong;
+    }
+    if (exam.durationSec > 0 || answered > 0) bump(exam.day, exam.durationSec / 60, answered, correct);
+  }
 
   const topicDays: DayKey[] = [];
   let topicTotal = 0;

@@ -7,18 +7,18 @@ import type {
 } from "@/types/study";
 
 export const SUBJECT_COLORS = [
-  "#9bb8d6",
-  "#d2b19a",
-  "#93c0a8",
-  "#cfc08e",
-  "#d2a8b6",
-  "#b0be94",
-  "#b4abd2",
-  "#d2ada8",
-  "#94bec8",
-  "#c8b29a",
-  "#c8a8c2",
-  "#a4aeb8",
+  "#82a8d9",
+  "#dca483",
+  "#7abe9f",
+  "#d3b877",
+  "#da99b2",
+  "#a6bc7e",
+  "#ac9fd8",
+  "#db9894",
+  "#7fbac7",
+  "#c8a58a",
+  "#c598c1",
+  "#97a4b2",
 ] as const;
 
 export const LEGACY_SUBJECT_COLORS: Readonly<Record<string, string>> = {
@@ -46,11 +46,41 @@ export const LEGACY_SUBJECT_COLORS: Readonly<Record<string, string>> = {
   "#c99c7f": SUBJECT_COLORS[9],
   "#c38dc0": SUBJECT_COLORS[10],
   "#8d9dae": SUBJECT_COLORS[11],
+  "#9bb8d6": SUBJECT_COLORS[0],
+  "#d2b19a": SUBJECT_COLORS[1],
+  "#93c0a8": SUBJECT_COLORS[2],
+  "#cfc08e": SUBJECT_COLORS[3],
+  "#d2a8b6": SUBJECT_COLORS[4],
+  "#b0be94": SUBJECT_COLORS[5],
+  "#b4abd2": SUBJECT_COLORS[6],
+  "#d2ada8": SUBJECT_COLORS[7],
+  "#94bec8": SUBJECT_COLORS[8],
+  "#c8b29a": SUBJECT_COLORS[9],
+  "#c8a8c2": SUBJECT_COLORS[10],
+  "#a4aeb8": SUBJECT_COLORS[11],
+  "#8eb0d8": SUBJECT_COLORS[0],
+  "#d7aa8e": SUBJECT_COLORS[1],
+  "#86bfa3": SUBJECT_COLORS[2],
+  "#d1bc82": SUBJECT_COLORS[3],
+  "#d6a0b4": SUBJECT_COLORS[4],
+  "#abbd89": SUBJECT_COLORS[5],
+  "#b0a5d5": SUBJECT_COLORS[6],
+  "#d7a29e": SUBJECT_COLORS[7],
+  "#89bcc7": SUBJECT_COLORS[8],
+  "#c8ab92": SUBJECT_COLORS[9],
+  "#c6a0c1": SUBJECT_COLORS[10],
+  "#9da9b5": SUBJECT_COLORS[11],
 };
 
 export function subjectColorOf(color: string): string {
   const key = color.toLowerCase();
   return LEGACY_SUBJECT_COLORS[key] ?? key;
+}
+
+export function subjectTone(color: string): string {
+  const resolved = subjectColorOf(color);
+  if (!/^#[0-9a-f]{6}$/i.test(resolved)) return resolved;
+  return `oklch(from ${resolved} calc(l * var(--subject-l-mult) + var(--subject-l-add)) calc(c * var(--subject-c)) h)`;
 }
 
 export const BUILT_IN_CATEGORIES: readonly BuiltInCategoryId[] = [
@@ -87,6 +117,7 @@ export const DEFAULT_STUDY_SETTINGS: StudySettings = {
   pomodoroLong: 15,
   pomodoroRounds: 4,
   claimedAwards: {},
+  awardOrder: {},
   updatedAt: 0,
 };
 
@@ -154,8 +185,22 @@ export function normalizeSettings(raw: Partial<StudySettings> | null | undefined
     pomodoroLong: clampInt(source.pomodoroLong, 1, 90, DEFAULT_STUDY_SETTINGS.pomodoroLong),
     pomodoroRounds: clampInt(source.pomodoroRounds, 2, 8, DEFAULT_STUDY_SETTINGS.pomodoroRounds),
     claimedAwards: cleanClaims(source.claimedAwards),
+    awardOrder: cleanAwardOrder(source.awardOrder),
     updatedAt: Number(source.updatedAt) || 0,
   };
+}
+
+function cleanAwardOrder(value: unknown): Record<string, string[]> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Record<string, string[]> = {};
+  for (const [planId, ids] of Object.entries(value as Record<string, unknown>).slice(0, 80)) {
+    if (!planId || planId.length > 80 || !Array.isArray(ids)) continue;
+    const clean = ids
+      .filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= 80)
+      .slice(0, 80);
+    if (clean.length) out[planId] = clean;
+  }
+  return out;
 }
 
 function cleanClaims(value: unknown): Record<string, number> {

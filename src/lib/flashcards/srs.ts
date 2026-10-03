@@ -1,10 +1,11 @@
-import type { Flashcard, FlashcardRating, FlashcardSettings } from "@/types/models";
+import type { Flashcard, FlashcardRating, FlashcardSettings, FlashcardStudyOrder } from "@/types/models";
 
 export const DEFAULT_FLASHCARD_SETTINGS: FlashcardSettings = {
   dailyGoal: 20,
   intervalModifier: 1.0,
   enableNotifications: false,
   notificationTime: "09:00",
+  studyOrder: "created",
 };
 
 export const FLASHCARD_SETTINGS_STORAGE_KEY = "synapsys.flashcardSettings";
@@ -37,6 +38,73 @@ export interface ReviewCalculationResult {
   easeFactor: number;
   nextReviewDate: number;
   relearn: boolean;
+}
+
+export function sanitizeStudyOrder(order: string | undefined): FlashcardStudyOrder {
+  if (order === "notebook" || order === "random" || order === "created") return order;
+  return "created";
+}
+
+export function orderStudyCards(
+  cards: readonly Flashcard[],
+  order: FlashcardStudyOrder,
+  context: {
+    notebooks: readonly { id: string; order: number; name: string }[];
+    notebookByPage: ReadonlyMap<string, string | null | undefined>;
+  }
+): Flashcard[] {
+  if (order === "random") return shuffleCards(cards);
+  if (order === "notebook") return sortByNotebook(cards, context);
+  return [...cards].sort(byCreated);
+}
+
+function byCreated(a: Flashcard, b: Flashcard): number {
+  return a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}
+
+function notebookOf(
+  card: Flashcard,
+  notebookByPage: ReadonlyMap<string, string | null | undefined>
+): string {
+  if (notebookByPage.has(card.pageId)) return notebookByPage.get(card.pageId) || "";
+  return card.notebookId || "";
+}
+
+function sortByNotebook(
+  cards: readonly Flashcard[],
+  context: {
+    notebooks: readonly { id: string; order: number; name: string }[];
+    notebookByPage: ReadonlyMap<string, string | null | undefined>;
+  }
+): Flashcard[] {
+  const ranked = [...context.notebooks].sort(
+    (a, b) => a.order - b.order || a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+  );
+  const rank = new Map(ranked.map((notebook, index) => [notebook.id, index]));
+  return [...cards].sort((a, b) => {
+    const ka = notebookOf(a, context.notebookByPage);
+    const kb = notebookOf(b, context.notebookByPage);
+    if (!ka !== !kb) return ka ? -1 : 1;
+    const ra = rank.get(ka) ?? 1_000_000;
+    const rb = rank.get(kb) ?? 1_000_000;
+    if (ra !== rb) return ra - rb;
+    if (ka !== kb) return ka < kb ? -1 : 1;
+    const title = (a.pageTitle ?? "").localeCompare(b.pageTitle ?? "", undefined, { sensitivity: "base" });
+    if (title !== 0) return title;
+    if (a.pageId !== b.pageId) return a.pageId < b.pageId ? -1 : 1;
+    return byCreated(a, b);
+  });
+}
+
+function shuffleCards(cards: readonly Flashcard[]): Flashcard[] {
+  const next = [...cards];
+  for (let index = next.length - 1; index > 0; index--) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    const current = next[index];
+    next[index] = next[swap];
+    next[swap] = current;
+  }
+  return next;
 }
 
 export function sanitizeModifier(modifier: number | undefined): number {
@@ -177,6 +245,7 @@ export function readStoredSettings(): FlashcardSettings {
         Math.min(200, Number(parsed.dailyGoal) || DEFAULT_FLASHCARD_SETTINGS.dailyGoal)
       ),
       intervalModifier: sanitizeModifier(parsed.intervalModifier),
+      studyOrder: sanitizeStudyOrder(parsed.studyOrder),
       enableNotifications: Boolean(parsed.enableNotifications),
       notificationTime:
         typeof parsed.notificationTime === "string" && /^\d{2}:\d{2}$/.test(parsed.notificationTime)

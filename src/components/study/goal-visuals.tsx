@@ -6,6 +6,7 @@ import { useStudy } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
 import { cn } from "@/lib/utils";
 import { diffDays, formatDay } from "@/lib/study/dates";
+import { subjectTone } from "@/lib/study/defaults";
 import type { DayKey, StudyPlan } from "@/types/study";
 
 /** Contagem regressiva da prova com a barra do caminho já percorrido desde o início do objetivo. */
@@ -116,8 +117,8 @@ export function CoveragePie({ done, total, color, size = 16, className }: { done
   }
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden className={cn("shrink-0", className)}>
-      <circle cx={r} cy={r} r={r - 0.75} fill="none" stroke={`color-mix(in oklab, ${color} 45%, transparent)`} strokeWidth={1.5} />
-      {wedge === "full" ? <circle cx={r} cy={r} r={inner} fill={color} /> : wedge ? <path d={wedge} fill={color} /> : null}
+      <circle cx={r} cy={r} r={r - 0.75} fill="none" stroke={`color-mix(in oklab, ${subjectTone(color)} 45%, transparent)`} strokeWidth={1.5} />
+      {wedge === "full" ? <circle cx={r} cy={r} r={inner} fill={subjectTone(color)} /> : wedge ? <path d={wedge} fill={subjectTone(color)} /> : null}
     </svg>
   );
 }
@@ -127,7 +128,7 @@ export function ProgressBar({ value, max, color = "var(--accent)", className }: 
   const ratio = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
   return (
     <span aria-hidden className={cn("relative block h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]", className)}>
-      {ratio > 0 ? <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${Math.max(ratio * 100, 3)}%`, backgroundColor: color }} /> : null}
+      {ratio > 0 ? <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${Math.max(ratio * 100, 3)}%`, backgroundColor: subjectTone(color) }} /> : null}
     </span>
   );
 }

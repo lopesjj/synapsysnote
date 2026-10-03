@@ -14,8 +14,9 @@ import { useStudyT } from "@/lib/study/i18n";
 import { capitalizeFirst, orderedWeekdays, weekdayLabel } from "@/lib/study/dates";
 import { cycleLength, generateCycleItems, subjectMinutes } from "@/lib/study/cycle";
 import { weeklyAgendaMinutes } from "@/lib/study/agenda";
+import { subjectTone } from "@/lib/study/defaults";
 import type { CycleItem, CycleSubjectConfig } from "@/types/study";
-import { GoalMark, Segmented } from "./ui";
+import { GoalMark, Segmented, SubjectDot } from "./ui";
 
 const BLOCK_OPTIONS = [15, 20, 25, 30, 40, 45, 50, 60, 75, 90, 120];
 const BAR_MAX = 8 * 60;
@@ -164,6 +165,7 @@ function CyclePreview({ items, size = 128 }: { items: CycleItem[]; size?: number
         ? items.map((item) => {
             const length = (item.minutes / total) * circumference;
             const dash = Math.max(0.5, length - gap);
+            const tone = subjectById(item.subjectId)?.color;
             const element = (
               <circle
                 key={item.id}
@@ -171,7 +173,7 @@ function CyclePreview({ items, size = 128 }: { items: CycleItem[]; size?: number
                 cy={size / 2}
                 r={radius}
                 fill="none"
-                stroke={subjectById(item.subjectId)?.color ?? "var(--text-faint)"}
+                stroke={tone ? subjectTone(tone) : "var(--text-faint)"}
                 strokeWidth={thickness}
                 strokeDasharray={`${dash} ${circumference - dash}`}
                 strokeDashoffset={-offset}
@@ -426,7 +428,7 @@ function WizardBody({ initialMode, onClose }: { initialMode: Mode; onClose: () =
                         className="inline-flex h-8 items-center gap-2 rounded-full pl-2.5 pr-3 text-[12.5px] text-ink shadow-[inset_0_0_0_1px_var(--border)] transition hover:shadow-[inset_0_0_0_1px_var(--border-strong)]"
                       >
                         <Plus className="size-3.5 text-faint" />
-                        <span className="size-2 rounded-full" style={{ backgroundColor: subject.color }} />
+                        <SubjectDot color={subject.color} />
                         {subject.name || st("untitled_subject")}
                       </button>
                     ))}
@@ -442,7 +444,7 @@ function WizardBody({ initialMode, onClose }: { initialMode: Mode; onClose: () =
                         return (
                           <li key={item.id} className="group flex items-center gap-2.5 py-1.5 text-[13px]">
                             <span className="w-5 text-right text-[11.5px] tabular-nums text-faint">{index + 1}</span>
-                            <span aria-hidden className="h-5 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subject?.color ?? "var(--border-strong)" }} />
+                            <span aria-hidden className="h-5 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subject?.color ? subjectTone(subject.color) : "var(--border-strong)" }} />
                             <span className="min-w-0 flex-1 truncate text-ink">{subject?.name ?? st("untitled_subject")}</span>
                             <div className="flex items-center opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                               <IconAction label={st("cycle_move_up")} disabled={index === 0} onClick={() => moveBlock(index, -1)}>
@@ -530,7 +532,7 @@ function WizardBody({ initialMode, onClose }: { initialMode: Mode; onClose: () =
                           aria-label={subject?.name}
                         />
                         <span className="flex min-w-0 items-center gap-2 text-[13px] text-ink">
-                          <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: subject?.color }} />
+                          <SubjectDot color={subject?.color} />
                           <span className="truncate">{subject?.name}</span>
                         </span>
                         <span className="col-start-3 row-start-1 text-right text-[12.5px] tabular-nums text-ink sm:col-start-5">
@@ -613,7 +615,7 @@ function WizardBody({ initialMode, onClose }: { initialMode: Mode; onClose: () =
                 return (
                   <li key={item.id} className="flex items-center gap-2.5 border-b border-[var(--border)] py-2 text-[13px]">
                     <span className="w-5 text-right text-[11.5px] tabular-nums text-faint">{index + 1}</span>
-                    <span aria-hidden className="h-4 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subject?.color }} />
+                    <span aria-hidden className="h-4 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subject?.color ? subjectTone(subject.color) : undefined }} />
                     <span className="min-w-0 flex-1 truncate text-ink">{subject?.name ?? st("untitled_subject")}</span>
                     <span className="text-[12px] tabular-nums text-muted">{duration(item.minutes * 60)}</span>
                   </li>

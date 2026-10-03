@@ -33,8 +33,9 @@ import { useStudy } from "@/lib/study/provider";
 import { useStudyT, type StudyKey } from "@/lib/study/i18n";
 import { useStudyUi } from "@/lib/study/ui-store";
 import { buildNoteDirectory } from "@/lib/study/material";
-import { coverageOf, groupSessions, performanceBand, topicKey, type CoverageInfo } from "@/lib/study/metrics";
+import { coverageOf, groupSessions, groupWithExams, performanceBand, topicKey, type CoverageInfo } from "@/lib/study/metrics";
 import { diffDays } from "@/lib/study/dates";
+import { subjectTone } from "@/lib/study/defaults";
 import type { StudyAggregate, StudySubject, StudyTopic } from "@/types/study";
 import { Combobox } from "../combobox";
 import { SubjectDialog } from "../subject-dialog";
@@ -55,7 +56,7 @@ interface SubjectRow {
 }
 
 const GRID = "lg:grid-cols-[minmax(0,1fr)_8.5rem_5.5rem_5.5rem_6rem_7.5rem_4.25rem]";
-const SEGMENTED_LIMIT = 20;
+const SEGMENTED_LIMIT = 8;
 const CARD = "rounded-[20px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_1px_2px_rgba(15,44,76,0.04)]";
 const FILTER_KEY: Record<Filter, StudyKey> = {
   all: "syllabus_filter_all",
@@ -95,7 +96,7 @@ function SubjectsBody() {
   const { st } = useStudyT();
   const params = useSearchParams();
   const focusSubject = params.get("subject");
-  const { activePlan, planSubjects, planSessions, today } = useStudy();
+  const { activePlan, planSubjects, planSessions, planExams, today } = useStudy();
   const [sort, setSort] = useState<SortKey>("custom");
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -121,7 +122,7 @@ function SubjectsBody() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const bySubject = useMemo(() => groupSessions(planSessions, (session) => session.subjectId), [planSessions]);
+  const bySubject = useMemo(() => groupWithExams(planSessions, planExams, planSubjects), [planExams, planSessions, planSubjects]);
   const byTopic = useMemo(() => groupSessions(planSessions, (session) => topicKey(session.subjectId, session.topicId)), [planSessions]);
   const coverage = useMemo(() => coverageOf(planSubjects), [planSubjects]);
   const q = fold(query.trim());
@@ -395,11 +396,11 @@ function CoverageMap({
                 >
                   <span
                     className="relative h-2.5 w-full overflow-hidden rounded-full transition-[height] duration-200 ease-out group-hover/segment:h-3.5"
-                    style={{ backgroundColor: `color-mix(in oklab, ${subject.color} 20%, var(--surface-2))` }}
+                    style={{ backgroundColor: `color-mix(in oklab, ${subjectTone(subject.color)} 20%, var(--surface-2))` }}
                   >
                     <span
                       className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
-                      style={{ width: `${(done / subject.topics.length) * 100}%`, backgroundColor: subject.color }}
+                      style={{ width: `${(done / subject.topics.length) * 100}%`, backgroundColor: subjectTone(subject.color) }}
                     />
                   </span>
                 </button>
@@ -504,7 +505,7 @@ function SubjectGroup({
           >
             <ChevronRight className={cn("size-4 transition-transform duration-200 ease-out", expanded && "rotate-90")} />
           </button>
-          <span aria-hidden className="h-8 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subject.color }} />
+          <span aria-hidden className="h-8 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subjectTone(subject.color) }} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 min-w-0">
               <Link
@@ -590,7 +591,7 @@ function SubjectGroup({
               <span
                 aria-hidden
                 className="pointer-events-none absolute bottom-5 left-[55px] top-0 w-px"
-                style={{ backgroundColor: `color-mix(in oklab, ${subject.color} 38%, transparent)` }}
+                style={{ backgroundColor: `color-mix(in oklab, ${subjectTone(subject.color)} 38%, transparent)` }}
               />
               {topics.length ? (
                 topics.map((topic) => (
@@ -660,7 +661,7 @@ function TopicRow({
           onCheckedChange={(value) => void actions.updateTopic(subject.id, topic.id, { done: value === true })}
           aria-label={topic.done ? st("topic_mark_pending") : st("topic_mark_done")}
           className="mt-[2px] data-[state=checked]:border-[var(--topic)] data-[state=checked]:bg-[var(--topic)]"
-          style={{ "--topic": subject.color } as CSSProperties}
+          style={{ "--topic": subjectTone(subject.color) } as CSSProperties}
         />
         <div className="min-w-0">
           <p className={cn("text-[13px] leading-snug transition-colors", topic.done ? "text-muted" : "text-ink")}>

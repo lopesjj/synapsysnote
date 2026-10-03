@@ -3,15 +3,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Maximize2 } from "lucide-react";
+import { ArrowLeft, Maximize2, Pencil } from "lucide-react";
+import { toast } from "sonner";
 import type { Flashcard, FlashcardRating } from "@/types/models";
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/primitives";
+import { Kbd, Textarea } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/translations";
 import { useUiStore } from "@/lib/store/ui-store";
 import { useImageLightboxStore } from "@/lib/store/image-lightbox-store";
-import { calculateNextReview, formatInterval } from "@/lib/flashcards/srs";
+import { useWorkspace } from "@/lib/data/provider";
+import { useFlashcardSettings } from "@/lib/flashcards/use-flashcard-settings";
+import { calculateNextReview, formatInterval, orderStudyCards } from "@/lib/flashcards/srs";
 import { formatDuration, intervalLabels } from "@/lib/flashcards/labels";
 import { cardImage, hasCardImage } from "@/lib/flashcards/card-images";
 import {
@@ -84,16 +87,37 @@ export function FlashcardStudySession({
 }: FlashcardStudySessionProps) {
   const { t } = useTranslation();
   const reducedMotion = useUiStore((state) => state.reducedMotion);
+  const { adapter, notebooks, pages } = useWorkspace();
+  const { settings } = useFlashcardSettings();
+  const notebookByPage = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const page of pages) map.set(page.id, page.notebookId);
+    return map;
+  }, [pages]);
+  const editsRef = useRef(new Map<string, { front: string; back: string; hint: string }>());
+  const arrange = useCallback(
+    (source: readonly Flashcard[]) =>
+      orderStudyCards(
+        source.map((card) => {
+          const edit = editsRef.current.get(card.id);
+          return edit ? { ...card, front: edit.front, back: edit.back, hint: edit.hint } : card;
+        }),
+        settings.studyOrder,
+        { notebooks, notebookByPage }
+      ),
+    [notebookByPage, notebooks, settings.studyOrder]
+  );
 
-  const [queue, setQueue] = useState<Flashcard[]>(() =>
-    [...cards].sort((a, b) => a.nextReviewDate - b.nextReviewDate)
-  );
-  const [baseOrder] = useState<string[]>(() =>
-    [...cards].sort((a, b) => a.nextReviewDate - b.nextReviewDate).map((c) => c.id)
-  );
+  const [queue, setQueue] = useState<Flashcard[]>(() => arrange(cards));
+  const [baseOrder, setBaseOrder] = useState<string[]>(() => queue.map((card) => card.id));
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draftFront, setDraftFront] = useState("");
+  const [draftBack, setDraftBack] = useState("");
+  const [draftHint, setDraftHint] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
   const [results, setResults] = useState<Map<string, FlashcardRating>>(new Map());
   const [answers, setAnswers] = useState<FlashcardRating[]>([]);
   const [completed, setCompleted] = useState(cards.length === 0);
@@ -195,11 +219,13 @@ export function FlashcardStudySession({
   );
 
   const restart = () => {
-    const fresh = [...cards].sort((a, b) => a.nextReviewDate - b.nextReviewDate);
+    const fresh = arrange(cards);
     setQueue(fresh);
+    setBaseOrder(fresh.map((card) => card.id));
     setIndex(0);
     setFlipped(false);
     setHintVisible(false);
+    setEditing(false);
     setResults(new Map());
     setAnswers([]);
     setCompleted(fresh.length === 0);
@@ -207,14 +233,62 @@ export function FlashcardStudySession({
     startedAtRef.current = Date.now();
   };
 
+  const openEdit = useCallback(() => {
+    const card = queue[index];
+    if (!card) return;
+    setDraftFront(card.front);
+    setDraftBack(card.back);
+    setDraftHint(card.hint ?? "");
+    setEditing(true);
+  }, [index, queue]);
+
+  const saveEdit = useCallback(async () => {
+    const card = queue[index];
+    if (!card || savingEdit) return;
+    const front = draftFront.trim();
+    const back = draftBack.trim();
+    const hint = draftHint.trim();
+    const frontOk = front.length > 0 || Boolean(cardImage(card, "front").url);
+    const backOk = back.length > 0 || Boolean(cardImage(card, "back").url);
+    if (!frontOk || !backOk) {
+      toast.error(t("card_side_required"));
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      await adapter.updateFlashcard(card.id, { front, back, hint: hint || undefined });
+      editsRef.current.set(card.id, { front, back, hint });
+      setQueue((prev) =>
+        prev.map((item) => (item.id === card.id ? { ...item, front, back, hint } : item))
+      );
+      setEditing(false);
+      toast.success(t("card_updated"));
+    } catch {
+      toast.error(t("card_save_failed"));
+    } finally {
+      setSavingEdit(false);
+    }
+  }, [adapter, draftBack, draftFront, draftHint, index, queue, savingEdit, t]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // Com o visualizador aberto ele e quem manda: tem os proprios atalhos de
       // zoom e de fechar.
       if (lightboxOpen) return;
-      // O card em foco ja trata Espaco/Enter no proprio elemento; sem esta guarda
-      // o listener global aplicaria um segundo toggle e o card nunca viraria.
       if (event.defaultPrevented) return;
+      if (editing) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setEditing(false);
+        }
+        return;
+      }
+      if (
+        event.target instanceof Element &&
+        event.target.closest("[data-study-edit]")
+      ) {
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
         onClose();
@@ -238,7 +312,7 @@ export function FlashcardStudySession({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [completed, flipped, handleRate, lightboxOpen, onClose]);
+  }, [completed, editing, flipped, handleRate, lightboxOpen, onClose]);
 
   const counts = useMemo(() => {
     const base: Record<FlashcardRating, number> = { again: 0, hard: 0, good: 0, easy: 0 };
@@ -317,6 +391,72 @@ export function FlashcardStudySession({
           <>
             <div className="flex flex-1 items-center justify-center py-6">
               <div className="relative w-full">
+                {editing ? (
+                  <form
+                    className="flex w-full flex-col gap-3 rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-panel)] sm:p-6"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void saveEdit();
+                    }}
+                  >
+                    <label className="block">
+                      <span className="mb-1.5 block text-[12px] font-medium text-muted">
+                        {t("card_front")}
+                      </span>
+                      <Textarea
+                        value={draftFront}
+                        onChange={(event) => setDraftFront(event.target.value)}
+                        rows={4}
+                        className="min-h-28 text-base leading-relaxed sm:min-h-24 sm:text-[14px]"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 block text-[12px] font-medium text-muted">
+                        {t("card_back")}
+                      </span>
+                      <Textarea
+                        value={draftBack}
+                        onChange={(event) => setDraftBack(event.target.value)}
+                        rows={4}
+                        className="min-h-28 text-base leading-relaxed sm:min-h-24 sm:text-[14px]"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 block text-[12px] font-medium text-muted">
+                        {t("card_hint")}
+                      </span>
+                      <Textarea
+                        value={draftHint}
+                        onChange={(event) => setDraftHint(event.target.value)}
+                        rows={2}
+                        placeholder={t("card_hint_placeholder")}
+                        className="min-h-16 text-base leading-relaxed sm:min-h-14 sm:text-[14px]"
+                      />
+                    </label>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="md"
+                        disabled={savingEdit}
+                        onClick={() => setEditing(false)}
+                        className="w-full sm:w-auto"
+                      >
+                        {t("cancel")}
+                      </Button>
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="md"
+                        disabled={savingEdit}
+                        className="w-full font-semibold sm:w-auto"
+                      >
+                        {t("save_changes")}
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
                 <span
                   aria-hidden="true"
                   className="absolute inset-x-6 -bottom-2 h-10 rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface-2)]/70"
@@ -339,12 +479,26 @@ export function FlashcardStudySession({
                   }}
                   className={cn(
                     "group relative w-full cursor-pointer outline-none [perspective:1600px]",
-                    // Com imagem o card cresce, para sobrar area util a ela.
                     hasCardImage(currentCard)
                       ? "h-[420px] sm:h-[470px]"
                       : "h-[360px] sm:h-[400px]"
                   )}
                 >
+                  <button
+                    type="button"
+                    data-study-edit=""
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openEdit();
+                    }}
+                    onKeyDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    aria-label={t("edit_card")}
+                    className="absolute right-3 top-3 z-20 flex size-10 items-center justify-center rounded-lg text-muted transition hover:bg-[var(--surface-2)] hover:text-ink sm:right-4 sm:top-4 sm:size-8"
+                  >
+                    <Pencil className="size-4" />
+                  </button>
                   <motion.div
                     className="relative h-full w-full [transform-style:preserve-3d]"
                     animate={{ rotateY: flipped ? 180 : 0 }}
@@ -369,9 +523,12 @@ export function FlashcardStudySession({
                     />
                   </motion.div>
                 </div>
+                  </>
+                )}
               </div>
             </div>
 
+            {!editing ? (
             <div className="shrink-0">
               {!flipped ? (
                 <Button
@@ -412,11 +569,12 @@ export function FlashcardStudySession({
                 </div>
               )}
 
-              <div className="mt-3 flex items-center justify-between text-[11.5px] text-faint">
+              <div className="mt-3 flex items-center justify-between gap-3 text-[11.5px] text-faint">
                 <span>{flipped ? t("rate_shortcuts_hint") : t("flip_card_hint")}</span>
-                <span className="tabular-nums">{t("cards_remaining_count", { count: remaining })}</span>
+                <span className="shrink-0 tabular-nums">{t("cards_remaining_count", { count: remaining })}</span>
               </div>
             </div>
+            ) : null}
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center py-10 text-center">
@@ -543,16 +701,16 @@ function CardFace({
         )}
       />
 
-      <div className="flex shrink-0 items-center justify-between">
+      <div className="flex shrink-0 items-center justify-between gap-2 pr-10 sm:pr-8">
         <span
           className={cn(
-            "text-[11px] font-semibold uppercase tracking-[0.09em]",
+            "shrink-0 text-[11px] font-semibold uppercase tracking-[0.09em]",
             isFront ? "text-[var(--accent)]" : "text-[var(--success)]"
           )}
         >
           {isFront ? t("card_front_short") : t("card_back_short")}
         </span>
-        <span className="truncate pl-3 text-[11.5px] text-faint">
+        <span className="min-w-0 truncate text-[11.5px] text-faint">
           {card.pageTitle || t("untitled")}
         </span>
       </div>

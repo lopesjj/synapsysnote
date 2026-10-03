@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import { useLocale, usePathname, useRouter } from "@/lib/i18n/navigation";
 import { useLocaleUrlSync } from "@/hooks/use-locale-url-sync";
@@ -530,25 +530,47 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 const COLLAPSED_SIDEBAR_WIDTH = 76;
 const SIDEBAR_SLIDE = { duration: 0.85, ease: [0.22, 1, 0.36, 1] as const };
+let sidebarMotionReady = false;
+const sidebarMotionListeners = new Set<() => void>();
+
+function subscribeSidebarMotion(listener: () => void) {
+  sidebarMotionListeners.add(listener);
+  if (!sidebarMotionReady) {
+    requestAnimationFrame(() => {
+      if (sidebarMotionReady) return;
+      sidebarMotionReady = true;
+      sidebarMotionListeners.forEach((entry) => entry());
+    });
+  }
+  return () => {
+    sidebarMotionListeners.delete(listener);
+  };
+}
+
+function useSidebarMotionReady() {
+  return useSyncExternalStore(subscribeSidebarMotion, () => sidebarMotionReady, () => false);
+}
 
 function DesktopSidebar() {
   const collapsed = useUiStore((state) => state.sidebarCollapsed);
   const width = useUiStore((state) => state.sidebarWidth);
   const reducedMotion = useUiStore((state) => state.reducedMotion);
+  const motionReady = useSidebarMotionReady();
+  const slide = motionReady && !reducedMotion ? SIDEBAR_SLIDE : { duration: 0 };
 
   return (
     <div className="hidden h-full md:flex">
       <motion.div
         initial={false}
         animate={{ width: collapsed ? COLLAPSED_SIDEBAR_WIDTH : width }}
-        transition={reducedMotion ? { duration: 0 } : SIDEBAR_SLIDE}
+        transition={slide}
         className="relative h-full shrink-0 overflow-hidden"
       >
         <motion.div
           initial={false}
           animate={{ opacity: collapsed ? 0 : 1 }}
-          transition={reducedMotion ? { duration: 0 } : { duration: 0.42, ease: "easeOut" }}
-          className="h-full"
+          transition={motionReady && !reducedMotion ? { duration: 0.42, ease: "easeOut" } : { duration: 0 }}
+          className={cn("h-full", collapsed && "pointer-events-none [&_*]:pointer-events-none")}
           style={{
             width,
             pointerEvents: collapsed ? "none" : "auto",
@@ -559,8 +581,11 @@ function DesktopSidebar() {
         <motion.div
           initial={false}
           animate={{ opacity: collapsed ? 1 : 0 }}
-          transition={reducedMotion ? { duration: 0 } : { duration: 0.45, ease: "easeOut", delay: collapsed ? 0.18 : 0 }}
-          className="absolute inset-y-0 left-0 w-[76px]"
+          transition={motionReady && !reducedMotion ? { duration: 0.45, ease: "easeOut", delay: collapsed ? 0.18 : 0 } : { duration: 0 }}
+          className={cn(
+            "absolute inset-y-0 left-0 w-[76px]",
+            !collapsed && "pointer-events-none [&_*]:pointer-events-none"
+          )}
           style={{ pointerEvents: collapsed ? "auto" : "none" }}
         >
           <SidebarRail />
