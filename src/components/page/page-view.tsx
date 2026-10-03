@@ -921,6 +921,7 @@ export function PageView({ pageId }: { pageId: string }) {
         onChange={(coverUrl) => adapter.updatePage(pageId, { coverUrl })}
         onPositionChange={(pos) => adapter.updatePage(pageId, { coverPosition: pos })}
         onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
+        onRemoveUpload={(url) => adapter.deleteMedia([url])}
       />
 
       <article
@@ -939,8 +940,9 @@ export function PageView({ pageId }: { pageId: string }) {
             icons={PAGE_ICONS}
             current={page.icon}
             fallback="📄"
-            onSelect={(icon) => void adapter.updatePage(pageId, { icon })}
+            onSelect={(icon) => adapter.updatePage(pageId, { icon })}
             onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
+            onRemoveUpload={(url) => adapter.deleteMedia([url])}
             className={
               hasCover
                 ? cn(

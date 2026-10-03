@@ -17,7 +17,7 @@ export const LEGAL_ENTITY = {
   privacyEmail: "atendimento@synapsysnt.com.br",
 };
 
-export const LEGAL_VERSION = "1.1";
+export const LEGAL_VERSION = "1.2";
 export const LEGAL_UPDATED_AT = "2026-10-02";
 
 /**

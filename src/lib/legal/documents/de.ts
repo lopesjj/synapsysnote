@@ -280,6 +280,7 @@ const de: LegalBundle = {
             list: [
               "**Konto und Inhalte:** solange dein Konto aktiv ist.",
               "**Papierkorb:** Gelöschte Elemente verbleiben {trashDays} Tage im Papierkorb und werden dann dauerhaft gelöscht.",
+              "**Erneuter Notion-Import:** die vorherige Version einer Notiz und die Dateien, die sie nicht mehr verwendet, werden sofort gelöscht, ohne in den Papierkorb zu gelangen.",
               "**Kontolöschung:** Über Einstellungen › Datenschutz & Daten werden die Daten sofort gelöscht; auf Anfrage per E-Mail innerhalb von 30 Tagen. Es bleibt nur, was wir gesetzlich aufbewahren müssen, etwa die Zugriffsprotokolle.",
               "**Zugriffsprotokolle:** {accessLogMonths} Monate, gemäß Artikel 15 des brasilianischen Marco Civil da Internet (Gesetz Nr. 12.965/2014).",
               "**Integrations-Token:** bis du die Integration trennst oder dein Konto löschst.",

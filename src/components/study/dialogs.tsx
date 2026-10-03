@@ -170,6 +170,7 @@ function GoalForm({
           fallback=""
           onSelect={(value) => setIcon(value || null)}
           onUploadImage={icons.upload}
+          onRemoveUpload={icons.releaseStored}
           trigger={
             <button
               type="button"

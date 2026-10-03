@@ -225,6 +225,17 @@ async function listPrefix(bucket: BucketLike, prefix: string): Promise<string[]>
   }
 }
 
+async function versionMediaPaths(db: Firestore, workspaceId: string): Promise<Set<string>> {
+  const into = new Set<string>();
+  const versions = await db.collectionGroup("versions").select("blocksJson", "blocks").get();
+  const prefix = `workspaces/${workspaceId}/`;
+  for (const version of versions.docs) {
+    if (!version.ref.path.startsWith(prefix)) continue;
+    addBlockPaths(parseStoredBlocks(version.data()), into);
+  }
+  return into;
+}
+
 async function deleteStorage(
   db: Firestore,
   bucket: BucketLike,
@@ -233,10 +244,10 @@ async function deleteStorage(
   inUse: Set<string>,
   scanStartedAt: Date,
   skipPages: Set<string>
-) {
+): Promise<string[]> {
   const ownPrefix = `workspaces/${workspaceId}/`;
   let deletable = [...candidates].filter((path) => path.startsWith(ownPrefix) && !inUse.has(path));
-  if (!deletable.length) return;
+  if (!deletable.length) return [];
   const reused = await pathsWrittenSince(db, workspaceId, scanStartedAt, skipPages);
   deletable = deletable.filter((path) => !reused.has(path));
   await Promise.allSettled(
@@ -247,6 +258,32 @@ async function deleteStorage(
         .catch(() => undefined)
     )
   );
+  return deletable;
+}
+
+export async function discardUnusedPaths(
+  db: Firestore,
+  bucket: BucketLike,
+  workspaceId: string,
+  paths: string[]
+): Promise<number> {
+  const prefix = `workspaces/${workspaceId}/`;
+  const valid = [...new Set(paths.map(extractStoragePath))].filter(
+    (path): path is string => Boolean(path && path.startsWith(prefix))
+  );
+  if (!valid.length) return 0;
+  const scanStartedAt = new Date();
+  const [inUse, versions] = await Promise.all([
+    referencedPaths(db, workspaceId, { pages: [], databases: [], notebooks: [] }),
+    versionMediaPaths(db, workspaceId),
+  ]);
+  for (const path of versions) inUse.add(path);
+  const deleted = await deleteStorage(db, bucket, workspaceId, new Set(valid), inUse, scanStartedAt, new Set());
+  if (deleted.length) {
+    const trashed = db.collection("workspaces").doc(workspaceId).collection("trashed_media");
+    await deleteRefs(db, deleted.map((path) => trashed.doc(quarantineDocId(path))));
+  }
+  return deleted.length;
 }
 
 export async function purgeItems(

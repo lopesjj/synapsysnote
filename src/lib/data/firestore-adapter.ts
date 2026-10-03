@@ -24,7 +24,7 @@ import {
   type QueryDocumentSnapshot,
   type Timestamp,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes, uploadBytesResumable } from "firebase/storage";
+import { deleteObject, getDownloadURL, ref, uploadBytes, uploadBytesResumable } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";
 import { nanoid } from "nanoid";
 import type {
@@ -1760,7 +1760,12 @@ export class FirestoreAdapter implements DataAdapter {
     const path = `workspaces/${this.workspaceId}/uploads/icons/${Date.now()}-${nanoid(6)}-${safeName}`;
     const storageRef = ref(getFirebaseStorage(), path);
     await uploadBytes(storageRef, uploadData, { contentType });
-    return getDownloadURL(storageRef);
+    try {
+      return await getDownloadURL(storageRef);
+    } catch (error) {
+      await deleteObject(storageRef).catch(() => undefined);
+      throw error;
+    }
   }
 
   async deleteMedia(storagePaths: string[]): Promise<void> {

@@ -37,12 +37,14 @@ import {
 } from "@/lib/notion/classify-import";
 import { defaultViews, mapDatabaseSchema, mapPropertyValues } from "./property-mapper";
 import { rehostNotionFile, rehostNotionIcon } from "./media";
-import { adminDb } from "@/lib/firebase/admin";
+import { adminBucket, adminDb } from "@/lib/firebase/admin";
 import {
   blockMediaPaths,
+  discardUnusedPaths,
   extractStoragePath,
   parseStoredBlocks,
-  quarantinePaths,
+  purgeItems,
+  type BucketLike,
 } from "@/lib/trash/purge-core";
 import { NOTION_REIMPORT_LABEL } from "@/lib/data/version-labels";
 
@@ -102,6 +104,59 @@ async function adoptChildPages(workspaceId: string, oldPageId: string, notebookI
     );
   }
   await commitOps(pages.firestore, ops);
+}
+
+function storage(): BucketLike {
+  return adminBucket() as unknown as BucketLike;
+}
+
+async function dropReimportVersions(workspaceId: string, pageId?: string): Promise<string[]> {
+  const db = adminDb();
+  const versions = await db.collectionGroup("versions").get();
+  const prefix = pageId
+    ? `workspaces/${workspaceId}/pages/${pageId}/versions/`
+    : `workspaces/${workspaceId}/pages/`;
+  const paths: string[] = [];
+  const refs: FirebaseFirestore.DocumentReference[] = [];
+  for (const version of versions.docs) {
+    if (!version.ref.path.startsWith(prefix) || version.get("label") !== NOTION_REIMPORT_LABEL) continue;
+    paths.push(...blockMediaPaths(parseStoredBlocks(version.data())));
+    refs.push(version.ref);
+  }
+  for (let start = 0; start < refs.length; start += 400) {
+    const batch = db.batch();
+    for (const ref of refs.slice(start, start + 400)) batch.delete(ref);
+    await batch.commit();
+  }
+  return paths;
+}
+
+export async function purgeReimportedNotes(workspaceId: string): Promise<void> {
+  const db = adminDb();
+  const bucket = storage();
+  const paths = await dropReimportVersions(workspaceId);
+  const [pages, databases, notebooks] = await Promise.all([
+    pagesRef(workspaceId).select("retiredNotionId", "deletedAt").get(),
+    databasesRef(workspaceId).select("retiredNotionId", "deletedAt").get(),
+    notebooksRef(workspaceId).select("retiredNotionId", "deletedAt").get(),
+  ]);
+  const retired = (snap: FirebaseFirestore.QuerySnapshot) => snap.docs.filter((doc) => doc.get("retiredNotionId") && doc.get("deletedAt"));
+  const retiredPages = retired(pages);
+  const retiredDatabases = retired(databases);
+  const retiredNotebooks = retired(notebooks);
+  if (retiredPages.length || retiredDatabases.length || retiredNotebooks.length) {
+    const full = await Promise.all([
+      Promise.all(retiredPages.map((doc) => doc.ref.get())),
+      Promise.all(retiredDatabases.map((doc) => doc.ref.get())),
+      Promise.all(retiredNotebooks.map((doc) => doc.ref.get())),
+    ]);
+    await purgeItems(db, bucket, workspaceId, {
+      pages: full[0],
+      databases: full[1],
+      notebooks: full[2],
+    });
+  }
+  if (paths.length) await discardUnusedPaths(db, bucket, workspaceId, paths);
 }
 
 async function retirePage(snap: Snapshot, uid: string) {
@@ -447,9 +502,7 @@ async function importPage(args: ImportArgs): Promise<string> {
     });
   } catch (error) {
     converted = false;
-    if (rehosted.length) {
-      await quarantinePaths(adminDb(), workspaceId, rehosted, { pageId: null, userId: progress.requestedBy });
-    }
+    if (rehosted.length) await discardUnusedPaths(adminDb(), storage(), workspaceId, rehosted);
     blocks = [
       {
         id: randomUUID(),
@@ -474,7 +527,7 @@ async function importPage(args: ImportArgs): Promise<string> {
   const plainText = blocksToPlainText(cleanBlocks);
   const newMedia = blockMediaPaths(cleanBlocks);
   if (Buffer.byteLength(blocksJson) + Buffer.byteLength(plainText) > MAX_PAGE_BYTES) {
-    await quarantinePaths(adminDb(), workspaceId, newMedia, { pageId: null, userId: progress.requestedBy });
+    await discardUnusedPaths(adminDb(), storage(), workspaceId, newMedia);
     throw new Error("A página passa do limite de 1 MB por nota. Divida-a em páginas menores no Notion e importe de novo.");
   }
 
@@ -517,19 +570,10 @@ async function importPage(args: ImportArgs): Promise<string> {
 
   let oldMedia: string[] = [];
   if (previous && replaceContent) {
-    const oldBlocks = storedBlocks(previous);
-    oldMedia = blockMediaPaths(oldBlocks);
-    const previousText = String(previous.get("plainText") ?? "");
-    if (previousText.trim() && previousText !== plainText) {
-      await ref.collection("versions").add({
-        pageId: ref.id,
-        title: previous.get("title") ?? "",
-        blocksJson: JSON.stringify(oldBlocks),
-        authorId: progress.requestedBy,
-        label: NOTION_REIMPORT_LABEL,
-        createdAt: FieldValue.serverTimestamp(),
-      });
-    }
+    oldMedia = blockMediaPaths(storedBlocks(previous));
+    const previousIcon = extractStoragePath(previous.get("icon"));
+    const nextIcon = extractStoragePath(icon);
+    if (previousIcon && previousIcon !== nextIcon) oldMedia.push(previousIcon);
   }
 
   await ref.set(
@@ -582,8 +626,9 @@ async function importPage(args: ImportArgs): Promise<string> {
 
   const kept = new Set(newMedia);
   const removed = oldMedia.filter((path) => !kept.has(path));
-  if (removed.length) {
-    await quarantinePaths(adminDb(), workspaceId, removed, { pageId: ref.id, userId: progress.requestedBy });
+  const held = await dropReimportVersions(workspaceId, ref.id);
+  if (removed.length || held.length) {
+    await discardUnusedPaths(adminDb(), storage(), workspaceId, [...removed, ...held]);
   }
 
   return ref.id;
@@ -773,9 +818,7 @@ async function importDatabase(args: ImportArgs): Promise<string> {
     await progress.patch({ currentStep: `Importando registros de “${node.title}” (${order})…` });
   } while (cursor);
 
-  if (replacedFiles.length) {
-    await quarantinePaths(adminDb(), workspaceId, replacedFiles, { pageId: null, userId: progress.requestedBy });
-  }
+  if (replacedFiles.length) await discardUnusedPaths(adminDb(), storage(), workspaceId, replacedFiles);
 
   idMap.set(node.id, ref.id);
   return ref.id;
@@ -1260,6 +1303,7 @@ async function runLeasedImportStep(
   if (remaining.length === 0) {
     await progress.patch({ currentStep: "Reconstruindo links entre as páginas…" });
     await relinkImportedPages(workspaceId, idMap, jobData.options.createBacklinks !== false);
+    await purgeReimportedNotes(workspaceId);
 
     await progress.finish();
     await integrationRef(workspaceId).set(

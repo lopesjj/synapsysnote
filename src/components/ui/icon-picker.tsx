@@ -132,14 +132,16 @@ export function IconPickerMenu({
   fallback,
   onSelect,
   onUploadImage,
+  onRemoveUpload,
   className,
 }: {
   trigger: ReactNode;
   icons: readonly string[];
   current?: string | null;
   fallback: string;
-  onSelect: (icon: string) => void;
+  onSelect: (icon: string) => void | Promise<unknown>;
   onUploadImage?: (file: File) => Promise<string>;
+  onRemoveUpload?: (url: string) => void | Promise<void>;
   className?: string;
 }) {
   const { t } = useTranslation();
@@ -170,10 +172,14 @@ export function IconPickerMenu({
     }
     setUploading(true);
     holdOpen.current = true;
+    let uploaded: string | null = null;
     try {
-      apply(await onUploadImage(file));
+      uploaded = await onUploadImage(file);
+      await onSelect(uploaded);
+      setOpen(false);
       toast.success(t("icon_updated"));
     } catch (error) {
+      if (uploaded && onRemoveUpload) await Promise.resolve(onRemoveUpload(uploaded)).catch(() => undefined);
       toast.error(error instanceof Error ? error.message : t("image_upload_failed"));
     } finally {
       holdOpen.current = false;

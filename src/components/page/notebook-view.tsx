@@ -763,9 +763,10 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
         coverUrl={notebook.coverUrl}
         coverPosition={notebook.coverPosition}
         readOnly={isArchived}
-        onChange={(coverUrl) => void adapter.updateNotebook(notebookId, { coverUrl })}
-        onPositionChange={(pos) => void adapter.updateNotebook(notebookId, { coverPosition: pos })}
+        onChange={(coverUrl) => adapter.updateNotebook(notebookId, { coverUrl })}
+        onPositionChange={(pos) => adapter.updateNotebook(notebookId, { coverPosition: pos })}
         onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
+        onRemoveUpload={(url) => adapter.deleteMedia([url])}
       />
 
       <div className="relative z-10 mx-auto w-full max-w-full sm:max-w-[var(--reading-width,64rem)] px-4 pb-24 pb-safe sm:px-5 md:px-8">
@@ -780,8 +781,9 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
             icons={NOTEBOOK_ICONS}
             current={notebook.emoji}
             fallback="📓"
-            onSelect={(icon) => void adapter.updateNotebook(notebookId, { emoji: icon })}
+            onSelect={(icon) => adapter.updateNotebook(notebookId, { emoji: icon })}
             onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
+            onRemoveUpload={(url) => adapter.deleteMedia([url])}
             className={
               hasCover
                 ? cn(

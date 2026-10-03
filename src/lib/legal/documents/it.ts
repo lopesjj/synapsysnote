@@ -280,6 +280,7 @@ const it: LegalBundle = {
             list: [
               "**Account e contenuti:** finché il tuo account è attivo.",
               "**Cestino:** gli elementi eliminati rimangono nel cestino per {trashDays} giorni e vengono poi cancellati definitivamente.",
+              "**Reimportazione da Notion:** la versione precedente della nota e i file che non usa più vengono eliminati subito, senza passare dal cestino.",
               "**Eliminazione dell'account:** fatta in Preferenze › Privacy e dati, i dati vengono cancellati subito; richiesta via email, entro 30 giorni. Resta solo ciò che la legge ci impone di conservare, come i registri di accesso.",
               "**Log di accesso:** {accessLogMonths} mesi, ai sensi dell'art. 15 del Marco Civil da Internet brasiliano (Legge n. 12.965/2014).",
               "**Token di integrazione:** fino a quando non disconnetti l'integrazione o elimini il tuo account.",

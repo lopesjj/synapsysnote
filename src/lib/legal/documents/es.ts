@@ -280,6 +280,7 @@ const es: LegalBundle = {
             list: [
               "**Cuenta y contenido:** mientras tu cuenta esté activa.",
               "**Papelera:** los elementos eliminados permanecen {trashDays} días en la papelera y después se borran definitivamente.",
+              "**Reimportación de Notion:** la versión anterior de la nota y los archivos que dejó de usar se borran al momento, sin pasar por la papelera.",
               "**Eliminación de la cuenta:** hecha en Preferencias › Privacidad y datos, los datos se borran al instante; pedida por correo, en un máximo de 30 días. Solo queda lo que la ley nos obliga a conservar, como los registros de acceso.",
               "**Registros de acceso:** {accessLogMonths} meses, según el art. 15 del Marco Civil de Internet de Brasil (Ley n.º 12.965/2014).",
               "**Tokens de integración:** hasta que desconectes la integración o elimines la cuenta.",

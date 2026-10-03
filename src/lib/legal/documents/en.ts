@@ -280,6 +280,7 @@ const en: LegalBundle = {
             list: [
               "**Account and content:** for as long as your account is active.",
               "**Trash:** deleted items stay in the trash for {trashDays} days and are then permanently erased.",
+              "**Notion re-import:** the previous version of a note and the files it no longer uses are deleted immediately, without going to the trash.",
               "**Account deletion:** when done under Preferences › Privacy & data, data is erased immediately; when requested by email, within 30 days. Only what the law requires us to keep, such as access logs, remains.",
               "**Access logs:** {accessLogMonths} months, in accordance with article 15 of the Brazilian Civil Rights Framework for the Internet (Law No. 12,965/2014).",
               "**Integration tokens:** until you disconnect the integration or delete your account.",

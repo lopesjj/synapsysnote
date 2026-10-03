@@ -280,6 +280,7 @@ const fr: LegalBundle = {
             list: [
               "**Compte et contenu :** tant que votre compte est actif.",
               "**Corbeille :** les éléments supprimés restent dans la corbeille pendant {trashDays} jours, puis sont définitivement effacés.",
+              "**Réimportation depuis Notion :** la version précédente de la note et les fichiers qu'elle n'utilise plus sont effacés immédiatement, sans passer par la corbeille.",
               "**Suppression du compte :** faite dans Préférences › Confidentialité et données, les données sont effacées immédiatement ; demandée par e-mail, sous 30 jours maximum. Seul reste ce que la loi nous oblige à conserver, comme les journaux d'accès.",
               "**Journaux d'accès :** {accessLogMonths} mois, conformément à l'article 15 du Marco Civil da Internet (loi n° 12.965/2014).",
               "**Jetons d'intégration :** jusqu'à ce que vous déconnectiez l'intégration ou supprimiez votre compte.",

@@ -280,6 +280,7 @@ const pt: LegalBundle = {
             list: [
               "**Conta e conteúdo:** enquanto sua conta estiver ativa.",
               "**Lixeira:** itens excluídos ficam {trashDays} dias na lixeira e depois são apagados definitivamente.",
+              "**Reimportação do Notion:** a versão anterior da nota e os arquivos que ela deixou de usar são apagados na hora, sem passar pela lixeira.",
               "**Exclusão da conta:** feita em Preferências › Privacidade e dados, os dados são apagados na hora; pedida por e-mail, em até 30 dias. Fica só o que a lei nos obriga a manter, como os registros de acesso.",
               "**Registros de acesso:** {accessLogMonths} meses, conforme o art. 15 do Marco Civil da Internet (Lei nº 12.965/2014).",
               "**Integrações:** tokens e dados da conta conectada ficam guardados até você desconectar a integração ou excluir a conta.",

@@ -14,13 +14,15 @@ export function CoverPicker({
   onChange,
   onPositionChange,
   onUploadImage,
+  onRemoveUpload,
   readOnly = false,
 }: {
   coverUrl?: string | null;
   coverPosition?: number | null;
-  onChange: (coverUrl: string | null) => void;
+  onChange: (coverUrl: string | null) => void | Promise<void>;
   onPositionChange?: (coverPosition: number) => void;
   onUploadImage?: (file: File) => Promise<string>;
+  onRemoveUpload?: (url: string) => void | Promise<void>;
   readOnly?: boolean;
 }) {
   const { t } = useTranslation();
@@ -114,9 +116,10 @@ export function CoverPicker({
       return;
     }
     setUploading(true);
+    let uploaded: string | null = null;
     try {
-      const url = await onUploadImage(file);
-      onChange(url);
+      uploaded = await onUploadImage(file);
+      await onChange(uploaded);
       setMenuOpen(false);
       if (isWebDevice()) {
         setCurrentPos(0.5);
@@ -126,6 +129,7 @@ export function CoverPicker({
       }
       toast.success(t("cover_updated"));
     } catch (error) {
+      if (uploaded && onRemoveUpload) await Promise.resolve(onRemoveUpload(uploaded)).catch(() => undefined);
       toast.error(error instanceof Error ? error.message : t("cover_upload_failed"));
     } finally {
       setUploading(false);
