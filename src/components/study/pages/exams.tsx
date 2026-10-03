@@ -47,7 +47,7 @@ function useExamChartHeight() {
 
 function ExamsBody() {
   const { st, locale, language } = useStudyT();
-  const { planExams, settings, actions } = useStudy();
+  const { planExams, settings, actions, planReadOnly } = useStudy();
   const [dialog, setDialog] = useState<{ open: boolean; exam: MockExam | null }>({ open: false, exam: null });
   const [metric, setMetric] = useState<"percent" | "score">("percent");
   const chartHeight = useExamChartHeight();
@@ -96,10 +96,12 @@ function ExamsBody() {
         subtitle={st("exams_subtitle")}
         showLog={false}
         actions={
+          planReadOnly ? null : (
           <Button variant="primary" onClick={() => setDialog({ open: true, exam: null })}>
             <Plus />
             {st("exams_new")}
           </Button>
+          )
         }
       />
       {rows.length ? (
@@ -202,9 +204,12 @@ function ExamsBody() {
                         ) : (
                           <span className="size-7 shrink-0" aria-hidden />
                         )}
+                        {planReadOnly ? null : (
                         <Button variant="ghost" size="icon-sm" aria-label={st("edit")} onClick={() => setDialog({ open: true, exam })}>
                           <Pencil />
                         </Button>
+                        )}
+                        {planReadOnly ? null : (
                         <Button
                           variant="ghost"
                           size="icon-sm"
@@ -218,6 +223,7 @@ function ExamsBody() {
                         >
                           <Trash2 />
                         </Button>
+                        )}
                       </div>
                     </div>
                     </div>
@@ -233,14 +239,18 @@ function ExamsBody() {
           art="exams"
           title={st("exams_empty")}
           action={
+            planReadOnly ? undefined : (
             <Button variant="primary" onClick={() => setDialog({ open: true, exam: null })}>
               <Plus />
               {st("exams_new")}
             </Button>
+            )
           }
         />
       )}
-      <ExamDialog open={dialog.open} exam={dialog.exam} onOpenChange={(open) => setDialog((value) => ({ ...value, open }))} />
+      {planReadOnly ? null : (
+        <ExamDialog open={dialog.open} exam={dialog.exam} onOpenChange={(open) => setDialog((value) => ({ ...value, open }))} />
+      )}
     </StudyPage>
   );
 }

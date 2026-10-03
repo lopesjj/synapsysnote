@@ -96,7 +96,7 @@ function SubjectsBody() {
   const { st } = useStudyT();
   const params = useSearchParams();
   const focusSubject = params.get("subject");
-  const { activePlan, planSubjects, planSessions, planExams, today } = useStudy();
+  const { focusPlan, planReadOnly, planSubjects, planSessions, planExams, today } = useStudy();
   const [sort, setSort] = useState<SortKey>("custom");
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -154,7 +154,7 @@ function SubjectsBody() {
     return list.filter((row) => row.visible);
   }, [bySubject, filter, planSubjects, q, sort, today]);
 
-  if (!activePlan) return null;
+  if (!focusPlan) return null;
 
   const filtering = Boolean(q) || filter !== "all";
   const allOpen = rows.length > 0 && rows.every((row) => open[row.subject.id]);
@@ -177,12 +177,14 @@ function SubjectsBody() {
     <StudyPage>
       <StudyHeader
         title={st("nav_subjects")}
-        subtitle={st("subjects_subtitle", { goal: activePlan.name || st("untitled_goal") })}
+        subtitle={st("subjects_subtitle", { goal: focusPlan.name || st("untitled_goal") })}
         actions={
-          <Button variant="secondary" onClick={() => setDialog({ open: true, subject: null })}>
-            <Plus />
-            {st("goal_add_subject")}
-          </Button>
+          planReadOnly ? null : (
+            <Button variant="secondary" onClick={() => setDialog({ open: true, subject: null })}>
+              <Plus />
+              {st("goal_add_subject")}
+            </Button>
+          )
         }
       />
 
@@ -283,7 +285,7 @@ function SubjectsBody() {
                     row={row}
                     query={q}
                     expanded={filtering || Boolean(open[row.subject.id])}
-                    composing={!filtering}
+                    composing={!filtering && !planReadOnly}
                     byTopic={byTopic}
                     onToggle={() => setOpen((value) => ({ ...value, [row.subject.id]: !value[row.subject.id] }))}
                     onEdit={() => setDialog({ open: true, subject: row.subject })}
@@ -309,10 +311,12 @@ function SubjectsBody() {
           title={st("empty_subjects_title")}
           description={st("empty_subjects_desc")}
           action={
-            <Button variant="primary" onClick={() => setDialog({ open: true, subject: null })}>
-              <Plus />
-              {st("empty_subjects_cta")}
-            </Button>
+            planReadOnly ? undefined : (
+              <Button variant="primary" onClick={() => setDialog({ open: true, subject: null })}>
+                <Plus />
+                {st("empty_subjects_cta")}
+              </Button>
+            )
           }
         />
       )}
@@ -320,7 +324,7 @@ function SubjectsBody() {
       <SubjectDialog
         open={dialog.open}
         onOpenChange={(value) => setDialog((current) => ({ ...current, open: value }))}
-        planId={activePlan.id}
+        planId={focusPlan.id}
         subject={dialog.subject}
       />
       <LinkNoteDialog target={linking} onClose={() => setLinking(null)} />
@@ -484,6 +488,7 @@ function SubjectGroup({
   onLink: (topic: StudyTopic) => void;
 }) {
   const { st, duration, locale } = useStudyT();
+  const { planReadOnly } = useStudy();
   const router = useRouter();
   const { settings, today } = useStudy();
   const { subject, agg, done, stale, topics } = row;
@@ -534,9 +539,11 @@ function SubjectGroup({
               </Button>
             </MenuTrigger>
             <MenuContent align="end">
-              <MenuItem onSelect={() => useStudyUi.getState().openLog({ subjectId: subject.id })}>
-                <Plus /> {st("logform_title_new")}
-              </MenuItem>
+              {planReadOnly ? null : (
+                <MenuItem onSelect={() => useStudyUi.getState().openLog({ subjectId: subject.id })}>
+                  <Plus /> {st("logform_title_new")}
+                </MenuItem>
+              )}
               <MenuItem onSelect={() => router.push(`/home/study/subjects/${subject.id}`)}>
                 <ArrowUpRight /> {st("subject_open")}
               </MenuItem>
@@ -545,10 +552,14 @@ function SubjectGroup({
                   <NotebookPen /> {st("subject_open_notebook")}
                 </MenuItem>
               ) : null}
-              <MenuSeparator />
-              <MenuItem onSelect={onEdit}>
-                <Pencil /> {st("edit")}
-              </MenuItem>
+              {planReadOnly ? null : (
+                <>
+                  <MenuSeparator />
+                  <MenuItem onSelect={onEdit}>
+                    <Pencil /> {st("edit")}
+                  </MenuItem>
+                </>
+              )}
             </MenuContent>
           </Menu>
         </div>
@@ -631,7 +642,7 @@ function TopicRow({
 }) {
   const { st, locale, duration } = useStudyT();
   const router = useRouter();
-  const { actions, settings, today } = useStudy();
+  const { actions, settings, today, planReadOnly } = useStudy();
   const { adapter, pageById } = useWorkspace();
   const note = topic.pageId ? pageById(topic.pageId) : undefined;
   const noteAlive = Boolean(note && !note.deletedAt);
@@ -658,7 +669,11 @@ function TopicRow({
       <div className="flex min-w-0 items-start gap-2.5 pl-[51px] lg:col-span-2">
         <Checkbox
           checked={topic.done}
-          onCheckedChange={(value) => void actions.updateTopic(subject.id, topic.id, { done: value === true })}
+          disabled={planReadOnly}
+          onCheckedChange={(value) => {
+            if (planReadOnly) return;
+            void actions.updateTopic(subject.id, topic.id, { done: value === true });
+          }}
           aria-label={topic.done ? st("topic_mark_pending") : st("topic_mark_done")}
           className="mt-[2px] data-[state=checked]:border-[var(--topic)] data-[state=checked]:bg-[var(--topic)]"
           style={{ "--topic": subjectTone(subject.color) } as CSSProperties}
@@ -693,6 +708,7 @@ function TopicRow({
 
       <div className="flex items-center justify-end gap-0.5 lg:order-last lg:opacity-0 lg:transition-opacity lg:group-hover/topic:opacity-100 lg:focus-within:opacity-100">
         <FocusButton variant="ghost" size="icon-sm" subjectId={subject.id} topicId={topic.id} label={st("subject_start_focus")} />
+        {planReadOnly && !noteAlive ? null : (
         <Menu>
           <MenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label={st("more_actions")}>
@@ -700,29 +716,33 @@ function TopicRow({
             </Button>
           </MenuTrigger>
           <MenuContent align="end">
-            <MenuItem onSelect={() => useStudyUi.getState().openLog({ subjectId: subject.id, topicId: topic.id })}>
-              <Plus /> {st("logform_title_new")}
-            </MenuItem>
-            <MenuSeparator />
+            {planReadOnly ? null : (
+              <MenuItem onSelect={() => useStudyUi.getState().openLog({ subjectId: subject.id, topicId: topic.id })}>
+                <Plus /> {st("logform_title_new")}
+              </MenuItem>
+            )}
             {noteAlive ? (
               <MenuItem onSelect={() => router.push(`/home/p/${topic.pageId}`)}>
                 <FileText /> {st("topic_open_note")}
               </MenuItem>
-            ) : (
+            ) : planReadOnly ? null : (
               <MenuItem onSelect={() => void createNote()}>
                 <FileText /> {st("topic_create_note")}
               </MenuItem>
             )}
-            <MenuItem onSelect={onLink}>
-              <Link2 /> {st("topic_link_note")}
-            </MenuItem>
-            {topic.pageId ? (
+            {planReadOnly ? null : (
+              <MenuItem onSelect={onLink}>
+                <Link2 /> {st("topic_link_note")}
+              </MenuItem>
+            )}
+            {topic.pageId && !planReadOnly ? (
               <MenuItem onSelect={() => void actions.updateTopic(subject.id, topic.id, { pageId: null })}>
                 <Link2Off /> {st("topic_unlink_note")}
               </MenuItem>
             ) : null}
           </MenuContent>
         </Menu>
+        )}
       </div>
 
       <span className="hidden text-right text-[12px] tabular-nums text-muted lg:block">{stats?.seconds ? duration(stats.seconds) : null}</span>

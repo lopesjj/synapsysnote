@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "@/lib/i18n/navigation";
@@ -144,15 +144,23 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
   const router = useRouter();
   const categoryLabel = useCategoryLabel();
   const liveNote = useLiveNote();
-  const { activePlan, plans, subjects, cycles, sessions, settings, reviews, subjectById, actions, today } = useStudy();
+  const { focusPlan, plans, subjects, cycles, sessions, settings, reviews, subjectById, actions, today } = useStudy();
   const editing = editId ? sessions.find((session) => session.id === editId) ?? null : null;
   const [carryPrefill, setCarryPrefill] = useState(true);
   const review =
     carryPrefill && prefill?.reviewId ? reviews.find((entry) => entry.id === prefill.reviewId) ?? null : null;
   const [planId] = useState<string | null>(
-    () => editing?.planId ?? review?.planId ?? subjectById(prefill?.subjectId)?.planId ?? activePlan?.id ?? null
+    () => editing?.planId ?? review?.planId ?? subjectById(prefill?.subjectId)?.planId ?? focusPlan?.id ?? null
   );
   const plan = plans.find((entry) => entry.id === planId) ?? null;
+  const locked = Boolean(plan?.archived);
+  const warned = useRef(false);
+  useEffect(() => {
+    if (!locked || warned.current) return;
+    warned.current = true;
+    toast.error(st("goal_readonly_toast"));
+    useStudyUi.getState().closeLog();
+  }, [locked, st]);
   const planSubjects = useMemo(() => subjects.filter((entry) => entry.planId === planId), [planId, subjects]);
   const planCycle = cycles.find((cycle) => cycle.planId === planId || cycle.id === planId) ?? null;
 
@@ -258,6 +266,11 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
   };
 
   const submit = async () => {
+    if (plan?.archived) {
+      toast.error(st("goal_readonly_toast"));
+      useStudyUi.getState().closeLog();
+      return;
+    }
     if (!planId) {
       setError(st("logform_no_goal"));
       return;
@@ -349,6 +362,8 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
 
   const intervals = settings.reviewIntervals;
   const intervalsText = new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(intervals.map(String));
+
+  if (locked) return null;
 
   return (
     <form

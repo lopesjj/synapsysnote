@@ -214,6 +214,14 @@ export interface StudySticky {
 
 export type TimerSound = "none" | "chime" | "bell" | "soft" | "digital";
 
+export interface StudyMotto {
+  day: DayKey;
+  id: string;
+  author: string;
+  en: string;
+  texts: Record<string, string>;
+}
+
 export interface StudySettings {
   activePlanId: string | null;
   studyWeekdays: number[];
@@ -231,6 +239,8 @@ export interface StudySettings {
   pomodoroRounds: number;
   claimedAwards: Record<string, number>;
   awardOrder: Record<string, string[]>;
+  motto: StudyMotto | null;
+  seenMottoIds: string[];
   updatedAt: number;
 }
 

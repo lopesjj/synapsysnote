@@ -502,9 +502,11 @@ export function GoalActionsMenu({
         )}
       </MenuTrigger>
       <MenuContent align="end">
-        <MenuItem onSelect={onEdit}>
-          <Pencil /> {st("edit")}
-        </MenuItem>
+        {plan.archived ? null : (
+          <MenuItem onSelect={onEdit}>
+            <Pencil /> {st("edit")}
+          </MenuItem>
+        )}
         {!plan.archived && !isActive ? (
           <MenuItem
             onSelect={async () => {

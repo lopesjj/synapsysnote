@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { Archive, CalendarDays, Check, ChevronDown, ChevronRight, Circle, CircleDot, ClipboardPaste, Clock, ListChecks, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -23,7 +23,7 @@ import { SubjectDialog } from "../subject-dialog";
 import { ExamDialog } from "../exam-dialog";
 import { DraftEditor, PasteImporter, useDraftMerge } from "../syllabus-import";
 import { CoveragePie, ExamCountdown, ProgressBar, SyllabusSummary, WeekBars, WeekMeter } from "../goal-visuals";
-import { GoalMark, StudyEmpty, StudyLoading, StudyPage } from "../ui";
+import { GoalMark, StudyEmpty, StudyLoading, StudyPage, reactivatePlan } from "../ui";
 import { CycleWheel } from "./schedule";
 import { GoalActionsMenu, PANEL, useGoalFacts, type GoalFacts } from "./goals";
 
@@ -81,16 +81,28 @@ function GoalDocument({
   const [subjectDialog, setSubjectDialog] = useState<{ open: boolean; subject: StudySubject | null }>({ open: false, subject: null });
   const [examOpen, setExamOpen] = useState(false);
   const isActive = activePlan?.id === plan.id;
-  const edit = (focus: GoalField = "name") => setDialog({ open: true, focus });
+  const locked = plan.archived;
+  const edit = (focus: GoalField = "name") => {
+    if (locked) return;
+    setDialog({ open: true, focus });
+  };
   const name = plan.name || st("untitled_goal");
   const subtitle = [plan.institution, plan.role].filter(Boolean).join(" · ");
+
+  useEffect(() => {
+    if (plan.archived) useStudyUi.getState().setBrowsePlanId(plan.id);
+  }, [plan.archived, plan.id]);
+
+  useEffect(() => {
+    if (locked && bulkOpen) setBulkOpen(false);
+  }, [bulkOpen, locked, setBulkOpen]);
 
   const activate = async () => {
     await actions.setActivePlan(plan.id);
     toast.success(st("goal_activated"));
   };
   const reactivate = async () => {
-    await actions.archivePlan(plan.id, false);
+    await reactivatePlan(plan.id, actions);
     toast.success(st("goal_unarchived"));
   };
 
@@ -124,25 +136,35 @@ function GoalDocument({
 
         <div className="mt-6 grid grid-cols-1 gap-x-10 gap-y-8 @5xl/goal:grid-cols-[minmax(0,1fr)_20rem] @5xl/goal:grid-rows-[auto_1fr] @6xl/goal:gap-x-12">
           <div className="min-w-0 @5xl/goal:col-start-1 @5xl/goal:row-start-1">
-            <button
-              type="button"
-              onClick={() => edit("icon")}
-              aria-label={st("goal_icon")}
-              className="block rounded-[12px] outline-none transition hover:opacity-85 focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)]"
-            >
+            {locked ? (
               <GoalMark icon={plan.icon} name={name} seed={plan.id} size={64} />
-            </button>
-            <h1 dir={textDir} className="mt-4">
+            ) : (
               <button
                 type="button"
-                onClick={() => edit("name")}
-                className={cn(
-                  "text-start text-[26px] font-semibold leading-tight tracking-[-0.025em] outline-none [overflow-wrap:anywhere] focus-visible:underline @3xl/goal:text-[30px]",
-                  plan.name ? "text-ink" : "text-faint"
-                )}
+                onClick={() => edit("icon")}
+                aria-label={st("goal_icon")}
+                className="block rounded-[12px] outline-none transition hover:opacity-85 focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)]"
               >
-                {name}
+                <GoalMark icon={plan.icon} name={name} seed={plan.id} size={64} />
               </button>
+            )}
+            <h1 dir={textDir} className="mt-4">
+              {locked ? (
+                <span className={cn("text-[26px] font-semibold leading-tight tracking-[-0.025em] [overflow-wrap:anywhere] @3xl/goal:text-[30px]", plan.name ? "text-ink" : "text-faint")}>
+                  {name}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => edit("name")}
+                  className={cn(
+                    "text-start text-[26px] font-semibold leading-tight tracking-[-0.025em] outline-none [overflow-wrap:anywhere] focus-visible:underline @3xl/goal:text-[30px]",
+                    plan.name ? "text-ink" : "text-faint"
+                  )}
+                >
+                  {name}
+                </button>
+              )}
             </h1>
             {subtitle ? (
               <p dir={textDir} className="mt-1 text-[14.5px] text-muted">
@@ -150,16 +172,8 @@ function GoalDocument({
               </p>
             ) : null}
             <PropertyChips plan={plan} onEdit={edit} />
-            {plan.archived ? (
-              <p className="mt-4 text-[13px] text-muted">
-                {st("goal_archived_notice")}{" "}
-                <button type="button" onClick={() => void reactivate()} className="text-[var(--accent)] underline-offset-4 hover:underline">
-                  {st("goals_unarchive")}
-                </button>
-              </p>
-            ) : null}
             <div className="mt-6 border-t border-[var(--border)] pt-5">
-              <Notes plan={plan} />
+              <Notes plan={plan} locked={locked} />
             </div>
           </div>
 
@@ -168,20 +182,22 @@ function GoalDocument({
           </aside>
 
           <div className="min-w-0 space-y-10 @5xl/goal:col-start-1 @5xl/goal:row-start-2">
-            <Ledger fact={fact} onAdd={() => setSubjectDialog({ open: true, subject: null })} onBulk={() => setBulkOpen(true)} />
+            <Ledger fact={fact} locked={locked} onAdd={() => setSubjectDialog({ open: true, subject: null })} onBulk={() => setBulkOpen(true)} />
             <ExamsSection fact={fact} canLog={isActive} onLog={() => setExamOpen(true)} />
           </div>
         </div>
       </div>
 
-      <GoalDialog open={dialog.open} onOpenChange={(open) => setDialog((value) => ({ ...value, open }))} plan={plan} focus={dialog.focus} />
-      <SubjectDialog
-        open={subjectDialog.open}
-        onOpenChange={(open) => setSubjectDialog((value) => ({ ...value, open }))}
-        planId={plan.id}
-        subject={subjectDialog.subject}
-      />
-      <BulkSubjectsDialog open={bulkOpen} onOpenChange={setBulkOpen} planId={plan.id} />
+      {locked ? null : <GoalDialog open={dialog.open} onOpenChange={(open) => setDialog((value) => ({ ...value, open }))} plan={plan} focus={dialog.focus} />}
+      {locked ? null : (
+        <SubjectDialog
+          open={subjectDialog.open}
+          onOpenChange={(open) => setSubjectDialog((value) => ({ ...value, open }))}
+          planId={plan.id}
+          subject={subjectDialog.subject}
+        />
+      )}
+      {locked ? null : <BulkSubjectsDialog open={bulkOpen} onOpenChange={setBulkOpen} planId={plan.id} />}
       {isActive ? <ExamDialog open={examOpen} onOpenChange={setExamOpen} /> : null}
     </StudyPage>
   );
@@ -217,7 +233,7 @@ function PropertyChips({ plan, onEdit }: { plan: StudyPlan; onEdit: (focus: Goal
   return (
     <div className="mt-4 flex flex-wrap gap-1.5">
       {plan.archived ? (
-        <Chip icon={<Archive className="text-muted" />} onClick={() => void actions.archivePlan(plan.id, false).then(() => toast.success(st("goal_unarchived")))}>
+        <Chip icon={<Archive className="text-muted" />} onClick={() => void reactivatePlan(plan.id, actions).then(() => toast.success(st("goal_unarchived")))}>
           {st("goal_status_archived")}
         </Chip>
       ) : isActive ? (
@@ -227,7 +243,7 @@ function PropertyChips({ plan, onEdit }: { plan: StudyPlan; onEdit: (focus: Goal
           {st("goal_status_inactive")}
         </Chip>
       )}
-      <Chip icon={<CalendarDays className="text-muted" />} onClick={() => onEdit("examDate")} muted={!plan.examDate}>
+      <Chip icon={<CalendarDays className="text-muted" />} onClick={plan.archived ? undefined : () => onEdit("examDate")} muted={!plan.examDate}>
         {plan.examDate ? (
           <>
             {formatDay(plan.examDate, locale, { day: "numeric", month: "short", year: "numeric" })}
@@ -237,11 +253,11 @@ function PropertyChips({ plan, onEdit }: { plan: StudyPlan; onEdit: (focus: Goal
           st("goal_exam_date")
         )}
       </Chip>
-      <Chip icon={<Clock className="text-muted" />} onClick={() => onEdit("weekly")} muted={!plan.weeklyGoalMinutes}>
+      <Chip icon={<Clock className="text-muted" />} onClick={plan.archived ? undefined : () => onEdit("weekly")} muted={!plan.weeklyGoalMinutes}>
         {plan.weeklyGoalMinutes ? st("goal_chip_weekly", { time: duration(plan.weeklyGoalMinutes * 60) }) : st("goal_prop_weekly")}
       </Chip>
       {plan.weeklyGoalQuestions ? (
-        <Chip icon={<ListChecks className="text-muted" />} onClick={() => onEdit("weekly")}>
+        <Chip icon={<ListChecks className="text-muted" />} onClick={plan.archived ? undefined : () => onEdit("weekly")}>
           {st("goal_chip_questions", { count: plan.weeklyGoalQuestions })}
         </Chip>
       ) : null}
@@ -249,7 +265,7 @@ function PropertyChips({ plan, onEdit }: { plan: StudyPlan; onEdit: (focus: Goal
   );
 }
 
-function Notes({ plan }: { plan: StudyPlan }) {
+function Notes({ plan, locked = false }: { plan: StudyPlan; locked?: boolean }) {
   const { st, textDir } = useStudyT();
   const { actions } = useStudy();
   const [editing, setEditing] = useState(false);
@@ -300,6 +316,21 @@ function Notes({ plan }: { plan: StudyPlan }) {
   };
 
   const metrics = "text-[14.5px] leading-[1.7]";
+  if (locked) {
+    if (!plan.notes.trim()) return null;
+    return (
+      <div className="max-w-[70ch]">
+        <p dir={textDir} className={cn("whitespace-pre-wrap text-ink/90 [overflow-wrap:anywhere]", metrics, !expanded && "line-clamp-6")} ref={textRef}>
+          {plan.notes}
+        </p>
+        {overflows ? (
+          <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-1 text-[13px] text-[var(--accent)] underline-offset-4 hover:underline">
+            {expanded ? st("goal_notes_less") : st("goal_notes_more")}
+          </button>
+        ) : null}
+      </div>
+    );
+  }
   if (editing) {
     return (
       <textarea
@@ -399,7 +430,7 @@ function Overview({ plan, fact, onEdit }: { plan: StudyPlan; fact: GoalFacts; on
   return (
     <div className={PANEL}>
       <OverviewSection title={st("goal_prop_exam")}>
-        <ExamCountdown plan={plan} startDay={timeline.goalStart} onSetDate={() => onEdit("examDate")} />
+        <ExamCountdown plan={plan} startDay={timeline.goalStart} onSetDate={plan.archived ? undefined : () => onEdit("examDate")} />
       </OverviewSection>
 
       <OverviewSection title={st("goal_col_syllabus")}>
@@ -410,9 +441,11 @@ function Overview({ plan, fact, onEdit }: { plan: StudyPlan; fact: GoalFacts; on
       <OverviewSection
         title={st("goals_this_week")}
         action={
-          <button type="button" onClick={() => onEdit("weekly")} className="text-[12px] text-muted underline-offset-4 transition hover:text-[var(--accent)] hover:underline">
-            {plan.weeklyGoalMinutes || plan.weeklyGoalQuestions ? st("edit") : st("goal_weekly_set")}
-          </button>
+          plan.archived ? null : (
+            <button type="button" onClick={() => onEdit("weekly")} className="text-[12px] text-muted underline-offset-4 transition hover:text-[var(--accent)] hover:underline">
+              {plan.weeklyGoalMinutes || plan.weeklyGoalQuestions ? st("edit") : st("goal_weekly_set")}
+            </button>
+          )
         }
       >
         <div className="space-y-3">
@@ -447,13 +480,13 @@ function Overview({ plan, fact, onEdit }: { plan: StudyPlan; fact: GoalFacts; on
       {cycle && current && progress ? (
         <OverviewSection title={st("goal_prop_cycle")}>
           <CycleSummary
-            linked={isActive}
+            linked={isActive || plan.archived}
             wheel={<CycleWheel cycle={cycle} progress={progress} compact className="size-9" />}
             now={st("goal_cycle_now", { subject: currentSubject?.name ?? st("untitled_subject"), time: duration(current.minutes * 60) })}
             detail={[nextTopic ? st("goal_cycle_next_topic", { topic: nextTopic.name }) : "", st("cycle_round", { n: cycle.round + 1 })].filter(Boolean).join(" · ")}
           />
         </OverviewSection>
-      ) : isActive ? (
+      ) : isActive && !plan.archived ? (
         <OverviewSection title={st("goal_prop_cycle")}>
           <Button variant="secondary" size="sm" asChild>
             <Link href="/home/study/schedule?setup=1">{st("goal_cycle_build")}</Link>
@@ -488,7 +521,7 @@ function Overview({ plan, fact, onEdit }: { plan: StudyPlan; fact: GoalFacts; on
               <div className="flex items-baseline justify-between gap-3">
                 <dt className="text-muted">{st("goal_prop_reviews")}</dt>
                 <dd className="text-ink">
-                  {isActive ? (
+                  {isActive || plan.archived ? (
                     <Link href="/home/study/reviews" className="underline-offset-4 hover:text-[var(--accent)] hover:underline">
                       {st("goal_reviews_value", { count: summary.pendingReviews })}
                     </Link>
@@ -598,7 +631,7 @@ function AccuracyValue({ questions, accuracy }: { questions: number; accuracy: n
   );
 }
 
-function Ledger({ fact, onAdd, onBulk }: { fact: GoalFacts; onAdd: () => void; onBulk: () => void }) {
+function Ledger({ fact, locked = false, onAdd, onBulk }: { fact: GoalFacts; locked?: boolean; onAdd: () => void; onBulk: () => void }) {
   const { st, duration } = useStudyT();
   const storedSort = useStudyUi((state) => state.goalSubjectSort);
   const setSort = useStudyUi((state) => state.setGoalSubjectSort);
@@ -626,14 +659,18 @@ function Ledger({ fact, onAdd, onBulk }: { fact: GoalFacts; onAdd: () => void; o
             </MenuContent>
           </Menu>
         ) : null}
-        <Button variant="ghost" size="sm" onClick={onBulk}>
-          <ClipboardPaste />
-          {st("goal_bulk_subjects")}
-        </Button>
-        <Button variant="secondary" size="sm" onClick={onAdd}>
-          <Plus />
-          {st("goal_add_subject")}
-        </Button>
+        {locked ? null : (
+          <>
+            <Button variant="ghost" size="sm" onClick={onBulk}>
+              <ClipboardPaste />
+              {st("goal_bulk_subjects")}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={onAdd}>
+              <Plus />
+              {st("goal_add_subject")}
+            </Button>
+          </>
+        )}
       </SectionHeader>
 
       {summary.subjects.length ? (
@@ -669,28 +706,32 @@ function Ledger({ fact, onAdd, onBulk }: { fact: GoalFacts; onAdd: () => void; o
             </span>
             <span className="hidden @3xl/goal:block" />
           </div>
-          <button
-            type="button"
-            onClick={onAdd}
-            className="flex h-10 w-full items-center gap-2 border-t border-[var(--border)] px-4 text-[13px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
-          >
-            <Plus className="size-3.5" />
-            {st("goal_add_subject")}
-          </button>
+          {locked ? null : (
+            <button
+              type="button"
+              onClick={onAdd}
+              className="flex h-10 w-full items-center gap-2 border-t border-[var(--border)] px-4 text-[13px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
+            >
+              <Plus className="size-3.5" />
+              {st("goal_add_subject")}
+            </button>
+          )}
         </div>
       ) : (
         <div className={cn(PANEL, "px-5 py-6")}>
           <p className="max-w-[56ch] text-[14px] leading-relaxed text-muted">{st("goal_subjects_empty")}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button variant="primary" size="sm" onClick={onBulk}>
-              <ClipboardPaste />
-              {st("goal_bulk_subjects")}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onAdd}>
-              <Plus />
-              {st("goal_add_subject")}
-            </Button>
-          </div>
+          {locked ? null : (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="primary" size="sm" onClick={onBulk}>
+                <ClipboardPaste />
+                {st("goal_bulk_subjects")}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onAdd}>
+                <Plus />
+                {st("goal_add_subject")}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </section>

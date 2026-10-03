@@ -59,7 +59,7 @@ export function ExamDialog({ open, onOpenChange, exam }: { open: boolean; onOpen
 
 function ExamForm({ exam, onClose }: { exam: MockExam | null; onClose: () => void }) {
   const { st, textDir } = useStudyT();
-  const { activePlan, planSubjects, actions, today, subjectById } = useStudy();
+  const { focusPlan, planReadOnly, planSubjects, actions, today, subjectById } = useStudy();
   const [day, setDay] = useState(exam?.day ?? today);
   const [name, setName] = useState(exam?.name ?? "");
   const [style, setStyle] = useState<MockExamStyle>(exam?.style ?? "multiple");
@@ -97,7 +97,13 @@ function ExamForm({ exam, onClose }: { exam: MockExam | null; onClose: () => voi
   const update = (id: string, patch: Partial<RowDraft>) => setRows((list) => list.map((row) => (row.id === id ? { ...row, ...patch } : row)));
 
   const submit = async () => {
-    if (!activePlan) return;
+    if (planReadOnly || !focusPlan) {
+      if (planReadOnly) {
+        toast.error(st("goal_readonly_toast"));
+        onClose();
+      }
+      return;
+    }
     if (!name.trim()) {
       setError(st("exam_name_required"));
       return;
@@ -125,7 +131,7 @@ function ExamForm({ exam, onClose }: { exam: MockExam | null; onClose: () => voi
     try {
       await actions.saveExam({
         id: exam?.id,
-        planId: exam?.planId ?? activePlan.id,
+        planId: exam?.planId ?? focusPlan.id,
         day,
         name: name.trim(),
         style,

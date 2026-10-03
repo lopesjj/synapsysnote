@@ -112,6 +112,11 @@ function GoalForm({
   const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
+    if (plan?.archived) {
+      toast.error(st("goal_readonly_toast"));
+      onClose();
+      return;
+    }
     if (!name.trim()) {
       setError(st("goal_name_required"));
       return;
@@ -237,6 +242,11 @@ function PaceForm({ plan, onClose }: { plan: StudyPlan; onClose: () => void }) {
   const [hours, setHours] = useState(plan.weeklyGoalMinutes ? String(Math.round((plan.weeklyGoalMinutes / 60) * 10) / 10) : "");
   const [questions, setQuestions] = useState(plan.weeklyGoalQuestions ? String(plan.weeklyGoalQuestions) : "");
   const submit = async () => {
+    if (plan.archived) {
+      toast.error(st("goal_readonly_toast"));
+      onClose();
+      return;
+    }
     try {
       await actions.savePlan({
         id: plan.id,
@@ -295,12 +305,18 @@ export function ReminderDialog({
 
 function ReminderForm({ reminder, onClose }: { reminder: StudyReminder | null; onClose: () => void }) {
   const { st, textDir } = useStudyT();
-  const { actions, activePlan, today } = useStudy();
+  const { actions, focusPlan, planReadOnly, plans, today } = useStudy();
   const [title, setTitle] = useState(reminder?.title ?? "");
   const [kind, setKind] = useState<"task" | "event">(reminder?.kind === "event" ? "event" : "task");
   const [day, setDay] = useState(reminder?.day ?? today);
+  const archivedOwner = Boolean(reminder?.planId && plans.some((plan) => plan.id === reminder.planId && plan.archived));
   const submit = async () => {
     if (!title.trim()) return;
+    if (archivedOwner) {
+      toast.error(st("goal_readonly_toast"));
+      onClose();
+      return;
+    }
     try {
       await actions.saveReminder({
         id: reminder?.id,
@@ -308,7 +324,7 @@ function ReminderForm({ reminder, onClose }: { reminder: StudyReminder | null; o
         kind,
         day: day || today,
         done: reminder?.done ?? false,
-        planId: reminder?.planId ?? activePlan?.id ?? null,
+        planId: reminder?.planId ?? (planReadOnly ? null : focusPlan?.id ?? null),
       });
       toast.success(st("reminder_saved"));
       onClose();
@@ -317,7 +333,8 @@ function ReminderForm({ reminder, onClose }: { reminder: StudyReminder | null; o
     }
   };
   const remove = async () => {
-    if (!reminder || !window.confirm(st("reminder_delete_confirm", { name: reminder.title || st("reminder_title_label") }))) return;
+    if (!reminder || archivedOwner) return;
+    if (!window.confirm(st("reminder_delete_confirm", { name: reminder.title || st("reminder_title_label") }))) return;
     try {
       await actions.deleteReminder(reminder.id);
       toast.success(st("reminder_deleted"));

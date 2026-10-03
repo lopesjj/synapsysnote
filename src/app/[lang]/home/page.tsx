@@ -43,7 +43,7 @@ import { resolvedDayOf } from "@/lib/study/review-queue";
 import { cardStage, startOfDay } from "@/lib/flashcards/srs";
 import { addDays, capitalizeFirst, dayKeyOf, diffDays, formatDay, minuteOfDay, startOfWeek, weekDays, weekdayLabel, weekdayOf } from "@/lib/study/dates";
 import { secondsByDay } from "@/lib/study/metrics";
-import { FocusButton, GoalSwitcher } from "@/components/study/ui";
+import { ArchivedPlanBanner, FocusButton, GoalMark, GoalSwitcher } from "@/components/study/ui";
 import { KpiBand } from "@/components/study/widgets";
 import { TaskCheck, TaskDialog, type TaskDialogState } from "@/components/study/tasks";
 import type { DayKey, StudyReminder, StudyReview } from "@/types/study";
@@ -305,7 +305,7 @@ function SkyHero({ onCreateNote }: { onCreateNote: () => void }) {
   const [bodyX, bodyY] = arcPoint(Math.min(1, Math.max(0, t01)));
   const glowAt = `right ${Math.round(32 + ARC.width - bodyX)}px top ${Math.round(30 + bodyY)}px`;
 
-  const plan = study.activePlan;
+  const plan = study.focusPlan;
   const today = study.today;
   const goalName = plan ? plan.name || st("untitled_goal") : "";
   const examDays = plan?.examDate ? diffDays(today, plan.examDate) : null;
@@ -678,7 +678,7 @@ function WeekStrip({ selected, onSelect }: { selected: DayKey; onSelect: (day: D
   const study = useStudy();
   const metrics = usePlanMetrics();
   const { tasks } = usePlanning();
-  const { today, activePlan: plan, planCycle, planReviews, reminders, settings, subjectById } = study;
+  const { today, focusPlan: plan, planCycle, planReviews, reminders, settings, subjectById } = study;
   const week = useMemo(() => weekDays(startOfWeek(today, settings.weekStartsOn)), [today, settings.weekStartsOn]);
 
   const plannedByDay = useMemo(() => {
@@ -788,7 +788,7 @@ function StudyOverview() {
   const router = useRouter();
   const { st } = useStudyT();
   const study = useStudy();
-  const plan = study.activePlan;
+  const plan = study.focusPlan;
 
   if (!study.ready) {
     return (
@@ -800,41 +800,64 @@ function StudyOverview() {
   }
 
   if (!plan) {
+    const archived = study.plans.filter((entry) => entry.archived);
     return (
-      <div className={cn(TILE, "flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6")}>
-        <div className="min-w-0">
-          <p className="text-[16px] font-semibold leading-snug tracking-[-0.015em] text-ink">{st("home_study_intro_title")}</p>
-          <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-muted">{st("home_study_intro_desc")}</p>
+      <div className="space-y-4">
+        <div className={cn(TILE, "flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6")}>
+          <div className="min-w-0">
+            <p className="text-[16px] font-semibold leading-snug tracking-[-0.015em] text-ink">{st("home_study_intro_title")}</p>
+            <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-muted">{st("home_study_intro_desc")}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-1.5">
+            <Button variant="primary" size="sm" onClick={() => router.push("/home/study/goals/new")}>
+              {st("home_study_intro_cta")}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={openBlankTimer}>
+              <Timer />
+              {st("home_quick_focus")}
+            </Button>
+          </div>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-1.5">
-          <Button variant="primary" size="sm" onClick={() => router.push("/home/study/goals/new")}>
-            {st("home_study_intro_cta")}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={openBlankTimer}>
-            <Timer />
-            {st("home_quick_focus")}
-          </Button>
-        </div>
+        {archived.length ? (
+          <div>
+            <p className="mb-2 text-[12.5px] font-medium text-muted">{st("goal_switch_archived")}</p>
+            <ul className="overflow-hidden rounded-[16px] border border-[var(--border)] bg-[var(--surface)]">
+              {archived.map((entry) => (
+                <li key={entry.id} className="border-t border-[var(--border)] first:border-t-0">
+                  <button
+                    type="button"
+                    onClick={() => useStudyUi.getState().setBrowsePlanId(entry.id)}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-[var(--surface-hover)]"
+                  >
+                    <GoalMark icon={entry.icon} name={entry.name} seed={entry.id} size={28} className="opacity-60 grayscale" />
+                    <span className="min-w-0 flex-1 truncate text-[13.5px] text-ink">{entry.name || st("untitled_goal")}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
     );
   }
 
-  // O objetivo ativo abre o painel dos números, como o cabeçalho de um projeto no Linear.
   return (
     <section aria-label={plan.name || st("untitled_goal")} className={cn(TILE, "overflow-hidden")}>
+      {study.planReadOnly ? <ArchivedPlanBanner className="mb-0 rounded-none border-x-0 border-t-0" /> : null}
       <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-4 px-5 pb-4 pt-5 sm:px-6">
         <GoalSwitcher />
-        <div className="flex flex-wrap items-center gap-1.5">
-          {/* Sessão nova começa em branco: a disciplina é escolhida no relógio. */}
-          <Button variant="primary" size="sm" onClick={openBlankTimer}>
-            <Timer />
-            {st("next_up_start")}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => useStudyUi.getState().openLog()}>
-            <Plus />
-            {st("logform_title_new")}
-          </Button>
-        </div>
+        {study.planReadOnly ? null : (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button variant="primary" size="sm" onClick={openBlankTimer}>
+              <Timer />
+              {st("next_up_start")}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => useStudyUi.getState().openLog()}>
+              <Plus />
+              {st("logform_title_new")}
+            </Button>
+          </div>
+        )}
       </div>
       <KpiBand className="rounded-none border-t border-[var(--border)] shadow-none" />
     </section>
@@ -907,7 +930,7 @@ function Agenda({ anchor, direction, pendingOnly }: { anchor: DayKey; direction:
   const { tasks } = usePlanning();
   const [dialog, setDialog] = useState<TaskDialogState>({ open: false, task: null, day: null });
   const [rememberedCards, setRememberedCards] = useState<string[]>(() => readCardDay(study.today));
-  const { today, activePlan: plan, planCycle, planReviews, reminders, settings, subjectById } = study;
+  const { today, focusPlan: plan, planCycle, planReviews, reminders, settings, subjectById } = study;
 
   useEffect(() => {
     if (!flashcardsReady) return;
@@ -1147,6 +1170,15 @@ function AgendaRow({
     return (
       <motion.li {...motionProps} className={cn(row, "group/review items-center")}>
         <span className="flex w-4 shrink-0 justify-center">
+          {study.planReadOnly ? (
+            <span
+              aria-hidden
+              className="flex size-[17px] items-center justify-center rounded-full border-2"
+              style={{ borderColor: color, backgroundColor: done ? color : "transparent" }}
+            >
+              <Check className={cn("size-2.5", done ? "text-white" : "opacity-0")} strokeWidth={3.5} />
+            </span>
+          ) : (
           <button
             type="button"
             onClick={() => void toggle()}
@@ -1162,6 +1194,7 @@ function AgendaRow({
               strokeWidth={3.5}
             />
           </button>
+          )}
         </span>
         <Link href="/home/study/reviews" prefetch className="min-w-0 flex-1">
           <span className={cn("block truncate text-[13.5px] leading-5 transition-colors", done ? "text-faint line-through" : "text-ink")}>
@@ -1235,7 +1268,7 @@ function AgendaRow({
   }
 
   if (item.kind === "exam") {
-    const plan = study.activePlan;
+    const plan = study.focusPlan;
     return (
       <motion.li {...motionProps}>
         <Link href={plan ? `/home/study/goals/${plan.id}` : "/home/study"} prefetch className={row}>
@@ -1305,7 +1338,8 @@ function PageCard({ notebook, notebooks, livePages }: { notebook: Notebook; note
 function TodayReviewsTile() {
   const { st } = useStudyT();
   const study = useStudy();
-  const plan = study.activePlan;
+  const plan = study.focusPlan;
+  const readOnly = study.planReadOnly;
   const { planReviews, reviews, actions, today, settings, subjectById, topicById } = study;
 
   const targetReviews = plan ? planReviews : reviews;
@@ -1420,6 +1454,11 @@ function TodayReviewsTile() {
                       : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-strong)]"
                   )}
                 >
+                  {readOnly ? (
+                    <span aria-hidden className="flex size-5 shrink-0 items-center justify-center rounded-full border border-[var(--border-strong)] text-transparent">
+                      <Check className="size-3" />
+                    </span>
+                  ) : (
                   <button
                     type="button"
                     onClick={() => void handleComplete(review)}
@@ -1429,6 +1468,7 @@ function TodayReviewsTile() {
                   >
                     <Check className="size-3" />
                   </button>
+                  )}
 
                   <span
                     className="h-8 w-[3px] shrink-0 rounded-full"

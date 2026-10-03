@@ -353,48 +353,75 @@ export function ConsistencyPanel() {
   );
 }
 
+function ExamPath({ spent, startLabel, examLabel }: { spent: number; startLabel: string; examLabel: string }) {
+  const percent = Math.round(Math.min(1, Math.max(0, spent)) * 1000) / 10;
+  return (
+    <div className="mt-5">
+      <div className="relative h-[3px]">
+        <div className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-[var(--border)]" />
+        <div className="absolute inset-y-0 start-0 my-auto h-[3px] rounded-full bg-[var(--accent)]" style={{ width: `${percent}%` }} />
+        <span
+          aria-hidden
+          className="absolute top-1/2 size-[7px] -translate-y-1/2 rounded-full bg-[var(--accent)] shadow-[0_0_0_3px_var(--surface)]"
+          style={{ insetInlineStart: `clamp(0px, calc(${percent}% - 3.5px), calc(100% - 7px))` }}
+        />
+      </div>
+      <div className="mt-2.5 flex items-center justify-between gap-3 text-[12px] text-faint">
+        <span className="min-w-0 truncate">{startLabel}</span>
+        <span className="min-w-0 truncate text-end">{examLabel}</span>
+      </div>
+    </div>
+  );
+}
+
 export function CountdownPanel() {
-  const { st, locale } = useStudyT();
-  const { activePlan, today } = useStudy();
+  const { st, locale, language } = useStudyT();
+  const { focusPlan, planReadOnly, today } = useStudy();
   const [editing, setEditing] = useState(false);
-  if (!activePlan) return null;
-  const exam = activePlan.examDate;
+  if (!focusPlan) return null;
+  const exam = focusPlan.examDate;
   const left = exam ? diffDays(today, exam) : null;
-  const created = activePlan.createdAt ? dayKeyOf(activePlan.createdAt) : today;
+  const created = focusPlan.createdAt ? dayKeyOf(focusPlan.createdAt) : today;
   const span = exam ? Math.max(1, diffDays(created, exam)) : 1;
   const elapsed = exam ? Math.max(0, Math.min(span, diffDays(created, today))) : 0;
+  const spent = left !== null && left > 0 ? elapsed / span : left === 0 ? 1 : 0;
+  const tracked = language !== "ja" && language !== "zh" && language !== "ar";
   return (
     <Panel title={st("countdown_title")}>
       {exam && left !== null ? (
-        <div className="space-y-3">
-          {left > 0 ? (
-            <div className="flex items-baseline gap-2">
-              <span className="text-[44px] font-semibold leading-none tracking-[-0.04em] text-ink">{left}</span>
-              <span className="text-[13px] text-muted">{st("countdown_days_label", { count: left })}</span>
-            </div>
-          ) : (
-            <p className="text-[15px] font-semibold text-ink">
-              {left === 0 ? st("countdown_today") : st("countdown_past", { date: formatDay(exam, locale, { day: "numeric", month: "long", year: "numeric" }) })}
+        left > 0 ? (
+          <div>
+            <p className={cn("text-[11px] font-semibold text-muted", tracked && "uppercase tracking-[0.18em]")}>
+              {st("countdown_days_label", { count: left })}
             </p>
-          )}
-          {left > 0 ? (
-            <p className="text-[12px] text-muted">
-              {st("countdown_until", { date: formatDay(exam, locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" }) })}
+            <p className="mt-1 text-[60px] font-semibold leading-none tracking-[-0.06em] text-ink tabular-nums sm:text-[72px]">{left}</p>
+            <p className="mt-4 text-[13px] text-muted">{capitalizeFirst(formatDay(exam, locale, { weekday: "long" }))}</p>
+            <p className="mt-0.5 text-[17px] font-medium leading-snug tracking-[-0.02em] text-pretty text-ink">
+              {formatDay(exam, locale, { day: "numeric", month: "long", year: "numeric" })}
             </p>
-          ) : null}
-          <div className="relative h-1.5 rounded-full bg-[var(--surface-2)]">
-            <div className="absolute inset-y-0 left-0 rounded-full bg-[var(--accent)]" style={{ width: `${(elapsed / span) * 100}%` }} />
+            <ExamPath spent={spent} startLabel={st("countdown_span_start")} examLabel={st("countdown_span_exam")} />
           </div>
-        </div>
+        ) : (
+          <div>
+            <p className="text-[17px] font-medium leading-snug text-pretty text-ink">
+              {left === 0
+                ? st("countdown_today")
+                : st("countdown_past", { date: formatDay(exam, locale, { day: "numeric", month: "long", year: "numeric" }) })}
+            </p>
+            {left === 0 ? <ExamPath spent={1} startLabel={st("countdown_span_start")} examLabel={st("countdown_span_exam")} /> : null}
+          </div>
+        )
       ) : (
         <div className="space-y-3">
           <p className="text-[12.5px] leading-relaxed text-muted">{st("countdown_empty")}</p>
-          <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
-            {st("countdown_set_date")}
-          </Button>
+          {planReadOnly ? null : (
+            <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
+              {st("countdown_set_date")}
+            </Button>
+          )}
         </div>
       )}
-      <GoalDialog open={editing} onOpenChange={setEditing} plan={activePlan} />
+      {planReadOnly ? null : <GoalDialog open={editing} onOpenChange={setEditing} plan={focusPlan} />}
     </Panel>
   );
 }
@@ -498,27 +525,27 @@ function KpiSpark({ values }: { values: number[] }) {
 
 function PaceKpi() {
   const { st, locale, duration, language } = useStudyT();
-  const { activePlan } = useStudy();
+  const { focusPlan, planReadOnly } = useStudy();
   const metrics = usePlanMetrics();
   const [editing, setEditing] = useState(false);
-  if (!activePlan) return null;
+  if (!focusPlan) return null;
   const rows = [
     {
       key: "hours",
       label: st("pace_hours"),
       value: metrics.weekSeconds,
-      goal: activePlan.weeklyGoalMinutes * 60,
+      goal: focusPlan.weeklyGoalMinutes * 60,
       valueLabel: duration(metrics.weekSeconds),
-      goalLabel: duration(activePlan.weeklyGoalMinutes * 60),
+      goalLabel: duration(focusPlan.weeklyGoalMinutes * 60),
       extra: (amount: number) => duration(amount),
     },
     {
       key: "questions",
       label: st("pace_questions"),
       value: metrics.weekQuestions,
-      goal: activePlan.weeklyGoalQuestions,
+      goal: focusPlan.weeklyGoalQuestions,
       valueLabel: formatNumber(metrics.weekQuestions, language),
-      goalLabel: formatNumber(activePlan.weeklyGoalQuestions, language),
+      goalLabel: formatNumber(focusPlan.weeklyGoalQuestions, language),
       extra: (amount: number) => formatNumber(amount, language),
     },
   ];
@@ -534,17 +561,19 @@ function PaceKpi() {
             end: formatDay(metrics.weekEnd, locale),
           })}
         </span>
-        <Tooltip label={st("pace_edit")}>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="absolute end-0 top-1/2 -translate-y-1/2"
-            aria-label={st("pace_edit")}
-            onClick={() => setEditing(true)}
-          >
-            <Pencil />
-          </Button>
-        </Tooltip>
+        {planReadOnly ? null : (
+          <Tooltip label={st("pace_edit")}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="absolute end-0 top-1/2 -translate-y-1/2"
+              aria-label={st("pace_edit")}
+              onClick={() => setEditing(true)}
+            >
+              <Pencil />
+            </Button>
+          </Tooltip>
+        )}
       </div>
       <div className="min-w-0 pt-2.5">
       {allDone ? <p className="mb-2.5 text-center text-[12px] font-medium leading-snug text-[var(--band-high-text)]">{st("pace_all_done")}</p> : null}
@@ -605,7 +634,7 @@ function PaceKpi() {
           );
         })}
       </div>
-      <PaceDialog open={editing} onOpenChange={setEditing} plan={activePlan} />
+      {planReadOnly ? null : <PaceDialog open={editing} onOpenChange={setEditing} plan={focusPlan} />}
       </div>
     </div>
   );
@@ -781,7 +810,7 @@ export function DistributionPanel() {
 
 export function ReviewRow({ review, compact = false }: { review: StudyReview; compact?: boolean }) {
   const { st, locale } = useStudyT();
-  const { subjectById, topicById, actions, today } = useStudy();
+  const { subjectById, topicById, actions, today, planReadOnly } = useStudy();
   const subject = subjectById(review.subjectId);
   const topic = topicById(review.subjectId, review.topicId);
   const late = review.status === "pending" && review.dueDay < today ? diffDays(review.dueDay, today) : 0;
@@ -799,22 +828,26 @@ export function ReviewRow({ review, compact = false }: { review: StudyReview; co
           </span>
         </p>
       </div>
-      <FocusButton variant="ghost" size="icon-sm" subjectId={review.subjectId} topicId={review.topicId} reviewId={review.id} label={st("review_start")} />
-      <Tooltip label={st("review_complete")}>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={st("review_complete")}
-          onClick={async () => {
-            await actions.resolveReviews([review.id], "done");
-            toast.success(st("review_done_toast", { count: 1 }), {
-              action: { label: st("review_restore"), onClick: () => void actions.resolveReviews([review.id], "pending") },
-            });
-          }}
-        >
-          <Check />
-        </Button>
-      </Tooltip>
+      {planReadOnly ? null : (
+        <>
+          <FocusButton variant="ghost" size="icon-sm" subjectId={review.subjectId} topicId={review.topicId} reviewId={review.id} label={st("review_start")} />
+          <Tooltip label={st("review_complete")}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={st("review_complete")}
+              onClick={async () => {
+                await actions.resolveReviews([review.id], "done");
+                toast.success(st("review_done_toast", { count: 1 }), {
+                  action: { label: st("review_restore"), onClick: () => void actions.resolveReviews([review.id], "pending") },
+                });
+              }}
+            >
+              <Check />
+            </Button>
+          </Tooltip>
+        </>
+      )}
     </div>
   );
 }
@@ -827,10 +860,10 @@ const REMINDER_KEY: Record<StudyReminder["kind"], StudyKey> = {
 
 export function RemindersPanel({ className }: { className?: string }) {
   const { st, locale } = useStudyT();
-  const { reminders, activePlan, actions, today } = useStudy();
+  const { reminders, focusPlan, planReadOnly, actions, today } = useStudy();
   const [dialog, setDialog] = useState<{ open: boolean; reminder: StudyReminder | null }>({ open: false, reminder: null });
   const [showDone, setShowDone] = useState(false);
-  const scoped = reminders.filter((reminder) => !reminder.planId || reminder.planId === activePlan?.id);
+  const scoped = reminders.filter((reminder) => !reminder.planId || reminder.planId === focusPlan?.id);
   const pending = scoped.filter((reminder) => !reminder.done);
   const done = scoped.filter((reminder) => reminder.done).sort((a, b) => (a.day < b.day ? 1 : -1));
   const visible = showDone ? [...pending, ...done] : pending;
@@ -839,11 +872,13 @@ export function RemindersPanel({ className }: { className?: string }) {
       className={className}
       title={st("reminders_title")}
       action={
-        <Tooltip label={st("reminder_add")}>
-          <Button variant="ghost" size="icon-sm" aria-label={st("reminder_add")} onClick={() => setDialog({ open: true, reminder: null })}>
-            <Plus />
-          </Button>
-        </Tooltip>
+        planReadOnly ? null : (
+          <Tooltip label={st("reminder_add")}>
+            <Button variant="ghost" size="icon-sm" aria-label={st("reminder_add")} onClick={() => setDialog({ open: true, reminder: null })}>
+              <Plus />
+            </Button>
+          </Tooltip>
+        )
       }
     >
       {visible.length ? (
@@ -854,7 +889,11 @@ export function RemindersPanel({ className }: { className?: string }) {
               <li key={reminder.id} className="group flex items-center gap-2.5 rounded-[var(--radius-sm)] py-1.5">
                 <Checkbox
                   checked={reminder.done}
-                  onCheckedChange={(value) => void actions.saveReminder({ ...reminder, done: value === true })}
+                  disabled={Boolean(reminder.planId && planReadOnly)}
+                  onCheckedChange={(value) => {
+                    if (reminder.planId && planReadOnly) return;
+                    void actions.saveReminder({ ...reminder, done: value === true });
+                  }}
                   aria-label={reminder.title}
                 />
                 <div className="min-w-0 flex-1">
@@ -864,6 +903,7 @@ export function RemindersPanel({ className }: { className?: string }) {
                     {!reminder.done && days >= 0 && days <= 60 ? ` · ${days === 0 ? st("today") : st("in_days", { count: days })}` : ""}
                   </p>
                 </div>
+                {reminder.planId && planReadOnly ? null : (
                 <Menu>
                   <MenuTrigger asChild>
                     <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 focus-visible:opacity-100" aria-label={st("more_actions")}>
@@ -886,6 +926,7 @@ export function RemindersPanel({ className }: { className?: string }) {
                     </MenuItem>
                   </MenuContent>
                 </Menu>
+                )}
               </li>
             );
           })}

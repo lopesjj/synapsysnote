@@ -2,6 +2,7 @@
 
 import { useCallback, type ComponentType, type ReactNode } from "react";
 import {
+  Archive,
   CalendarDays,
   Check,
   ChevronDown,
@@ -14,19 +15,20 @@ import {
   Settings2,
   Timer,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Link, useRouter } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { DisciplinesIcon } from "@/lib/icons/study-icons";
 import { WorkspaceIcon, isIconUrl } from "@/lib/icons/workspace-icon";
 import { cn } from "@/lib/utils";
-import { useStudy } from "@/lib/study/provider";
+import { useStudy, type StudyActions } from "@/lib/study/provider";
 import { useStudyT, type StudyKey } from "@/lib/study/i18n";
 import { useStudyUi } from "@/lib/study/ui-store";
 import { useLiveNote, useMaterialNote } from "@/lib/study/hooks";
 import { splitDuration } from "@/lib/study/format";
 import { BUILT_IN_CATEGORIES, SUBJECT_COLORS, subjectTone } from "@/lib/study/defaults";
-import type { PerformanceBand, StudyCategory } from "@/types/study";
+import type { PerformanceBand, StudyCategory, StudyPlan } from "@/types/study";
 
 const MONOGRAM_SKIP = new Set(["de", "da", "do", "das", "dos", "e", "a", "o", "the", "of", "and", "la", "le", "el", "di", "del", "der", "die", "und"]);
 
@@ -140,9 +142,49 @@ export function GoalMark({
   );
 }
 
+export async function reactivatePlan(planId: string, actions: StudyActions) {
+  await actions.archivePlan(planId, false);
+  await actions.setActivePlan(planId);
+  useStudyUi.getState().setBrowsePlanId(null);
+}
+
+export function chooseStudyPlan(plan: StudyPlan, setActive: (id: string) => Promise<void>) {
+  if (plan.archived) {
+    useStudyUi.getState().setBrowsePlanId(plan.id);
+    return;
+  }
+  useStudyUi.getState().setBrowsePlanId(null);
+  void setActive(plan.id);
+}
+
+export function ArchivedPlanBanner({ className }: { className?: string }) {
+  const { st } = useStudyT();
+  const { focusPlan, planReadOnly, actions } = useStudy();
+  if (!planReadOnly || !focusPlan) return null;
+  const name = focusPlan.name || st("untitled_goal");
+  return (
+    <div className={cn("mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3", className)}>
+      <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-muted">
+        <span className="font-medium text-ink">{name}</span>
+        {" · "}
+        {st("goal_archived_notice")} {st("goal_readonly_banner")}
+      </p>
+      <Button
+        variant="secondary"
+        size="sm"
+        className="shrink-0"
+        onClick={() => void reactivatePlan(focusPlan.id, actions).then(() => toast.success(st("goal_unarchived")))}
+      >
+        {st("goals_unarchive")}
+      </Button>
+    </div>
+  );
+}
+
 export function StudyPage({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div className={cn("mx-auto w-full max-w-6xl px-5 pb-16 pt-7 md:px-8 md:pt-9 xl:max-w-7xl 2xl:max-w-[94rem]", className)}>
+      <ArchivedPlanBanner />
       {children}
     </div>
   );
@@ -162,7 +204,7 @@ export function StudyHeader({
   showLog?: boolean;
 }) {
   const { st, textDir } = useStudyT();
-  const { activePlan } = useStudy();
+  const { focusPlan, planReadOnly } = useStudy();
   return (
     <header className="mb-7 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-b border-[var(--border)] pb-5">
       <div className="min-w-0 flex-1 basis-72">
@@ -182,7 +224,7 @@ export function StudyHeader({
             <GoalSwitcher />
           </div>
         ) : null}
-        {showLog && activePlan ? (
+        {showLog && focusPlan && !planReadOnly ? (
           <Button variant="primary" size="md" onClick={() => useStudyUi.getState().openLog()}>
             <Plus />
             {st("logform_title_new")}
@@ -196,9 +238,11 @@ export function StudyHeader({
 export function GoalSwitcher({ compact = false, detail }: { compact?: boolean; detail?: ReactNode }) {
   const { st } = useStudyT();
   const router = useRouter();
-  const { plans, activePlan, actions } = useStudy();
+  const { plans, focusPlan, actions } = useStudy();
   const live = plans.filter((plan) => !plan.archived);
-  const name = activePlan ? activePlan.name || st("untitled_goal") : st("sidebar_no_goal");
+  const archived = plans.filter((plan) => plan.archived);
+  const name = focusPlan ? focusPlan.name || st("untitled_goal") : st("sidebar_no_goal");
+  const choose = (plan: StudyPlan) => chooseStudyPlan(plan, actions.setActivePlan);
   return (
     <Menu>
       <MenuTrigger asChild>
@@ -208,8 +252,8 @@ export function GoalSwitcher({ compact = false, detail }: { compact?: boolean; d
             className="group -m-2 flex min-w-0 items-center gap-4 rounded-[18px] p-2 text-left transition hover:bg-[var(--surface-hover)]"
             aria-label={st("goal_switch_label")}
           >
-            {activePlan ? (
-              <GoalMark icon={activePlan.icon} name={name} seed={activePlan.id} size={52} />
+            {focusPlan ? (
+              <GoalMark icon={focusPlan.icon} name={name} seed={focusPlan.id} size={52} />
             ) : (
               <span className="flex size-[52px] items-center justify-center rounded-[14px] bg-[var(--surface-2)] text-muted">
                 <Flag className="size-5" />
@@ -232,13 +276,13 @@ export function GoalSwitcher({ compact = false, detail }: { compact?: boolean; d
             )}
             aria-label={st("goal_switch_label")}
           >
-            {activePlan ? (
-              <GoalMark icon={activePlan.icon} name={activePlan.name} seed={activePlan.id} size={compact ? 20 : 24} />
+            {focusPlan ? (
+              <GoalMark icon={focusPlan.icon} name={focusPlan.name} seed={focusPlan.id} size={compact ? 20 : 24} />
             ) : (
               <Flag className="size-3.5 text-muted" />
             )}
             <span className="min-w-0 flex-1 truncate text-left font-medium">
-              {activePlan ? activePlan.name || st("untitled_goal") : st("sidebar_no_goal")}
+              {focusPlan ? focusPlan.name || st("untitled_goal") : st("sidebar_no_goal")}
             </span>
             <ChevronDown className="size-3.5 shrink-0 text-faint transition group-data-[state=open]:rotate-180" />
           </button>
@@ -247,13 +291,26 @@ export function GoalSwitcher({ compact = false, detail }: { compact?: boolean; d
       <MenuContent align={detail !== undefined ? "start" : "end"} className="w-64">
         <MenuLabel>{st("goal_switch_label")}</MenuLabel>
         {live.map((plan) => (
-          <MenuItem key={plan.id} onSelect={() => void actions.setActivePlan(plan.id)}>
+          <MenuItem key={plan.id} onSelect={() => choose(plan)}>
             <GoalMark icon={plan.icon} name={plan.name} seed={plan.id} size={20} />
             <span className="min-w-0 flex-1 truncate">{plan.name || st("untitled_goal")}</span>
-            {plan.id === activePlan?.id ? <Check className="!text-[var(--accent)]" /> : null}
+            {plan.id === focusPlan?.id ? <Check className="!text-[var(--accent)]" /> : null}
           </MenuItem>
         ))}
-        {live.length ? <MenuSeparator /> : null}
+        {archived.length ? (
+          <>
+            {live.length ? <MenuSeparator /> : null}
+            <MenuLabel>{st("goal_switch_archived")}</MenuLabel>
+            {archived.map((plan) => (
+              <MenuItem key={plan.id} onSelect={() => choose(plan)}>
+                <GoalMark icon={plan.icon} name={plan.name} seed={plan.id} size={20} className="opacity-60 grayscale" />
+                <span className="min-w-0 flex-1 truncate text-muted">{plan.name || st("untitled_goal")}</span>
+                {plan.id === focusPlan?.id ? <Archive className="!text-muted" /> : null}
+              </MenuItem>
+            ))}
+          </>
+        ) : null}
+        {live.length || archived.length ? <MenuSeparator /> : null}
         <MenuItem onSelect={() => router.push("/home/study/goals/new")}>
           <Plus /> {st("goal_switch_new")}
         </MenuItem>
@@ -577,6 +634,8 @@ export function StudyLoading() {
 export function NoGoalState({ title }: { title: string }) {
   const { st } = useStudyT();
   const router = useRouter();
+  const { plans } = useStudy();
+  const archived = plans.filter((plan) => plan.archived);
   return (
     <StudyPage>
       <StudyHeader title={title} showGoal={false} showLog={false} />
@@ -591,14 +650,33 @@ export function NoGoalState({ title }: { title: string }) {
           </Button>
         }
       />
+      {archived.length ? (
+        <div className="mx-auto mt-8 w-full max-w-md">
+          <p className="mb-2 text-[12.5px] font-medium text-muted">{st("goal_switch_archived")}</p>
+          <ul className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+            {archived.map((plan) => (
+              <li key={plan.id} className="border-t border-[var(--border)] first:border-t-0">
+                <button
+                  type="button"
+                  onClick={() => useStudyUi.getState().setBrowsePlanId(plan.id)}
+                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-[var(--surface-hover)]"
+                >
+                  <GoalMark icon={plan.icon} name={plan.name} seed={plan.id} size={28} className="opacity-60 grayscale" />
+                  <span className="min-w-0 flex-1 truncate text-[13.5px] text-ink">{plan.name || st("untitled_goal")}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </StudyPage>
   );
 }
 
 export function StudyGate({ title, children }: { title: string; children: ReactNode }) {
-  const { ready, activePlan } = useStudy();
+  const { ready, focusPlan } = useStudy();
   if (!ready) return <StudyLoading />;
-  if (!activePlan) return <NoGoalState title={title} />;
+  if (!focusPlan) return <NoGoalState title={title} />;
   return <>{children}</>;
 }
 
@@ -664,7 +742,11 @@ export function FocusButton({
   className?: string;
 }) {
   const { st } = useStudyT();
+  const { subjects, plans } = useStudy();
   const startFocus = useStartFocus();
+  const subject = subjectId ? subjects.find((entry) => entry.id === subjectId) : undefined;
+  const locked = Boolean(subject && plans.some((plan) => plan.id === subject.planId && plan.archived));
+  if (locked) return null;
   const start = () => startFocus({ subjectId, topicId, reviewId, minutes });
   return (
     <Button variant={variant} size={size} onClick={start} className={className} aria-label={label ?? st("sidebar_focus_idle")}>

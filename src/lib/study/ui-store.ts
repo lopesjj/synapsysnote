@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { primeTimerAudio } from "./sound";
 
 export type StudyModule = "notes" | "study";
 export type TimerMode = "stopwatch" | "countdown" | "pomodoro";
@@ -73,6 +74,7 @@ interface StudyUiState {
   scheduleView: "week" | "month";
   scheduleLayers: ScheduleLayers;
   goalsArchivedOpen: boolean;
+  browsePlanId: string | null;
   goalSubjectSort: GoalSubjectSort;
   /** Planejamento da página inicial mostrando só o que falta fazer no dia. */
   homePendingOnly: boolean;
@@ -90,6 +92,7 @@ interface StudyUiState {
   setScheduleView: (view: "week" | "month") => void;
   setScheduleLayer: (layer: keyof ScheduleLayers, value: boolean) => void;
   setGoalsArchivedOpen: (open: boolean) => void;
+  setBrowsePlanId: (id: string | null) => void;
   setGoalSubjectSort: (sort: GoalSubjectSort) => void;
   setHomePendingOnly: (value: boolean) => void;
   setNewGoalDraft: (name: string) => void;
@@ -108,6 +111,7 @@ export const useStudyUi = create<StudyUiState>()(
       scheduleView: "week",
       scheduleLayers: { plan: true, reviews: true, tasks: true },
       goalsArchivedOpen: false,
+      browsePlanId: null,
       goalSubjectSort: "syllabus",
       homePendingOnly: false,
       newGoalDraft: "",
@@ -133,6 +137,7 @@ export const useStudyUi = create<StudyUiState>()(
       setScheduleView: (view) => set({ scheduleView: view }),
       setScheduleLayer: (layer, value) => set({ scheduleLayers: { ...get().scheduleLayers, [layer]: value } }),
       setGoalsArchivedOpen: (open) => set({ goalsArchivedOpen: open }),
+      setBrowsePlanId: (id) => set({ browsePlanId: id }),
       setGoalSubjectSort: (sort) => set({ goalSubjectSort: sort }),
       setHomePendingOnly: (value) => set({ homePendingOnly: value }),
       setNewGoalDraft: (name) => set({ newGoalDraft: name }),
@@ -160,6 +165,7 @@ export const useStudyUi = create<StudyUiState>()(
         scheduleView: state.scheduleView,
         scheduleLayers: state.scheduleLayers,
         goalsArchivedOpen: state.goalsArchivedOpen,
+        browsePlanId: state.browsePlanId,
         goalSubjectSort: state.goalSubjectSort,
         homePendingOnly: state.homePendingOnly,
         celebrated: state.celebrated,
@@ -176,6 +182,7 @@ export function startTimer() {
   const store = useStudyUi.getState();
   const timer = store.timer;
   if (timer.status === "running") return;
+  if (timer.mode !== "stopwatch") primeTimerAudio();
   const now = Date.now();
   store.setTimer({
     status: "running",

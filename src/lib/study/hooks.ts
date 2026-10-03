@@ -82,13 +82,13 @@ export function usePlanMetrics() {
 }
 
 export function useAwardBook(): AwardBook | null {
-  const { activePlan, planSubjects, settings, today } = useStudy();
+  const { focusPlan, planSubjects, settings, today } = useStudy();
   const metrics = usePlanMetrics();
   return useMemo(
     () =>
-      activePlan
+      focusPlan
         ? buildAwardBook({
-            plan: activePlan,
+            plan: focusPlan,
             subjects: planSubjects,
             studied: metrics.days,
             today,
@@ -98,7 +98,7 @@ export function useAwardBook(): AwardBook | null {
             claims: settings.claimedAwards,
           })
         : null,
-    [activePlan, metrics.days, metrics.streak, planSubjects, settings.claimedAwards, settings.studyWeekdays, settings.timeZone, today]
+    [focusPlan, metrics.days, metrics.streak, planSubjects, settings.claimedAwards, settings.studyWeekdays, settings.timeZone, today]
   );
 }
 

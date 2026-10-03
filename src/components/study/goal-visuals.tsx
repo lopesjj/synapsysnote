@@ -10,17 +10,19 @@ import { subjectTone } from "@/lib/study/defaults";
 import type { DayKey, StudyPlan } from "@/types/study";
 
 /** Contagem regressiva da prova com a barra do caminho já percorrido desde o início do objetivo. */
-export function ExamCountdown({ plan, startDay, onSetDate }: { plan: StudyPlan; startDay: DayKey; onSetDate: () => void }) {
+export function ExamCountdown({ plan, startDay, onSetDate }: { plan: StudyPlan; startDay: DayKey; onSetDate?: () => void }) {
   const { st, locale } = useStudyT();
   const { today } = useStudy();
   if (!plan.examDate) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-[14px] text-muted">{st("goal_no_exam")}</span>
-        <Button variant="secondary" size="sm" onClick={onSetDate} className="relative z-10">
-          <CalendarDays />
-          {st("goals_set_date")}
-        </Button>
+        {onSetDate ? (
+          <Button variant="secondary" size="sm" onClick={onSetDate} className="relative z-10">
+            <CalendarDays />
+            {st("goals_set_date")}
+          </Button>
+        ) : null}
       </div>
     );
   }
@@ -39,9 +41,13 @@ export function ExamCountdown({ plan, startDay, onSetDate }: { plan: StudyPlan; 
         <span className="text-[34px] font-semibold leading-none tracking-[-0.035em] tabular-nums text-ink">{days === 0 ? st("goals_exam_today") : days}</span>
         <span className="text-[13px] text-muted">{days === 0 ? st("goals_exam_today_sub") : st("goal_countdown_label", { count: days })}</span>
       </p>
-      <button type="button" onClick={onSetDate} className="relative z-10 mt-1.5 text-start text-[13px] text-ink underline-offset-4 hover:underline">
-        {long}
-      </button>
+      {onSetDate ? (
+        <button type="button" onClick={onSetDate} className="relative z-10 mt-1.5 text-start text-[13px] text-ink underline-offset-4 hover:underline">
+          {long}
+        </button>
+      ) : (
+        <p className="mt-1.5 text-[13px] text-ink">{long}</p>
+      )}
       <ProgressBar value={elapsed} max={span} className="mt-3" />
       <p className="mt-1.5 text-[12px] tabular-nums text-muted">{st("goal_ruler_week_of", { n: week, total: totalWeeks, left: Math.max(0, totalWeeks - week) })}</p>
     </div>

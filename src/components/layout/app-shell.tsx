@@ -607,6 +607,7 @@ function MobileSidebar() {
   const { t } = useTranslation();
   const open = useUiStore((state) => state.mobileSidebarOpen);
   const reducedMotion = useUiStore((state) => state.reducedMotion);
+  const sidebarWidth = useUiStore((state) => state.sidebarWidth);
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -634,7 +635,7 @@ function MobileSidebar() {
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-60 md:hidden"
+          className="fixed inset-0 z-60 h-dvh md:hidden"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -650,7 +651,8 @@ function MobileSidebar() {
             aria-modal="true"
             aria-label={t("main_navigation")}
             tabIndex={-1}
-            className="absolute inset-y-0 left-0 h-full w-[min(20rem,calc(100%-3.25rem))] overflow-hidden shadow-[8px_0_32px_rgba(0,0,0,0.18)] outline-none"
+            className="absolute inset-y-0 left-0 h-full w-[min(var(--drawer),calc(100%-3rem))] overflow-hidden shadow-[8px_0_32px_rgba(0,0,0,0.18)] outline-none"
+            style={{ ["--drawer" as string]: `${Math.max(sidebarWidth, 280)}px` }}
             initial={{ x: "-100%" }}
             animate={{ x: 0 }}
             exit={{ x: "-100%" }}

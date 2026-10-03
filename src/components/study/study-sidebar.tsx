@@ -117,7 +117,7 @@ function useDueReviews() {
 function FocusDock() {
   const { st } = useStudyT();
   const timer = useStudyUi((state) => state.timer);
-  const { subjectById, activePlan, settings } = useStudy();
+  const { subjectById, focusPlan, planReadOnly, settings } = useStudy();
   const active = timer.status !== "idle";
   const armed = isTimerArmed(timer);
   const now = useNow(timer.status === "running", 1000);
@@ -149,12 +149,12 @@ function FocusDock() {
   }
   return (
     <div className="grid grid-cols-[1fr_auto_auto] gap-1.5">
-      <Button variant="primary" size="sm" className="h-10 justify-center gap-2 leading-none [@media(pointer:fine)]:h-8" onClick={openBlankTimer}>
+      <Button variant="primary" size="sm" className="h-10 justify-center gap-2 leading-none [@media(pointer:fine)]:h-8" disabled={planReadOnly} onClick={openBlankTimer}>
         <Timer className="size-4 shrink-0" />
         <span className="truncate leading-none">{st("sidebar_focus_idle")}</span>
       </Button>
       <Tooltip label={st("logform_title_new")}>
-        <Button variant="secondary" size="icon" className="size-10 [@media(pointer:fine)]:size-8" disabled={!activePlan} onClick={() => useStudyUi.getState().openLog()} aria-label={st("logform_title_new")}>
+        <Button variant="secondary" size="icon" className="size-10 [@media(pointer:fine)]:size-8" disabled={!focusPlan || planReadOnly} onClick={() => useStudyUi.getState().openLog()} aria-label={st("logform_title_new")}>
           <Plus />
         </Button>
       </Tooltip>
@@ -194,7 +194,7 @@ function SidebarLink({
       onMouseEnter={() => router.prefetch(href)}
       onClick={onClick}
       className={cn(
-        "flex w-full min-w-0 items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] transition hover:bg-[var(--surface-hover)] [&_svg]:shrink-0 [@media(pointer:coarse)]:py-2.5",
+        "flex w-full min-w-0 items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] transition hover:bg-[var(--surface-hover)] [&_svg]:shrink-0",
         active ? "bg-[var(--surface-hover)] font-medium text-ink" : "text-muted hover:text-ink"
       )}
     >
@@ -204,7 +204,7 @@ function SidebarLink({
   );
 }
 
-export function StudySidebarBody({ homeLink, mobile = false }: { homeLink: ReactNode; mobile?: boolean }) {
+export function StudySidebarBody({ homeLink }: { homeLink: ReactNode }) {
   const { st } = useStudyT();
   const { t } = useTranslation();
   const pathname = usePathname();
@@ -212,16 +212,16 @@ export function StudySidebarBody({ homeLink, mobile = false }: { homeLink: React
   const closeMobile = () => useUiStore.getState().setMobileSidebarOpen(false);
 
   return (
-    <div className={cn("flex flex-col", !mobile && "min-h-0 flex-1")}>
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="space-y-0.5 px-3">
         <button
           type="button"
           onClick={() => useUiStore.getState().setPaletteOpen(true)}
-          className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink [@media(pointer:coarse)]:py-2.5"
+          className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
         >
           <Search className="size-3.5 shrink-0" />
           <span className="truncate">{t("search")}</span>
-          <Kbd className="ml-auto [@media(pointer:coarse)]:hidden">{isMac() ? "⌘K" : "Ctrl K"}</Kbd>
+          <Kbd className="ml-auto">{isMac() ? "⌘K" : "Ctrl K"}</Kbd>
         </button>
         {homeLink}
         {STUDY_NAV.map((item) => (
@@ -242,7 +242,7 @@ export function StudySidebarBody({ homeLink, mobile = false }: { homeLink: React
         ))}
       </div>
 
-      <div className={cn("mt-4 space-y-4 px-3 pb-4", !mobile && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}>
+      <div className="mt-4 min-h-0 flex-1 touch-pan-y space-y-4 overflow-y-auto overscroll-y-contain px-3 pb-4">
         <div>
           <p className="px-2 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-faint">{st("sidebar_tools")}</p>
           <FocusDock />

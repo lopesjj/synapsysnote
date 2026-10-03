@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ExternalLink, FileText, Link2, MessageSquareText, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useRouter } from "@/lib/i18n/navigation";
@@ -27,7 +27,12 @@ export function SubjectDetailPage({ subjectId }: { subjectId: string }) {
   const { st, textDir, language } = useStudyT();
   const { ready, subjects, sessions, exams, reviews, plans, settings, today } = useStudy();
   const subject = subjects.find((entry) => entry.id === subjectId) ?? null;
+  const plan = plans.find((entry) => entry.id === subject?.planId) ?? null;
+  const locked = Boolean(plan?.archived);
   const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (plan?.archived) useStudyUi.getState().setBrowsePlanId(plan.id);
+  }, [plan?.archived, plan?.id]);
 
   const data = useMemo(() => {
     const own = sessions.filter((session) => session.subjectId === subjectId);
@@ -69,7 +74,6 @@ export function SubjectDetailPage({ subjectId }: { subjectId: string }) {
     );
   }
 
-  const plan = plans.find((entry) => entry.id === subject.planId);
   const done = subject.topics.filter((topic) => topic.done).length;
   const band = performanceBand(data.total.accuracy, settings);
 
@@ -92,15 +96,19 @@ export function SubjectDetailPage({ subjectId }: { subjectId: string }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 max-sm:w-full">
-          <Button variant="ghost" onClick={() => setEditing(true)}>
-            <Pencil />
-            {st("edit")}
-          </Button>
+          {locked ? null : (
+            <Button variant="ghost" onClick={() => setEditing(true)}>
+              <Pencil />
+              {st("edit")}
+            </Button>
+          )}
           <FocusButton variant="secondary" size="md" subjectId={subject.id} label={st("subject_start_focus")} />
-          <Button variant="primary" onClick={() => useStudyUi.getState().openLog({ subjectId: subject.id })}>
-            <Plus />
-            {st("logform_title_new")}
-          </Button>
+          {locked ? null : (
+            <Button variant="primary" onClick={() => useStudyUi.getState().openLog({ subjectId: subject.id })}>
+              <Plus />
+              {st("logform_title_new")}
+            </Button>
+          )}
         </div>
       </header>
 
@@ -135,7 +143,7 @@ export function SubjectDetailPage({ subjectId }: { subjectId: string }) {
       </section>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <TopicsPanel subject={subject} byTopic={data.byTopic} />
+        <TopicsPanel subject={subject} byTopic={data.byTopic} locked={locked} />
         <Panel
           title={st("subject_detail_reviews")}
           action={<PanelLink href="/home/study/reviews">{st("view_all")}</PanelLink>}
@@ -153,9 +161,9 @@ export function SubjectDetailPage({ subjectId }: { subjectId: string }) {
         </Panel>
       </div>
 
-      <RecordsPanel subject={subject} sessions={data.sessions} />
+      <RecordsPanel subject={subject} sessions={data.sessions} locked={locked} />
 
-      <SubjectDialog open={editing} onOpenChange={setEditing} planId={subject.planId} subject={subject} />
+      {locked ? null : <SubjectDialog open={editing} onOpenChange={setEditing} planId={subject.planId} subject={subject} />}
     </StudyPage>
   );
 }
@@ -163,9 +171,11 @@ export function SubjectDetailPage({ subjectId }: { subjectId: string }) {
 function TopicsPanel({
   subject,
   byTopic,
+  locked = false,
 }: {
   subject: StudySubject;
   byTopic: Map<string, StudyAggregate>;
+  locked?: boolean;
 }) {
   const { st, locale } = useStudyT();
   const router = useRouter();
@@ -211,8 +221,12 @@ function TopicsPanel({
                       <label className="flex items-start gap-2.5">
                         <Checkbox
                           checked={topic.done}
+                          disabled={locked}
                           className="mt-[2px]"
-                          onCheckedChange={(value) => void actions.updateTopic(subject.id, topic.id, { done: value === true })}
+                          onCheckedChange={(value) => {
+                            if (locked) return;
+                            void actions.updateTopic(subject.id, topic.id, { done: value === true });
+                          }}
                           aria-label={topic.done ? st("topic_mark_pending") : st("topic_mark_done")}
                         />
                         <span className={cn("leading-snug", topic.done ? "text-muted" : "text-ink")}>{topic.name}</span>
@@ -236,14 +250,14 @@ function TopicsPanel({
                               <FileText className="!text-[var(--accent)]" />
                             </Button>
                           </Tooltip>
-                        ) : (
+                        ) : locked ? null : (
                           <Tooltip label={st("topic_create_note")}>
                             <Button variant="ghost" size="icon-sm" aria-label={st("topic_create_note")} onClick={() => void createNote(topic)}>
                               <FileText />
                             </Button>
                           </Tooltip>
                         )}
-                        <TopicLinkButton subject={subject} topic={topic} />
+                        <TopicLinkButton subject={subject} topic={topic} locked={locked} />
                         <FocusButton variant="ghost" size="icon-sm" subjectId={subject.id} topicId={topic.id} label={st("subject_start_focus")} />
                       </div>
                     </td>
@@ -260,7 +274,7 @@ function TopicsPanel({
   );
 }
 
-function TopicLinkButton({ subject, topic }: { subject: StudySubject; topic: StudyTopic }) {
+function TopicLinkButton({ subject, topic, locked = false }: { subject: StudySubject; topic: StudyTopic; locked?: boolean }) {
   const { st } = useStudyT();
   const { actions } = useStudy();
   const [open, setOpen] = useState(false);
@@ -288,6 +302,7 @@ function TopicLinkButton({ subject, topic }: { subject: StudySubject; topic: Stu
           </Button>
         </Tooltip>
       ) : null}
+      {locked ? null : (
       <Popover
         open={open}
         onOpenChange={(value) => {
@@ -338,11 +353,12 @@ function TopicLinkButton({ subject, topic }: { subject: StudySubject; topic: Stu
           </form>
         </PopoverContent>
       </Popover>
+      )}
     </div>
   );
 }
 
-function RecordsPanel({ subject, sessions }: { subject: StudySubject; sessions: StudySession[] }) {
+function RecordsPanel({ subject, sessions, locked = false }: { subject: StudySubject; sessions: StudySession[]; locked?: boolean }) {
   const { st, locale } = useStudyT();
   const { actions } = useStudy();
   const visible = sessions.slice(0, 60);
@@ -413,12 +429,16 @@ function RecordsPanel({ subject, sessions }: { subject: StudySubject; sessions: 
                             </span>
                           </Tooltip>
                         ) : null}
-                        <Button variant="ghost" size="icon-sm" aria-label={st("edit")} onClick={() => useStudyUi.getState().openLog(null, session.id)}>
-                          <Pencil />
-                        </Button>
+                        {locked ? null : (
+                          <Button variant="ghost" size="icon-sm" aria-label={st("edit")} onClick={() => useStudyUi.getState().openLog(null, session.id)}>
+                            <Pencil />
+                          </Button>
+                        )}
+                        {locked ? null : (
                         <Button variant="ghost" size="icon-sm" aria-label={st("delete")} className="hover:text-[var(--danger)]" onClick={() => void remove(session)}>
                           <Trash2 />
                         </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

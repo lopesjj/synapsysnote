@@ -397,8 +397,8 @@ export function StudyPreferencesSection() {
               type="button"
               aria-pressed={settings.timerSound === sound}
               onClick={() => {
-                update({ timerSound: sound });
                 playTimerSound(sound);
+                update({ timerSound: sound });
               }}
               className={cn(
                 "inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-sm)] border px-3 text-[12.5px] transition",

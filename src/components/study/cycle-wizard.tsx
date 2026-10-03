@@ -206,7 +206,7 @@ export function CycleWizard({
 function WizardBody({ initialMode, onClose }: { initialMode: Mode; onClose: () => void }) {
   const { st, locale, duration } = useStudyT();
   const router = useRouter();
-  const { planSubjects, planCycle, settings, actions, activePlan, subjectById, today } = useStudy();
+  const { planSubjects, planCycle, settings, actions, focusPlan, planReadOnly, subjectById, today } = useStudy();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [step, setStep] = useState(0);
   const [weekMinutes, setWeekMinutes] = useState<number[]>(() =>
@@ -302,7 +302,8 @@ function WizardBody({ initialMode, onClose }: { initialMode: Mode; onClose: () =
 
   const save = async () => {
     const problem = validate(2);
-    if (problem || !activePlan) {
+    if (problem || planReadOnly || !focusPlan) {
+      if (planReadOnly) toast.error(st("goal_readonly_toast"));
       setError(problem);
       return;
     }
@@ -310,7 +311,7 @@ function WizardBody({ initialMode, onClose }: { initialMode: Mode; onClose: () =
     try {
       if (mode === "manual") {
         const used = new Set(manualBlocks.map((block) => block.subjectId));
-        await actions.saveCycle(activePlan.id, {
+        await actions.saveCycle(focusPlan.id, {
           subjects: configs.filter((config) => used.has(config.subjectId)).map(({ subjectId, weight, level }) => ({ subjectId, weight, level })),
           weekMinutes,
           minBlock: autoInput.minBlock,
@@ -319,7 +320,7 @@ function WizardBody({ initialMode, onClose }: { initialMode: Mode; onClose: () =
         });
       } else {
         // Ids vazios: o backend cria ids novos, e o histórico da sequência anterior não se confunde com a nova.
-        await actions.saveCycle(activePlan.id, {
+        await actions.saveCycle(focusPlan.id, {
           subjects: autoInput.subjects,
           weekMinutes,
           minBlock: autoInput.minBlock,
@@ -355,10 +356,10 @@ function WizardBody({ initialMode, onClose }: { initialMode: Mode; onClose: () =
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 px-6 pb-4 pr-12 pt-5">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-[12px]">
-          {activePlan ? (
+          {focusPlan ? (
             <span className="flex min-w-0 items-center gap-1.5 text-muted">
-              <GoalMark icon={activePlan.icon} name={activePlan.name} seed={activePlan.id} size={16} />
-              <span className="truncate">{activePlan.name || st("untitled_goal")}</span>
+              <GoalMark icon={focusPlan.icon} name={focusPlan.name} seed={focusPlan.id} size={16} />
+              <span className="truncate">{focusPlan.name || st("untitled_goal")}</span>
             </span>
           ) : (
             <span />

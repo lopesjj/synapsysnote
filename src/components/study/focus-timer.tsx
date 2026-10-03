@@ -22,7 +22,7 @@ import {
 } from "@/lib/study/ui-store";
 import { clockLabel, maskClock, parseDurationInput, splitDuration } from "@/lib/study/format";
 import { dayKeyOf, minuteOfDay } from "@/lib/study/dates";
-import { playTimerSound } from "@/lib/study/sound";
+import { holdTimerAudio, playTimerSound, releaseTimerAudio, resumeTimerAudio, unlockTimerAudio } from "@/lib/study/sound";
 import { setTitlePrefix } from "@/lib/document-title";
 import { TIMER_SOUNDS } from "@/lib/study/defaults";
 import type { StudySettings } from "@/types/study";
@@ -103,25 +103,63 @@ export function finishFocus(settings: StudySettings, message: string) {
   });
 }
 
+type ScreenWakeLock = { release: () => Promise<void> };
+
+function requestScreenWake(): Promise<ScreenWakeLock | null> {
+  const wakeLock = (navigator as Navigator & { wakeLock?: { request: (type: "screen") => Promise<ScreenWakeLock> } }).wakeLock;
+  if (!wakeLock || document.visibilityState !== "visible") return Promise.resolve(null);
+  return wakeLock.request("screen").catch(() => null);
+}
+
 export function FocusEngine() {
   const { settings } = useStudy();
   const { st } = useStudyT();
   const status = useStudyUi((state) => state.timer.status);
+  const timerSound = settings.timerSound;
+  const pomodoroFocus = settings.pomodoroFocus;
+  const pomodoroShort = settings.pomodoroShort;
+  const pomodoroLong = settings.pomodoroLong;
+  const pomodoroRounds = settings.pomodoroRounds;
 
   useEffect(() => {
-    if (status !== "running") return;
+    if (status !== "running") {
+      releaseTimerAudio();
+      return;
+    }
+    const cue = () => {
+      const timer = useStudyUi.getState().timer;
+      if (timer.mode === "stopwatch" || timerSound === "none") {
+        releaseTimerAudio();
+        return;
+      }
+      holdTimerAudio();
+    };
+    cue();
+    let wake: ScreenWakeLock | null = null;
+    let dropped = false;
+    const lockScreen = () => {
+      const timer = useStudyUi.getState().timer;
+      if (dropped || timer.mode === "stopwatch" || timerSound === "none") return;
+      void requestScreenWake().then((sentinel) => {
+        if (dropped || !sentinel) {
+          void sentinel?.release();
+          return;
+        }
+        wake = sentinel;
+      });
+    };
+    lockScreen();
     const tick = () => {
       const store = useStudyUi.getState();
       const timer = store.timer;
       if (timer.status !== "running") return;
       const now = Date.now();
       if (timer.mode === "countdown") {
-        if (timerElapsedMs(timer, now) >= timer.countdownMs) {
-          store.setTimer({ status: "paused", elapsedMs: timer.countdownMs, startedAt: null, finished: true });
-          playTimerSound(settings.timerSound);
-          toast.success(st("timer_countdown_done"));
-          store.setTimerOpen(true);
-        }
+        if (timerElapsedMs(timer, now) < timer.countdownMs) return;
+        store.setTimer({ status: "paused", elapsedMs: timer.countdownMs, startedAt: null, finished: true });
+        playTimerSound(timerSound);
+        toast.success(st("timer_countdown_done"));
+        store.setTimerOpen(true);
         return;
       }
       if (timer.mode !== "pomodoro") return;
@@ -146,15 +184,58 @@ export function FocusEngine() {
         changed = true;
         if (guard === 1) toast.info(st("timer_phase_done", { phase: st(PHASE_KEY[ended]) }));
       }
-      if (changed) {
-        playTimerSound(settings.timerSound);
-        store.setTimer({ phase, focusRounds: rounds, focusMs, elapsedMs: 0, startedAt: now - elapsed });
-      }
+      if (!changed) return;
+      playTimerSound(timerSound);
+      store.setTimer({ phase, focusRounds: rounds, focusMs, elapsedMs: 0, startedAt: now - elapsed });
+      cue();
+    };
+    let deadline = 0;
+    const arm = () => {
+      const timer = useStudyUi.getState().timer;
+      if (timer.status !== "running") return;
+      const target = targetMs(timer, settings);
+      if (target === null) return;
+      const remaining = Math.max(0, target - timerElapsedMs(timer));
+      window.clearTimeout(deadline);
+      deadline = window.setTimeout(tick, remaining);
     };
     tick();
-    const interval = window.setInterval(tick, 500);
-    return () => window.clearInterval(interval);
-  }, [settings, st, status]);
+    arm();
+    const interval = window.setInterval(() => {
+      tick();
+      arm();
+    }, 1000);
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      resumeTimerAudio();
+      cue();
+      lockScreen();
+      tick();
+      arm();
+    };
+    const onGesture = () => {
+      const timer = useStudyUi.getState().timer;
+      if (timer.status === "running" && timer.mode !== "stopwatch" && timerSound !== "none") {
+        unlockTimerAudio();
+        holdTimerAudio();
+      }
+      resumeTimerAudio();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onVisible);
+    window.addEventListener("pointerdown", onGesture, true);
+    window.addEventListener("keydown", onGesture, true);
+    return () => {
+      dropped = true;
+      window.clearTimeout(deadline);
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onVisible);
+      window.removeEventListener("pointerdown", onGesture, true);
+      window.removeEventListener("keydown", onGesture, true);
+      void wake?.release();
+    };
+  }, [pomodoroFocus, pomodoroLong, pomodoroRounds, pomodoroShort, settings, st, status, timerSound]);
 
   return null;
 }
@@ -365,7 +446,7 @@ export function FocusOverlay() {
   const { st } = useStudyT();
   const open = useStudyUi((state) => state.timerOpen);
   const timer = useStudyUi((state) => state.timer);
-  const { settings, planSubjects, subjectById, actions } = useStudy();
+  const { settings, planSubjects, subjectById, actions, planReadOnly } = useStudy();
   const liveNote = useLiveNote();
   const router = useRouter();
   const now = useNow(open && timer.status === "running");
@@ -483,8 +564,8 @@ export function FocusOverlay() {
                       key={sound}
                       onSelect={(event) => {
                         event.preventDefault();
-                        void actions.updateSettings({ timerSound: sound });
                         playTimerSound(sound);
+                        void actions.updateSettings({ timerSound: sound });
                       }}
                     >
                       <Check className={cn(settings.timerSound === sound ? "!text-[var(--accent)]" : "opacity-0")} />
@@ -506,6 +587,15 @@ export function FocusOverlay() {
           </div>
 
           <div className="flex flex-1 flex-col items-center justify-center px-5 pb-8 pt-4">
+            {planReadOnly ? (
+              <span className="flex max-w-[min(32rem,90vw)] items-center gap-2 px-3 py-1.5 text-[13px]">
+                {subject ? <SubjectDot color={subject.color} /> : null}
+                <span className={cn("truncate", subject ? "font-medium text-ink" : "text-muted")}>
+                  {subject ? subject.name : st("timer_no_subject")}
+                  {topic ? <span className="font-normal text-muted"> · {topic.name}</span> : null}
+                </span>
+              </span>
+            ) : (
             <Menu>
               <MenuTrigger asChild>
                 <button
@@ -547,6 +637,7 @@ export function FocusOverlay() {
                 ) : null}
               </MenuContent>
             </Menu>
+            )}
 
             {materialNote ? (
               <button

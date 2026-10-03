@@ -45,7 +45,6 @@ import {
   Search,
   Star,
   Trash2,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, compareNatural, isMac } from "@/lib/utils";
@@ -106,23 +105,21 @@ const detectCollisions: CollisionDetection = (args) => {
   return within.length ? within : closestCenter(args);
 };
 
-const GRIP_CLASS = cn(
-  "shrink-0 cursor-grab rounded p-0.5 text-faint hover:text-ink active:cursor-grabbing",
-  "[@media(pointer:coarse)]:flex [@media(pointer:coarse)]:size-9 [@media(pointer:coarse)]:items-center [@media(pointer:coarse)]:justify-center [@media(pointer:coarse)]:p-0"
-);
+const GRIP_CLASS =
+  "shrink-0 cursor-grab rounded p-0.5 text-faint hover:text-ink active:cursor-grabbing";
 
 const ROW_ICON_BUTTON =
-  "flex shrink-0 items-center justify-center rounded p-0.5 text-faint hover:text-ink [@media(pointer:coarse)]:size-9 [@media(pointer:coarse)]:p-0";
+  "flex shrink-0 items-center justify-center rounded p-0.5 text-faint hover:text-ink";
 
 const ROW_CHEVRON =
-  "flex size-4 shrink-0 items-center justify-center rounded text-faint transition hover:text-ink [@media(pointer:coarse)]:size-8";
+  "flex size-4 shrink-0 items-center justify-center rounded text-faint transition hover:text-ink";
+
+const ROW_HOVER_ONLY = "[@media(hover:none)]:hidden";
 
 function rowActionsClass(menuOpen: boolean) {
   return cn(
     "grid transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
-    menuOpen
-      ? "grid-cols-[1fr]"
-      : "grid-cols-[0fr] group-hover:grid-cols-[1fr] [@media(hover:none)]:grid-cols-[1fr] [@media(pointer:coarse)]:grid-cols-[1fr]"
+    menuOpen ? "grid-cols-[1fr]" : "grid-cols-[0fr] group-hover:grid-cols-[1fr] [@media(hover:none)]:grid-cols-[1fr]"
   );
 }
 
@@ -863,11 +860,7 @@ export function Sidebar({
       <span className="pointer-events-none absolute inset-y-0 left-[76px] right-9 flex select-none items-center justify-center overflow-hidden">
         <SynapsysLettering />
       </span>
-      {mobile ? (
-        <X className="ml-auto size-4 shrink-0 text-ink" strokeWidth={1.75} />
-      ) : (
-        <PanelLeftClose className="ml-auto size-4 shrink-0 text-ink" strokeWidth={1.75} />
-      )}
+      <PanelLeftClose className="ml-auto size-4 shrink-0 text-ink" strokeWidth={1.75} />
     </button>
   );
 
@@ -886,11 +879,7 @@ export function Sidebar({
     >
       <div
         className="relative flex shrink-0 items-center overflow-hidden pr-3.5 pb-6"
-        style={{
-          paddingTop: mobile
-            ? "calc(1.5rem + env(safe-area-inset-top, 0px))"
-            : "calc(2rem + env(safe-area-inset-top, 0px))",
-        }}
+        style={{ paddingTop: "calc(2rem + env(safe-area-inset-top, 0px))" }}
       >
         {mobile ? (
           chromeButton
@@ -901,29 +890,23 @@ export function Sidebar({
         )}
       </div>
 
-      <div
-        className={cn(
-          mobile
-            ? "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain"
-            : "flex min-h-0 flex-1 flex-col"
-        )}
-      >
-      <div className={cn("shrink-0 px-3 pb-3", mobile && "pt-2")}>
+      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 px-3 pb-3">
         <ModuleSwitch layoutId={mobile ? "synapsys-module-thumb-mobile" : "synapsys-module-thumb"} />
       </div>
 
       {activeModule === "study" ? (
-        <StudySidebarBody homeLink={homeLink} mobile={mobile} />
+        <StudySidebarBody homeLink={homeLink} />
       ) : (
         <>
       <div className="shrink-0 space-y-0.5 px-3">
         <button
           onClick={() => useUiStore.getState().setPaletteOpen(true)}
-          className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink [@media(pointer:coarse)]:py-2.5"
+          className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
         >
           <Search className="size-3.5 shrink-0" />
           <span className="truncate">{t("search")}</span>
-          <Kbd className="ml-auto [@media(pointer:coarse)]:hidden">{isMac() ? "⌘K" : "Ctrl K"}</Kbd>
+          <Kbd className="ml-auto">{isMac() ? "⌘K" : "Ctrl K"}</Kbd>
         </button>
         {homeLink}
         <NavLink
@@ -985,7 +968,7 @@ export function Sidebar({
         onDragCancel={onDragCancel}
         onDragEnd={(event) => void onDragEnd(event)}
       >
-        <div className={cn("mt-3 space-y-4 px-3 pb-4", !mobile && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}>
+        <div className="mt-3 min-h-0 flex-1 touch-pan-y space-y-4 overflow-y-auto overscroll-y-contain px-3 pb-4">
           {favorites.length ? (
             <Section
               title={t("favorites")}
@@ -1161,7 +1144,7 @@ function NavLink({
       onMouseEnter={() => router.prefetch(href)}
       onClick={() => useUiStore.getState().setMobileSidebarOpen(false)}
       className={cn(
-        "flex w-full min-w-0 items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] transition hover:bg-[var(--surface-hover)] [&_svg]:shrink-0 [@media(pointer:coarse)]:py-2.5",
+        "flex w-full min-w-0 items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[13.5px] transition hover:bg-[var(--surface-hover)] [&_svg]:shrink-0",
         active ? "font-medium text-ink" : "text-muted hover:text-ink"
       )}
     >
@@ -1318,7 +1301,7 @@ function NotebookRow({
         <Tooltip label={t("new_notebook")}>
           <button
             onClick={onCreateSubnotebook}
-            className={ROW_ICON_BUTTON}
+            className={cn(ROW_ICON_BUTTON, ROW_HOVER_ONLY)}
             aria-label={t("new_notebook")}
           >
             <FolderPlus className="size-3.5" />
@@ -1327,7 +1310,7 @@ function NotebookRow({
         <Tooltip label={t("new_note")}>
           <button
             onClick={onCreatePage}
-            className={ROW_ICON_BUTTON}
+            className={cn(ROW_ICON_BUTTON, ROW_HOVER_ONLY)}
             aria-label={t("new_note")}
           >
             <Plus className="size-3.5" />
@@ -1514,7 +1497,7 @@ function SortablePageRow({
             <button
               type="button"
               onClick={() => void onCreateChild()}
-              className={ROW_ICON_BUTTON}
+              className={cn(ROW_ICON_BUTTON, ROW_HOVER_ONLY)}
               aria-label={t("new_subpage")}
             >
               <Plus className="size-3.5" />

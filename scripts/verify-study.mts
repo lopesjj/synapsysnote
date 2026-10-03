@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { linesFromText, mergeDrafts, parseSyllabus, subjectsFromCsv, topicListFromText, smartTitle } from "../src/lib/study/syllabus";
+import { pickUnseen, quoteFitsTheme, type RemoteMotto } from "../src/lib/study/mottos";
 import { STUDY_DICTIONARIES } from "../src/lib/study/i18n/dictionaries";
 import { SUPPORTED_LANGUAGES } from "../src/lib/i18n/languages";
 import { formatTranslation } from "../src/lib/i18n/translations";
@@ -90,6 +91,114 @@ assert.deepEqual(
   runIn.map((subject) => [subject.name, subject.topics.length]),
   [["Direito Administrativo", 2], ["Língua Portuguesa", 2], ["Noções de Informática (TI)", 2]]
 );
+
+const gap = parseSyllabus("DIREITO PENAL: 1 Princípios básicos. 2 Aplicação da lei penal. 2.2 Lei penal no tempo. 2.2.1 Tempo do crime. 2.3 Lei penal no espaço. 3 Tipicidade.");
+assert.equal(gap[0]?.name, "Direito Penal");
+assert.deepEqual(gap[0]?.topics, [
+  "Princípios básicos",
+  "Aplicação da lei penal",
+  "2.2 Lei penal no tempo",
+  "2.2.1 Tempo do crime",
+  "2.3 Lei penal no espaço",
+  "Tipicidade",
+]);
+
+const vunesp = parseSyllabus("Língua Portuguesa: Leitura e interpretação de textos. Sinônimos e antônimos. Crase.");
+assert.equal(vunesp[0]?.name, "Língua Portuguesa");
+assert.deepEqual(vunesp[0]?.topics, ["Leitura e interpretação de textos", "Sinônimos e antônimos", "Crase"]);
+
+const dashed = parseSyllabus("Língua Portuguesa - 1 Compreensão de textos. 2 Ortografia oficial. 3 Emprego da crase.");
+assert.equal(dashed[0]?.name, "Língua Portuguesa");
+assert.deepEqual(dashed[0]?.topics, ["Compreensão de textos", "Ortografia oficial", "Emprego da crase"]);
+
+const hierarchical = parseSyllabus("1. NOÇÕES DE DIREITO\n1.1 Constituição Federal: artigos 1º a 5º.\n1.1.1 Constituição do Estado de São Paulo: artigos 139 a 143.\n2. CRIMINALÍSTICA\n2.1 Local de crime.");
+assert.deepEqual(hierarchical.map((subject) => subject.name), ["Noções de Direito", "Criminalística"]);
+assert.deepEqual(hierarchical[0]?.topics, [
+  "1.1 Constituição Federal: artigos 1º a 5º",
+  "1.1.1 Constituição do Estado de São Paulo: artigos 139 a 143",
+]);
+assert.deepEqual(hierarchical[1]?.topics, ["2.1 Local de crime"]);
+
+const languages = parseSyllabus("LÍNGUA ESTRANGEIRA: I LÍNGUA INGLESA: 1 Compreensão de texto. 2 Itens gramaticais. II LÍNGUA ESPANHOLA: 1 Compreensão de texto. 2 Itens gramaticais.");
+assert.deepEqual(languages.map((subject) => subject.name), ["Língua Inglesa", "Língua Espanhola"]);
+assert.equal(languages[0]?.topics.length, 2);
+assert.equal(languages[1]?.topics.length, 2);
+
+const cargo = parseSyllabus("CARGO 2: PERITO CRIMINAL FEDERAL - ÁREA 1: CONTÁBIL\n1 Contabilidade geral. 1.1 Teoria contábil. 1.2 Estoques.\n2 Contabilidade comercial. 2.1 Operações com mercadorias.");
+assert.deepEqual(cargo.map((subject) => subject.name), ["Contabilidade geral", "Contabilidade comercial"]);
+assert.ok(cargo[0]?.topics.includes("1.1 Teoria contábil"));
+assert.ok(cargo[1]?.topics.includes("2.1 Operações com mercadorias"));
+
+const block = parseSyllabus("BLOCO I: Língua Portuguesa\n(16) questões:\n1. Análise de textos.\n2. Crase.");
+assert.equal(block[0]?.name, "Língua Portuguesa");
+assert.deepEqual(block[0]?.topics, ["Análise de textos", "Crase"]);
+
+const apps = parseSyllabus("INFORMÁTICA: MS-Word: edição de textos. MS-Excel: planilhas e fórmulas. Internet: navegação e conceitos de URL.");
+assert.equal(apps.length, 1);
+assert.equal(apps[0]?.name, "Informática");
+assert.ok(apps[0]?.topics.some((topic) => topic.startsWith("MS-Excel")));
+
+const branches = parseSyllabus("Conhecimentos específicos: Estatística: Cálculo de probabilidades. Distribuição normal. Matemática Financeira: Juros simples e compostos. Taxas equivalentes.");
+assert.deepEqual(branches.map((subject) => subject.name), ["Estatística", "Matemática Financeira"]);
+
+const ethics = parseSyllabus("ÉTICA E CIDADANIA: 1 Ética e moral. 2 Ética, princípios e valores. 3 Ética e função pública: integridade. 4. Ética no setor público. 4.1 Princípios da Administração Pública: moralidade (art. 37 da CF). 4.2 Deveres dos servidores. 5 Ética e democracia: exercício da cidadania. 5.1 Transparência ativa.");
+assert.deepEqual(ethics.map((subject) => subject.name), ["Ética e Cidadania"]);
+assert.ok(ethics[0]?.topics.includes("Ética e função pública: integridade"));
+assert.ok(ethics[0]?.topics.some((topic) => topic.startsWith("4.1 Princípios da Administração Pública")));
+assert.ok(ethics[0]?.topics.includes("Ética e democracia: exercício da cidadania"));
+assert.ok(ethics[0]?.topics.some((topic) => topic.startsWith("5.1 Transparência ativa")));
+
+const statuteGap = parseSyllabus("1. NOÇÕES DE DIREITO\n1.1 Constituição Federal: artigos 1º a 5º, 16, 37, 39, 41 e 144.\n1.1.1 Constituição do Estado de São Paulo: artigos 139 a 143.\n1.2 Direito Administrativo. Administração Pública: princípios explícitos. Serviço público.");
+assert.deepEqual(statuteGap.map((subject) => subject.name), ["Noções de Direito"]);
+assert.ok(statuteGap[0]?.topics.some((topic) => topic.startsWith("1.1 Constituição Federal")));
+assert.ok(statuteGap[0]?.topics.some((topic) => topic.startsWith("1.1.1 Constituição do Estado")));
+assert.ok(statuteGap[0]?.topics.some((topic) => topic.startsWith("1.2 Direito Administrativo")));
+
+const capsBranches = parseSyllabus("BLOCO II: Conhecimentos em Direito\n1. DIREITO PENAL: Código Penal - artigos 293 a 305.\n2. DIREITO PROCESSUAL PENAL: Código de Processo Penal - artigos 251 a 258.");
+assert.deepEqual(capsBranches.map((subject) => subject.name), ["Direito Penal", "Direito Processual Penal"]);
+
+const dashedParent = parseSyllabus("Ética e Gestão no Serviço Público - 1. Princípios e ética na Administração Pública: 1.1 Princípios constitucionais. 2. Gestão de pessoas: 2.1 Motivação.");
+assert.equal(dashedParent[0]?.name, "Ética e Gestão no Serviço Público");
+assert.ok(dashedParent[0]?.topics.some((topic) => topic.startsWith("1.1 Princípios constitucionais")));
+assert.ok(dashedParent[0]?.topics.some((topic) => topic.startsWith("2.1 Motivação")));
+
+const windows = parseSyllabus("INFORMÁTICA: MS-Windows 10 ou superior: conceito de pastas. MS-\nExcel: planilhas e fórmulas.");
+assert.equal(windows.length, 1);
+assert.ok(windows[0]?.topics.some((topic) => topic.startsWith("MS-Windows 10")));
+assert.ok(windows[0]?.topics.some((topic) => topic.startsWith("MS-Excel")));
+
+const component = parseSyllabus("Componente: Língua Portuguesa\nHabilidades (1):\nAnalisar textos noticiosos.\nObjetos de conhecimento:\n• Parcialidade em textos noticiosos.\n• Comparação de fontes.");
+assert.equal(component[0]?.name, "Língua Portuguesa");
+assert.ok(component[0]?.topics.includes("Analisar textos noticiosos"));
+assert.ok(component[0]?.topics.some((topic) => topic.startsWith("Parcialidade")));
+assert.ok(component[0]?.topics.some((topic) => topic.startsWith("Comparação")));
+
+const skill = parseSyllabus("Componente: Língua Portuguesa\nDistinguir o uso contemporâneo de tópicos gramaticais daquele estipulado pela norma\npadrão da língua.");
+assert.deepEqual(skill.map((subject) => subject.name), ["Língua Portuguesa"]);
+assert.ok(skill[0]?.topics[0]?.includes("padrão da língua"));
+
+const siblingLaw = parseSyllabus("DIREITO PROCESSUAL CIVIL: 3.2 Lei n.º 9.099 de 26.09.1995 e 3.3 Lei n.º 12.153 de 22/12/2009.");
+assert.ok(siblingLaw[0]?.topics.some((topic) => topic.startsWith("3.2 Lei")));
+assert.ok(siblingLaw[0]?.topics.some((topic) => topic.startsWith("3.3 Lei")));
+
+const wrapped = parseSyllabus("LÍNGUA PORTUGUESA: 1 Compreensão e interpretação de textos verbais, não verbais,\nliterários e não literários. 2 Crase.");
+assert.equal(wrapped[0]?.topics[0], "Compreensão e interpretação de textos verbais, não verbais, literários e não literários");
+
+const statute = parseSyllabus("DIREITO CONSTITUCIONAL: 1 Direitos e garantias conforme a Lei nº 8.112/1990 e art. 5º da CF. 2 Organização do Estado.");
+assert.equal(statute[0]?.topics.length, 2);
+assert.match(statute[0]?.topics[0] ?? "", /8\.112\/1990/);
+assert.match(statute[0]?.topics[0] ?? "", /art\. 5º/);
+
+const repeated = parseSyllabus("CRIMINALÍSTICA: 1 Vestígios. 1.1 Sinais de morte. 1.1 Cronotanatognose e alterações cadavéricas. 1.2 Traumatologia.");
+assert.ok(repeated[0]?.topics.some((topic) => topic.includes("Sinais de morte")));
+assert.ok(repeated[0]?.topics.some((topic) => topic.includes("Cronotanatognose")));
+
+const longTopic = "1 " + "Resolução 000/2000; ".repeat(40);
+const fitted = parseSyllabus(`LEGISLAÇÃO: ${longTopic} 2 Crase.`);
+assert.ok((fitted[0]?.topics.length ?? 0) > 1);
+assert.ok(fitted[0]?.topics.every((topic) => topic.length <= 300));
+assert.ok(fitted[0]?.topics.join(" ").includes("Resolução 000/2000"));
+assert.ok(fitted[0]?.topics.includes("Crase"));
 
 assert.deepEqual(linesFromText("1. Licitações\n- Contratos\n\n• contratos\n2) Improbidade administrativa\na) Bens públicos"), [
   "Licitações",
@@ -628,6 +737,23 @@ const txSubject = latestSubjects.find((entry) => entry.id === "tx") as { topics:
 assert.deepEqual(txSubject?.topics.map((topic) => topic.id), ["a", "b", "c", "d"]);
 await local.commit([{ kind: "transform", collection: "study_subjects", id: "missing", apply: (raw) => (raw ? { merge: { name: "x" } } : {}) }]);
 assert.equal(latestSubjects.some((entry) => entry.id === "missing"), false);
+
+assert.equal(quoteFitsTheme("Beauty is not in the face; beauty is a light in the heart."), false);
+assert.equal(quoteFitsTheme("Perseverance and spirit have done wonders in all ages."), true);
+const catalog: RemoteMotto[] = Array.from({ length: 12 }, (_, index) => ({
+  id: index.toString(16).padStart(20, "a"),
+  text: `Perseverance carries goal ${index} through the setback.`,
+  author: "Test",
+}));
+const seen: string[] = [];
+for (let day = 0; day < catalog.length; day += 1) {
+  const next = pickUnseen(catalog, seen);
+  assert.ok(next);
+  assert.equal(seen.includes(next.id), false);
+  seen.push(next.id);
+}
+assert.equal(pickUnseen(catalog, seen), null);
+assert.equal(new Set(seen).size, catalog.length);
 
 console.log("verify-study: ok");
 

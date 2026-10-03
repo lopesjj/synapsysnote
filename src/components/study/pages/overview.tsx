@@ -12,7 +12,7 @@ import { useStudyUi } from "@/lib/study/ui-store";
 import { dayStatus, isPlannedDay, performanceBand } from "@/lib/study/metrics";
 import { capitalizeFirst, diffDays, formatDay, startOfWeek, weekDays, weekdayLabel, weekdayOf } from "@/lib/study/dates";
 import { splitDuration } from "@/lib/study/format";
-import { dailyMotto } from "@/lib/study/mottos";
+import { useDailyMotto } from "@/lib/study/daily-motto";
 import { subjectTone } from "@/lib/study/defaults";
 import {
   ConsistencyPanel,
@@ -40,31 +40,33 @@ export function StudyOverview() {
 function OverviewBody() {
   const { st } = useStudyT();
   const router = useRouter();
-  const { activePlan, planSubjects } = useStudy();
+  const { focusPlan, planReadOnly, planSubjects } = useStudy();
   const [subjectOpen, setSubjectOpen] = useState(false);
-  if (!activePlan) return null;
+  if (!focusPlan) return null;
 
   if (!planSubjects.length) {
     return (
       <StudyPage>
-        <StudyHeader title={st("nav_overview")} subtitle={st("overview_subtitle", { goal: activePlan.name || st("untitled_goal") })} />
+        <StudyHeader title={st("nav_overview")} subtitle={st("overview_subtitle", { goal: focusPlan.name || st("untitled_goal") })} showLog={!planReadOnly} />
         <StudyEmpty
           art="subjects"
           title={st("empty_subjects_title")}
           description={st("empty_subjects_desc")}
           action={
-            <div className="flex flex-wrap gap-2">
-              <Button variant="primary" onClick={() => setSubjectOpen(true)}>
-                <Plus />
-                {st("empty_subjects_cta")}
-              </Button>
-              <Button variant="secondary" onClick={() => router.push(`/home/study/goals/${activePlan.id}?bulk=1`)}>
-                {st("goal_bulk_subjects")}
-              </Button>
-            </div>
+            planReadOnly ? undefined : (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="primary" onClick={() => setSubjectOpen(true)}>
+                  <Plus />
+                  {st("empty_subjects_cta")}
+                </Button>
+                <Button variant="secondary" onClick={() => router.push(`/home/study/goals/${focusPlan.id}?bulk=1`)}>
+                  {st("goal_bulk_subjects")}
+                </Button>
+              </div>
+            )
           }
         />
-        <SubjectDialog open={subjectOpen} onOpenChange={setSubjectOpen} planId={activePlan.id} />
+        {planReadOnly ? null : <SubjectDialog open={subjectOpen} onOpenChange={setSubjectOpen} planId={focusPlan.id} />}
       </StudyPage>
     );
   }
@@ -75,10 +77,12 @@ function OverviewBody() {
         <div className="max-sm:hidden">
           <GoalSwitcher />
         </div>
-        <Button variant="primary" size="md" onClick={() => useStudyUi.getState().openLog()}>
-          <Plus />
-          {st("logform_title_new")}
-        </Button>
+        {planReadOnly ? null : (
+          <Button variant="primary" size="md" onClick={() => useStudyUi.getState().openLog()}>
+            <Plus />
+            {st("logform_title_new")}
+          </Button>
+        )}
       </div>
       <div className="space-y-4">
         <Cover />
@@ -90,10 +94,10 @@ function OverviewBody() {
               <ConsistencyPanel />
             </div>
             <div className="order-3 min-w-0 lg:order-none">
-              <SubjectsPanel />
+              <WeekChartPanel />
             </div>
             <div className="order-4 min-w-0 lg:order-none">
-              <WeekChartPanel />
+              <SubjectsPanel />
             </div>
             <div className="order-9 flex min-w-0 lg:order-none lg:flex-1">
               <RecentActivityPanel className="w-full" />
@@ -136,34 +140,29 @@ function useCoverMarkSize() {
 }
 
 function Cover() {
-  const { st, duration, locale, textDir, language } = useStudyT();
-  const { activePlan, planSubjects, settings, today } = useStudy();
+  const { st, locale, textDir, language } = useStudyT();
+  const { focusPlan, planSubjects, settings, today } = useStudy();
   const metrics = usePlanMetrics();
   const book = useAwardBook();
   const markSize = useCoverMarkSize();
-  if (!activePlan) return null;
+  if (!focusPlan) return null;
 
   const parts: string[] = [];
-  parts.push(
-    activePlan.weeklyGoalMinutes
-      ? st("overview_lede_week_goal", { time: duration(metrics.weekSeconds), goal: duration(activePlan.weeklyGoalMinutes * 60) })
-      : st("overview_lede_week", { time: duration(metrics.weekSeconds) })
-  );
   if (metrics.dueReviews.length) parts.push(st("home_lede_reviews", { count: metrics.dueReviews.length }));
   const weakest = planSubjects
     .map((subject) => ({ subject, agg: metrics.bySubject.get(subject.id) }))
     .filter((entry) => entry.agg && entry.agg.questions >= 10 && performanceBand(entry.agg.accuracy, settings) === "low")
     .sort((a, b) => (a.agg?.accuracy ?? 1) - (b.agg?.accuracy ?? 1))[0];
   if (weakest) parts.push(st("overview_lede_weak", { subject: weakest.subject.name }));
-  const examDays = activePlan.examDate ? diffDays(today, activePlan.examDate) : null;
+  const examDays = focusPlan.examDate ? diffDays(today, focusPlan.examDate) : null;
   if (examDays !== null && examDays > 0) parts.push(st("home_lede_exam", { count: examDays }));
-  const lede = `${capitalizeFirst(new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(parts))}.`;
+  const lede = parts.length ? `${capitalizeFirst(new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(parts))}.` : "";
 
-  const goalName = activePlan.name || st("untitled_goal");
+  const goalName = focusPlan.name || st("untitled_goal");
   const goalComplete = Boolean(book?.goalComplete && book.goal);
   const dateLabel = capitalizeFirst(formatDay(today, locale, { weekday: "long", day: "numeric", month: "long" }));
   const { h, m } = splitDuration(metrics.todaySeconds);
-  const motto = dailyMotto(language, today);
+  const motto = useDailyMotto(language);
 
   return (
     <section className="study-cover overflow-hidden rounded-[22px] shadow-[0_0_0_1px_var(--cover-line)]">
@@ -180,7 +179,7 @@ function Cover() {
               <span className="relative shrink-0">
                 <span aria-hidden className="pointer-events-none absolute -inset-2 rounded-[1.8rem] bg-[color-mix(in_oklab,var(--cover-accent)_6%,transparent)] blur-2xl sm:-inset-2.5" />
                 <span className="relative inline-flex rounded-[1.65rem] bg-[var(--cover-chip)] p-1.5 shadow-[0_0_0_1px_var(--cover-line),0_6px_14px_-12px_color-mix(in_oklab,var(--cover-fg)_10%,transparent)] sm:rounded-[1.9rem] sm:p-2">
-                  <GoalMark icon={activePlan.icon} name={goalName} seed={activePlan.id} size={markSize} soft />
+                  <GoalMark icon={focusPlan.icon} name={goalName} seed={focusPlan.id} size={markSize} soft />
                 </span>
               </span>
             )}
@@ -191,9 +190,15 @@ function Cover() {
               <h2 dir={textDir} className="font-display text-[32px] font-medium leading-[1.02] tracking-[-0.02em] text-[var(--cover-fg)] [overflow-wrap:anywhere] sm:text-[40px]">
                 {goalName}
               </h2>
-              <p dir={textDir} className="mt-3 max-w-xl text-[14px] leading-relaxed text-[var(--cover-muted)]">
-                {goalComplete && book?.goal ? st("hero_goal_complete_desc", { count: book.goal.total }) : lede}
-              </p>
+              {goalComplete && book?.goal ? (
+                <p dir={textDir} className="mt-3 max-w-xl text-[14px] leading-relaxed text-[var(--cover-muted)]">
+                  {st("hero_goal_complete_desc", { count: book.goal.total })}
+                </p>
+              ) : lede ? (
+                <p dir={textDir} className="mt-3 max-w-xl text-[14px] leading-relaxed text-[var(--cover-muted)]">
+                  {lede}
+                </p>
+              ) : null}
             </div>
           </div>
           <GoalProgress />
@@ -237,19 +242,24 @@ function Cover() {
 
           <WeekDots />
 
-          <figure dir={textDir} className="border-t border-[var(--cover-line)] pt-5 lg:flex lg:min-h-0 lg:flex-1 lg:items-center">
-            <blockquote className="w-full min-w-0">
-              <p className="font-display text-pretty text-[15px] italic leading-[1.5] text-[var(--cover-fg)]">
-                <span aria-hidden className="select-none text-[var(--cover-accent)]">
-                  {motto.open}
-                </span>
-                <span className="opacity-90">{motto.text}</span>
-                <span aria-hidden className="select-none text-[var(--cover-accent)]">
-                  {motto.close}
-                </span>
-              </p>
-            </blockquote>
-          </figure>
+          {motto ? (
+            <figure dir={textDir} className="border-t border-[var(--cover-line)] pt-5 lg:flex lg:min-h-0 lg:flex-1 lg:items-center">
+              <blockquote className="w-full min-w-0">
+                <p className="font-display text-pretty text-[15px] italic leading-[1.5] text-[var(--cover-fg)]">
+                  <span aria-hidden className="select-none text-[var(--cover-accent)]">
+                    {motto.open}
+                  </span>
+                  <span className="opacity-90">{motto.text}</span>
+                  <span aria-hidden className="select-none text-[var(--cover-accent)]">
+                    {motto.close}
+                  </span>
+                </p>
+                {motto.author ? (
+                  <figcaption className="mt-2.5 text-[12.5px] not-italic leading-snug text-[var(--cover-muted)]">{motto.author}</figcaption>
+                ) : null}
+              </blockquote>
+            </figure>
+          ) : null}
         </div>
       </div>
     </section>
@@ -338,35 +348,23 @@ function HappyFace({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 64 64" className={className} aria-hidden>
       <defs>
-        <radialGradient id={`${id}f`} cx="42%" cy="34%" r="70%">
-          <stop offset="0" stopColor="#FFF07A" />
-          <stop offset="0.55" stopColor="#FFCB2E" />
-          <stop offset="1" stopColor="#F59E0B" />
+        <radialGradient id={`${id}f`} cx="40%" cy="34%" r="72%">
+          <stop offset="0" stopColor="#FFE56A" />
+          <stop offset="0.48" stopColor="#FFCC33" />
+          <stop offset="1" stopColor="#F5A623" />
         </radialGradient>
-        <radialGradient id={`${id}s`} cx="50%" cy="20%" r="55%">
-          <stop offset="0" stopColor="#fff" stopOpacity="0.75" />
+        <radialGradient id={`${id}s`} cx="50%" cy="16%" r="55%">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.72" />
           <stop offset="1" stopColor="#fff" stopOpacity="0" />
         </radialGradient>
-        <radialGradient id={`${id}e`} cx="38%" cy="35%" r="65%">
-          <stop offset="0" stopColor="#fff" />
-          <stop offset="0.45" stopColor="#F4F7FB" />
-          <stop offset="1" stopColor="#D5DCE6" />
-        </radialGradient>
-        <linearGradient id={`${id}k`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#FF8BC4" />
-          <stop offset="1" stopColor="#E11D74" />
-        </linearGradient>
       </defs>
       <circle cx="32" cy="32" r="30" fill={`url(#${id}f)`} />
-      <circle cx="32" cy="32" r="29.5" fill="none" stroke="#D97706" strokeOpacity="0.35" />
-      <ellipse cx="32" cy="16" rx="18" ry="10" fill={`url(#${id}s)`} />
-      <path d="M15 29.5c1.4-3.6 4.6-5.2 7.4-4.2" stroke="#7A4518" strokeWidth="3.4" strokeLinecap="round" fill="none" />
-      <circle cx="43" cy="27" r="7.2" fill={`url(#${id}e)`} />
-      <circle cx="43" cy="27" r="3.3" fill="#1C1917" />
-      <circle cx="44.3" cy="25.6" r="1.15" fill="#fff" />
-      <path d="M16 40c1.2-4 7.2-6.6 16-6.6s14.8 2.6 16 6.6c.8 8.4-6.4 13.4-16 13.4S15.2 48.4 16 40z" fill="#7A4518" />
-      <path d="M27.5 45.5c1.4 7.2 3.4 11.6 4.2 13 1.4 2.6 5.4 2.4 6.4-.4.8-2.2 0-6.4-1.4-12.2-1.8 1.6-5 2.4-7.6 1.4-.8.4-1.4-1-2-1.8z" fill={`url(#${id}k)`} />
-      <ellipse cx="31" cy="50" rx="1.8" ry="2.8" fill="#fff" fillOpacity="0.28" />
+      <circle cx="32" cy="32" r="29.5" fill="none" stroke="#E39B12" strokeOpacity="0.35" />
+      <ellipse cx="32" cy="15" rx="16" ry="9" fill={`url(#${id}s)`} />
+      <path d="M16 27.5Q22.8 20.6 29.6 27.5" stroke="#6B4518" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+      <path d="M34.4 27.5Q41.2 20.6 48 27.5" stroke="#6B4518" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+      <path d="M14.8 36.2c3.2-1.6 9.2-2.5 17.2-2.5s14 .9 17.2 2.5C46.6 49.2 40.4 56 32 56S17.4 49.2 14.8 36.2z" fill="#66421A" />
+      <path d="M17.6 36.8c2.4-1 7.6-1.6 14.4-1.6s12 .6 14.4 1.6c-1.4 6.6-6.8 10.2-14.4 10.2s-13-3.6-14.4-10.2z" fill="#fff" />
     </svg>
   );
 }

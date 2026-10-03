@@ -176,19 +176,21 @@ function ScheduleBody() {
   const { st, locale } = useStudyT();
   const router = useRouter();
   const params = useSearchParams();
-  const { planCycle, planReviews, planSubjects, reminders, settings, today, actions, activePlan, subjectById } = useStudy();
+  const { planCycle, planReviews, planSubjects, reminders, settings, today, actions, focusPlan, planReadOnly, subjectById } = useStudy();
   const { tasks } = usePlanning();
   const view = useStudyUi((state) => state.scheduleView);
   const [anchor, setAnchor] = useState(today);
-  const [wizard, setWizard] = useState<{ open: boolean; mode: WizardMode }>(() => ({ open: params.get("setup") === "1", mode: "manual" }));
+  const [wizard, setWizard] = useState<{ open: boolean; mode: WizardMode }>({ open: false, mode: "manual" });
   const [taskDialog, setTaskDialog] = useState<TaskDialogState>({ open: false, task: null, day: null });
   const [reminderDialog, setReminderDialog] = useState<{ open: boolean; reminder: StudyReminder | null }>({ open: false, reminder: null });
   const [agendaDialog, setAgendaDialog] = useState<AgendaDialogState>({ open: false, entry: null, day: null });
   const [scope, setScope] = useState<ScopeRequest | null>(null);
 
   useEffect(() => {
-    if (params.get("setup") === "1") router.replace("/home/study/schedule");
-  }, [params, router]);
+    if (params.get("setup") !== "1") return;
+    if (!planReadOnly) setWizard({ open: true, mode: "manual" });
+    router.replace("/home/study/schedule");
+  }, [params, planReadOnly, router]);
 
   const days = useMemo(
     () => (view === "week" ? weekDays(startOfWeek(anchor, settings.weekStartsOn)) : monthGrid(anchor, settings.weekStartsOn)),
@@ -233,18 +235,18 @@ function ScheduleBody() {
     }
     for (const task of tasks) if (task.day) map.get(task.day)?.tasks.push(task);
     for (const reminder of reminders) {
-      if (reminder.done || (reminder.planId && reminder.planId !== activePlan?.id)) continue;
+      if (reminder.done || (reminder.planId && reminder.planId !== focusPlan?.id)) continue;
       map.get(reminder.day)?.reminders.push(reminder);
     }
-    if (activePlan?.examDate) {
-      const entry = map.get(activePlan.examDate);
+    if (focusPlan?.examDate) {
+      const entry = map.get(focusPlan.examDate);
       if (entry) entry.exam = true;
     }
     for (const entry of map.values()) {
       entry.reviews.sort((a, b) => Number(b.late) - Number(a.late) || (a.review.dueDay < b.review.dueDay ? -1 : 1));
     }
     return map;
-  }, [activePlan, days, from, planCycle, planReviews, reminders, subjectById, tasks, to, today]);
+  }, [focusPlan, days, from, planCycle, planReviews, reminders, subjectById, tasks, to, today]);
 
   const week = useMemo<WeekTotals>(() => {
     if (!planCycle) return { done: 0, planned: 0, available: 0 };
@@ -274,9 +276,9 @@ function ScheduleBody() {
   const openReminder = (reminder: StudyReminder) => setReminderDialog({ open: true, reminder });
 
   const removeCycle = async () => {
-    if (!activePlan || !window.confirm(st("schedule_remove_confirm"))) return;
+    if (!focusPlan || !window.confirm(st("schedule_remove_confirm"))) return;
     try {
-      await actions.deleteCycle(activePlan.id);
+      await actions.deleteCycle(focusPlan.id);
       toast.success(st("schedule_removed"));
     } catch {
       toast.error(st("error_generic"));
@@ -284,9 +286,9 @@ function ScheduleBody() {
   };
 
   const changeAgenda = async (edit: (agenda: AgendaEntry[]) => AgendaEntry[], message: string, removeItemId?: string) => {
-    if (!activePlan) return false;
+    if (!focusPlan) return false;
     try {
-      await actions.editAgenda(activePlan.id, edit, { removeItemId });
+      await actions.editAgenda(focusPlan.id, edit, { removeItemId });
       toast.success(message);
       return true;
     } catch {
@@ -364,11 +366,11 @@ function ScheduleBody() {
         <StudyHeader
           title={st("nav_schedule")}
           subtitle={st("schedule_subtitle")}
-          showGoal={Boolean(activePlan)}
+          showGoal={Boolean(focusPlan)}
           showLog={false}
           actions={
             <>
-              {activePlan && planSubjects.length ? (
+              {focusPlan && planSubjects.length && !planReadOnly ? (
                 <Button variant="secondary" onClick={() => commands.scheduleOn(null)}>
                   <CalendarPlus />
                   {st("agenda_title_new")}
@@ -378,7 +380,7 @@ function ScheduleBody() {
                 <ListPlus />
                 {st("task_new")}
               </Button>
-              {planCycle && activePlan ? (
+              {planCycle && focusPlan && !planReadOnly ? (
                 <Menu>
                   <MenuTrigger asChild>
                     <Button variant="secondary" size="icon" className="size-9" aria-label={st("more_actions")}>
@@ -427,7 +429,7 @@ function ScheduleBody() {
           </div>
         </div>
 
-        {activePlan ? (
+        {focusPlan && !planReadOnly ? (
           <CycleWizard open={wizard.open} onOpenChange={(open) => setWizard((value) => ({ ...value, open }))} initialMode={wizard.mode} />
         ) : null}
         <TaskDialog state={taskDialog} onOpenChange={(open) => setTaskDialog((value) => ({ ...value, open }))} />
@@ -436,7 +438,7 @@ function ScheduleBody() {
           reminder={reminderDialog.reminder}
           onOpenChange={(open) => setReminderDialog((value) => ({ ...value, open }))}
         />
-        {activePlan ? (
+        {focusPlan && !planReadOnly ? (
           <AgendaDialog
             state={agendaDialog}
             onOpenChange={(open) => setAgendaDialog((value) => ({ ...value, open }))}
@@ -452,7 +454,7 @@ function ScheduleBody() {
 
 function CycleBand({ cycle, progress, week }: { cycle: StudyCycle; progress: RoundProgress; week: WeekTotals }) {
   const { st, duration } = useStudyT();
-  const { subjectById, actions } = useStudy();
+  const { subjectById, actions, planReadOnly } = useStudy();
   const current = cycle.items.length ? cycle.items[cycle.pointer % cycle.items.length] : null;
   const subject = current ? subjectById(current.subjectId) : undefined;
   const topic = subject?.topics.find((entry) => !entry.done) ?? null;
@@ -500,7 +502,7 @@ function CycleBand({ cycle, progress, week }: { cycle: StudyCycle; progress: Rou
               <p className="mt-1 text-[15px] text-muted">{st("cycle_empty")}</p>
             )}
           </div>
-          {current ? (
+          {current && !planReadOnly ? (
             <div className="col-span-2 flex flex-wrap gap-2 @2xl:col-span-1 @2xl:col-start-2 @2xl:self-start">
               <FocusButton variant="primary" size="md" subjectId={current.subjectId} topicId={topic?.id ?? null} minutes={current.minutes} label={st("next_up_start")} />
               <Button variant="secondary" onClick={() => void mark(false)}>
@@ -642,7 +644,7 @@ function WeekLedger({ week }: { week: WeekTotals }) {
 function SetupBand({ onSetup }: { onSetup: (mode: WizardMode) => void }) {
   const { st } = useStudyT();
   const router = useRouter();
-  const { activePlan, planSubjects } = useStudy();
+  const { focusPlan, planReadOnly, planSubjects } = useStudy();
   return (
     <section className="mb-8 flex flex-wrap items-center gap-x-8 gap-y-5">
       <svg viewBox="0 0 120 120" aria-hidden className="size-[5.5rem] shrink-0 -rotate-90 sm:size-28">
@@ -650,19 +652,19 @@ function SetupBand({ onSetup }: { onSetup: (mode: WizardMode) => void }) {
       </svg>
       <div className="min-w-0 max-w-xl flex-[1_1_20rem]">
         <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-ink">
-          {activePlan ? st("schedule_empty_title") : st("schedule_no_goal_title")}
+          {focusPlan ? st("schedule_empty_title") : st("schedule_no_goal_title")}
         </h2>
         <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-          {activePlan ? st("schedule_empty_desc") : st("schedule_no_goal_desc")}
+          {focusPlan ? st("schedule_empty_desc") : st("schedule_no_goal_desc")}
         </p>
-        {activePlan && !planSubjects.length ? <p className="mt-2 text-[12.5px] text-muted">{st("cycle_no_subjects_warning")}</p> : null}
+        {focusPlan && !planSubjects.length ? <p className="mt-2 text-[12.5px] text-muted">{st("cycle_no_subjects_warning")}</p> : null}
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-          {!activePlan ? (
+          {!focusPlan ? (
             <Button variant="primary" onClick={() => router.push("/home/study/goals/new")}>
               <Plus />
               {st("empty_goal_cta")}
             </Button>
-          ) : !planSubjects.length ? (
+          ) : planReadOnly ? null : !planSubjects.length ? (
             <Button variant="primary" onClick={() => router.push("/home/study/subjects")}>
               <BookOpen />
               {st("cycle_add_subjects_cta")}
@@ -780,7 +782,7 @@ function LayerGlyph({ layer }: { layer: keyof ScheduleLayers }) {
 
 function DayAddMenu({ day, className, children }: { day: DayKey; className?: string; children: ReactNode }) {
   const { st, locale } = useStudyT();
-  const { planSubjects, activePlan } = useStudy();
+  const { planSubjects, focusPlan, planReadOnly } = useStudy();
   const commands = useScheduleCommands();
   const label = st("day_add", { date: formatDay(day, locale, { day: "numeric", month: "long" }) });
   return (
@@ -791,7 +793,7 @@ function DayAddMenu({ day, className, children }: { day: DayKey; className?: str
         </button>
       </MenuTrigger>
       <MenuContent align="end">
-        {activePlan && planSubjects.length ? (
+        {focusPlan && planSubjects.length && !planReadOnly ? (
           <MenuItem onSelect={() => commands.scheduleOn(day)}>
             <CalendarPlus /> {st("agenda_title_new")}
           </MenuItem>
@@ -954,7 +956,7 @@ function DayDisciplines({ blocks, day }: { blocks: PlannedBlock[]; day: DayKey }
 
 function SortableDisciplines({ blocks, day }: { blocks: PlannedBlock[]; day: DayKey }) {
   const { st } = useStudyT();
-  const { planCycle, subjectById, actions } = useStudy();
+  const { planCycle, subjectById, actions, planReadOnly } = useStudy();
   const [override, setOverride] = useState<string[] | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const suppressClick = useRef(false);
@@ -996,7 +998,7 @@ function SortableDisciplines({ blocks, day }: { blocks: PlannedBlock[]; day: Day
     setDraggingId(null);
     releaseClick();
     const planId = planCycle?.planId;
-    if (!over || active.id === over.id || !planId) return;
+    if (!over || active.id === over.id || !planId || planReadOnly) return;
     const ids = shown.map((block) => block.key);
     const from = ids.indexOf(String(active.id));
     const to = ids.indexOf(String(over.id));
@@ -1092,7 +1094,8 @@ function SortableDiscipline({
   day: DayKey;
   onClickCapture: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.key });
+  const { planReadOnly } = useStudy();
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.key, disabled: planReadOnly });
   return (
     <DisciplineItem
       block={block}
@@ -1131,7 +1134,7 @@ function DisciplineItem({
   lifted?: boolean;
 }) {
   const { st, locale, duration } = useStudyT();
-  const { subjectById, topicById, planCycle, actions, today } = useStudy();
+  const { subjectById, topicById, planCycle, actions, today, planReadOnly } = useStudy();
   const startFocus = useStartFocus();
   const commands = useScheduleCommands();
   const { summary } = useAgendaLabels();
@@ -1219,6 +1222,16 @@ function DisciplineItem({
       <div className={cardClass} style={cardStyle}>
         {face}
       </div>
+    );
+  }
+
+  if (planReadOnly) {
+    return (
+      <li ref={drag?.setNodeRef} style={drag?.style}>
+        <div className={cardClass} style={cardStyle}>
+          {face}
+        </div>
+      </li>
     );
   }
 
@@ -1362,7 +1375,7 @@ function DisciplineItem({
 function ReviewItem({ review, late }: { review: StudyReview; late: boolean }) {
   const { st } = useStudyT();
   const router = useRouter();
-  const { subjectById, topicById, actions, today } = useStudy();
+  const { subjectById, topicById, actions, today, planReadOnly } = useStudy();
   const startFocus = useStartFocus();
   const subject = subjectById(review.subjectId);
   const topic = topicById(review.subjectId, review.topicId);
@@ -1402,6 +1415,8 @@ function ReviewItem({ review, late }: { review: StudyReview; late: boolean }) {
               ) : null}
             </p>
           </div>
+          {planReadOnly ? null : (
+            <>
           <MenuSeparator />
           <MenuItem onSelect={() => startFocus({ subjectId: review.subjectId, topicId: review.topicId, reviewId: review.id })}>
             <Timer /> {st("review_start")}
@@ -1413,6 +1428,8 @@ function ReviewItem({ review, late }: { review: StudyReview; late: boolean }) {
             <EyeOff /> {st("review_ignore")}
           </MenuItem>
           <MenuSeparator />
+            </>
+          )}
           <MenuItem onSelect={() => router.push("/home/study/reviews")}>
             <ArrowUpRight /> {st("review_open_page")}
           </MenuItem>
@@ -1423,18 +1440,31 @@ function ReviewItem({ review, late }: { review: StudyReview; late: boolean }) {
 }
 
 function ReminderItem({ reminder, onOpen }: { reminder: StudyReminder; onOpen: (reminder: StudyReminder) => void }) {
+  const { planReadOnly } = useStudy();
   const Icon = reminder.kind === "exam" ? Flag : reminder.kind === "event" ? CalendarDays : Bell;
+  const locked = Boolean(reminder.planId && planReadOnly);
+  const body = (
+    <>
+      <Icon className={cn("size-3 shrink-0", reminder.kind === "exam" ? "text-[var(--band-low)]" : "text-faint")} />
+      <span className="min-w-0 flex-1 truncate text-muted">{reminder.title}</span>
+    </>
+  );
   return (
     <li>
-      <button
-        type="button"
-        onClick={() => onOpen(reminder)}
-        title={reminder.title}
-        className="flex w-full min-w-0 items-center gap-1.5 rounded-[7px] px-1.5 py-1 text-left text-[11.5px] transition hover:bg-[var(--surface-hover)]"
-      >
-        <Icon className={cn("size-3 shrink-0", reminder.kind === "exam" ? "text-[var(--band-low)]" : "text-faint")} />
-        <span className="min-w-0 flex-1 truncate text-muted">{reminder.title}</span>
-      </button>
+      {locked ? (
+        <span title={reminder.title} className="flex w-full min-w-0 items-center gap-1.5 rounded-[7px] px-1.5 py-1 text-left text-[11.5px]">
+          {body}
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onOpen(reminder)}
+          title={reminder.title}
+          className="flex w-full min-w-0 items-center gap-1.5 rounded-[7px] px-1.5 py-1 text-left text-[11.5px] transition hover:bg-[var(--surface-hover)]"
+        >
+          {body}
+        </button>
+      )}
     </li>
   );
 }
@@ -1581,7 +1611,7 @@ function CycleSequence({
 }) {
   const { st, locale, duration } = useStudyT();
   const router = useRouter();
-  const { planSubjects, subjectById, settings, today, actions } = useStudy();
+  const { planSubjects, subjectById, settings, today, actions, planReadOnly } = useStudy();
   const commands = useScheduleCommands();
   const { summary } = useAgendaLabels();
   const [order, setOrder] = useState<string[] | null>(null);
@@ -1619,7 +1649,7 @@ function CycleSequence({
 
   const onDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (planReadOnly || !over || active.id === over.id) return;
     const ids = items.map((item) => item.id);
     const next = arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id)));
     setOrder(next);
@@ -1732,6 +1762,7 @@ function CycleSequence({
         <p className="px-5 pb-1 text-[12.5px] text-faint">{st("cycle_empty")}</p>
       )}
 
+      {planReadOnly ? null : (
       <div className="px-2 pb-2 pt-1">
         {!planSubjects.length ? (
           <div className="space-y-2 px-3 py-1.5">
@@ -1818,11 +1849,12 @@ function CycleSequence({
           </button>
         )}
       </div>
+      )}
 
       <div className="border-t border-[var(--border)] px-2 pb-2 pt-2.5">
         <div className="flex items-center justify-between gap-2 pl-3 pr-1">
           <h3 className="text-[13px] font-semibold text-ink">{st("agenda_section")}</h3>
-          {planSubjects.length ? (
+          {planSubjects.length && !planReadOnly ? (
             <Button
               variant="ghost"
               size="icon-sm"
@@ -1842,11 +1874,19 @@ function CycleSequence({
               return (
                 <li key={entry.id} className="group/fixed flex items-center gap-2 rounded-[10px] py-1 pl-2 pr-1 transition hover:bg-[var(--surface-hover)]">
                   <span aria-hidden className="h-7 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: subject?.color ? subjectTone(subject.color) : "var(--border-strong)" }} />
-                  <button type="button" onClick={() => commands.editAgenda(entry, null)} className="min-w-0 flex-1 text-left">
-                    <span className="block truncate text-[12.5px] text-ink">{name}</span>
-                    <span className="block truncate text-[11px] text-faint">{summary(entry)}</span>
-                  </button>
+                  {planReadOnly ? (
+                    <span className="min-w-0 flex-1 text-left">
+                      <span className="block truncate text-[12.5px] text-ink">{name}</span>
+                      <span className="block truncate text-[11px] text-faint">{summary(entry)}</span>
+                    </span>
+                  ) : (
+                    <button type="button" onClick={() => commands.editAgenda(entry, null)} className="min-w-0 flex-1 text-left">
+                      <span className="block truncate text-[12.5px] text-ink">{name}</span>
+                      <span className="block truncate text-[11px] text-faint">{summary(entry)}</span>
+                    </button>
+                  )}
                   <span className="shrink-0 text-[11.5px] tabular-nums text-muted">{duration(entry.minutes * 60)}</span>
+                  {planReadOnly ? null : (
                   <Menu>
                     <MenuTrigger asChild>
                       <Button
@@ -1868,6 +1908,7 @@ function CycleSequence({
                       </MenuItem>
                     </MenuContent>
                   </Menu>
+                  )}
                 </li>
               );
             })}
@@ -1878,7 +1919,7 @@ function CycleSequence({
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-1 border-t border-[var(--border)] px-2 py-1.5">
-        {cycle.history.length ? (
+        {cycle.history.length && !planReadOnly ? (
           <Button variant="ghost" size="sm" onClick={() => void undo()} title={st("cycle_undo")} aria-label={st("cycle_undo")}>
             <Undo2 />
             {st("undo")}
@@ -1886,10 +1927,12 @@ function CycleSequence({
         ) : (
           <span />
         )}
+        {planReadOnly ? <span /> : (
         <Button variant="ghost" size="sm" onClick={() => onReconfigure("manual")}>
           <SlidersHorizontal />
           {st("schedule_reconfigure")}
         </Button>
+        )}
       </div>
     </section>
   );
@@ -1920,7 +1963,8 @@ function SequenceRow({
 }) {
   const { st, duration } = useStudyT();
   const { subjectById } = useStudy();
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
+  const { planReadOnly } = useStudy();
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: item.id, disabled: planReadOnly });
   const subject = subjectById(item.subjectId);
   const name = subject?.name ?? st("untitled_subject");
   const finished = state === "done" || state === "skipped";
@@ -1969,6 +2013,7 @@ function SequenceRow({
       <select
         aria-label={`${st("col_time")}: ${name}`}
         value={item.minutes}
+        disabled={planReadOnly}
         onChange={(event) => onMinutes(Number(event.target.value))}
         className="h-7 shrink-0 cursor-pointer appearance-none rounded-[6px] bg-transparent px-1.5 text-[11.5px] tabular-nums text-muted outline-none transition [text-align-last:right] hover:bg-[var(--surface-2)] hover:text-ink focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
       >
@@ -1978,6 +2023,7 @@ function SequenceRow({
           </option>
         ))}
       </select>
+      {planReadOnly ? null : (
       <Menu>
         <MenuTrigger asChild>
           <Button
@@ -2016,6 +2062,7 @@ function SequenceRow({
           </MenuItem>
         </MenuContent>
       </Menu>
+      )}
     </li>
   );
 }

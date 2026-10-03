@@ -2,6 +2,7 @@ import type {
   BuiltInCategoryId,
   StickyColor,
   StudyCategory,
+  StudyMotto,
   StudySettings,
   TimerSound,
 } from "@/types/study";
@@ -118,6 +119,8 @@ export const DEFAULT_STUDY_SETTINGS: StudySettings = {
   pomodoroRounds: 4,
   claimedAwards: {},
   awardOrder: {},
+  motto: null,
+  seenMottoIds: [],
   updatedAt: 0,
 };
 
@@ -186,6 +189,8 @@ export function normalizeSettings(raw: Partial<StudySettings> | null | undefined
     pomodoroRounds: clampInt(source.pomodoroRounds, 2, 8, DEFAULT_STUDY_SETTINGS.pomodoroRounds),
     claimedAwards: cleanClaims(source.claimedAwards),
     awardOrder: cleanAwardOrder(source.awardOrder),
+    motto: cleanMotto(source.motto),
+    seenMottoIds: cleanMottoIds(source.seenMottoIds),
     updatedAt: Number(source.updatedAt) || 0,
   };
 }
@@ -201,6 +206,44 @@ function cleanAwardOrder(value: unknown): Record<string, string[]> {
     if (clean.length) out[planId] = clean;
   }
   return out;
+}
+
+function cleanMotto(value: unknown): StudySettings["motto"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Partial<StudyMotto>;
+  const day = typeof raw.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.day) ? raw.day : "";
+  const id = typeof raw.id === "string" && /^[a-f0-9]{20}$/.test(raw.id) ? raw.id : "";
+  const en = typeof raw.en === "string" ? raw.en.replace(/\s+/g, " ").trim().slice(0, 240) : "";
+  if (!day || !id || !en) return null;
+  const texts: Record<string, string> = {};
+  if (raw.texts && typeof raw.texts === "object" && !Array.isArray(raw.texts)) {
+    for (const [language, text] of Object.entries(raw.texts)) {
+      if (!/^[a-z]{2}$/.test(language) || typeof text !== "string") continue;
+      const clean = text.replace(/\s+/g, " ").trim().slice(0, 280);
+      if (clean) texts[language] = clean;
+    }
+  }
+  if (!texts.en) texts.en = en;
+  return {
+    day,
+    id,
+    author: typeof raw.author === "string" ? raw.author.replace(/\s+/g, " ").trim().slice(0, 80) : "",
+    en,
+    texts,
+  };
+}
+
+function cleanMottoIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== "string" || !/^[a-f0-9]{20}$/.test(entry) || seen.has(entry)) continue;
+    seen.add(entry);
+    ids.push(entry);
+    if (ids.length >= 20_000) break;
+  }
+  return ids;
 }
 
 function cleanClaims(value: unknown): Record<string, number> {

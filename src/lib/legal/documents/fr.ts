@@ -31,6 +31,7 @@ const fr: LegalBundle = {
               "importer du contenu depuis Notion, Evernote, Google Docs et des fichiers ;",
               "générer des flashcards et des transcriptions avec l'aide de l'intelligence artificielle ;",
               "enregistrer des séances d'étude avec un minuteur de concentration et suivre les révisions programmées, les examens blancs et les plannings ;",
+              "lire, dans la vue d'ensemble des études, une phrase quotidienne sur la persévérance et les objectifs, issue d'un fonds externe et qui ne se répète pas ;",
               "réviser ce que vous avez étudié avec la répétition espacée.",
             ],
           },
@@ -83,7 +84,7 @@ const fr: LegalBundle = {
         id: "ai",
         title: "Fonctionnalités d'intelligence artificielle",
         blocks: [
-          "Certaines fonctionnalités utilisent l'intelligence artificielle : transcription audio et vidéo, génération de flashcards, détection de flashcards en double, traduction et organisation en matières et en thèmes d'un programme que vous collez. Elles ne traitent que le contenu que vous choisissez, au moment où vous activez la fonctionnalité.",
+          "Certaines fonctionnalités utilisent l'intelligence artificielle : transcription audio et vidéo, génération de flashcards, détection de flashcards en double, traduction et organisation en matières et en thèmes d'un programme que vous collez. Elles ne traitent que le contenu que vous choisissez, au moment où vous activez la fonctionnalité. La phrase quotidienne des études provient d'un fonds externe. Lorsque la langue du site n'est pas l'anglais, seule cette phrase publique est traduite, sans utiliser vos notes ni vos enregistrements d'étude.",
           {
             note: "Les résultats générés par l'IA peuvent contenir des erreurs, des omissions ou des inexactitudes. Relisez les transcriptions et les flashcards avant de les utiliser pour étudier, et vérifiez toujours auprès de la source officielle — texte de loi, avis de concours ou bibliographie recommandée.",
           },
@@ -184,7 +185,7 @@ const fr: LegalBundle = {
               rows: [
                 ["Inscription", "Nom, e-mail, numéro de téléphone et photo de profil", "Vous ou votre compte Google"],
                 ["Identifiants", "Mot de passe, conservé uniquement sous forme chiffrée par le fournisseur d'authentification", "Vous"],
-                ["Contenu", "Notes, pages, carnets, flashcards, pièces jointes, fichiers audio et vidéos ; dans le module d'étude, objectifs, matières et sujets (avec les liens externes que vous ajoutez), séances (avec le support et les notes liées), questions, révisions, examens blancs, plannings, rappels, bloc-notes et les réussites rangées dans votre vitrine (avec leur date et l'ordre dans lequel vous les rangez)", "Vous et les importations que vous effectuez"],
+                ["Contenu", "Notes, pages, carnets, flashcards, pièces jointes, fichiers audio et vidéos ; dans le module d'étude, objectifs, matières et sujets (avec les liens externes que vous ajoutez), séances (avec le support et les notes liées), questions, révisions, examens blancs, plannings, rappels, bloc-notes et les réussites rangées dans votre vitrine (avec leur date et l'ordre dans lequel vous les rangez), la phrase du jour et la liste des phrases déjà affichées, afin de ne pas les répéter", "Vous et les importations que vous effectuez"],
                 ["Intégrations", "Jetons d'accès à Notion, Evernote et Google Docs", "Le service connecté, avec votre autorisation"],
                 ["Préférences", "Langue, thème, accessibilité et disposition", "Vous"],
                 ["Données techniques", "Adresse IP, pays approximatif, navigateur, appareil, date et heure d'accès", "Collecte automatique"],
@@ -206,6 +207,7 @@ const fr: LegalBundle = {
                 ["Créer et maintenir votre compte, authentifier l'accès et synchroniser votre contenu", "Exécution d'un contrat (art. 7, V)"],
                 ["Exécuter les fonctionnalités que vous activez : importations, transcriptions, flashcards et traductions", "Exécution d'un contrat (art. 7, V)"],
                 ["Calculer des statistiques, des révisions programmées et des plannings à partir de vos enregistrements d'étude", "Exécution d'un contrat (art. 7, V)"],
+                ["Obtenir la phrase du jour dans un fonds externe et mémoriser celles déjà affichées, afin de ne pas les répéter", "Exécution d'un contrat (art. 7, V)"],
                 ["Protéger les comptes contre la fraude et les accès non autorisés, notamment avec reCAPTCHA", "Intérêt légitime (art. 7, IX)"],
                 ["Conserver les journaux d'accès pendant la durée prévue par le Marco Civil da Internet (cadre civil de l'Internet au Brésil)", "Obligation légale (art. 7, II)"],
                 ["Envoyer des communications essentielles, comme la réinitialisation du mot de passe et les avis de modification", "Exécution d'un contrat (art. 7, V)"],
@@ -230,9 +232,10 @@ const fr: LegalBundle = {
               "**Traduction :** Google Gemini API ; tant qu'elle est indisponible, Google Cloud Translation.",
               "**Transcription en direct des notes vocales :** la reconnaissance vocale de votre navigateur, qui peut envoyer l'audio au fournisseur (Google, Microsoft ou Apple). Reste désactivée tant que vous ne l'activez pas lors de l'enregistrement.",
               "**Organisation de programmes :** Google Gemini API, uniquement lorsque vous choisissez « Organiser avec l'IA » ; le découpage automatique habituel se fait dans votre navigateur.",
+              "**Phrase du jour dans les études :** le texte vient du fonds public ZenQuotes. Lorsque la langue du site n'est pas l'anglais, seule cette phrase est traduite avec la Google Gemini API ou, si elle est indisponible, avec Google Cloud Translation. Nous n'envoyons pas les données de votre compte.",
             ],
           },
-          { note: "Nous n'utilisons pas votre contenu pour entraîner des modèles d'intelligence artificielle, et aucune fonctionnalité d'IA n'est exécutée sans une action de votre part." },
+          { note: "Nous n'utilisons pas votre contenu pour entraîner des modèles d'intelligence artificielle. Aucune fonctionnalité d'IA ne lit vos notes sans une action de votre part. La seule exécution automatique est la traduction de la phrase publique du jour, qui n'inclut ni notes, ni fichiers, ni enregistrements d'étude." },
         ],
       },
       {
@@ -246,7 +249,8 @@ const fr: LegalBundle = {
               rows: [
                 ["Google Cloud et Firebase", "Hébergement, base de données, stockage de fichiers, authentification et e-mails système"],
                 ["Google reCAPTCHA", "Protection contre les robots lors de la connexion et de la réinitialisation du mot de passe"],
-                ["Google Gemini API et Google Cloud Translation", "Fonctionnalités d'IA et de traduction que vous activez"],
+                ["Google Gemini API et Google Cloud Translation", "Fonctionnalités d'IA et de traduction que vous activez, et la traduction de la phrase publique du jour"],
+                ["ZenQuotes", "Fournir la phrase motivante du jour. La requête part de nos serveurs et n'inclut pas les données de votre compte"],
                 ["country.is (géolocalisation par IP)", "Identifier le pays pour suggérer la langue, uniquement avec votre consentement et sans conserver l'adresse IP"],
                 ["Notion, Evernote et Google Docs", "Uniquement lorsque vous connectez l'intégration, pour importer ce que vous choisissez"],
                 ["Reconnaissance vocale et voix du navigateur (Google, Microsoft ou Apple)", "Transcription en direct, si vous l'activez, et lecture à voix haute lorsque le navigateur utilise des voix en ligne"],

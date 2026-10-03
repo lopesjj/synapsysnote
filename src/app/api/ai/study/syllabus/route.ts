@@ -3,6 +3,7 @@ import { appRequestUser, rateLimitKey } from "@/lib/api/app-session";
 import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { createRateLimiter } from "@/lib/api/rate-limit";
 import { clientIpOf } from "@/lib/api/client-ip";
+import { boundTopics, syllabusSystemPrompt } from "@/lib/study/syllabus";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -36,7 +37,7 @@ const limiter = createRateLimiter({
 });
 
 const PREFERRED_TTL_MS = 30 * 60_000;
-const ATTEMPT_TIMEOUT_MS = 45_000;
+const ATTEMPT_TIMEOUT_MS = 60_000;
 
 let preferred: { model: string; until: number } | null = null;
 
@@ -60,12 +61,7 @@ function sanitize(raw: unknown): { name: string; topics: string[] }[] {
     if (!entry || typeof entry !== "object") continue;
     const name = String((entry as { name?: unknown }).name ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
     const topicsRaw = (entry as { topics?: unknown }).topics;
-    const topics = Array.isArray(topicsRaw)
-      ? topicsRaw
-          .map((topic) => String(topic ?? "").replace(/\s+/g, " ").trim().slice(0, 300))
-          .filter(Boolean)
-          .slice(0, 600)
-      : [];
+    const topics = Array.isArray(topicsRaw) ? boundTopics(topicsRaw.map((topic) => String(topic ?? ""))) : [];
     if (name || topics.length) out.push({ name, topics });
   }
   return out;
@@ -82,25 +78,10 @@ export async function POST(request: NextRequest) {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) return NextResponse.json({ error: "GEMINI_API_KEY is not configured" }, { status: 500 });
-    const body = (await request.json().catch(() => ({}))) as { text?: unknown };
+    const body = (await request.json().catch(() => ({}))) as { text?: unknown; language?: unknown };
     const text = String(body.text ?? "").slice(0, MAX_TEXT).trim();
     if (!text) return NextResponse.json({ subjects: [] });
-    const prompt = [
-      "You organize the syllabus of an exam, certification or course into subjects and topics.",
-      "Read the text below and return every subject (discipline) with its topics in the original order.",
-      "Rules:",
-      "- Keep the wording of the source; only fix obvious line-break or spacing artifacts.",
-      "- Remove item numbers from the start of topics and subject names.",
-      "- A topic is one teachable item; split long sentences that list several items separated by semicolons.",
-      "- Sub-items stay as separate topics right after their parent.",
-      "- Ignore headings that only group subjects (e.g. general knowledge, specific knowledge) when they have no topics of their own.",
-      "- Do not invent subjects or topics that are not in the text.",
-      "- Keep the language of the source text. Write subject names in title case.",
-      "Return only JSON shaped as {\"subjects\":[{\"name\":\"...\",\"topics\":[\"...\"]}]}.",
-      "",
-      "TEXT:",
-      text,
-    ].join("\n");
+    const language = String(body.language ?? "pt").slice(0, 12);
 
     let lastError = "";
     for (const model of modelList()) {
@@ -110,12 +91,13 @@ export async function POST(request: NextRequest) {
           headers: { "Content-Type": "application/json" },
           signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
           body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            systemInstruction: { parts: [{ text: syllabusSystemPrompt(language) }] },
+            contents: [{ role: "user", parts: [{ text }] }],
             generationConfig: {
               responseMimeType: "application/json",
               responseSchema: RESPONSE_SCHEMA,
-              temperature: 0.1,
-              maxOutputTokens: 16_384,
+              temperature: 0,
+              maxOutputTokens: 32768,
             },
           }),
         });

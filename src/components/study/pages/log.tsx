@@ -36,7 +36,7 @@ export function LogPage() {
 function LogBody() {
   const { st, locale, duration, language } = useStudyT();
   const categoryLabel = useCategoryLabel();
-  const { planSessions, planExams, planSubjects, settings, topicById, actions, today } = useStudy();
+  const { planSessions, planExams, planSubjects, settings, topicById, actions, today, planReadOnly } = useStudy();
   const [examDialog, setExamDialog] = useState<{ open: boolean; exam: MockExam | null }>({ open: false, exam: null });
   const liveNote = useLiveNote();
   const materialText = useCallback(
@@ -203,14 +203,14 @@ function LogBody() {
                 <ul className="divide-y divide-[var(--border)] overflow-hidden rounded-[20px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_1px_2px_rgba(15,44,76,0.04)]">
                   {rows.map((row) =>
                     row.kind === "session" ? (
-                      <SessionLogRow key={row.session.id} session={row.session} onRemove={() => void remove(row.session)} />
+                      <SessionLogRow key={row.session.id} session={row.session} onRemove={planReadOnly ? undefined : () => void remove(row.session)} />
                     ) : (
                       <ExamLogRow
                         key={row.exam.id}
                         exam={row.exam}
                         subjects={planSubjects}
-                        onEdit={() => setExamDialog({ open: true, exam: row.exam })}
-                        onRemove={() => void removeExam(row.exam)}
+                        onEdit={planReadOnly ? undefined : () => setExamDialog({ open: true, exam: row.exam })}
+                        onRemove={planReadOnly ? undefined : () => void removeExam(row.exam)}
                       />
                     )
                   )}
@@ -227,7 +227,7 @@ function LogBody() {
   );
 }
 
-function SessionLogRow({ session, onRemove }: { session: StudySession; onRemove: () => void }) {
+function SessionLogRow({ session, onRemove }: { session: StudySession; onRemove?: () => void }) {
   const { st, duration } = useStudyT();
   const { subjectById, topicById } = useStudy();
   const subject = subjectById(session.subjectId);
@@ -244,7 +244,7 @@ function SessionLogRow({ session, onRemove }: { session: StudySession; onRemove:
       wrong={answered ? session.wrong : null}
       percent={answered ? percentLabel(session.correct / answered) : null}
       comment={session.comment}
-      onEdit={() => useStudyUi.getState().openLog(null, session.id)}
+      onEdit={onRemove ? () => useStudyUi.getState().openLog(null, session.id) : undefined}
       onRemove={onRemove}
       meta={
         <>
@@ -267,8 +267,8 @@ function ExamLogRow({
 }: {
   exam: MockExam;
   subjects: { id: string; name: string }[];
-  onEdit: () => void;
-  onRemove: () => void;
+  onEdit?: () => void;
+  onRemove?: () => void;
 }) {
   const { st, duration } = useStudyT();
   const totals = examTotals(exam);
@@ -326,8 +326,8 @@ function LogEntryRow({
   percent: string | null;
   meta: React.ReactNode;
   comment: string;
-  onEdit: () => void;
-  onRemove: () => void;
+  onEdit?: () => void;
+  onRemove?: () => void;
 }) {
   const { st } = useStudyT();
   return (
@@ -364,12 +364,16 @@ function LogEntryRow({
         ) : (
           <span className="size-7 shrink-0" aria-hidden />
         )}
-        <Button variant="ghost" size="icon-sm" aria-label={st("edit")} onClick={onEdit}>
-          <Pencil />
-        </Button>
-        <Button variant="ghost" size="icon-sm" aria-label={st("delete")} onClick={onRemove} className="hover:text-[var(--danger)]">
-          <Trash2 />
-        </Button>
+        {onEdit ? (
+          <Button variant="ghost" size="icon-sm" aria-label={st("edit")} onClick={onEdit}>
+            <Pencil />
+          </Button>
+        ) : null}
+        {onRemove ? (
+          <Button variant="ghost" size="icon-sm" aria-label={st("delete")} onClick={onRemove} className="hover:text-[var(--danger)]">
+            <Trash2 />
+          </Button>
+        ) : null}
       </div>
     </li>
   );

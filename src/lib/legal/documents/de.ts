@@ -31,6 +31,7 @@ const de: LegalBundle = {
               "Inhalte aus Notion, Evernote, Google Docs und Dateien importieren;",
               "Lernkarten und Transkripte mit Hilfe von künstlicher Intelligenz erstellen;",
               "Lerneinheiten mit einem Fokus-Timer erfassen und geplante Wiederholungen, Probeprüfungen und Lernpläne verfolgen;",
+              "in der Lernübersicht einen täglichen Spruch über Ausdauer und Ziele lesen, der aus einem externen Bestand kommt und sich nicht wiederholt;",
               "das Gelernte mit Spaced Repetition wiederholen.",
             ],
           },
@@ -83,7 +84,7 @@ const de: LegalBundle = {
         id: "ai",
         title: "Funktionen mit künstlicher Intelligenz",
         blocks: [
-          "Einige Funktionen nutzen künstliche Intelligenz: Audio- und Videotranskription, Erstellung von Lernkarten, Erkennung doppelter Karten, Übersetzung und das Gliedern eines von dir eingefügten Stoffplans in Fächer und Themen. Sie verarbeiten nur die Inhalte, die du auswählst, und nur dann, wenn du die Funktion aktivierst.",
+          "Einige Funktionen nutzen künstliche Intelligenz: Audio- und Videotranskription, Erstellung von Lernkarten, Erkennung doppelter Karten, Übersetzung und das Gliedern eines von dir eingefügten Stoffplans in Fächer und Themen. Sie verarbeiten nur die Inhalte, die du auswählst, und nur dann, wenn du die Funktion aktivierst. Der tägliche Lernspruch stammt aus einem externen Bestand. Wenn die Sprache der Website nicht Englisch ist, übersetzen wir nur diesen öffentlichen Spruch, nicht deine Notizen oder Lerneinträge.",
           {
             note: "KI-generierte Ergebnisse können Fehler, Auslassungen oder Ungenauigkeiten enthalten. Überprüfe Transkripte und Lernkarten, bevor du damit lernst, und gleiche sie immer mit der offiziellen Quelle ab — dem Gesetzestext, der Prüfungsausschreibung oder der empfohlenen Literatur.",
           },
@@ -184,7 +185,7 @@ const de: LegalBundle = {
               rows: [
                 ["Registrierung", "Name, E-Mail, Telefonnummer und Profilbild", "Du oder dein Google-Konto"],
                 ["Zugangsdaten", "Passwort, nur verschlüsselt vom Authentifizierungsanbieter gespeichert", "Du"],
-                ["Inhalte", "Notizen, Seiten, Notizbücher, Lernkarten, Anhänge, Audio und Video; im Lernmodul Ziele, Fächer und Themen (mit den externen Links, die du hinzufügst), Lerneinheiten (mit Material und verknüpften Notizen), Aufgaben, Wiederholungen, Probeprüfungen, Lernpläne, Erinnerungen, Notizblock und die in deiner Vitrine aufbewahrten Erfolge (mit dem Datum der Aufbewahrung und der Reihenfolge, in der du sie anordnest)", "Du und die von dir durchgeführten Importe"],
+                ["Inhalte", "Notizen, Seiten, Notizbücher, Lernkarten, Anhänge, Audio und Video; im Lernmodul Ziele, Fächer und Themen (mit den externen Links, die du hinzufügst), Lerneinheiten (mit Material und verknüpften Notizen), Aufgaben, Wiederholungen, Probeprüfungen, Lernpläne, Erinnerungen, Notizblock und die in deiner Vitrine aufbewahrten Erfolge (mit dem Datum der Aufbewahrung und der Reihenfolge, in der du sie anordnest), den Tagesspruch und die Liste der bereits gezeigten Sprüche, damit sie sich nicht wiederholen", "Du und die von dir durchgeführten Importe"],
                 ["Integrationen", "Zugriffstoken für Notion, Evernote und Google Docs", "Der verbundene Dienst, mit deiner Autorisierung"],
                 ["Einstellungen", "Sprache, Design, Barrierefreiheit und Layout", "Du"],
                 ["Zustimmung zu Dokumenten", "Version und Datum, an dem du die Nutzungsbedingungen und diese Richtlinie akzeptiert hast", "Du"],
@@ -206,6 +207,7 @@ const de: LegalBundle = {
                 ["Dein Konto erstellen und pflegen, Zugang authentifizieren und Inhalte synchronisieren", "Vertragserfüllung (Art. 7, V)"],
                 ["Von dir ausgelöste Funktionen ausführen: Importe, Transkripte, Lernkarten und Übersetzungen", "Vertragserfüllung (Art. 7, V)"],
                 ["Statistiken, geplante Wiederholungen und Lernpläne aus deinen Lerneinträgen berechnen", "Vertragserfüllung (Art. 7, V)"],
+                ["Den Tagesspruch aus einem externen Bestand holen und bereits gezeigte Sprüche speichern, damit sie sich nicht wiederholen", "Vertragserfüllung (Art. 7, V)"],
                 ["Konten vor Betrug und unbefugtem Zugriff schützen, auch mithilfe von reCAPTCHA", "Berechtigtes Interesse (Art. 7, IX)"],
                 ["Zugriffsprotokolle für die im brasilianischen Marco Civil da Internet vorgeschriebene Dauer aufbewahren", "Rechtliche Verpflichtung (Art. 7, II)"],
                 ["Unverzichtbare Mitteilungen senden, wie Passwortzurücksetzungen und Hinweise auf Änderungen", "Vertragserfüllung (Art. 7, V)"],
@@ -230,9 +232,10 @@ const de: LegalBundle = {
               "**Lernkarten und Erkennung doppelter Karten:** Google Gemini API.",
               "**Übersetzung:** Google Gemini API; solange sie nicht verfügbar ist, Google Cloud Translation.",
               "**Gliederung von Stoffplänen:** Google Gemini API, nur wenn du „Mit KI ordnen“ wählst; die normale automatische Aufteilung läuft in deinem Browser.",
+              "**Täglicher Lernspruch:** der Text stammt aus dem öffentlichen Bestand ZenQuotes. Wenn die Sprache der Website nicht Englisch ist, übersetzen wir nur diesen Spruch mit der Google Gemini API oder, falls sie nicht verfügbar ist, mit Google Cloud Translation. Wir senden keine Kontodaten.",
             ],
           },
-          { note: "Wir verwenden deine Inhalte nicht zum Training von KI-Modellen, und keine KI-Funktion läuft ohne eine Aktion von dir." },
+          { note: "Wir verwenden deine Inhalte nicht zum Training von KI-Modellen. Keine KI-Funktion liest deine Notizen ohne eine Aktion von dir. Der einzige automatische Lauf ist die Übersetzung des öffentlichen Tagesspruchs, die keine Notizen, Dateien oder Lerneinträge umfasst." },
         ],
       },
       {
@@ -246,7 +249,8 @@ const de: LegalBundle = {
               rows: [
                 ["Google Cloud und Firebase", "Hosting, Datenbank, Dateispeicherung, Authentifizierung und System-E-Mails"],
                 ["Google reCAPTCHA", "Bot-Schutz bei Anmeldung und Passwortzurücksetzung"],
-                ["Google Gemini API und Google Cloud Translation", "Von dir ausgelöste KI- und Übersetzungsfunktionen"],
+                ["Google Gemini API und Google Cloud Translation", "Von dir ausgelöste KI- und Übersetzungsfunktionen sowie die Übersetzung des öffentlichen Tagesspruchs"],
+                ["ZenQuotes", "Den motivierenden Tagesspruch liefern. Die Abfrage geht von unseren Servern aus und enthält keine Kontodaten"],
                 ["Spracherkennung und Stimmen des Browsers (Google, Microsoft oder Apple)", "Live-Transkription, sofern aktiviert, und Vorlesen, wenn der Browser Online-Stimmen verwendet"],
                 ["country.is (IP-Geolokalisierung)", "Dein Land ermitteln, um eine Sprache vorzuschlagen, nur mit deiner Einwilligung und ohne deine IP-Adresse zu speichern"],
                 ["jsDelivr, Unsplash und flagcdn", "Laden von Schnittstellenbibliotheken, Schriftarten und öffentlichen Bildern; erhalten nur technische Verbindungsdaten wie IP und Browser"],

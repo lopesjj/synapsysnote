@@ -31,6 +31,7 @@ const en: LegalBundle = {
               "import content from Notion, Evernote, Google Docs and files;",
               "generate flashcards and transcripts with the help of artificial intelligence;",
               "log study sessions with a focus timer and follow scheduled reviews, mock exams and study planning;",
+              "read, on the study overview, a daily phrase about persistence and goals, drawn from an external collection and never repeated;",
               "review what you have studied with spaced repetition.",
             ],
           },
@@ -83,7 +84,7 @@ const en: LegalBundle = {
         id: "ai",
         title: "Artificial intelligence features",
         blocks: [
-          "Some features use artificial intelligence: audio and video transcription, flashcard generation, duplicate-card detection, translation, and organizing a syllabus you paste into subjects and topics. They process only the content you choose, at the moment you trigger the feature.",
+          "Some features use artificial intelligence: audio and video transcription, flashcard generation, duplicate-card detection, translation, and organizing a syllabus you paste into subjects and topics. They process only the content you choose, at the moment you trigger the feature. The daily study phrase comes from an external collection. When the site language is not English, only that public phrase is translated, not your notes or study records.",
           {
             note: "AI-generated output may contain errors, omissions or inaccuracies. Review transcripts and flashcards before studying with them, and always check them against the official source — the text of the law, the exam notice or the recommended reading list.",
           },
@@ -184,7 +185,7 @@ const en: LegalBundle = {
               rows: [
                 ["Registration", "Name, email, phone number and profile photo", "You or your Google account"],
                 ["Credentials", "Password, stored only in encrypted form by the authentication provider", "You"],
-                ["Content", "Notes, pages, notebooks, flashcards, attachments, audio and video; in the study module, goals, subjects and topics (with any external links you add), sessions (with their material and linked notes), questions, reviews, mock exams, schedules, reminders, notepad and the achievements kept in your showcase (with the date they were kept and the order you arrange them)", "You and the imports you make"],
+                ["Content", "Notes, pages, notebooks, flashcards, attachments, audio and video; in the study module, goals, subjects and topics (with any external links you add), sessions (with their material and linked notes), questions, reviews, mock exams, schedules, reminders, notepad and the achievements kept in your showcase (with the date they were kept and the order you arrange them), the daily phrase and the list of phrases already shown, so they are not repeated", "You and the imports you make"],
                 ["Integrations", "Access tokens for Notion, Evernote and Google Docs", "The connected service, with your authorization"],
                 ["Preferences", "Language, theme, accessibility and layout", "You"],
                 ["Technical data", "IP address, approximate country, browser, device, date and time of access", "Collected automatically"],
@@ -206,6 +207,7 @@ const en: LegalBundle = {
                 ["Creating and maintaining your account, authenticating access and syncing your content", "Performance of a contract (art. 7, V)"],
                 ["Running features you trigger: imports, transcriptions, flashcards and translations", "Performance of a contract (art. 7, V)"],
                 ["Calculating statistics, scheduled reviews and study schedules from your study records", "Performance of a contract (art. 7, V)"],
+                ["Fetching the daily phrase from an external collection and storing which phrases were already shown, so they are not repeated", "Performance of a contract (art. 7, V)"],
                 ["Protecting accounts against fraud and unauthorized access, including with reCAPTCHA", "Legitimate interest (art. 7, IX)"],
                 ["Keeping access logs for the period set by the Brazilian Civil Rights Framework for the Internet (Marco Civil da Internet)", "Legal obligation (art. 7, II)"],
                 ["Sending essential communications, such as password resets and notices of changes", "Performance of a contract (art. 7, V)"],
@@ -230,9 +232,10 @@ const en: LegalBundle = {
               "**Translation:** Google Gemini API; while it is unavailable, Google Cloud Translation.",
               "**Live transcription of voice notes:** your browser's speech recognition, which may send audio to the provider (Google, Microsoft, or Apple). Stays off until you turn it on during recording.",
               "**Syllabus organization:** Google Gemini API, only when you choose “Organize with AI”; the regular automatic split runs in your browser.",
+              "**Daily study phrase:** the text comes from the public ZenQuotes collection. When the site language is not English, only that phrase is translated with the Google Gemini API or, if it is unavailable, with Google Cloud Translation. We do not send your account data.",
             ],
           },
-          { note: "We do not use your content to train artificial intelligence models, and no AI feature runs without an action on your part." },
+          { note: "We do not use your content to train artificial intelligence models. No AI feature reads your notes without an action on your part. The only automatic run is the translation of the public daily phrase, which does not include notes, files or study records." },
         ],
       },
       {
@@ -246,7 +249,8 @@ const en: LegalBundle = {
               rows: [
                 ["Google Cloud and Firebase", "Hosting, database, file storage, authentication and system emails"],
                 ["Google reCAPTCHA", "Protection against bots at sign-in and password reset"],
-                ["Google Gemini API and Google Cloud Translation", "AI and translation features you trigger"],
+                ["Google Gemini API and Google Cloud Translation", "AI and translation features you trigger, and translation of the public daily phrase"],
+                ["ZenQuotes", "Supplying the daily motivational phrase. The request leaves our servers and does not include your account data"],
                 ["country.is (IP geolocation)", "Identifying your country to suggest a language, only with your consent and without storing your IP address"],
                 ["Notion, Evernote and Google Docs", "Only when you connect the integration, to import what you choose"],
                 ["Browser speech recognition and voices (Google, Microsoft, or Apple)", "Live transcription, if you enable it, and read-aloud when the browser uses online voices"],

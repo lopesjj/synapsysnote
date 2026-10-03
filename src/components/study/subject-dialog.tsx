@@ -125,7 +125,7 @@ function TopicRow({
 function SubjectForm({ planId, subject, onClose }: { planId: string; subject: StudySubject | null; onClose: () => void }) {
   const { st, textDir } = useStudyT();
   const { notebooks } = useWorkspace();
-  const { actions, sessions, planSubjects } = useStudy();
+  const { actions, sessions, planSubjects, plans } = useStudy();
   const [name, setName] = useState(subject?.name ?? "");
   const [color, setColor] = useState(subject?.color ?? SUBJECT_COLORS[planSubjects.length % SUBJECT_COLORS.length]);
   const [notebookId, setNotebookId] = useState<string | null>(subject?.notebookId ?? null);
@@ -174,6 +174,11 @@ function SubjectForm({ planId, subject, onClose }: { planId: string; subject: St
   };
 
   const submit = async () => {
+    if (plans.some((entry) => entry.id === planId && entry.archived)) {
+      toast.error(st("goal_readonly_toast"));
+      onClose();
+      return;
+    }
     if (!name.trim()) {
       setError(st("subject_name_required"));
       return;

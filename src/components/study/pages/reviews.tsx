@@ -81,7 +81,7 @@ function ReviewsBody() {
 
 function ReviewQueue() {
   const { st, locale } = useStudyT();
-  const { planReviews, planSubjects, sessions, actions, today, settings } = useStudy();
+  const { planReviews, planSubjects, sessions, actions, today, settings, planReadOnly } = useStudy();
   const [tab, setTab] = useState<ReviewTab>("due");
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [subjectId, setSubjectId] = useState("");
@@ -196,7 +196,7 @@ function ReviewQueue() {
               />
               {selectedIds.length ? st("selected_count", { count: selectedIds.length }) : st("select_all")}
             </label>
-            {selectedIds.length ? (
+            {selectedIds.length && !planReadOnly ? (
               <div className="flex items-center gap-1.5">
                 {resolvedTab ? (
                   <Button size="sm" variant="secondary" onClick={() => void bulk("pending")}>
@@ -510,7 +510,7 @@ function ReviewRow({
   onSelect: (value: boolean) => void;
 }) {
   const { st, locale } = useStudyT();
-  const { subjectById, topicById, actions, today } = useStudy();
+  const { subjectById, topicById, actions, today, planReadOnly } = useStudy();
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const subject = subjectById(review.subjectId);
   const topic = topicById(review.subjectId, review.topicId);
@@ -534,6 +534,7 @@ function ReviewRow({
     >
       <Checkbox
         checked={selected}
+        disabled={planReadOnly}
         onCheckedChange={(value) => onSelect(value === true)}
         aria-label={name}
         className="col-start-1 row-start-1 mt-[3px] @3xl/list:mt-0"
@@ -556,7 +557,7 @@ function ReviewRow({
       </div>
 
       <div className="col-start-3 row-start-1 flex items-center justify-end gap-1 @3xl/list:col-start-5">
-        {pending ? (
+        {planReadOnly ? null : pending ? (
           <>
             <Tooltip label={st("review_start")}>
               <span className="inline-flex">
@@ -595,6 +596,7 @@ function ReviewRow({
           </>
         ) : null}
 
+        {planReadOnly ? null : (
         <Menu>
           <MenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label={`${st("more_actions")}: ${name}`}>
@@ -646,6 +648,7 @@ function ReviewRow({
             </MenuItem>
           </MenuContent>
         </Menu>
+        )}
 
         <RescheduleDialog
           open={rescheduleOpen}
@@ -1083,7 +1086,7 @@ function FlashcardsPanel() {
 /** Objetivo sem nenhuma revisão ainda: explica de onde elas vêm com os intervalos reais das preferências. */
 function ReviewsIntro() {
   const { st } = useStudyT();
-  const { settings, today } = useStudy();
+  const { settings, today, planReadOnly } = useStudy();
   const { dueFlashcards } = useWorkspace();
   const intervals = settings.reviewIntervals;
   return (
@@ -1100,10 +1103,12 @@ function ReviewsIntro() {
                 <p className="mt-3 text-[12.5px] leading-relaxed text-faint">{st("reviews_intro_auto_off")}</p>
               ) : null}
               <div className="mt-6 flex flex-wrap items-center gap-2">
-                <Button variant="secondary" onClick={() => useStudyUi.getState().openLog()}>
-                  <Plus />
-                  {st("logform_title_new")}
-                </Button>
+                {planReadOnly ? null : (
+                  <Button variant="secondary" onClick={() => useStudyUi.getState().openLog()}>
+                    <Plus />
+                    {st("logform_title_new")}
+                  </Button>
+                )}
                 <Button variant="ghost" onClick={openStudyPreferences}>
                   <SlidersHorizontal />
                   {st("reviews_edit_intervals")}

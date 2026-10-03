@@ -53,7 +53,7 @@ export function CommandPalette({
   }, [open, onOpenChange]);
 
   const { st } = useStudyT();
-  const { activePlan } = useStudy();
+  const { focusPlan, planReadOnly } = useStudy();
   const run = (action: () => void) => {
     onOpenChange(false);
     action();
@@ -434,7 +434,7 @@ export function CommandPalette({
                       </Command.Item>
                     </Command.Group>
                     <Command.Group heading={<GroupLabel>{st("cmd_group")}</GroupLabel>}>
-                      {activePlan ? (
+                      {focusPlan && !planReadOnly ? (
                         <Command.Item
                           value="study-log-session"
                           className={itemClass}
@@ -443,13 +443,15 @@ export function CommandPalette({
                           <span className="flex-1 text-[13px] text-ink">{st("cmd_log_session")}</span>
                         </Command.Item>
                       ) : null}
-                      <Command.Item
-                        value="study-focus"
-                        className={itemClass}
-                        onSelect={() => run(openBlankTimer)}
-                      >
-                        <span className="flex-1 text-[13px] text-ink">{st("cmd_start_focus")}</span>
-                      </Command.Item>
+                      {planReadOnly ? null : (
+                        <Command.Item
+                          value="study-focus"
+                          className={itemClass}
+                          onSelect={() => run(openBlankTimer)}
+                        >
+                          <span className="flex-1 text-[13px] text-ink">{st("cmd_start_focus")}</span>
+                        </Command.Item>
+                      )}
                       <Command.Item value="study-overview" className={itemClass} onSelect={() => go("/home/study")}>
                         <span className="flex-1 text-[13px] text-ink">{st("cmd_open_study")}</span>
                       </Command.Item>

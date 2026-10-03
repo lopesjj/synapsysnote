@@ -261,7 +261,7 @@ export function StreakSeal({
 
 export function AwardArt({ award, size = 64, className }: { award: Award; size?: number; className?: string }) {
   const { st } = useStudyT();
-  const { activePlan } = useStudy();
+  const { focusPlan } = useStudy();
   if (award.kind === "streak") return <StreakSeal award={award} size={size} unit={st("award_seal_unit")} className={className} />;
   if (award.kind === "subject") {
     if (award.earnedAt === null) {
@@ -294,8 +294,8 @@ export function AwardArt({ award, size = 64, className }: { award: Award; size?:
   const earned = award.earnedAt !== null;
   return (
     <Laurel size={size} className={className} color={earned ? "var(--laurel)" : "var(--border-strong)"}>
-      {activePlan ? (
-        <GoalMark icon={activePlan.icon} name={activePlan.name} seed={activePlan.id} size={Math.round(size * 0.5)} raised={earned} soft={earned} className={cn(!earned && "opacity-50 grayscale")} />
+      {focusPlan ? (
+        <GoalMark icon={focusPlan.icon} name={focusPlan.name} seed={focusPlan.id} size={Math.round(size * 0.5)} raised={earned} soft={earned} className={cn(!earned && "opacity-50 grayscale")} />
       ) : null}
     </Laurel>
   );
@@ -434,9 +434,9 @@ export function usePendingAwards(): Award[] {
 
 export function AwardsPanel() {
   const { st } = useStudyT();
-  const { activePlan, settings, actions } = useStudy();
+  const { focusPlan, planReadOnly, settings, actions } = useStudy();
   const book = useAwardBook();
-  const planId = activePlan?.id ?? "";
+  const planId = focusPlan?.id ?? "";
   const stored = settings.awardOrder[planId] ?? EMPTY_ORDER;
   const [draft, setDraft] = useState<{ planId: string; ids: string[] } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -452,7 +452,7 @@ export function AwardsPanel() {
     return arrangeAwards(sortAwards(book.kept), ids);
   }, [book, draft, planId, stored]);
   const dragging = earned.find((award) => award.id === draggingId) ?? null;
-  const canSort = earned.length > 1;
+  const canSort = earned.length > 1 && !planReadOnly;
 
   useEffect(() => {
     if (!draft || draft.planId !== planId) return;
@@ -488,12 +488,12 @@ export function AwardsPanel() {
 
   if (!book) return null;
   const locked = [
-    ...(book.goal && book.goal.earnedAt === null ? [book.goal] : []),
-    ...book.subjects.filter((award) => award.earnedAt === null).sort((a, b) => b.progress - a.progress).slice(0, 3),
+    ...book.subjects.filter((award) => award.earnedAt === null).sort((a, b) => b.progress - a.progress),
     ...(book.nextStreak ? [book.nextStreak] : []),
   ];
+  const total = book.all.length - (book.goal?.earnedAt === null ? 1 : 0);
   return (
-    <Panel title={st("awards_title")} description={st("awards_desc", { earned: earned.length, total: book.all.length })}>
+    <Panel title={st("awards_title")} description={st("awards_desc", { earned: earned.length, total })}>
       {earned.length ? (
         <DndContext
           sensors={sensors}
@@ -562,7 +562,7 @@ export function AwardsPanel() {
         <p className="text-[12.5px] leading-relaxed text-muted">{st("awards_empty")}</p>
       )}
       {locked.length ? (
-        <div className={cn(earned.length && "mt-5 border-t border-dashed border-[var(--border)] pt-4")}>
+        <div className={cn(earned.length ? "mt-5 border-t border-dashed border-[var(--border)] pt-4" : "mt-5")}>
           <p className="mb-3 text-[10.5px] font-medium uppercase tracking-[0.14em] text-faint">{st("awards_section_locked")}</p>
           <div className="-mx-1 flex flex-wrap gap-x-1 gap-y-4">
             {locked.map((award) => (
@@ -593,7 +593,7 @@ function celebrationCopy(award: Award, st: StudyT, goalName: string): { headline
 
 export function CelebrationBanner() {
   const { st } = useStudyT();
-  const { activePlan, actions } = useStudy();
+  const { focusPlan, planReadOnly, actions } = useStudy();
   const celebrated = useStudyUi((state) => state.celebrated);
   const [settled, setSettled] = useState<string | null>(null);
   const [hidden, setHidden] = useState<string | null>(null);
@@ -608,14 +608,14 @@ export function CelebrationBanner() {
     return () => window.clearTimeout(timer);
   }, [leadId]);
   useEffect(() => {
-    if (!pendingKey || !celebrated.length) return;
+    if (planReadOnly || !pendingKey || !celebrated.length) return;
     const seen = new Set(celebrated);
     const keys = pendingKey.split(",").filter((key) => seen.has(key.slice(key.indexOf("~") + 1)));
     if (keys.length) void actions.claimAwards(keys);
-  }, [actions, celebrated, pendingKey]);
-  if (!lead || !activePlan || hidden === pendingKey) return null;
+  }, [actions, celebrated, pendingKey, planReadOnly]);
+  if (planReadOnly || !lead || !focusPlan || hidden === pendingKey) return null;
   const confetti = settled !== lead.id;
-  const { headline, body } = celebrationCopy(lead, st, activePlan.name || st("untitled_goal"));
+  const { headline, body } = celebrationCopy(lead, st, focusPlan.name || st("untitled_goal"));
   const accent = lead.kind === "subject" ? lead.color : lead.kind === "streak" ? sealTone(lead.tier) : "var(--laurel)";
   const daysLeft = Math.min(...pending.map((award) => award.daysLeft ?? CLAIM_WINDOW_DAYS));
   const keep = async () => {
