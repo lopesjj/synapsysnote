@@ -1,0 +1,10 @@
+{
+  "plugins": {
+    "adapter-mind": {
+      "enabled": true
+    },
+    "firebase/firebase": {
+      "enabled": true
+    }
+  }
+}

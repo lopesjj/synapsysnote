@@ -878,6 +878,9 @@ html[data-reduced-motion="true"] .synapsys-paper {
   border-radius: 4px;
   color: var(--muted);
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
   cursor: pointer;
   background: transparent;
   border: none;
@@ -902,6 +905,23 @@ html[data-reduced-motion="true"] .synapsys-paper {
   top: 0.25rem;
 }
 
+@media (pointer: coarse) {
+  .synapsys-editor .ProseMirror .synapsys-toggle__trigger::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 2.75rem;
+    height: 2.75rem;
+    transform: translate(-50%, -50%);
+  }
+
+  .synapsys-drag-handle {
+    display: none !important;
+    pointer-events: none !important;
+  }
+}
+
 .synapsys-editor .ProseMirror .synapsys-toggle [data-node-view-content-react] > *:first-child,
 .synapsys-editor .ProseMirror .synapsys-toggle .synapsys-toggle-content > *:first-child {
   margin-top: 0;
@@ -921,7 +941,18 @@ html[data-reduced-motion="true"] .synapsys-paper {
 [data-toggle-open="false"] [data-node-view-content-react] > *:not(:first-child),
 [data-toggle-open="false"] [data-node-view-content] > *:not(:first-child),
 [data-toggle-open="false"] .synapsys-toggle-content > *:not(:first-child) {
-  display: none !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .synapsys-toggle--open [data-node-view-content-react] > *:not(:first-child),
@@ -1274,13 +1305,6 @@ html[data-reduced-motion="true"] .synapsys-paper {
 
 .bottom-nav-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-@media (pointer: coarse) {
-  [data-sidebar] a[href],
-  [data-sidebar] button {
-    min-height: 44px;
-  }
 }
 
 .dark .synapsys-editor [style*="color: #2563EB"],

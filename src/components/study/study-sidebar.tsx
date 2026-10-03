@@ -74,7 +74,7 @@ export function ModuleSwitch({
               if (!selected) switchModule(option.id);
             }}
             className={cn(
-              "relative z-0 flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-[7px] px-1.5 text-[12.5px] font-medium transition-colors [@media(pointer:fine)]:h-7",
+              "relative z-0 flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-[7px] px-1.5 text-[12.5px] font-medium transition-colors",
               selected ? "text-ink" : "text-muted hover:text-ink"
             )}
           >
@@ -149,12 +149,12 @@ function FocusDock() {
   }
   return (
     <div className="grid grid-cols-[1fr_auto_auto] gap-1.5">
-      <Button variant="primary" size="sm" className="h-10 justify-center gap-2 leading-none [@media(pointer:fine)]:h-8" disabled={planReadOnly} onClick={openBlankTimer}>
+      <Button variant="primary" size="sm" className="h-8 justify-center gap-2 leading-none" disabled={planReadOnly} onClick={openBlankTimer}>
         <Timer className="size-4 shrink-0" />
         <span className="truncate leading-none">{st("sidebar_focus_idle")}</span>
       </Button>
       <Tooltip label={st("logform_title_new")}>
-        <Button variant="secondary" size="icon" className="size-10 [@media(pointer:fine)]:size-8" disabled={!focusPlan || planReadOnly} onClick={() => useStudyUi.getState().openLog()} aria-label={st("logform_title_new")}>
+        <Button variant="secondary" size="icon" className="size-8" disabled={!focusPlan || planReadOnly} onClick={() => useStudyUi.getState().openLog()} aria-label={st("logform_title_new")}>
           <Plus />
         </Button>
       </Tooltip>
@@ -162,7 +162,7 @@ function FocusDock() {
         <Button
           variant="secondary"
           size="icon"
-          className="size-10 [@media(pointer:fine)]:size-8"
+          className="size-8"
           onClick={() => useStudyUi.getState().setPadOpen(!useStudyUi.getState().padOpen)}
           aria-label={st("nav_scratchpad")}
         >
@@ -213,7 +213,7 @@ export function StudySidebarBody({ homeLink }: { homeLink: ReactNode }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="space-y-0.5 px-3">
+      <div className="min-h-0 touch-pan-y space-y-0.5 overflow-y-auto overscroll-y-contain px-3 md:shrink-0 md:overflow-visible">
         <button
           type="button"
           onClick={() => useUiStore.getState().setPaletteOpen(true)}
@@ -242,7 +242,7 @@ export function StudySidebarBody({ homeLink }: { homeLink: ReactNode }) {
         ))}
       </div>
 
-      <div className="mt-4 min-h-0 flex-1 touch-pan-y space-y-4 overflow-y-auto overscroll-y-contain px-3 pb-4">
+      <div className="mt-4 shrink-0 space-y-4 px-3 pb-4 md:min-h-0 md:flex-1 md:touch-pan-y md:overflow-y-auto md:overscroll-y-contain">
         <div>
           <p className="px-2 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-faint">{st("sidebar_tools")}</p>
           <FocusDock />

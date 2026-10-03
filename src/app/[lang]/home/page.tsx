@@ -73,7 +73,7 @@ function phaseOf(minute: number): SkyPhase {
   if (minute < 420) return "dawn";
   if (minute < 720) return "morning";
   if (minute < 1020) return "afternoon";
-  if (minute < 1170) return "dusk";
+  if (minute < 1110) return "dusk";
   return "night";
 }
 

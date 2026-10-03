@@ -1,48 +1,152 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
-import { TextSelection } from "@tiptap/pm/state";
+import { NodeSelection, Plugin, PluginKey, Selection, TextSelection } from "@tiptap/pm/state";
+import type { EditorState } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ignoreToggleMutation, isToggleChromeTarget } from "./toggle-guard";
 
-function ToggleView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
-  const [open, setOpen] = useState(() => Boolean(node.attrs.open ?? true));
-
-  useEffect(() => {
-    setOpen(Boolean(node.attrs.open ?? true));
-  }, [node.attrs.open]);
-
-  const handleToggle = (event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const next = !open;
-    setOpen(next);
-    updateAttributes({ open: next });
-
-    if (!next && typeof getPos === "function") {
-      const togglePos = getPos();
-      if (typeof togglePos === "number") {
-        const { state } = editor;
-        const { selection } = state;
-        const firstChild = node.child(0);
-        const headerEnd = togglePos + 1 + firstChild.nodeSize;
-        const toggleEnd = togglePos + node.nodeSize;
-
-        if (selection.from >= headerEnd && selection.to <= toggleEnd) {
-          const targetPos = togglePos + 1 + Math.min(selection.from - togglePos - 1, firstChild.content.size);
-          editor.chain().setTextSelection(Math.max(togglePos + 1, targetPos)).run();
-        }
+function toggleOpen(editor: NodeViewProps["editor"], getPos: NodeViewProps["getPos"]) {
+  try {
+    if (!editor || editor.isDestroyed || !editor.isEditable || typeof getPos !== "function") return;
+    const pos = getPos();
+    if (typeof pos !== "number") return;
+    const toggleNode = editor.state.doc.nodeAt(pos);
+    if (!toggleNode || toggleNode.type.name !== "toggleBlock" || toggleNode.childCount < 1) return;
+    const next = !Boolean(toggleNode.attrs.open ?? true);
+    const tr = editor.state.tr.setNodeMarkup(pos, undefined, { ...toggleNode.attrs, open: next });
+    if (!next) {
+      const { selection } = editor.state;
+      const headerEnd = pos + 1 + toggleNode.child(0).nodeSize;
+      const toggleEnd = pos + toggleNode.nodeSize;
+      if (selection.from >= headerEnd && selection.to <= toggleEnd) {
+        const mapped = tr.mapping.map(pos + 1, 1);
+        const clamped = Math.max(0, Math.min(mapped, tr.doc.content.size));
+        tr.setSelection(TextSelection.near(tr.doc.resolve(clamped), 1));
       }
     }
-  };
+    editor.view.dispatch(tr);
+  } catch {
+    return;
+  }
+}
 
-  const handleMouseDown = (event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
+function pointInside(element: HTMLElement, x: number, y: number) {
+  const rect = element.getBoundingClientRect();
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
+function keepToggleOnBackspace(state: EditorState, view: EditorView, togglePos: number, cursorPos: number) {
+  try {
+    if (togglePos > 0) {
+      const prev = state.doc.resolve(togglePos).nodeBefore;
+      if (prev) {
+        const prevPos = togglePos - prev.nodeSize;
+        if (prev.isTextblock && prev.content.size === 0) {
+          const tr = state.tr.delete(prevPos, togglePos);
+          const mapped = tr.mapping.map(cursorPos, 1);
+          const clamped = Math.max(0, Math.min(mapped, tr.doc.content.size));
+          tr.setSelection(TextSelection.near(tr.doc.resolve(clamped), 1));
+          view.dispatch(tr.scrollIntoView());
+          return true;
+        }
+        const next = Selection.near(state.doc.resolve(togglePos), -1);
+        if (!next.eq(state.selection)) view.dispatch(state.tr.setSelection(next).scrollIntoView());
+        return true;
+      }
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function ToggleView({ node, editor, getPos }: NodeViewProps) {
+  const open = Boolean(node.attrs.open ?? true);
+  const editorRef = useRef(editor);
+  const getPosRef = useRef(getPos);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  editorRef.current = editor;
+  getPosRef.current = getPos;
+
+  useLayoutEffect(() => {
+    const element = triggerRef.current;
+    if (!element) return;
+    let armed = true;
+    let lastToggleAt = 0;
+
+    const stop = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    const noteGestureStart = (event: Event, touch: boolean) => {
+      if (Date.now() - lastToggleAt > 40) armed = true;
+      if (touch) stop(event);
+      else event.stopPropagation();
+    };
+
+    const fire = (event: Event) => {
+      stop(event);
+      if (!armed) return;
+      armed = false;
+      lastToggleAt = Date.now();
+      toggleOpen(editorRef.current, getPosRef.current);
+    };
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (!event.isPrimary) return;
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      noteGestureStart(event, event.pointerType !== "mouse");
+    };
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (!event.isPrimary || event.pointerType === "mouse") return;
+      fire(event);
+    };
+
+    const onTouchStart = (event: TouchEvent) => {
+      noteGestureStart(event, true);
+    };
+
+    const onTouchEnd = (event: TouchEvent) => {
+      const touch = event.changedTouches[0];
+      if (!touch || !pointInside(element, touch.clientX, touch.clientY)) return;
+      fire(event);
+    };
+
+    const onMouseDown = (event: MouseEvent) => {
+      if (event.button !== 0) return;
+      stop(event);
+    };
+
+    const onClick = (event: MouseEvent) => {
+      fire(event);
+    };
+
+    element.addEventListener("pointerdown", onPointerDown);
+    element.addEventListener("pointerup", onPointerUp);
+    element.addEventListener("touchstart", onTouchStart, { passive: false });
+    element.addEventListener("touchend", onTouchEnd, { passive: false });
+    element.addEventListener("mousedown", onMouseDown);
+    element.addEventListener("click", onClick);
+    element.addEventListener("contextmenu", stop);
+
+    return () => {
+      element.removeEventListener("pointerdown", onPointerDown);
+      element.removeEventListener("pointerup", onPointerUp);
+      element.removeEventListener("touchstart", onTouchStart);
+      element.removeEventListener("touchend", onTouchEnd);
+      element.removeEventListener("mousedown", onMouseDown);
+      element.removeEventListener("click", onClick);
+      element.removeEventListener("contextmenu", stop);
+    };
+  }, []);
 
   return (
     <NodeViewWrapper
@@ -55,11 +159,12 @@ function ToggleView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
     >
       <div className="synapsys-toggle-inner w-full">
         <button
+          ref={triggerRef}
           type="button"
           contentEditable={false}
+          draggable={false}
+          aria-expanded={open}
           aria-label={open ? "Recolher toggle" : "Expandir toggle"}
-          onMouseDown={handleMouseDown}
-          onClick={handleToggle}
           className="synapsys-toggle__trigger"
         >
           <ChevronRight
@@ -161,7 +266,8 @@ export const ToggleBlock = Node.create({
             const tr = state.tr;
             const newParagraph = state.schema.nodes.paragraph.create();
             tr.insert(togglePos, newParagraph);
-            tr.setSelection(TextSelection.create(tr.doc, togglePos + newParagraph.nodeSize + 1));
+            const boundary = Math.min(togglePos + newParagraph.nodeSize + 1, tr.doc.content.size);
+            tr.setSelection(TextSelection.near(tr.doc.resolve(boundary), 1));
             view.dispatch(tr.scrollIntoView());
             return true;
           }
@@ -249,7 +355,8 @@ export const ToggleBlock = Node.create({
           if (firstChild.textContent === "" && firstChild.childCount === 0 && toggleNode.childCount === 1) {
             return this.editor.chain().lift(this.name).run() || this.editor.commands.clearNodes();
           }
-          return false;
+          if ($from.depth !== toggleDepth && $from.depth !== toggleDepth + 1) return false;
+          return keepToggleOnBackspace(state, view, togglePos, $from.pos);
         }
 
         return false;
@@ -463,12 +570,51 @@ export const ToggleBlock = Node.create({
     };
   },
 
+  addProseMirrorPlugins() {
+    let lastTouchAt = 0;
+    let lastKeyAt = 0;
+    return [
+      new Plugin({
+        key: new PluginKey("toggleMobileGuard"),
+        props: {
+          handleTripleClickOn: (_view, _pos, node, _nodePos, event) => {
+            if (node.type.name !== this.name) return false;
+            if (!isToggleChromeTarget(event.target)) return false;
+            event.preventDefault();
+            return true;
+          },
+          handleDOMEvents: {
+            touchstart: () => {
+              lastTouchAt = Date.now();
+              return false;
+            },
+            keydown: () => {
+              lastKeyAt = Date.now();
+              return false;
+            },
+            beforeinput: (view, event) => {
+              const input = event as InputEvent;
+              const type = input.inputType || "";
+              const destructive = type.startsWith("delete") || type === "insertReplacementText";
+              if (!destructive || lastKeyAt >= lastTouchAt || Date.now() - lastTouchAt > 1200) return false;
+              const selection = view.state.selection;
+              if (!(selection instanceof NodeSelection) || selection.node.type.name !== this.name) return false;
+              event.preventDefault();
+              return true;
+            },
+          },
+        },
+      }),
+    ];
+  },
+
   addNodeView() {
     return ReactNodeViewRenderer(ToggleView, {
       stopEvent: ({ event }) => {
-        const target = event.target as HTMLElement | null;
+        const target = event.target instanceof Element ? event.target : null;
         return Boolean(target?.closest(".synapsys-toggle__trigger"));
       },
+      ignoreMutation: ({ mutation }) => ignoreToggleMutation(mutation),
     });
   },
 });

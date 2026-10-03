@@ -47,6 +47,9 @@ function OverviewBody() {
   if (!planSubjects.length) {
     return (
       <StudyPage>
+        <div className="mb-4 sm:hidden">
+          <GoalSwitcher className="w-full max-w-none" />
+        </div>
         <StudyHeader title={st("nav_overview")} subtitle={st("overview_subtitle", { goal: focusPlan.name || st("untitled_goal") })} showLog={!planReadOnly} />
         <StudyEmpty
           art="subjects"
@@ -187,7 +190,10 @@ function Cover() {
               {goalComplete ? (
                 <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--laurel)]">{st("hero_goal_complete_title")}</p>
               ) : null}
-              <h2 dir={textDir} className="font-display text-[32px] font-medium leading-[1.02] tracking-[-0.02em] text-[var(--cover-fg)] [overflow-wrap:anywhere] sm:text-[40px]">
+              <div className="sm:hidden">
+                <GoalSwitcher variant="title" />
+              </div>
+              <h2 dir={textDir} className="hidden font-display text-[40px] font-medium leading-[1.02] tracking-[-0.02em] text-[var(--cover-fg)] [overflow-wrap:anywhere] sm:block">
                 {goalName}
               </h2>
               {goalComplete && book?.goal ? (

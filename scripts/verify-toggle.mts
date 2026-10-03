@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { blocksSignature, blocksToDoc, docToBlocks } from "../src/components/editor/serializer";
+import { ignoreToggleMutation, isToggleChromeTarget } from "../src/components/editor/extensions/toggle-guard";
 import { toTableRows } from "../src/lib/data/table-rows";
 import type { AppBlock } from "../src/types/models";
 
@@ -116,4 +117,112 @@ const calloutDoc = blocksToDoc([
   { id: "c1", type: "callout", props: { emoji: "📌" }, children: [{ id: "l1", type: "numbered_list_item", richText: [{ text: "um" }] }] },
 ]);
 assert.equal(calloutDoc.content?.[0]?.content?.[1]?.type, "orderedList");
+
+type FakeNode = {
+  nodeType: number;
+  parentElement: FakeNode | null;
+  attrs: Set<string>;
+  editable: boolean;
+  children: FakeNode[];
+  closest(selector: string): FakeNode | null;
+  contains(node: FakeNode): boolean;
+  querySelector(selector: string): FakeNode | null;
+  hasAttribute(name: string): boolean;
+  isContentEditable: boolean;
+};
+
+function fakeElement(attrs: string[] = []): FakeNode {
+  const node: FakeNode = {
+    nodeType: 1,
+    parentElement: null,
+    attrs: new Set(attrs),
+    editable: false,
+    children: [],
+    closest(selector: string) {
+      return matches(node, selector) ? node : node.parentElement?.closest(selector) ?? null;
+    },
+    contains(other: FakeNode) {
+      if (other === node) return true;
+      return node.children.some((child) => child.contains(other));
+    },
+    querySelector(selector: string) {
+      for (const child of node.children) {
+        if (matches(child, selector)) return child;
+        const nested = child.querySelector(selector);
+        if (nested) return nested;
+      }
+      return null;
+    },
+    hasAttribute(name: string) {
+      return node.attrs.has(name);
+    },
+    get isContentEditable() {
+      return node.editable;
+    },
+  };
+  return node;
+}
+
+function matches(node: FakeNode, selector: string) {
+  if (selector === ".synapsys-toggle") return node.attrs.has("toggle");
+  if (selector === ".synapsys-toggle__trigger") return node.attrs.has("trigger");
+  if (selector === "[data-node-view-content]") return node.attrs.has("data-node-view-content");
+  if (selector === "[data-node-view-content-react]") return node.attrs.has("data-node-view-content-react");
+  return false;
+}
+
+function adopt(parent: FakeNode, child: FakeNode) {
+  child.parentElement = parent;
+  parent.children.push(child);
+  return child;
+}
+
+const contentRoot = fakeElement(["data-node-view-content-react"]);
+contentRoot.editable = true;
+const paragraph = fakeElement();
+paragraph.editable = true;
+adopt(contentRoot, paragraph);
+
+assert.equal(
+  ignoreToggleMutation({ type: "characterData", target: { nodeType: 3, parentElement: paragraph } }),
+  false
+);
+assert.equal(ignoreToggleMutation({ type: "childList", target: contentRoot, addedNodes: [paragraph], removedNodes: [] }), false);
+assert.equal(
+  ignoreToggleMutation({
+    type: "childList",
+    target: fakeElement(),
+    addedNodes: [],
+    removedNodes: [contentRoot],
+  }),
+  true
+);
+assert.equal(ignoreToggleMutation({ type: "attributes", target: contentRoot }), true);
+
+const trigger = fakeElement(["trigger"]);
+assert.equal(ignoreToggleMutation({ type: "selection", target: trigger }), true);
+assert.equal(ignoreToggleMutation({ type: "selection", target: paragraph }), false);
+
+const button = fakeElement();
+assert.equal(
+  ignoreToggleMutation({ type: "childList", target: fakeElement(["toggle"]), addedNodes: [button], removedNodes: [] }),
+  true
+);
+
+const outer = fakeElement(["toggle"]);
+const outerContent = fakeElement(["data-node-view-content"]);
+const inner = fakeElement(["toggle"]);
+const innerButton = fakeElement(["trigger"]);
+const innerContent = fakeElement(["data-node-view-content"]);
+adopt(outer, outerContent);
+adopt(outerContent, inner);
+adopt(inner, innerButton);
+adopt(inner, innerContent);
+const innerText = fakeElement();
+adopt(innerContent, innerText);
+
+assert.equal(isToggleChromeTarget(innerButton), true);
+assert.equal(isToggleChromeTarget(innerText), false);
+assert.equal(isToggleChromeTarget(outer), true);
+
 console.log("all toggle tests passed");

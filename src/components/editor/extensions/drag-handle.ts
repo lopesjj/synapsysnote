@@ -106,6 +106,25 @@ export const DragHandle = Extension.create({
           container.addEventListener("mouseenter", cancelHide);
           container.addEventListener("mouseleave", scheduleHide);
 
+          let lastTouchAt = 0;
+          const markTouch = (event: Event) => {
+            lastTouchAt = Date.now();
+            event.preventDefault();
+            event.stopPropagation();
+            hideImmediate();
+          };
+          const markEditorTouch = () => {
+            lastTouchAt = Date.now();
+            hideImmediate();
+          };
+          const onEditorPointerDown = (event: PointerEvent) => {
+            if (event.pointerType === "touch" || event.pointerType === "pen") markEditorTouch();
+          };
+          container.addEventListener("touchstart", markTouch, { passive: false });
+          container.addEventListener("pointerdown", (event) => {
+            if (event.pointerType === "touch" || event.pointerType === "pen") markTouch(event);
+          });
+
           const parent = view.dom.parentElement;
           if (parent) {
             if (getComputedStyle(parent).position === "static") parent.style.position = "relative";
@@ -113,7 +132,10 @@ export const DragHandle = Extension.create({
           }
 
           const onMouseMove = (event: MouseEvent) => {
-            if (!view.editable) return;
+            if (!view.editable || Date.now() - lastTouchAt < 1000) {
+              if (Date.now() - lastTouchAt < 1000) hideImmediate();
+              return;
+            }
             const target = event.target as HTMLElement;
             if (container.contains(target)) {
               cancelHide();
@@ -146,7 +168,14 @@ export const DragHandle = Extension.create({
             scheduleHide();
           };
 
-          deleteButton.addEventListener("click", () => {
+          deleteButton.addEventListener("click", (event) => {
+            const fromTouch = Date.now() - lastTouchAt < 1000;
+            if (fromTouch) {
+              event.preventDefault();
+              event.stopPropagation();
+              hideImmediate();
+              return;
+            }
             if (state.pos === null) return;
             const node = view.state.doc.nodeAt(state.pos);
             if (!node) return;
@@ -173,12 +202,16 @@ export const DragHandle = Extension.create({
 
           view.dom.addEventListener("mousemove", onMouseMove);
           view.dom.addEventListener("mouseleave", onMouseLeave);
+          view.dom.addEventListener("touchstart", markEditorTouch, { passive: true, capture: true });
+          view.dom.addEventListener("pointerdown", onEditorPointerDown, { capture: true });
 
           return {
             destroy() {
               cancelHide();
               view.dom.removeEventListener("mousemove", onMouseMove);
               view.dom.removeEventListener("mouseleave", onMouseLeave);
+              view.dom.removeEventListener("touchstart", markEditorTouch, { capture: true });
+              view.dom.removeEventListener("pointerdown", onEditorPointerDown, { capture: true });
               container.removeEventListener("mouseenter", cancelHide);
               container.removeEventListener("mouseleave", scheduleHide);
               container.remove();

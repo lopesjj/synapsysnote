@@ -481,6 +481,13 @@ export function FocusOverlay() {
   const running = timer.status === "running";
   const subject = subjectById(timer.subjectId);
   const topic = subject?.topics.find((entry) => entry.id === timer.topicId);
+  const topicListRef = useRef<HTMLDivElement>(null);
+  const scrollTopicsRef = useRef(false);
+  useEffect(() => {
+    if (!scrollTopicsRef.current) return;
+    scrollTopicsRef.current = false;
+    topicListRef.current?.scrollIntoView({ block: "nearest" });
+  }, [timer.subjectId]);
   const materialNote = liveNote(timer.pageId);
   const hasTime = focusSeconds(timer, now) > 0;
   const countdownDone = timer.finished && timer.mode === "countdown";
@@ -610,30 +617,39 @@ export function FocusOverlay() {
                   <ChevronDown className="size-3.5 shrink-0 text-faint transition group-data-[state=open]:rotate-180" />
                 </button>
               </MenuTrigger>
-              <MenuContent align="center" className="max-h-80 w-72 overflow-y-auto">
+              <MenuContent align="center" collisionPadding={16} className="max-h-[min(20rem,70dvh)] w-[min(18rem,calc(100vw-2rem))] overflow-y-auto">
                 <MenuItem onSelect={() => useStudyUi.getState().setTimer({ subjectId: null, topicId: null, pageId: null })}>
                   <span className="size-2 rounded-full border border-[var(--border-strong)]" />
                   {st("timer_no_subject")}
                 </MenuItem>
                 {planSubjects.length ? <MenuSeparator /> : null}
                 {planSubjects.map((entry) => (
-                  <MenuItem key={entry.id} onSelect={() => useStudyUi.getState().setTimer({ subjectId: entry.id, topicId: null, pageId: null })}>
+                  <MenuItem
+                    key={entry.id}
+                    className="min-h-11 sm:min-h-0"
+                    onSelect={(event) => {
+                      if (entry.id === timer.subjectId) return;
+                      event.preventDefault();
+                      scrollTopicsRef.current = true;
+                      useStudyUi.getState().setTimer({ subjectId: entry.id, topicId: null, pageId: null });
+                    }}
+                  >
                     <SubjectDot color={entry.color} />
                     <span className="min-w-0 flex-1 truncate">{entry.name}</span>
                     {entry.id === timer.subjectId ? <Check className="!text-[var(--accent)]" /> : null}
                   </MenuItem>
                 ))}
                 {subject && subject.topics.length ? (
-                  <>
+                  <div ref={topicListRef}>
                     <MenuSeparator />
                     <MenuLabel>{subject.name}</MenuLabel>
                     {subject.topics.map((entry) => (
-                      <MenuItem key={entry.id} onSelect={() => useStudyUi.getState().setTimer({ topicId: entry.id, pageId: null })}>
+                      <MenuItem key={entry.id} className="min-h-11 sm:min-h-0" onSelect={() => useStudyUi.getState().setTimer({ topicId: entry.id, pageId: null })}>
                         <span className={cn("size-1.5 rounded-full", entry.id === timer.topicId ? "bg-[var(--accent)]" : "bg-[var(--border-strong)]")} />
                         <span className="truncate">{entry.name}</span>
                       </MenuItem>
                     ))}
-                  </>
+                  </div>
                 ) : null}
               </MenuContent>
             </Menu>

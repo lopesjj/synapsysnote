@@ -235,8 +235,18 @@ export function StudyHeader({
   );
 }
 
-export function GoalSwitcher({ compact = false, detail }: { compact?: boolean; detail?: ReactNode }) {
-  const { st } = useStudyT();
+export function GoalSwitcher({
+  compact = false,
+  detail,
+  variant = "field",
+  className,
+}: {
+  compact?: boolean;
+  detail?: ReactNode;
+  variant?: "field" | "title";
+  className?: string;
+}) {
+  const { st, textDir } = useStudyT();
   const router = useRouter();
   const { plans, focusPlan, actions } = useStudy();
   const live = plans.filter((plan) => !plan.archived);
@@ -267,12 +277,27 @@ export function GoalSwitcher({ compact = false, detail }: { compact?: boolean; d
               {detail ? <span className="mt-0.5 block truncate text-[13px] text-muted">{detail}</span> : null}
             </span>
           </button>
+        ) : variant === "title" ? (
+          <button
+            type="button"
+            className={cn(
+              "group -m-1 inline-flex max-w-full items-start gap-2 rounded-lg p-1 text-left transition hover:bg-[color-mix(in_oklab,var(--cover-fg)_6%,transparent)]",
+              className
+            )}
+            aria-label={st("goal_switch_label")}
+          >
+            <span dir={textDir} className="min-w-0 font-display text-[32px] font-medium leading-[1.02] tracking-[-0.02em] text-[var(--cover-fg)] [overflow-wrap:anywhere]">
+              {name}
+            </span>
+            <ChevronDown className="mt-2 size-5 shrink-0 text-[var(--cover-faint)] transition group-data-[state=open]:rotate-180" />
+          </button>
         ) : (
           <button
             type="button"
             className={cn(
               "group inline-flex h-9 max-w-[18rem] items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] pe-2.5 ps-1.5 text-[13px] text-ink transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]",
-              compact && "h-8 w-full max-w-none"
+              compact && "h-8 w-full max-w-none",
+              className
             )}
             aria-label={st("goal_switch_label")}
           >
@@ -288,7 +313,11 @@ export function GoalSwitcher({ compact = false, detail }: { compact?: boolean; d
           </button>
         )}
       </MenuTrigger>
-      <MenuContent align={detail !== undefined ? "start" : "end"} className="w-64">
+      <MenuContent
+        align={detail !== undefined || variant === "title" ? "start" : "end"}
+        collisionPadding={{ top: 12, right: 12, bottom: 96, left: 12 }}
+        className="max-h-[min(24rem,70dvh)] w-[min(16rem,calc(100vw-2rem))] overflow-y-auto"
+      >
         <MenuLabel>{st("goal_switch_label")}</MenuLabel>
         {live.map((plan) => (
           <MenuItem key={plan.id} onSelect={() => choose(plan)}>

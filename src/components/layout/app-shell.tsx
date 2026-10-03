@@ -406,7 +406,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           className={cn(
             "min-h-0 flex-1 overflow-y-auto",
             mobileSidebarOpen && "max-md:overflow-hidden",
-            focusPillVisible ? "pb-[calc(10.5rem+env(safe-area-inset-bottom,0px))] md:pb-[6.75rem]" : "pb-20 md:pb-0"
+            focusPillVisible ? "pb-[calc(10.5rem+env(safe-area-inset-bottom,0px))] md:pb-[6.75rem]" : "pb-[calc(5.45rem+env(safe-area-inset-bottom,0px))] md:pb-0"
           )}
         >
           {children}
@@ -690,7 +690,7 @@ function BottomNav({ inert = false }: { inert?: boolean }) {
   return (
     <nav
       inert={inert ? true : undefined}
-      className="fixed inset-x-0 bottom-0 z-50 flex border-t border-[var(--border)] bg-[var(--surface)]/95 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl md:hidden"
+      className="fixed inset-x-0 bottom-0 z-50 flex border-t border-[var(--border)] bg-[var(--surface)]/95 pt-2 pb-[calc(0.95rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl md:hidden"
       aria-label={t("main_navigation")}
     >
       <MobileNavItem
