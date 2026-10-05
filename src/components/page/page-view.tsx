@@ -285,6 +285,15 @@ export function PageView({ pageId }: { pageId: string }) {
   const hasEditedRef = useRef(false);
   const editorBaseRef = useRef<{ pageId: string; base: PageWriteBase } | null>(null);
   const announcedPageIdRef = useRef<string | null>(null);
+  const [stickyHeaderHeight, setStickyHeaderHeight] = useState<number | null>(null);
+  const measureStickyHeader = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    const update = () => setStickyHeaderHeight(node.offsetHeight);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   const zenMode = useUiStore((state) => state.zenMode);
   const showSaveIndicator = useUiStore((state) => state.showSaveIndicator);
@@ -620,8 +629,20 @@ export function PageView({ pageId }: { pageId: string }) {
   const showCoverHeader = hasCover && !isArchived;
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      style={
+        {
+          "--page-sticky-offset": showCoverHeader
+            ? "env(safe-area-inset-top, 0px)"
+            : stickyHeaderHeight
+              ? `${stickyHeaderHeight}px`
+              : undefined,
+        } as React.CSSProperties
+      }
+    >
       <div
+        ref={measureStickyHeader}
         className={cn(
           "z-30 flex items-center gap-2 px-4 py-2 max-md:ps-[max(1rem,env(safe-area-inset-left,0px))] max-md:pt-[calc(0.5rem+env(safe-area-inset-top,0px))] md:px-8",
           showCoverHeader

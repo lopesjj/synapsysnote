@@ -725,8 +725,9 @@ function BottomNav({ inert = false }: { inert?: boolean }) {
         label={activeModule === "study" ? st("module_notes") : st("module_study")}
         active={false}
         onClick={() => {
-          switchModule(activeModule === "study" ? "notes" : "study");
-          useUiStore.getState().setMobileSidebarOpen(true);
+          const next = activeModule === "study" ? "notes" : "study";
+          switchModule(next);
+          router.push(next === "study" ? "/home/study" : "/home/notes");
         }}
       />
     </nav>

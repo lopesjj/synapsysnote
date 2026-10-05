@@ -58,8 +58,8 @@ export function ImportTreeView({
       return (
         <div key={node.id}>
           <div
-            className="group flex items-center gap-2 rounded-[var(--radius-xs)] py-1.5 pr-2 transition-colors hover:bg-[var(--surface-hover)]"
-            style={{ paddingLeft: `${8 + depth * 20}px` }}
+            className="group flex items-center gap-2 rounded-[var(--radius-xs)] py-1.5 pr-2 ps-[calc(8px_+_var(--tree-depth)_*_12px)] transition-colors hover:bg-[var(--surface-hover)] sm:ps-[calc(8px_+_var(--tree-depth)_*_20px)]"
+            style={{ "--tree-depth": depth } as React.CSSProperties}
           >
             <button
               type="button"
@@ -90,13 +90,13 @@ export function ImportTreeView({
             <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{node.title}</span>
 
             {node.modifiedTime ? (
-              <span className="shrink-0 text-[11px] text-faint">
+              <span className="hidden shrink-0 text-[11px] text-faint sm:inline">
                 {formatRelative(new Date(node.modifiedTime).getTime(), language)}
               </span>
             ) : null}
 
             {isContainer && hasChildren ? (
-              <span className="shrink-0 text-[11px] text-faint">
+              <span className="hidden shrink-0 text-[11px] text-faint sm:inline">
                 {node.children!.length}{" "}
                 {node.children!.length === 1 ? t("wizard_unit_item") : t("wizard_unit_items")}
               </span>
@@ -110,7 +110,7 @@ export function ImportTreeView({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 px-5 pt-4">
+      <div className="flex items-center gap-2 px-4 pt-4 sm:px-5">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
           <Input
@@ -131,8 +131,8 @@ export function ImportTreeView({
         </Button>
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-b border-[var(--border)] px-5 pb-2.5">
-        <label className="flex cursor-pointer items-center gap-2.5 text-[12.5px] text-ink">
+      <div className="mt-3 flex flex-col gap-2 border-b border-[var(--border)] px-4 pb-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <label className="flex cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[12.5px] text-ink">
           <Checkbox
             checked={selectedCount === totalCount && totalCount > 0}
             onCheckedChange={(value) => toggleAll(value === true)}
@@ -142,7 +142,7 @@ export function ImportTreeView({
             ({totalCount} {totalCount === 1 ? t("wizard_unit_item") : t("wizard_unit_items")})
           </span>
         </label>
-        <div className="flex items-center gap-3 text-[11.5px]">
+        <div className="flex items-center justify-between gap-3 text-[11.5px] sm:justify-end">
           <div className="flex items-center gap-1.5 text-muted">
             <button type="button" onClick={expandAll} className="transition hover:text-ink hover:underline">
               {t("wizard_expand_all")}
@@ -158,9 +158,9 @@ export function ImportTreeView({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-2">
+      <div className="min-h-0 flex-1 overflow-y-auto py-2">
         {loading ? (
-          <div className="space-y-2 px-5 py-3">
+          <div className="space-y-2 px-4 py-3 sm:px-5">
             {Array.from({ length: 7 }).map((_, index) => (
               <div
                 key={index}
@@ -173,7 +173,7 @@ export function ImportTreeView({
             ))}
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center gap-3 px-8 py-14 text-center">
+          <div className="flex flex-col items-center gap-3 px-5 py-12 text-center sm:px-8 sm:py-14">
             <AlertTriangle className="size-6 text-[var(--warning)]" />
             <p className="text-[13px] text-ink">{localizeErrorMessage(error, t)}</p>
             <Button variant="secondary" onClick={onRetry}>

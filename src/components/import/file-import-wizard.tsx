@@ -17,7 +17,8 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
+import { DialogHeader, DialogShell } from "@/components/ui/dialog";
+import { WizardFooter, WizardSteps } from "./wizard-footer";
 import { Button } from "@/components/ui/button";
 import { Badge, Input, Progress, Switch } from "@/components/ui/primitives";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
@@ -133,6 +134,7 @@ export function FileImportWizard({
   return (
     <DialogShell open={open} onOpenChange={close} className="max-w-2xl" closeAriaLabel={t("close")}>
       <DialogHeader
+        className="px-4 pr-12 sm:px-5 sm:pr-12"
         title={t("fimp_title")}
         description={`${PROVIDER_LABEL[provider]} · ${t(SUBTITLE_KEY[provider])}`}
         icon={<Upload className="size-4" />}
@@ -140,7 +142,7 @@ export function FileImportWizard({
 
       <div className="relative min-h-0 flex-1 overflow-y-auto">
         {step === "select" ? (
-          <div className="space-y-4 px-5 py-5">
+          <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
             <div
               onDragOver={(event) => {
                 event.preventDefault();
@@ -153,7 +155,7 @@ export function FileImportWizard({
                 handleFiles(event.dataTransfer.files);
               }}
               className={cn(
-                "flex flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-dashed px-6 py-10 text-center transition",
+                "flex flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-dashed px-4 py-8 text-center transition sm:px-6 sm:py-10",
                 dragging
                   ? "border-[var(--accent)] bg-[var(--accent-soft)]"
                   : "border-[var(--border-strong)] bg-[var(--surface-2)]"
@@ -184,7 +186,7 @@ export function FileImportWizard({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
                   {t("fimp_google_url_label")}
                 </p>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
                     value={docUrl}
                     onChange={(event) => setDocUrl(event.target.value)}
@@ -250,7 +252,7 @@ export function FileImportWizard({
         ) : null}
 
         {step === "review" ? (
-          <div className="space-y-5 px-5 py-5">
+          <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5">
             <div className="space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
                 {t("fimp_destination")}
@@ -332,16 +334,16 @@ export function FileImportWizard({
         ) : null}
 
         {step === "progress" ? (
-          <div className="space-y-4 px-5 py-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Badge tone={importer.results ? "success" : "accent"}>
+          <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
+            <div className="flex items-start justify-between gap-3 sm:items-center">
+              <div className="flex min-w-0 flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+                <Badge tone={importer.results ? "success" : "accent"} className="shrink-0">
                   {importer.results ? <Check className="size-3" /> : <Loader2 className="size-3 animate-spin" />}
                   {importer.results ? t("fimp_done_title") : t("fimp_importing")}
                 </Badge>
-                <span className="truncate text-[12.5px] text-muted">{importer.progress.currentTitle}</span>
+                <span className="max-w-full truncate text-[12.5px] text-muted">{importer.progress.currentTitle}</span>
               </div>
-              <span className="font-mono text-[12.5px] tabular-nums text-ink">{importer.percent}%</span>
+              <span className="shrink-0 font-mono text-[12.5px] tabular-nums text-ink">{importer.percent}%</span>
             </div>
 
             <Progress value={importer.percent} />
@@ -400,91 +402,76 @@ export function FileImportWizard({
         ) : null}
       </div>
 
-      <DialogFooter>
-        <div className="flex items-center gap-2 text-[11.5px] text-muted">
-          <StepDot active={step === "select"} done={step !== "select"} />
-          <StepDot active={step === "review"} done={step === "progress"} />
-          <StepDot active={step === "progress"} />
-          <span className="ml-1">
-            {step === "select" ? t("wizard_step1") : step === "review" ? t("wizard_step2") : t("wizard_step3")}
-          </span>
-        </div>
+      <WizardFooter
+        steps={
+          <WizardSteps
+            current={step === "select" ? 1 : step === "review" ? 2 : 3}
+            label={step === "select" ? t("wizard_step1") : step === "review" ? t("wizard_step2") : t("wizard_step3")}
+          />
+        }
+      >
+        {step === "select" ? (
+          <>
+            <Button variant="ghost" onClick={() => close(false)}>
+              {t("wizard_cancel")}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!importer.notes.length || importer.parsing}
+              onClick={() => setStepOverride("review")}
+            >
+              {t("fimp_import_button")}
+              <ArrowRight />
+            </Button>
+          </>
+        ) : null}
 
-        <div className="flex items-center gap-2">
-          {step === "select" ? (
+        {step === "review" ? (
+          <>
+            <Button variant="ghost" onClick={() => setStepOverride("select")}>
+              <ArrowLeft /> {t("wizard_back")}
+            </Button>
+            <Button variant="primary" disabled={!importer.notes.length} onClick={handleStart}>
+              {t("fimp_import_action", { count: importer.notes.length })}
+            </Button>
+          </>
+        ) : null}
+
+        {step === "progress" ? (
+          importer.results ? (
             <>
-              <Button variant="ghost" onClick={() => close(false)}>
-                {t("wizard_cancel")}
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  importer.reset();
+                  setStepOverride("select");
+                }}
+              >
+                {t("wizard_new_import")}
               </Button>
               <Button
                 variant="primary"
-                disabled={!importer.notes.length || importer.parsing}
-                onClick={() => setStepOverride("review")}
+                onClick={() => {
+                  onOpenChange(false);
+                  if (firstPageId) router.push(`/home/p/${firstPageId}`);
+                }}
               >
-                {t("fimp_import_button")}
-                <ArrowRight />
+                <Check /> {t("wizard_finish")}
               </Button>
             </>
-          ) : null}
-
-          {step === "review" ? (
+          ) : (
             <>
-              <Button variant="ghost" onClick={() => setStepOverride("select")}>
-                <ArrowLeft /> {t("wizard_back")}
+              <Button variant="ghost" onClick={() => close(false)}>
+                {t("wizard_continue_background")}
               </Button>
-              <Button variant="primary" disabled={!importer.notes.length} onClick={handleStart}>
-                {t("fimp_import_action", { count: importer.notes.length })}
+              <Button variant="danger" onClick={importer.cancel}>
+                <X /> {t("wizard_cancel_import")}
               </Button>
             </>
-          ) : null}
-
-          {step === "progress" ? (
-            importer.results ? (
-              <>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    importer.reset();
-                    setStepOverride("select");
-                  }}
-                >
-                  {t("wizard_new_import")}
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    onOpenChange(false);
-                    if (firstPageId) router.push(`/home/p/${firstPageId}`);
-                  }}
-                >
-                  <Check /> {t("wizard_finish")}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="ghost" onClick={() => close(false)}>
-                  {t("wizard_continue_background")}
-                </Button>
-                <Button variant="danger" onClick={importer.cancel}>
-                  <X /> {t("wizard_cancel_import")}
-                </Button>
-              </>
-            )
-          ) : null}
-        </div>
-      </DialogFooter>
+          )
+        ) : null}
+      </WizardFooter>
     </DialogShell>
-  );
-}
-
-function StepDot({ active, done }: { active?: boolean; done?: boolean }) {
-  return (
-    <span
-      className={cn(
-        "size-1.5 rounded-full transition-colors",
-        active || done ? "bg-[var(--accent)]" : "bg-[var(--border-strong)]"
-      )}
-    />
   );
 }
 

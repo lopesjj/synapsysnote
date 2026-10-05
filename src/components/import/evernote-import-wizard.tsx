@@ -16,7 +16,8 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
-import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
+import { DialogHeader, DialogShell } from "@/components/ui/dialog";
+import { WizardFooter } from "./wizard-footer";
 import { Button } from "@/components/ui/button";
 import { Badge, Progress, Switch } from "@/components/ui/primitives";
 import { useTranslation, localizeErrorMessage } from "@/lib/i18n/translations";
@@ -125,6 +126,7 @@ export function EvernoteImportWizard({
   return (
     <DialogShell open={open} onOpenChange={close} className="max-w-2xl" closeAriaLabel={t("close")}>
       <DialogHeader
+        className="px-4 pr-12 sm:px-5 sm:pr-12"
         title="Evernote"
         description={
           connected
@@ -134,9 +136,9 @@ export function EvernoteImportWizard({
         icon={<NotebookPen className="size-4 text-emerald-400" />}
       />
 
-      <div className="relative flex min-h-[380px] max-h-[540px] flex-1 flex-col overflow-hidden">
+      <div className="relative flex min-h-[min(380px,55dvh)] flex-1 flex-col overflow-hidden sm:max-h-[540px] sm:min-h-[380px]">
         {step === "connect" ? (
-          <div className="overflow-y-auto px-6 py-7">
+          <div className="overflow-y-auto px-4 py-6 sm:px-6 sm:py-7">
             <div className="flex flex-col items-center text-center">
               <div className="flex size-14 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] shadow-sm">
                 <NotebookPen className="size-7 text-emerald-400" />
@@ -255,7 +257,7 @@ export function EvernoteImportWizard({
         ) : null}
 
         {step === "preview" ? (
-          <div className="space-y-5 overflow-y-auto px-5 py-4">
+          <div className="space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
             <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] p-4">
               <div className="text-[13px] font-medium text-ink">{t("import_destination_title")}</div>
               <p className="mt-1 text-[12px] text-muted">{t("import_destination_desc")}</p>
@@ -298,7 +300,7 @@ export function EvernoteImportWizard({
         ) : null}
 
         {step === "progress" ? (
-          <div className="space-y-4 overflow-y-auto px-5 py-6">
+          <div className="space-y-4 overflow-y-auto px-4 py-5 sm:px-5 sm:py-6">
             <div className="space-y-2">
               <div className="flex items-center justify-between text-[12.5px]">
                 <span className="font-medium text-ink">
@@ -331,8 +333,8 @@ export function EvernoteImportWizard({
                     ) : (
                       <CircleDashed className="size-3.5 shrink-0 text-red-400" />
                     )}
-                    <span className="flex-1 truncate font-medium text-ink">{item.title}</span>
-                    <Badge tone={item.status === "done" ? "success" : "danger"}>
+                    <span className="min-w-0 flex-1 truncate font-medium text-ink">{item.title}</span>
+                    <Badge tone={item.status === "done" ? "success" : "danger"} className="shrink-0">
                       {item.status === "done" ? t("status_completed") : t("status_failed")}
                     </Badge>
                   </div>
@@ -343,70 +345,68 @@ export function EvernoteImportWizard({
         ) : null}
       </div>
 
-      <DialogFooter>
-        <div className="flex items-center gap-2">
-          {step === "select" ? (
-            <>
-              <Button variant="ghost" onClick={() => onOpenChange(false)}>
-                {t("wizard_cancel")}
-              </Button>
+      <WizardFooter>
+        {step === "select" ? (
+          <>
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              {t("wizard_cancel")}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!selectedIds.size}
+              onClick={() => setStepOverride("preview")}
+            >
+              {t("wizard_review", { count: selectedIds.size ? `(${selectedIds.size})` : "" })}
+              <ArrowRight className="size-3.5" />
+            </Button>
+          </>
+        ) : null}
+
+        {step === "preview" ? (
+          <>
+            <Button variant="ghost" onClick={() => setStepOverride("select")}>
+              <ArrowLeft className="size-3.5" /> {t("wizard_back")}
+            </Button>
+            <Button variant="primary" disabled={running} onClick={handleStart}>
+              {running ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              {t("wizard_import_action", {
+                count: selectedIds.size,
+                unit: selectedIds.size === 1 ? t("wizard_unit_item") : t("wizard_unit_items"),
+              })}
+            </Button>
+          </>
+        ) : null}
+
+        {step === "progress" && running ? (
+          <>
+            <Button variant="ghost" onClick={() => close(false)}>
+              {t("wizard_continue_background")}
+            </Button>
+            <Button variant="danger" onClick={cancel}>
+              {t("wizard_cancel_import")}
+            </Button>
+          </>
+        ) : null}
+
+        {step === "progress" && !running && results ? (
+          <>
+            {firstCreatedId ? (
               <Button
                 variant="primary"
-                disabled={!selectedIds.size}
-                onClick={() => setStepOverride("preview")}
+                onClick={() => {
+                  close(false);
+                  router.push(`/home/p/${firstCreatedId}`);
+                }}
               >
-                {t("wizard_review", { count: selectedIds.size ? `(${selectedIds.size})` : "" })}
-                <ArrowRight className="size-3.5" />
+                {t("open_imported_page")}
               </Button>
-            </>
-          ) : null}
-
-          {step === "preview" ? (
-            <>
-              <Button variant="ghost" onClick={() => setStepOverride("select")}>
-                <ArrowLeft className="size-3.5" /> {t("wizard_back")}
-              </Button>
-              <Button variant="primary" disabled={running} onClick={handleStart}>
-                {running ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                {t("wizard_import_action", {
-                  count: selectedIds.size,
-                  unit: selectedIds.size === 1 ? t("wizard_unit_item") : t("wizard_unit_items"),
-                })}
-              </Button>
-            </>
-          ) : null}
-
-          {step === "progress" && running ? (
-            <>
-              <Button variant="ghost" onClick={() => close(false)}>
-                {t("wizard_continue_background")}
-              </Button>
-              <Button variant="danger" onClick={cancel}>
-                {t("wizard_cancel_import")}
-              </Button>
-            </>
-          ) : null}
-
-          {step === "progress" && !running && results ? (
-            <>
-              {firstCreatedId ? (
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    close(false);
-                    router.push(`/home/p/${firstCreatedId}`);
-                  }}
-                >
-                  {t("open_imported_page")}
-                </Button>
-              ) : null}
-              <Button variant="secondary" onClick={() => close(false)}>
-                {t("close")}
-              </Button>
-            </>
-          ) : null}
-        </div>
-      </DialogFooter>
+            ) : null}
+            <Button variant="secondary" onClick={() => close(false)}>
+              {t("close")}
+            </Button>
+          </>
+        ) : null}
+      </WizardFooter>
     </DialogShell>
   );
 }

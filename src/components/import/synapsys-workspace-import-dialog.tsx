@@ -14,7 +14,8 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
+import { DialogHeader, DialogShell } from "@/components/ui/dialog";
+import { WizardFooter } from "./wizard-footer";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/primitives";
 import { useWorkspace } from "@/lib/data/provider";
@@ -298,13 +299,14 @@ export function SynapsysWorkspaceImportDialog({
   return (
     <DialogShell open={open} onOpenChange={handleClose} className="max-w-xl">
       <DialogHeader
+        className="px-4 pr-12 sm:px-5 sm:pr-12"
         title={t("synapsys_import_dialog_title")}
         description={t("synapsys_import_dialog_desc")}
         icon={<FolderArchive className="size-4" />}
         iconClassName="bg-indigo-500/10 text-indigo-400"
       />
 
-      <div className="p-5 space-y-4">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
         {errorMsg && (
           <div className="flex items-start gap-2.5 p-3 rounded-[var(--radius-md)] bg-red-500/10 border border-red-500/20 text-red-400 text-[12.5px]">
             <AlertCircle className="size-4 shrink-0 mt-0.5" />
@@ -328,7 +330,7 @@ export function SynapsysWorkspaceImportDialog({
             }}
             onDrop={handleDrop}
             className={cn(
-              "flex flex-col items-center justify-center p-8 rounded-[var(--radius-lg)] border-2 border-dashed transition cursor-pointer select-none",
+              "flex flex-col items-center justify-center p-6 sm:p-8 rounded-[var(--radius-lg)] border-2 border-dashed transition cursor-pointer select-none",
               dragActive
                 ? "border-[var(--primary)] bg-[var(--primary)]/5"
                 : "border-[var(--border)] hover:border-[var(--border-strong)] bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/50",
@@ -386,18 +388,18 @@ export function SynapsysWorkspaceImportDialog({
             </div>
 
             <div className="p-4 rounded-[var(--radius-md)] bg-[var(--surface-2)]/40 border border-[var(--border)] space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-[11px] font-semibold tracking-wider uppercase text-muted">
                   {t("synapsys_import_summary_title")}
                 </span>
                 {workspaceOriginName ? (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                  <span className="inline-block max-w-full truncate px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                     {workspaceOriginName}
                   </span>
                 ) : null}
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5 text-[12.5px]">
+              <div className="grid grid-cols-1 gap-2.5 text-[12.5px] min-[420px]:grid-cols-2">
                 <div className="flex items-center gap-2 text-ink">
                   <FolderTree className="size-3.5 text-blue-400 shrink-0" />
                   <span>
@@ -431,7 +433,7 @@ export function SynapsysWorkspaceImportDialog({
                     })}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-ink col-span-2">
+                <div className="flex items-center gap-2 text-ink min-[420px]:col-span-2">
                   <HardDrive className="size-3.5 text-cyan-400 shrink-0" />
                   <span>
                     {t("synapsys_import_files_count", {
@@ -481,12 +483,12 @@ export function SynapsysWorkspaceImportDialog({
               </div>
             ) : (
               <div className="space-y-2.5 pt-2">
-                <div className="flex items-center justify-between text-[12.5px]">
-                  <span className="font-medium text-ink flex items-center gap-2">
-                    <Loader2 className="size-3.5 animate-spin text-[var(--primary)]" />
+                <div className="flex items-start justify-between gap-3 text-[12.5px]">
+                  <span className="font-medium text-ink flex min-w-0 items-center gap-2">
+                    <Loader2 className="size-3.5 shrink-0 animate-spin text-[var(--primary)]" />
                     {displayProgressText}
                   </span>
-                  <span className="text-muted">{displayProgressPercent}%</span>
+                  <span className="shrink-0 text-muted">{displayProgressPercent}%</span>
                 </div>
                 <Progress value={displayProgressPercent} className="h-2" />
               </div>
@@ -495,7 +497,7 @@ export function SynapsysWorkspaceImportDialog({
         )}
       </div>
 
-      <DialogFooter>
+      <WizardFooter>
         {effectiveRestoring ? (
           <>
             <Button
@@ -535,7 +537,7 @@ export function SynapsysWorkspaceImportDialog({
             </Button>
           </>
         )}
-      </DialogFooter>
+      </WizardFooter>
     </DialogShell>
   );
 }

@@ -8,6 +8,8 @@ import { Menu, MenuContent, MenuTrigger } from "@/components/ui/menu";
 import { useTranslation } from "@/lib/i18n/translations";
 import { cn } from "@/lib/utils";
 
+const TOUCH_CONTROLS_TIMEOUT_MS = 10_000;
+
 export function CoverPicker({
   coverUrl,
   coverPosition,
@@ -38,8 +40,20 @@ export function CoverPicker({
   const [isRepositioning, setIsRepositioning] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [currentPos, setCurrentPos] = useState<number>(coverPosition ?? 0.5);
+  const [touchControlsVisible, setTouchControlsVisible] = useState(false);
 
   const isWebDevice = () => typeof window !== "undefined" && window.innerWidth >= 768;
+
+  useEffect(() => {
+    if (!touchControlsVisible || menuOpen) return;
+    const timer = window.setTimeout(() => setTouchControlsVisible(false), TOUCH_CONTROLS_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [touchControlsVisible, menuOpen]);
+
+  const handleCoverTap = () => {
+    if (readOnly || isRepositioning || isWebDevice()) return;
+    setTouchControlsVisible((visible) => !visible);
+  };
 
   useEffect(() => {
     if (!isRepositioning) {
@@ -101,6 +115,7 @@ export function CoverPicker({
   const handleSelectCover = (newCoverUrl: string | null) => {
     onChange(newCoverUrl);
     setMenuOpen(false);
+    if (!newCoverUrl) setTouchControlsVisible(false);
     if (newCoverUrl && isWebDevice()) {
       setCurrentPos(0.5);
       setIsRepositioning(true);
@@ -408,6 +423,7 @@ export function CoverPicker({
           <div
             ref={containerRef}
             onPointerDown={handlePointerDown}
+            onClick={handleCoverTap}
             className={cn(
               "h-[28vh] max-h-[360px] min-h-[200px] w-full bg-[var(--surface-2)] md:min-h-[240px] select-none",
               isRepositioning && "touch-none",
@@ -464,7 +480,14 @@ export function CoverPicker({
               </div>
             </div>
           ) : !readOnly ? (
-            <div className="absolute top-12 right-3 z-20 flex items-center gap-1.5 opacity-100 pointer-events-auto transition-opacity duration-200 sm:top-14 sm:right-6 md:right-8 md:opacity-0 md:pointer-events-none md:group-hover/cover:opacity-100 md:group-hover/cover:pointer-events-auto md:focus-within:opacity-100 md:focus-within:pointer-events-auto">
+            <div
+              className={cn(
+                "absolute right-3 top-[calc(4rem+env(safe-area-inset-top,0px))] z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center justify-end gap-1.5 transition-opacity duration-200 sm:right-6 md:top-14 md:right-8 md:opacity-0 md:pointer-events-none md:group-hover/cover:opacity-100 md:group-hover/cover:pointer-events-auto md:focus-within:opacity-100 md:focus-within:pointer-events-auto",
+                touchControlsVisible
+                  ? "max-md:opacity-100 max-md:pointer-events-auto"
+                  : "max-md:opacity-0 max-md:pointer-events-none"
+              )}
+            >
               <Menu open={menuOpen} onOpenChange={setMenuOpen}>
                 <MenuTrigger asChild>
                   <button

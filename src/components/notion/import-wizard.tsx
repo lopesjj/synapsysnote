@@ -19,7 +19,8 @@ import {
 import { toast } from "sonner";
 import type { NotionTreeNode } from "@/types/models";
 import { useNotionImport } from "@/hooks/use-notion-import";
-import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
+import { DialogHeader, DialogShell } from "@/components/ui/dialog";
+import { WizardFooter, WizardSteps } from "@/components/import/wizard-footer";
 import { Button } from "@/components/ui/button";
 import { Badge, Checkbox, Progress, Skeleton, Switch } from "@/components/ui/primitives";
 import { cn, formatBytes } from "@/lib/utils";
@@ -126,6 +127,7 @@ export function ImportWizard({
       className="max-w-3xl"
     >
       <DialogHeader
+        className="px-4 pr-12 sm:px-5 sm:pr-12"
         title={t("import_from_notion_title")}
         description={
           integration?.connected
@@ -174,124 +176,100 @@ export function ImportWizard({
         ) : null}
       </div>
 
-      <DialogFooter>
-        <div className="flex items-center gap-2 text-[11.5px] text-muted">
-          {step === "select" ? (
-            <>
-              <StepDot active /> <StepDot /> <StepDot />
-              <span className="ml-1">{t("wizard_step1")}</span>
-            </>
-          ) : null}
-          {step === "preview" ? (
-            <>
-              <StepDot done /> <StepDot active /> <StepDot />
-              <span className="ml-1">{t("wizard_step2")}</span>
-            </>
-          ) : null}
-          {step === "progress" ? (
-            <>
-              <StepDot done /> <StepDot done /> <StepDot active />
-              <span className="ml-1">{t("wizard_step3")}</span>
-            </>
-          ) : null}
-        </div>
+      <WizardFooter
+        steps={
+          step === "select" ? (
+            <WizardSteps current={1} label={t("wizard_step1")} />
+          ) : step === "preview" ? (
+            <WizardSteps current={2} label={t("wizard_step2")} />
+          ) : step === "progress" ? (
+            <WizardSteps current={3} label={t("wizard_step3")} />
+          ) : null
+        }
+      >
+        {step === "select" ? (
+          <>
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              {t("wizard_cancel")}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!selected.size}
+              onClick={() => {
+                setReimportConfirmed(false);
+                setStepOverride("preview");
+              }}
+            >
+              {t("wizard_review", { count: selected.size ? `(${selected.size})` : "" })}
+              <ArrowRight />
+            </Button>
+          </>
+        ) : null}
 
-        <div className="flex items-center gap-2">
-          {step === "select" ? (
+        {step === "preview" ? (
+          <>
+            <Button variant="ghost" onClick={() => setStepOverride("select")}>
+              <ArrowLeft /> {t("wizard_back")}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={submitting || needsReimportConfirmation}
+              onClick={handleStart}
+            >
+              {submitting ? <Loader2 className="animate-spin" /> : null}
+              {t("wizard_import_action", {
+                count: summary.total,
+                unit: summary.total === 1 ? t("wizard_unit_item") : t("wizard_unit_items"),
+              })}
+            </Button>
+          </>
+        ) : null}
+
+        {step === "progress" ? (
+          finished ? (
             <>
-              <Button variant="ghost" onClick={() => onOpenChange(false)}>
-                {t("wizard_cancel")}
-              </Button>
               <Button
-                variant="primary"
-                disabled={!selected.size}
+                variant="ghost"
                 onClick={() => {
-                  setReimportConfirmed(false);
-                  setStepOverride("preview");
+                  reset();
+                  setStepOverride("select");
                 }}
               >
-                {t("wizard_review", { count: selected.size ? `(${selected.size})` : "" })}
-                <ArrowRight />
-              </Button>
-            </>
-          ) : null}
-
-          {step === "preview" ? (
-            <>
-              <Button variant="ghost" onClick={() => setStepOverride("select")}>
-                <ArrowLeft /> {t("wizard_back")}
+                {t("wizard_new_import")}
               </Button>
               <Button
                 variant="primary"
-                disabled={submitting || needsReimportConfirmation}
-                onClick={handleStart}
+                onClick={() => {
+                  const imported = job?.items.find(
+                    (item) => item.status === "done" && item.appId && item.type === "page"
+                  );
+                  onOpenChange(false);
+                  if (imported?.appId) router.push(`/home/p/${imported.appId}`);
+                }}
               >
-                {submitting ? <Loader2 className="animate-spin" /> : null}
-                {t("wizard_import_action", {
-                  count: summary.total,
-                  unit: summary.total === 1 ? t("wizard_unit_item") : t("wizard_unit_items"),
-                })}
+                <Check /> {t("wizard_finish")}
               </Button>
             </>
-          ) : null}
-
-          {step === "progress" ? (
-            finished ? (
-              <>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    reset();
-                    setStepOverride("select");
-                  }}
-                >
-                  {t("wizard_new_import")}
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    const imported = job?.items.find(
-                      (item) => item.status === "done" && item.appId && item.type === "page"
-                    );
-                    onOpenChange(false);
-                    if (imported?.appId) router.push(`/home/p/${imported.appId}`);
-                  }}
-                >
-                  <Check /> {t("wizard_finish")}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="ghost" onClick={() => onOpenChange(false)}>
-                  {t("wizard_continue_background")}
-                </Button>
-                <Button variant="danger" onClick={() => void cancel()}>
-                  <X /> {t("wizard_cancel_import")}
-                </Button>
-              </>
-            )
-          ) : null}
-        </div>
-      </DialogFooter>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={() => onOpenChange(false)}>
+                {t("wizard_continue_background")}
+              </Button>
+              <Button variant="danger" onClick={() => void cancel()}>
+                <X /> {t("wizard_cancel_import")}
+              </Button>
+            </>
+          )
+        ) : null}
+      </WizardFooter>
     </DialogShell>
-  );
-}
-
-function StepDot({ active, done }: { active?: boolean; done?: boolean }) {
-  return (
-    <span
-      className={cn(
-        "size-1.5 rounded-full transition-colors",
-        done ? "bg-[var(--accent)]" : active ? "bg-[var(--accent)]" : "bg-[var(--border-strong)]"
-      )}
-    />
   );
 }
 
 function ConnectStep({ connecting, onConnect }: { connecting: boolean; onConnect: () => void }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col items-center justify-center gap-5 px-8 py-14 text-center">
+    <div className="flex flex-col items-center justify-center gap-5 px-5 py-10 text-center sm:px-8 sm:py-14">
       <div className="space-y-1.5">
         <h3 className="text-[15px] font-semibold text-ink">{t("wizard_connect_heading")}</h3>
         <p className="mx-auto max-w-md text-[12.5px] leading-relaxed text-muted">
@@ -366,7 +344,7 @@ function SelectStep({
 
   if (loading) {
     return (
-      <div className="space-y-2 px-5 py-5">
+      <div className="space-y-2 px-4 py-5 sm:px-5">
         {Array.from({ length: 7 }).map((_, index) => (
           <div key={index} className="flex items-center gap-3" style={{ paddingLeft: `${(index % 3) * 20}px` }}>
             <Skeleton className="size-4 rounded" />
@@ -380,7 +358,7 @@ function SelectStep({
 
   if (error) {
     return (
-      <div className="flex flex-col items-center gap-3 px-8 py-16 text-center">
+      <div className="flex flex-col items-center gap-3 px-5 py-12 text-center sm:px-8 sm:py-16">
         <AlertTriangle className="size-6 text-[var(--warning)]" />
         <p className="text-[13px] text-ink">{localizeErrorMessage(error, t)}</p>
         <Button variant="secondary" onClick={onRetry}>
@@ -398,8 +376,8 @@ function SelectStep({
       return (
         <div key={node.id}>
           <div
-            className="group flex items-center gap-2 rounded-[var(--radius-xs)] py-1.5 pr-2 transition-colors hover:bg-[var(--surface-hover)]"
-            style={{ paddingLeft: `${8 + depth * 20}px` }}
+            className="group flex items-center gap-2 rounded-[var(--radius-xs)] py-1.5 pr-2 ps-[calc(8px_+_var(--tree-depth)_*_12px)] transition-colors hover:bg-[var(--surface-hover)] sm:ps-[calc(8px_+_var(--tree-depth)_*_20px)]"
+            style={{ "--tree-depth": depth } as React.CSSProperties}
           >
             <button
               type="button"
@@ -430,23 +408,23 @@ function SelectStep({
             <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{node.title}</span>
 
             {existingNotionIds?.has(node.id) ? (
-              <Badge tone="neutral" className="text-[10.5px] opacity-75">
+              <Badge tone="neutral" className="shrink-0 text-[10.5px] opacity-75">
                 {t("wizard_already_in_synapsys")}
               </Badge>
             ) : null}
 
             {node.type === "database" ? (
               hasChildren ? (
-                <Badge tone="accent">
+                <Badge tone="accent" className="shrink-0">
                   {node.children!.length} {node.children!.length === 1 ? t("note_singular") : t("notes_plural")}
                 </Badge>
               ) : (
-                <Badge tone="accent">
+                <Badge tone="accent" className="shrink-0">
                   {node.childCount ?? 0} {t("wizard_summary_records").toLowerCase()}
                 </Badge>
               )
             ) : hasChildren ? (
-              <span className="text-[11px] text-faint">
+              <span className="hidden shrink-0 text-[11px] text-faint sm:inline">
                 {node.children!.length} {node.children!.length === 1 ? t("wizard_unit_item") : t("wizard_unit_items")}
               </span>
             ) : null}
@@ -463,8 +441,8 @@ function SelectStep({
 
   return (
     <div>
-      <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-2.5">
-        <label className="flex cursor-pointer items-center gap-2.5 text-[12.5px] text-ink">
+      <div className="flex flex-col gap-2 border-b border-[var(--border)] px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <label className="flex cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[12.5px] text-ink">
           <Checkbox
             checked={selectedCount === total && total > 0}
             onCheckedChange={(value) => toggleAll(value === true)}
@@ -472,7 +450,7 @@ function SelectStep({
           {t("wizard_import_all")}
           <span className="text-faint">({total} {total === 1 ? t("wizard_unit_item") : t("wizard_unit_items")})</span>
         </label>
-        <div className="flex items-center gap-3 text-[11.5px]">
+        <div className="flex items-center justify-between gap-3 text-[11.5px] sm:justify-end">
           <div className="flex items-center gap-1.5 text-muted">
             <button
               type="button"
@@ -571,8 +549,8 @@ function PreviewStep({
   ];
 
   return (
-    <div className="space-y-5 px-5 py-5">
-      <div className="grid grid-cols-3 gap-3">
+    <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <SummaryCard label={t("wizard_summary_pages")} value={summary.pages} />
         <SummaryCard label={t("wizard_summary_databases")} value={summary.databases} />
         <SummaryCard label={t("wizard_summary_records")} value={summary.rows} />
@@ -611,12 +589,12 @@ function PreviewStep({
         </div>
 
         <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5 text-xs">
+          <div className="flex w-full items-center gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5 text-xs [scrollbar-width:none] sm:w-auto [&::-webkit-scrollbar]:hidden">
             <button
               type="button"
               onClick={() => setFilterTab("all")}
               className={cn(
-                "rounded px-2.5 py-1 text-[11.5px] font-medium transition",
+                "flex-1 whitespace-nowrap rounded px-2.5 py-1 text-[11.5px] font-medium transition sm:flex-none",
                 filterTab === "all"
                   ? "bg-[var(--surface-2)] text-ink shadow-xs"
                   : "text-muted hover:text-ink"
@@ -628,7 +606,7 @@ function PreviewStep({
               type="button"
               onClick={() => setFilterTab("pages")}
               className={cn(
-                "rounded px-2.5 py-1 text-[11.5px] font-medium transition",
+                "flex-1 whitespace-nowrap rounded px-2.5 py-1 text-[11.5px] font-medium transition sm:flex-none",
                 filterTab === "pages"
                   ? "bg-[var(--surface-2)] text-ink shadow-xs"
                   : "text-muted hover:text-ink"
@@ -640,7 +618,7 @@ function PreviewStep({
               type="button"
               onClick={() => setFilterTab("notebooks")}
               className={cn(
-                "rounded px-2.5 py-1 text-[11.5px] font-medium transition",
+                "flex-1 whitespace-nowrap rounded px-2.5 py-1 text-[11.5px] font-medium transition sm:flex-none",
                 filterTab === "notebooks"
                   ? "bg-[var(--surface-2)] text-ink shadow-xs"
                   : "text-muted hover:text-ink"
@@ -793,9 +771,9 @@ function PreviewStep({
 
 function SummaryCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] p-3">
-      <p className="text-[11px] uppercase tracking-[0.06em] text-muted">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-ink">{value}</p>
+    <div className="min-w-0 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] p-2.5 sm:p-3">
+      <p className="break-words text-[10.5px] uppercase leading-tight tracking-[0.06em] text-muted sm:text-[11px]">{label}</p>
+      <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-ink sm:text-2xl">{value}</p>
     </div>
   );
 }
@@ -886,11 +864,11 @@ function ProgressStep({
   };
 
   return (
-    <div className="space-y-4 px-5 py-5">
+    <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
       <div className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Badge tone={statusTone[job.status]}>
+        <div className="flex items-start justify-between gap-3 sm:items-center">
+          <div className="flex min-w-0 flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+            <Badge tone={statusTone[job.status]} className="shrink-0">
               {["pending", "discovering", "running"].includes(job.status) ? (
                 <Loader2 className="size-3 animate-spin" />
               ) : job.status === "completed" ? (
@@ -900,14 +878,14 @@ function ProgressStep({
               )}
               {statusLabel[job.status]}
             </Badge>
-            <span className="text-[12.5px] text-muted">{formatImportStep(job, t)}</span>
+            <span className="min-w-0 break-words text-[12.5px] text-muted">{formatImportStep(job, t)}</span>
           </div>
-          <span className="font-mono text-[12.5px] tabular-nums text-ink">{progress}%</span>
+          <span className="shrink-0 font-mono text-[12.5px] tabular-nums text-ink">{progress}%</span>
         </div>
 
         <Progress value={progress} indeterminate={job.status === "discovering"} />
 
-        <div className="grid grid-cols-3 gap-3 pt-1">
+        <div className="grid grid-cols-3 gap-2 pt-1 sm:gap-3">
           <Metric
             label={t("wizard_summary_pages")}
             value={`${job.processedPages}/${Math.max(job.totalPages, job.processedPages)}`}
@@ -973,9 +951,9 @@ function ProgressStep({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2">
-      <p className="text-[10.5px] uppercase tracking-[0.07em] text-faint">{label}</p>
-      <p className="font-mono text-[13px] tabular-nums text-ink">{value}</p>
+    <div className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--border)] px-2.5 py-2 sm:px-3">
+      <p className="truncate text-[10px] uppercase tracking-[0.07em] text-faint sm:text-[10.5px]">{label}</p>
+      <p className="truncate font-mono text-[12.5px] tabular-nums text-ink sm:text-[13px]">{value}</p>
     </div>
   );
 }
