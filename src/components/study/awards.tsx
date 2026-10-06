@@ -15,7 +15,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowRight, Clock, X } from "lucide-react";
+import { ArrowRight, Clock, Lock, X } from "lucide-react";
 import { Link } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/primitives";
@@ -27,6 +27,9 @@ import { useStudyUi } from "@/lib/study/ui-store";
 import { formatDay } from "@/lib/study/dates";
 import { CLAIM_WINDOW_DAYS, arrangeAwards, sortAwards, type Award, type StreakAward } from "@/lib/study/awards";
 import { GoalMark, Panel } from "./ui";
+import { useGoalGates } from "@/lib/plans/gates";
+import { openPlanDialog } from "@/lib/plans/client";
+import { usePlanT } from "@/lib/plans/i18n";
 
 const SEAL_TONES = ["#c96d42", "#1f7b78", "#4b56a4", "#8d3657", "#2f7049", "#b8860b", "#52606f", "#1c1e26"] as const;
 const SEAL_INK = ["#fff1e6", "#e2f5f3", "#e8ebff", "#fde6ee", "#e3f4e9", "#fff8dc", "#eef2f6", "#e9c46a"] as const;
@@ -435,6 +438,8 @@ export function usePendingAwards(): Award[] {
 export function AwardsPanel() {
   const { st } = useStudyT();
   const { focusPlan, planReadOnly, settings, actions } = useStudy();
+  const awardsGate = useGoalGates().awards;
+  const { tp } = usePlanT();
   const book = useAwardBook();
   const planId = focusPlan?.id ?? "";
   const stored = settings.awardOrder[planId] ?? EMPTY_ORDER;
@@ -452,7 +457,7 @@ export function AwardsPanel() {
     return arrangeAwards(sortAwards(book.kept), ids);
   }, [book, draft, planId, stored]);
   const dragging = earned.find((award) => award.id === draggingId) ?? null;
-  const canSort = earned.length > 1 && !planReadOnly;
+  const canSort = earned.length > 1 && !planReadOnly && awardsGate.allowed;
 
   useEffect(() => {
     if (!draft || draft.planId !== planId) return;
@@ -494,6 +499,24 @@ export function AwardsPanel() {
   const total = book.all.length - (book.goal?.earnedAt === null ? 1 : 0);
   return (
     <Panel title={st("awards_title")} description={st("awards_desc", { earned: earned.length, total })}>
+      {awardsGate.allowed ? null : (
+        <div className="mb-4 flex flex-col gap-2.5 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)]/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-2">
+            <Lock className="mt-0.5 size-3.5 shrink-0 text-muted" />
+            <div className="min-w-0">
+              <p className="text-[12.5px] font-semibold text-ink">{tp("upsell_awards_title")}</p>
+              <p className="text-[12px] leading-relaxed text-muted">{tp("upsell_awards_body")}</p>
+            </div>
+          </div>
+          <Button variant="secondary" size="sm" className="shrink-0" onClick={openPlanDialog}>
+            {tp("view_plans")}
+          </Button>
+        </div>
+      )}
+      <div
+        aria-disabled={awardsGate.allowed ? undefined : true}
+        className={cn(!awardsGate.allowed && "pointer-events-none select-none opacity-50 grayscale")}
+      >
       {earned.length ? (
         <DndContext
           sensors={sensors}
@@ -571,6 +594,7 @@ export function AwardsPanel() {
           </div>
         </div>
       ) : null}
+      </div>
     </Panel>
   );
 }
@@ -594,6 +618,7 @@ function celebrationCopy(award: Award, st: StudyT, goalName: string): { headline
 export function CelebrationBanner() {
   const { st } = useStudyT();
   const { focusPlan, planReadOnly, actions } = useStudy();
+  const awardsAllowed = useGoalGates().awards.allowed;
   const celebrated = useStudyUi((state) => state.celebrated);
   const [settled, setSettled] = useState<string | null>(null);
   const [hidden, setHidden] = useState<string | null>(null);
@@ -613,7 +638,7 @@ export function CelebrationBanner() {
     const keys = pendingKey.split(",").filter((key) => seen.has(key.slice(key.indexOf("~") + 1)));
     if (keys.length) void actions.claimAwards(keys);
   }, [actions, celebrated, pendingKey, planReadOnly]);
-  if (planReadOnly || !lead || !focusPlan || hidden === pendingKey) return null;
+  if (planReadOnly || !awardsAllowed || !lead || !focusPlan || hidden === pendingKey) return null;
   const confetti = settled !== lead.id;
   const { headline, body } = celebrationCopy(lead, st, focusPlan.name || st("untitled_goal"));
   const accent = lead.kind === "subject" ? lead.color : lead.kind === "streak" ? sealTone(lead.tier) : "var(--laurel)";

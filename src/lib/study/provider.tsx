@@ -188,6 +188,7 @@ export interface StudyContextValue extends StudyState {
   focusPlan: StudyPlan | null;
   planReadOnly: boolean;
   planArchived: boolean;
+  accountReadOnly: boolean;
   planSubjects: StudySubject[];
   planSessions: StudySession[];
   planReviews: StudyReview[];
@@ -1524,6 +1525,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       focusPlan,
       planReadOnly: Boolean(browsed) || accountReadOnly,
       planArchived: Boolean(browsed),
+      accountReadOnly,
       planSubjects: planId ? state.subjects.filter((subject) => subject.planId === planId) : [],
       planSessions: planId ? state.sessions.filter((session) => session.planId === planId) : [],
       planReviews: planId ? state.reviews.filter((review) => review.planId === planId) : [],

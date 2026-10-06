@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { Bell, Check, ChevronDown, Minus, Plus, RotateCcw, Settings } from "lucide-react";
+import { Bell, Check, ChevronDown, Lock, Minus, Plus, RotateCcw, Settings } from "lucide-react";
 import { toast } from "sonner";
 import type { Flashcard, FlashcardSettings, FlashcardStudyOrder, Page } from "@/types/models";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,8 @@ import {
   requestNotificationPermission,
   type NotificationPermissionState,
 } from "@/lib/flashcards/notifications";
+import { notifyPlanError } from "@/lib/plans/client";
+import { usePlanGates } from "@/lib/plans/gates";
 
 interface FlashcardsSettingsModalProps {
   open: boolean;
@@ -200,6 +202,7 @@ function SettingsForm({
 }: Omit<FlashcardsSettingsModalProps, "open">) {
   const { t } = useTranslation();
   const { adapter, flashcards, notebooks, pages } = useWorkspace();
+  const resetGate = usePlanGates().feature("flashcards");
 
   const [dailyGoal, setDailyGoal] = useState(
     settings.dailyGoal || DEFAULT_FLASHCARD_SETTINGS.dailyGoal
@@ -348,8 +351,8 @@ function SettingsForm({
       if (count === 0) toast.info(t("reset_progress_empty"));
       else toast.success(t("reset_progress_done", { count }));
       setConfirmingReset(false);
-    } catch {
-      toast.error(t("saving_indicator_hint"));
+    } catch (error) {
+      if (!notifyPlanError(error)) toast.error(t("saving_indicator_hint"));
     } finally {
       setResetting(false);
     }
@@ -686,9 +689,11 @@ function SettingsForm({
                   variant="secondary"
                   size="sm"
                   className="h-8.5 border-[color-mix(in_oklab,var(--danger)_30%,transparent)] bg-[var(--surface)] text-[12px] text-[var(--danger)] hover:bg-[color-mix(in_oklab,var(--danger)_10%,transparent)] hover:text-[var(--danger)]"
-                  disabled={resetCount === 0}
+                  disabled={resetCount === 0 || !resetGate.allowed}
+                  title={resetGate.reason ?? undefined}
                   onClick={() => setConfirmingReset(true)}
                 >
+                  {resetGate.allowed ? null : <Lock className="size-3.5" />}
                   {t("reset_progress_action")}
                 </Button>
               )}

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { MessageSquareText, Pencil, Search, Trash2 } from "lucide-react";
+import { Lock, MessageSquareText, Pencil, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input, Tooltip } from "@/components/ui/primitives";
@@ -19,6 +19,7 @@ import type { MockExam, StudySession } from "@/types/study";
 import { CategoryChip, DurationFigure, MaterialLink, Segmented, SelectFilter, StudyEmpty, StudyGate, StudyHeader, StudyPage, useCategoryLabel } from "../ui";
 import { ExamDialog } from "../exam-dialog";
 import { relativeDay } from "../widgets";
+import { usePlanGates } from "@/lib/plans/gates";
 
 type Period = "7" | "30" | "90" | "365" | "all";
 
@@ -36,7 +37,9 @@ export function LogPage() {
 function LogBody() {
   const { st, locale, duration, language } = useStudyT();
   const categoryLabel = useCategoryLabel();
-  const { planSessions, planExams, planSubjects, settings, topicById, actions, today, planReadOnly } = useStudy();
+  const { planSessions, planExams, planSubjects, settings, topicById, actions, today, planArchived } = useStudy();
+  const writeGate = usePlanGates().write;
+  const editLock = writeGate.allowed ? null : writeGate.reason;
   const [examDialog, setExamDialog] = useState<{ open: boolean; exam: MockExam | null }>({ open: false, exam: null });
   const liveNote = useLiveNote();
   const materialText = useCallback(
@@ -203,14 +206,20 @@ function LogBody() {
                 <ul className="divide-y divide-[var(--border)] overflow-hidden rounded-[20px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_1px_2px_rgba(15,44,76,0.04)]">
                   {rows.map((row) =>
                     row.kind === "session" ? (
-                      <SessionLogRow key={row.session.id} session={row.session} onRemove={planReadOnly ? undefined : () => void remove(row.session)} />
+                      <SessionLogRow
+                        key={row.session.id}
+                        session={row.session}
+                        editLock={editLock}
+                        onRemove={planArchived ? undefined : () => void remove(row.session)}
+                      />
                     ) : (
                       <ExamLogRow
                         key={row.exam.id}
                         exam={row.exam}
                         subjects={planSubjects}
-                        onEdit={planReadOnly ? undefined : () => setExamDialog({ open: true, exam: row.exam })}
-                        onRemove={planReadOnly ? undefined : () => void removeExam(row.exam)}
+                        editLock={editLock}
+                        onEdit={planArchived ? undefined : () => setExamDialog({ open: true, exam: row.exam })}
+                        onRemove={planArchived ? undefined : () => void removeExam(row.exam)}
                       />
                     )
                   )}
@@ -227,7 +236,15 @@ function LogBody() {
   );
 }
 
-function SessionLogRow({ session, onRemove }: { session: StudySession; onRemove?: () => void }) {
+function SessionLogRow({
+  session,
+  editLock,
+  onRemove,
+}: {
+  session: StudySession;
+  editLock: string | null;
+  onRemove?: () => void;
+}) {
   const { st, duration } = useStudyT();
   const { subjectById, topicById } = useStudy();
   const subject = subjectById(session.subjectId);
@@ -245,6 +262,7 @@ function SessionLogRow({ session, onRemove }: { session: StudySession; onRemove?
       percent={answered ? percentLabel(session.correct / answered) : null}
       comment={session.comment}
       onEdit={onRemove ? () => useStudyUi.getState().openLog(null, session.id) : undefined}
+      editLock={editLock}
       onRemove={onRemove}
       meta={
         <>
@@ -262,11 +280,13 @@ function SessionLogRow({ session, onRemove }: { session: StudySession; onRemove?
 function ExamLogRow({
   exam,
   subjects,
+  editLock,
   onEdit,
   onRemove,
 }: {
   exam: MockExam;
   subjects: { id: string; name: string }[];
+  editLock: string | null;
   onEdit?: () => void;
   onRemove?: () => void;
 }) {
@@ -291,6 +311,7 @@ function ExamLogRow({
       percent={answered ? percentLabel(totals.percent) : null}
       comment={exam.comment}
       onEdit={onEdit}
+      editLock={editLock}
       onRemove={onRemove}
       meta={
         <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-muted">
@@ -314,6 +335,7 @@ function LogEntryRow({
   meta,
   comment,
   onEdit,
+  editLock,
   onRemove,
 }: {
   color: string;
@@ -327,6 +349,7 @@ function LogEntryRow({
   meta: React.ReactNode;
   comment: string;
   onEdit?: () => void;
+  editLock?: string | null;
   onRemove?: () => void;
 }) {
   const { st } = useStudyT();
@@ -365,8 +388,15 @@ function LogEntryRow({
           <span className="size-7 shrink-0" aria-hidden />
         )}
         {onEdit ? (
-          <Button variant="ghost" size="icon-sm" aria-label={st("edit")} onClick={onEdit}>
-            <Pencil />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={st("edit")}
+            disabled={Boolean(editLock)}
+            title={editLock ?? undefined}
+            onClick={onEdit}
+          >
+            {editLock ? <Lock /> : <Pencil />}
           </Button>
         ) : null}
         {onRemove ? (

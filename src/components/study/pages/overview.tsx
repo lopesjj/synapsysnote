@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState, useSyncExternalStore } from "react";
-import { Plus } from "lucide-react";
+import { Lock, Plus } from "lucide-react";
 import { Link, useRouter } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,8 @@ import {
 import { AwardArt, AwardsPanel, CelebrationBanner } from "../awards";
 import { GoalMark, GoalSwitcher, StudyEmpty, StudyGate, StudyHeader, StudyPage } from "../ui";
 import { SubjectDialog } from "../subject-dialog";
+import { usePlanGates } from "@/lib/plans/gates";
+import { GateTooltip } from "@/components/plans/plan-lock";
 
 export function StudyOverview() {
   const { st } = useStudyT();
@@ -40,7 +42,8 @@ export function StudyOverview() {
 function OverviewBody() {
   const { st } = useStudyT();
   const router = useRouter();
-  const { focusPlan, planReadOnly, planSubjects } = useStudy();
+  const { focusPlan, planReadOnly, planArchived, planSubjects } = useStudy();
+  const writeGate = usePlanGates().write;
   const [subjectOpen, setSubjectOpen] = useState(false);
   if (!focusPlan) return null;
 
@@ -50,21 +53,29 @@ function OverviewBody() {
         <div className="mb-4 sm:hidden">
           <GoalSwitcher className="w-full max-w-none" />
         </div>
-        <StudyHeader title={st("nav_overview")} subtitle={st("overview_subtitle", { goal: focusPlan.name || st("untitled_goal") })} showLog={!planReadOnly} />
+        <StudyHeader title={st("nav_overview")} subtitle={st("overview_subtitle", { goal: focusPlan.name || st("untitled_goal") })} showLog={!planArchived} />
         <StudyEmpty
           art="subjects"
           title={st("empty_subjects_title")}
           description={st("empty_subjects_desc")}
           action={
-            planReadOnly ? undefined : (
+            planArchived ? undefined : (
               <div className="flex flex-wrap gap-2">
-                <Button variant="primary" onClick={() => setSubjectOpen(true)}>
-                  <Plus />
-                  {st("empty_subjects_cta")}
-                </Button>
-                <Button variant="secondary" onClick={() => router.push(`/home/study/goals/${focusPlan.id}?bulk=1`)}>
-                  {st("goal_bulk_subjects")}
-                </Button>
+                <GateTooltip gate={writeGate}>
+                  <Button variant="primary" disabled={!writeGate.allowed} onClick={() => setSubjectOpen(true)}>
+                    {writeGate.allowed ? <Plus /> : <Lock />}
+                    {st("empty_subjects_cta")}
+                  </Button>
+                </GateTooltip>
+                <GateTooltip gate={writeGate}>
+                  <Button
+                    variant="secondary"
+                    disabled={!writeGate.allowed}
+                    onClick={() => router.push(`/home/study/goals/${focusPlan.id}?bulk=1`)}
+                  >
+                    {st("goal_bulk_subjects")}
+                  </Button>
+                </GateTooltip>
               </div>
             )
           }
@@ -80,11 +91,18 @@ function OverviewBody() {
         <div className="max-sm:hidden">
           <GoalSwitcher />
         </div>
-        {planReadOnly ? null : (
-          <Button variant="primary" size="md" onClick={() => useStudyUi.getState().openLog()}>
-            <Plus />
-            {st("logform_title_new")}
-          </Button>
+        {planArchived ? null : (
+          <GateTooltip gate={writeGate}>
+            <Button
+              variant="primary"
+              size="md"
+              disabled={!writeGate.allowed}
+              onClick={() => useStudyUi.getState().openLog()}
+            >
+              {writeGate.allowed ? <Plus /> : <Lock />}
+              {st("logform_title_new")}
+            </Button>
+          </GateTooltip>
         )}
       </div>
       <div className="space-y-4">
@@ -148,6 +166,7 @@ function Cover() {
   const metrics = usePlanMetrics();
   const book = useAwardBook();
   const markSize = useCoverMarkSize();
+  const motto = useDailyMotto(language);
   if (!focusPlan) return null;
 
   const parts: string[] = [];
@@ -165,7 +184,6 @@ function Cover() {
   const goalComplete = Boolean(book?.goalComplete && book.goal);
   const dateLabel = capitalizeFirst(formatDay(today, locale, { weekday: "long", day: "numeric", month: "long" }));
   const { h, m } = splitDuration(metrics.todaySeconds);
-  const motto = useDailyMotto(language);
 
   return (
     <section className="study-cover overflow-hidden rounded-[22px] shadow-[0_0_0_1px_var(--cover-line)]">

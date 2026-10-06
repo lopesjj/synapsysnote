@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Archive, ArchiveRestore, Check, ChevronRight, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Check, ChevronRight, Lock, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useRouter } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,8 @@ import type { DayKey, StudyPlan } from "@/types/study";
 import { GoalDialog, type GoalField } from "../dialogs";
 import { ExamCountdown, ProgressBar, SyllabusSummary, WeekBars, WeekMeter } from "../goal-visuals";
 import { GoalMark, StudyHeader, StudyLoading, StudyPage } from "../ui";
+import { useGoalGates, usePlanGates } from "@/lib/plans/gates";
+import { GateTooltip, PlanLockBadge } from "@/components/plans/plan-lock";
 
 export interface GoalFacts {
   summary: GoalSummary;
@@ -60,6 +62,7 @@ export function GoalsPage() {
   const { st, locale } = useStudyT();
   const router = useRouter();
   const { ready, plans, activePlan, today } = useStudy();
+  const goalGates = useGoalGates();
   const facts = useGoalFacts();
   const [dialog, setDialog] = useState<{ plan: StudyPlan | null; focus: GoalField }>({ plan: null, focus: "name" });
 
@@ -90,10 +93,16 @@ export function GoalsPage() {
         showGoal={false}
         showLog={false}
         actions={
-          <Button variant="primary" onClick={() => router.push("/home/study/goals/new")}>
-            <Plus />
-            {st("goal_switch_new")}
-          </Button>
+          <GateTooltip gate={goalGates.newGoal}>
+            <Button
+              variant="primary"
+              disabled={!goalGates.newGoal.allowed}
+              onClick={() => router.push("/home/study/goals/new")}
+            >
+              {goalGates.newGoal.allowed ? <Plus /> : <Lock />}
+              {st("goal_switch_new")}
+            </Button>
+          </GateTooltip>
         }
       />
       <div className="@container/goals">
@@ -214,6 +223,7 @@ const TABLE_GRID =
   "@3xl/goals:grid @3xl/goals:grid-cols-[minmax(0,1fr)_10rem_8.5rem_2rem] @3xl/goals:items-center @3xl/goals:gap-x-6 @4xl/goals:grid-cols-[minmax(0,1fr)_10rem_8rem_8.5rem_2rem] @5xl/goals:grid-cols-[minmax(0,1fr)_10rem_6.5rem_8rem_8.5rem_2rem]";
 
 function GoalTable({ plans, facts, onEdit }: { plans: StudyPlan[]; facts: Map<string, GoalFacts>; onEdit: (plan: StudyPlan, focus?: GoalField) => void }) {
+  const newGoalGate = useGoalGates().newGoal;
   const { st } = useStudyT();
   return (
     <div className={PANEL}>
@@ -233,13 +243,25 @@ function GoalTable({ plans, facts, onEdit }: { plans: StudyPlan[]; facts: Map<st
           return fact ? <GoalRow key={plan.id} plan={plan} fact={fact} onEdit={onEdit} /> : null;
         })}
       </ul>
-      <Link
-        href="/home/study/goals/new"
-        className="flex h-11 items-center gap-2 border-t border-[var(--border)] px-4 text-[13px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
-      >
-        <Plus className="size-3.5" />
-        {st("goal_switch_new")}
-      </Link>
+      {newGoalGate.allowed ? (
+        <Link
+          href="/home/study/goals/new"
+          className="flex h-11 items-center gap-2 border-t border-[var(--border)] px-4 text-[13px] text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink"
+        >
+          <Plus className="size-3.5" />
+          {st("goal_switch_new")}
+        </Link>
+      ) : (
+        <div
+          aria-disabled="true"
+          title={newGoalGate.reason ?? undefined}
+          className="flex min-h-11 cursor-not-allowed flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-[var(--border)] px-4 py-2 text-[13px] text-faint"
+        >
+          <Lock className="size-3.5" />
+          <span>{st("goal_switch_new")}</span>
+          {newGoalGate.reason ? <span className="w-full text-[11.5px] leading-snug">{newGoalGate.reason}</span> : null}
+        </div>
+      )}
     </div>
   );
 }
@@ -370,7 +392,9 @@ function EmptyGoals() {
   const { st, textDir } = useStudyT();
   const router = useRouter();
   const [value, setValue] = useState("");
+  const newGoalGate = useGoalGates().newGoal;
   const submit = () => {
+    if (!newGoalGate.allowed) return;
     useStudyUi.getState().setNewGoalDraft(value.trim());
     router.push("/home/study/goals/new");
   };
@@ -398,10 +422,12 @@ function EmptyGoals() {
             autoComplete="off"
             className="h-10 min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--canvas)] px-3 text-[14px] text-ink outline-none transition placeholder:text-faint focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
           />
-          <Button type="submit" variant="primary" className="h-10">
+          <Button type="submit" variant="primary" className="h-10" disabled={!newGoalGate.allowed} title={newGoalGate.reason ?? undefined}>
+            {newGoalGate.allowed ? null : <Lock />}
             {st("goals_empty_continue")}
           </Button>
         </div>
+        {newGoalGate.reason ? <p className="mt-2 text-[12px] leading-relaxed text-faint">{newGoalGate.reason}</p> : null}
       </div>
     </form>
   );
@@ -418,6 +444,7 @@ function ArchivedGoals({
 }) {
   const { st, locale, duration, textDir } = useStudyT();
   const { actions } = useStudy();
+  const unarchiveGate = useGoalGates().unarchive;
   const open = useStudyUi((state) => state.goalsArchivedOpen);
   const setOpen = useStudyUi((state) => state.setGoalsArchivedOpen);
   const reactivate = async (plan: StudyPlan) => {
@@ -462,10 +489,17 @@ function ArchivedGoals({
                   {meta.length ? <p className="truncate text-[12px] tabular-nums text-faint">{meta.join(" · ")}</p> : null}
                 </div>
                 <div className="relative z-10 flex items-center gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => void reactivate(plan)}>
-                    <ArchiveRestore />
-                    {st("goals_unarchive")}
-                  </Button>
+                  <GateTooltip gate={unarchiveGate}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!unarchiveGate.allowed}
+                      onClick={() => void reactivate(plan)}
+                    >
+                      {unarchiveGate.allowed ? <ArchiveRestore /> : <Lock />}
+                      {st("goals_unarchive")}
+                    </Button>
+                  </GateTooltip>
                   <GoalActionsMenu plan={plan} onEdit={() => onEdit(plan)} />
                 </div>
               </li>
@@ -491,6 +525,9 @@ export function GoalActionsMenu({
   const { st } = useStudyT();
   const router = useRouter();
   const { actions, activePlan } = useStudy();
+  const goalGates = useGoalGates();
+  const writeGate = usePlanGates().write;
+  const archiveGate = plan.archived ? goalGates.unarchive : goalGates.archive;
   const isActive = activePlan?.id === plan.id;
   return (
     <Menu>
@@ -503,8 +540,9 @@ export function GoalActionsMenu({
       </MenuTrigger>
       <MenuContent align="end">
         {plan.archived ? null : (
-          <MenuItem onSelect={onEdit}>
+          <MenuItem disabled={!writeGate.allowed} onSelect={onEdit}>
             <Pencil /> {st("edit")}
+            <PlanLockBadge gate={writeGate} />
           </MenuItem>
         )}
         {!plan.archived && !isActive ? (
@@ -518,12 +556,14 @@ export function GoalActionsMenu({
           </MenuItem>
         ) : null}
         <MenuItem
+          disabled={!archiveGate.allowed}
           onSelect={async () => {
             await actions.archivePlan(plan.id, !plan.archived);
             toast.success(plan.archived ? st("goal_unarchived") : st("goal_archived"));
           }}
         >
           {plan.archived ? <ArchiveRestore /> : <Archive />} {plan.archived ? st("goals_unarchive") : st("goals_archive")}
+          <PlanLockBadge gate={archiveGate} />
         </MenuItem>
         <MenuSeparator />
         <MenuItem

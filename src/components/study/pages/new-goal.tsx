@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronRight, ClipboardPaste, FileSpreadsheet, ImagePlus, Loader2, NotebookTabs, X } from "lucide-react";
+import { ChevronRight, ClipboardPaste, FileSpreadsheet, ImagePlus, Loader2, Lock, NotebookTabs, X } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useRouter } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import type { Notebook, Page } from "@/types/models";
 import { DraftEditor, PasteImporter, draftsFromParsed, useDraftMerge } from "../syllabus-import";
 import { DateField } from "@/components/ui/pickers";
 import { GoalMark, StudyPage, StudySelect } from "../ui";
+import { useGoalGates } from "@/lib/plans/gates";
 
 type Panel = "paste" | "notebook" | "csv";
 
@@ -68,6 +69,7 @@ export function NewGoalPage() {
   const router = useRouter();
   const { rootNotebooks, notebooks, livePages } = useWorkspace();
   const { actions } = useStudy();
+  const newGoalGate = useGoalGates().newGoal;
   const [drafts, setDrafts] = useState<SubjectDraft[]>([]);
   const [panel, setPanel] = useState<Panel | null>(null);
   const [rootId, setRootId] = useState("");
@@ -407,8 +409,18 @@ export function NewGoalPage() {
         <Button variant="ghost" className="max-md:min-h-11" onClick={() => router.push("/home/study/goals")}>
           {st("cancel")}
         </Button>
-        <Button variant="primary" className="max-md:min-h-11" disabled={saving} onClick={() => void create()}>
-          {saving ? <Loader2 className="animate-spin" /> : null}
+        {newGoalGate.reason ? (
+          <p className="order-first w-full text-[12px] leading-relaxed text-[var(--warning)] sm:order-none sm:w-auto sm:max-w-sm">
+            {newGoalGate.reason}
+          </p>
+        ) : null}
+        <Button
+          variant="primary"
+          className="max-md:min-h-11"
+          disabled={saving || !newGoalGate.allowed}
+          onClick={() => void create()}
+        >
+          {saving ? <Loader2 className="animate-spin" /> : newGoalGate.allowed ? null : <Lock />}
           {saving ? st("creating") : st("create_goal_cta")}
         </Button>
       </div>

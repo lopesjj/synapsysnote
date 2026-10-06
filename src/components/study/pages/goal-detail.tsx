@@ -26,6 +26,7 @@ import { CoveragePie, ExamCountdown, ProgressBar, SyllabusSummary, WeekBars, Wee
 import { GoalMark, StudyEmpty, StudyLoading, StudyPage, reactivatePlan } from "../ui";
 import { CycleWheel } from "./schedule";
 import { GoalActionsMenu, PANEL, useGoalFacts, type GoalFacts } from "./goals";
+import { useGoalGates } from "@/lib/plans/gates";
 
 const SORTS: { id: GoalSubjectSort; key: "goal_sort_syllabus" | "goal_sort_coverage" | "goal_sort_accuracy" | "goal_sort_reviews" }[] = [
   { id: "syllabus", key: "goal_sort_syllabus" },
@@ -228,12 +229,21 @@ function Chip({ icon, children, onClick, muted, label }: { icon: ReactNode; chil
 function PropertyChips({ plan, onEdit }: { plan: StudyPlan; onEdit: (focus: GoalField) => void }) {
   const { st, locale, duration } = useStudyT();
   const { activePlan, actions, today } = useStudy();
+  const unarchiveGate = useGoalGates().unarchive;
   const isActive = activePlan?.id === plan.id;
   const days = plan.examDate ? diffDays(today, plan.examDate) : null;
   return (
     <div className="mt-4 flex flex-wrap gap-1.5">
       {plan.archived ? (
-        <Chip icon={<Archive className="text-muted" />} onClick={() => void reactivatePlan(plan.id, actions).then(() => toast.success(st("goal_unarchived")))}>
+        <Chip
+          icon={<Archive className="text-muted" />}
+          onClick={
+            unarchiveGate.allowed
+              ? () => void reactivatePlan(plan.id, actions).then(() => toast.success(st("goal_unarchived")))
+              : undefined
+          }
+          label={unarchiveGate.reason ?? undefined}
+        >
           {st("goal_status_archived")}
         </Chip>
       ) : isActive ? (

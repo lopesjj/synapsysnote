@@ -14,7 +14,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { motion } from "framer-motion";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Lock, Plus, Trash2 } from "lucide-react";
 import type { AppDatabase, DatabaseRow, PropertyDef } from "@/types/models";
 import { useWorkspace } from "@/lib/data/provider";
 import { PropertyCell, SelectChip } from "./property-cell";
@@ -23,6 +23,8 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, Tabs, TabsList, TabsTrigger } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/translations";
+import { usePlanGates } from "@/lib/plans/gates";
+import { GateTooltip } from "@/components/plans/plan-lock";
 import {
   isPlanningName,
   translateDatabaseText,
@@ -34,6 +36,8 @@ export { isPlanningName, translateDatabaseText, formatRecordsProperties };
 export function DatabaseView({ database }: { database: AppDatabase }) {
   const { t, language } = useTranslation();
   const { adapter } = useWorkspace();
+  const writeGate = usePlanGates().write;
+  const locked = !writeGate.allowed;
   const [view, setView] = useState<"table" | "kanban">(database.views[0]?.type === "kanban" ? "kanban" : "table");
 
   const titleProperty = database.properties.find((p) => p.type === "title") ?? database.properties[0];
@@ -71,9 +75,12 @@ export function DatabaseView({ database }: { database: AppDatabase }) {
               <TabsTrigger value="kanban">{t("db_tab_kanban")}</TabsTrigger>
             </TabsList>
           </Tabs>
-          <Button variant="primary" size="sm" onClick={() => addRow()}>
-            {t("db_new_button")}
-          </Button>
+          <GateTooltip gate={writeGate}>
+            <Button variant="primary" size="sm" onClick={() => addRow()} disabled={locked}>
+              {locked ? <Lock /> : null}
+              {t("db_new_button")}
+            </Button>
+          </GateTooltip>
         </div>
       </div>
 
@@ -83,15 +90,24 @@ export function DatabaseView({ database }: { database: AppDatabase }) {
             title={t("db_empty_title")}
             description={t("db_empty_desc")}
             action={
-              <Button variant="secondary" onClick={() => addRow()}>
-                {t("db_create_record")}
-              </Button>
+              <GateTooltip gate={writeGate}>
+                <Button variant="secondary" onClick={() => addRow()} disabled={locked}>
+                  {locked ? <Lock /> : null}
+                  {t("db_create_record")}
+                </Button>
+              </GateTooltip>
             }
           />
         ) : view === "table" ? (
-          <TableView database={database} titleProperty={titleProperty} onAddRow={() => addRow()} />
+          <TableView database={database} titleProperty={titleProperty} onAddRow={() => addRow()} locked={locked} />
         ) : groupProperty ? (
-          <KanbanView database={database} groupProperty={groupProperty} titleProperty={titleProperty} onAddRow={addRow} />
+          <KanbanView
+            database={database}
+            groupProperty={groupProperty}
+            titleProperty={titleProperty}
+            onAddRow={addRow}
+            locked={locked}
+          />
         ) : (
           <EmptyState
             title={t("db_no_group_prop_title")}
@@ -108,10 +124,12 @@ function TableView({
   database,
   titleProperty,
   onAddRow,
+  locked,
 }: {
   database: AppDatabase;
   titleProperty: PropertyDef;
   onAddRow: () => void;
+  locked: boolean;
 }) {
   const { t, language } = useTranslation();
   const { adapter } = useWorkspace();
@@ -142,16 +160,18 @@ function TableView({
             <tr key={row.id} className="group border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)]">
               {properties.map((property) => (
                 <td key={property.id} className="align-middle">
-                  <PropertyCell
-                    property={property}
-                    value={row.values[property.id] ?? null}
-                    onChange={(next) =>
-                      adapter.upsertRow(database.id, {
-                        id: row.id,
-                        values: { ...row.values, [property.id]: next },
-                      })
-                    }
-                  />
+                  <fieldset disabled={locked} className="m-0 min-w-0 border-0 p-0">
+                    <PropertyCell
+                      property={property}
+                      value={row.values[property.id] ?? null}
+                      onChange={(next) =>
+                        adapter.upsertRow(database.id, {
+                          id: row.id,
+                          values: { ...row.values, [property.id]: next },
+                        })
+                      }
+                    />
+                  </fieldset>
                 </td>
               ))}
               <td className="pr-2 text-right">
@@ -169,9 +189,10 @@ function TableView({
             <td colSpan={properties.length + 1}>
               <button
                 onClick={onAddRow}
-                className="flex w-full items-center gap-2 px-3 py-2 text-[12.5px] text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink"
+                disabled={locked}
+                className="flex w-full items-center gap-2 px-3 py-2 text-[12.5px] text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:text-faint"
               >
-                <Plus className="size-3.5" /> {t("db_new_row")}
+                {locked ? <Lock className="size-3.5" /> : <Plus className="size-3.5" />} {t("db_new_row")}
               </button>
             </td>
           </tr>
@@ -187,11 +208,13 @@ function KanbanView({
   groupProperty,
   titleProperty,
   onAddRow,
+  locked,
 }: {
   database: AppDatabase;
   groupProperty: PropertyDef;
   titleProperty: PropertyDef;
   onAddRow: (preset: Record<string, unknown>) => void;
+  locked: boolean;
 }) {
   const { t, language } = useTranslation();
   const { adapter } = useWorkspace();
@@ -255,6 +278,7 @@ function KanbanView({
             name={column.label}
             color={column.color}
             count={column.rows.length}
+            locked={locked}
             onAdd={() =>
               onAddRow({ [groupProperty.id]: column.id === "__none__" ? null : column.id })
             }
@@ -266,6 +290,7 @@ function KanbanView({
                 database={database}
                 titleProperty={titleProperty}
                 groupPropertyId={groupProperty.id}
+                locked={locked}
               />
             ))}
           </KanbanColumn>
@@ -290,6 +315,7 @@ function KanbanColumn({
   name,
   color,
   count,
+  locked,
   onAdd,
   children,
 }: {
@@ -297,6 +323,7 @@ function KanbanColumn({
   name: string;
   color?: string;
   count: number;
+  locked: boolean;
   onAdd: () => void;
   children: React.ReactNode;
 }) {
@@ -315,10 +342,11 @@ function KanbanColumn({
         <span className="text-[11px] text-faint">{count}</span>
         <button
           onClick={onAdd}
-          className="ml-auto rounded p-1 text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink"
+          disabled={locked}
+          className="ml-auto rounded p-1 text-faint transition hover:bg-[var(--surface-hover)] hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           aria-label={t("db_add_in_column", { name })}
         >
-          <Plus className="size-3.5" />
+          {locked ? <Lock className="size-3.5" /> : <Plus className="size-3.5" />}
         </button>
       </div>
       <div className="flex min-h-[120px] flex-col gap-2 p-2">{children}</div>
@@ -331,15 +359,17 @@ function KanbanCard({
   database,
   titleProperty,
   groupPropertyId,
+  locked,
 }: {
   row: DatabaseRow;
   database: AppDatabase;
   titleProperty: PropertyDef;
   groupPropertyId: string;
+  locked: boolean;
 }) {
   const { t, language } = useTranslation();
   const { adapter } = useWorkspace();
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: row.id });
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: row.id, disabled: locked });
 
   const visibleProps = database.properties
     .filter((p) => p.id !== titleProperty.id && p.id !== groupPropertyId && !p.hidden)
@@ -359,23 +389,26 @@ function KanbanCard({
         <button
           {...attributes}
           {...listeners}
-          className="mt-0.5 cursor-grab rounded p-0.5 text-faint opacity-0 transition group-hover:opacity-100 active:cursor-grabbing"
+          disabled={locked}
+          className="mt-0.5 cursor-grab rounded p-0.5 text-faint opacity-0 transition group-hover:opacity-100 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-30"
           aria-label={t("db_drag_card")}
         >
           <GripVertical className="size-3.5" />
         </button>
         <div className="min-w-0 flex-1">
-          <PropertyCell
-            compact
-            property={titleProperty}
-            value={row.values[titleProperty.id] ?? null}
-            onChange={(next) =>
-              adapter.upsertRow(database.id, {
-                id: row.id,
-                values: { ...row.values, [titleProperty.id]: next },
-              })
-            }
-          />
+          <fieldset disabled={locked} className="m-0 min-w-0 border-0 p-0">
+            <PropertyCell
+              compact
+              property={titleProperty}
+              value={row.values[titleProperty.id] ?? null}
+              onChange={(next) =>
+                adapter.upsertRow(database.id, {
+                  id: row.id,
+                  values: { ...row.values, [titleProperty.id]: next },
+                })
+              }
+            />
+          </fieldset>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {visibleProps.map((property) => {
               const value = row.values[property.id];

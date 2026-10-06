@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { ChevronRight, MessageSquareText, Pencil, Plus, Timer, Trash2 } from "lucide-react";
+import { ChevronRight, Lock, MessageSquareText, Pencil, Plus, Timer, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/primitives";
@@ -15,6 +15,8 @@ import type { MockExam } from "@/types/study";
 import { BarList, LineChart } from "../charts";
 import { ExamDialog } from "../exam-dialog";
 import { AccuracyTag, Panel, Segmented, StudyEmpty, StudyGate, StudyHeader, StudyPage, bandColor } from "../ui";
+import { usePlanGates } from "@/lib/plans/gates";
+import { GateTooltip } from "@/components/plans/plan-lock";
 
 export function ExamsPage() {
   const { st } = useStudyT();
@@ -47,7 +49,8 @@ function useExamChartHeight() {
 
 function ExamsBody() {
   const { st, locale, language } = useStudyT();
-  const { planExams, settings, actions, planReadOnly } = useStudy();
+  const { planExams, settings, actions, planReadOnly, planArchived } = useStudy();
+  const writeGate = usePlanGates().write;
   const [dialog, setDialog] = useState<{ open: boolean; exam: MockExam | null }>({ open: false, exam: null });
   const [metric, setMetric] = useState<"percent" | "score">("percent");
   const chartHeight = useExamChartHeight();
@@ -96,11 +99,17 @@ function ExamsBody() {
         subtitle={st("exams_subtitle")}
         showLog={false}
         actions={
-          planReadOnly ? null : (
-          <Button variant="primary" onClick={() => setDialog({ open: true, exam: null })}>
-            <Plus />
-            {st("exams_new")}
-          </Button>
+          planArchived ? null : (
+            <GateTooltip gate={writeGate}>
+              <Button
+                variant="primary"
+                disabled={!writeGate.allowed}
+                onClick={() => setDialog({ open: true, exam: null })}
+              >
+                {writeGate.allowed ? <Plus /> : <Lock />}
+                {st("exams_new")}
+              </Button>
+            </GateTooltip>
           )
         }
       />
@@ -204,12 +213,20 @@ function ExamsBody() {
                         ) : (
                           <span className="size-7 shrink-0" aria-hidden />
                         )}
-                        {planReadOnly ? null : (
-                        <Button variant="ghost" size="icon-sm" aria-label={st("edit")} onClick={() => setDialog({ open: true, exam })}>
-                          <Pencil />
-                        </Button>
+                        {planArchived ? null : (
+                        <GateTooltip gate={writeGate} label={st("edit")}>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={st("edit")}
+                            disabled={!writeGate.allowed}
+                            onClick={() => setDialog({ open: true, exam })}
+                          >
+                            {writeGate.allowed ? <Pencil /> : <Lock />}
+                          </Button>
+                        </GateTooltip>
                         )}
-                        {planReadOnly ? null : (
+                        {planArchived ? null : (
                         <Button
                           variant="ghost"
                           size="icon-sm"
@@ -239,11 +256,17 @@ function ExamsBody() {
           art="exams"
           title={st("exams_empty")}
           action={
-            planReadOnly ? undefined : (
-            <Button variant="primary" onClick={() => setDialog({ open: true, exam: null })}>
-              <Plus />
-              {st("exams_new")}
-            </Button>
+            planArchived ? undefined : (
+              <GateTooltip gate={writeGate}>
+                <Button
+                  variant="primary"
+                  disabled={!writeGate.allowed}
+                  onClick={() => setDialog({ open: true, exam: null })}
+                >
+                  {writeGate.allowed ? <Plus /> : <Lock />}
+                  {st("exams_new")}
+                </Button>
+              </GateTooltip>
             )
           }
         />

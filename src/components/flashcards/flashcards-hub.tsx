@@ -2,7 +2,7 @@
 
 import { Link } from "@/lib/i18n/navigation";
 import { useMemo, useState, type CSSProperties } from "react";
-import { Check, ChevronRight, Layers, Loader2, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, Layers, Loader2, Lock, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Flashcard } from "@/types/models";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,9 @@ import { useFlashcardSettings } from "@/lib/flashcards/use-flashcard-settings";
 import { DeckIcon, FlashcardsIcon, StudyIcon } from "@/lib/icons/flashcard-icon";
 import { FlashcardStudySession } from "./flashcard-study-session";
 import { FlashcardsSettingsModal } from "./flashcards-settings-modal";
+import { usePlanGates } from "@/lib/plans/gates";
+import { openPlanDialog } from "@/lib/plans/client";
+import { usePlanT } from "@/lib/plans/i18n";
 
 /* ------------------------------------------------------------------ */
 /* Dados derivados                                                     */
@@ -202,6 +205,7 @@ function DeckRow({
   onStudy: (title: string, cards: Flashcard[]) => void;
 }) {
   const { t } = useTranslation();
+  const studyGate = usePlanGates().feature("flashcards");
   const key = deckKey(deck);
   const name = deck.notebook?.name ?? t("unfiled");
   const open = isExpanded(key);
@@ -273,11 +277,12 @@ function DeckRow({
           variant="ghost"
           size="sm"
           className="h-8 shrink-0 gap-1.5 text-muted hover:text-ink"
+          disabled={!studyGate.allowed}
           onClick={() => onStudy(name, deck.cards)}
-          title={t("study_notebook")}
+          title={studyGate.reason ?? t("study_notebook")}
           aria-label={t("study_notebook")}
         >
-          <StudyIcon className="size-3 text-[var(--accent)]" />
+          {studyGate.allowed ? <StudyIcon className="size-3 text-[var(--accent)]" /> : <Lock className="size-3" />}
           <span className="hidden font-medium sm:inline">{t("study")}</span>
         </Button>
       </div>
@@ -335,6 +340,7 @@ function NoteRow({
   onStudy: (title: string, cards: Flashcard[]) => void;
 }) {
   const { t } = useTranslation();
+  const studyGate = usePlanGates().feature("flashcards");
   const open = isExpanded(node.page.id);
   const hasChildren = node.children.length > 0;
   const title = node.page.title.trim() || t("untitled");
@@ -410,12 +416,12 @@ function NoteRow({
             variant="ghost"
             size="sm"
             className="h-8 shrink-0 gap-1.5 text-muted hover:text-ink"
-            disabled={node.subtreeCards.length === 0}
+            disabled={node.subtreeCards.length === 0 || !studyGate.allowed}
             onClick={() => onStudy(title, node.subtreeCards)}
-            title={t("study_this_note")}
+            title={studyGate.reason ?? t("study_this_note")}
             aria-label={t("study_this_note")}
           >
-            <StudyIcon className="size-3 text-[var(--accent)]" />
+            {studyGate.allowed ? <StudyIcon className="size-3 text-[var(--accent)]" /> : <Lock className="size-3" />}
             <span className="hidden font-medium sm:inline">{t("study")}</span>
           </Button>
         </div>
@@ -470,6 +476,10 @@ export function FlashcardsHub() {
     useWorkspace();
   const { t, language } = useTranslation();
   const { settings, saveSettings } = useFlashcardSettings();
+  const { tp } = usePlanT();
+  const planGates = usePlanGates();
+  const flashGate = planGates.feature("flashcards");
+  const planReadOnly = planGates.readOnly;
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "due">("all");
@@ -786,10 +796,12 @@ export function FlashcardsHub() {
               <button
                 type="button"
                 onClick={hasQueue ? handleReviewDue : handleStudyAll}
-                className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-full bg-[var(--fc-play)] pl-2 pr-5 text-[14px] font-bold text-[#032027] shadow-[0_12px_28px_-10px_rgba(0,0,0,0.7)] outline-none transition hover:bg-[var(--fc-play-hover)] focus-visible:ring-2 focus-visible:ring-white/80 active:scale-[0.98] @[34rem]/fc:w-auto @[34rem]/fc:justify-start"
+                disabled={!flashGate.allowed}
+                title={flashGate.reason ?? undefined}
+                className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-full bg-[var(--fc-play)] pl-2 pr-5 text-[14px] font-bold text-[#032027] shadow-[0_12px_28px_-10px_rgba(0,0,0,0.7)] outline-none transition hover:bg-[var(--fc-play-hover)] focus-visible:ring-2 focus-visible:ring-white/80 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-[var(--fc-play)] disabled:active:scale-100 @[34rem]/fc:w-auto @[34rem]/fc:justify-start"
               >
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#032027] text-[var(--fc-play)]">
-                  <StudyIcon className="size-4 translate-x-px" />
+                  {flashGate.allowed ? <StudyIcon className="size-4 translate-x-px" /> : <Lock className="size-4" />}
                 </span>
                 {hasQueue ? (queue.fresh > 0 ? t("study_now") : t("review_now")) : t("study_all")}
                 {hasQueue ? (
@@ -806,7 +818,9 @@ export function FlashcardsHub() {
                   <button
                     type="button"
                     onClick={handleStudyAll}
-                    className="inline-flex h-10 items-center gap-2 rounded-full px-3 text-[13px] font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
+                    disabled={!flashGate.allowed}
+                    title={flashGate.reason ?? undefined}
+                    className="inline-flex h-10 items-center gap-2 rounded-full px-3 text-[13px] font-medium text-white/75 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
                   >
                     <Layers className="size-4" />
                     {t("study_all")}
@@ -828,6 +842,25 @@ export function FlashcardsHub() {
             </div>
           </div>
         </section>
+
+        {flashGate.allowed ? null : (
+          <div className="mt-4 flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-2.5">
+              <Lock className="mt-0.5 size-4 shrink-0 text-muted" />
+              <div className="min-w-0">
+                {flashGate.badge && !planReadOnly ? (
+                  <p className="text-[13px] font-semibold text-ink">{tp("upsell_flashcards_title")}</p>
+                ) : null}
+                <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
+                  {planReadOnly ? tp("flashcards_read_only") : tp("upsell_flashcards_body")}
+                </p>
+              </div>
+            </div>
+            <Button variant="secondary" size="sm" className="w-full shrink-0 sm:w-auto" onClick={openPlanDialog}>
+              {tp("view_plans")}
+            </Button>
+          </div>
+        )}
 
         {/* ---------------- Progresso ---------------- */}
         {hasAnyCard ? (
@@ -1147,10 +1180,11 @@ export function FlashcardsHub() {
                       variant="primary"
                       size="sm"
                       className="h-8 gap-1.5 font-semibold"
-                      disabled={selectedCards.length === 0}
+                      disabled={selectedCards.length === 0 || !flashGate.allowed}
+                      title={flashGate.reason ?? undefined}
                       onClick={() => startSession(t("study_selected"), selectedCards)}
                     >
-                      <StudyIcon className="size-3" />
+                      {flashGate.allowed ? <StudyIcon className="size-3" /> : <Lock className="size-3" />}
                       <span>{t("study")}</span>
                     </Button>
                   </div>

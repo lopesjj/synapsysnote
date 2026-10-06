@@ -7,13 +7,14 @@ import {
   CheckCheck,
   EyeOff,
   Layers3,
+  Lock,
   MessageSquareText,
   MoreHorizontal,
   Plus,
   SlidersHorizontal,
   Trash2,
-  Undo2,
   type LucideIcon,
+  Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "@/lib/i18n/navigation";
@@ -44,6 +45,8 @@ import {
 import type { DayKey, StudyReview, StudySession } from "@/types/study";
 import { subjectTone } from "@/lib/study/defaults";
 import { CategoryChip, FocusButton, MaterialLink, Segmented, SelectFilter, StudyGate, StudyHeader, StudyPage } from "../ui";
+import { usePlanGates } from "@/lib/plans/gates";
+import { GateTooltip, PlanLockBadge } from "@/components/plans/plan-lock";
 
 const PANEL = "rounded-xl border border-[var(--border)] bg-[var(--surface)]";
 const TABS: ReviewTab[] = ["due", "overdue", "upcoming", "done", "ignored"];
@@ -510,7 +513,8 @@ function ReviewRow({
   onSelect: (value: boolean) => void;
 }) {
   const { st, locale } = useStudyT();
-  const { subjectById, topicById, actions, today, planReadOnly } = useStudy();
+  const { subjectById, topicById, actions, today, planReadOnly, planArchived } = useStudy();
+  const writeGate = usePlanGates().write;
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const subject = subjectById(review.subjectId);
   const topic = topicById(review.subjectId, review.topicId);
@@ -557,7 +561,7 @@ function ReviewRow({
       </div>
 
       <div className="col-start-3 row-start-1 flex items-center justify-end gap-1 @3xl/list:col-start-5">
-        {planReadOnly ? null : pending ? (
+        {planArchived ? null : pending ? (
           <>
             <Tooltip label={st("review_start")}>
               <span className="inline-flex">
@@ -571,11 +575,12 @@ function ReviewRow({
                 />
               </span>
             </Tooltip>
-            <Tooltip label={st("review_log")}>
+            <GateTooltip gate={writeGate} label={st("review_log")}>
               <Button
                 variant="ghost"
                 size="icon-sm"
                 aria-label={st("review_log")}
+                disabled={!writeGate.allowed}
                 onClick={() =>
                   useStudyUi.getState().openLog({
                     subjectId: review.subjectId,
@@ -585,18 +590,25 @@ function ReviewRow({
                   })
                 }
               >
-                <Plus />
+                {writeGate.allowed ? <Plus /> : <Lock />}
               </Button>
-            </Tooltip>
-            <Tooltip label={st("review_complete")}>
-              <Button variant="ghost" size="icon-sm" aria-label={st("review_complete")} className="hover:text-[var(--accent)]" onClick={() => void complete()}>
-                <Check />
+            </GateTooltip>
+            <GateTooltip gate={writeGate} label={st("review_complete")}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={st("review_complete")}
+                className="hover:text-[var(--accent)]"
+                disabled={!writeGate.allowed}
+                onClick={() => void complete()}
+              >
+                {writeGate.allowed ? <Check /> : <Lock />}
               </Button>
-            </Tooltip>
+            </GateTooltip>
           </>
         ) : null}
 
-        {planReadOnly ? null : (
+        {planArchived ? null : (
         <Menu>
           <MenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label={`${st("more_actions")}: ${name}`}>
@@ -606,26 +618,31 @@ function ReviewRow({
           <MenuContent align="end">
             {pending ? (
               <>
-                <MenuItem onSelect={() => setRescheduleOpen(true)}>
+                <MenuItem disabled={!writeGate.allowed} onSelect={() => setRescheduleOpen(true)}>
                   <CalendarClock /> {st("review_reschedule")}
+                  <PlanLockBadge gate={writeGate} />
                 </MenuItem>
                 <MenuItem
+                  disabled={!writeGate.allowed}
                   onSelect={async () => {
                     await actions.resolveReviews([review.id], "ignored");
                     toast.success(st("review_ignored_toast", { count: 1 }));
                   }}
                 >
                   <EyeOff /> {st("review_ignore")}
+                  <PlanLockBadge gate={writeGate} />
                 </MenuItem>
               </>
             ) : (
               <MenuItem
+                disabled={!writeGate.allowed}
                 onSelect={async () => {
                   await actions.resolveReviews([review.id], "pending");
                   toast.success(st("review_restored_toast"));
                 }}
               >
                 <Undo2 /> {st("review_restore")}
+                <PlanLockBadge gate={writeGate} />
               </MenuItem>
             )}
             <MenuItem
@@ -1086,7 +1103,8 @@ function FlashcardsPanel() {
 /** Objetivo sem nenhuma revisão ainda: explica de onde elas vêm com os intervalos reais das preferências. */
 function ReviewsIntro() {
   const { st } = useStudyT();
-  const { settings, today, planReadOnly } = useStudy();
+  const { settings, today, planArchived } = useStudy();
+  const writeGate = usePlanGates().write;
   const { dueFlashcards } = useWorkspace();
   const intervals = settings.reviewIntervals;
   return (
@@ -1103,11 +1121,17 @@ function ReviewsIntro() {
                 <p className="mt-3 text-[12.5px] leading-relaxed text-faint">{st("reviews_intro_auto_off")}</p>
               ) : null}
               <div className="mt-6 flex flex-wrap items-center gap-2">
-                {planReadOnly ? null : (
-                  <Button variant="secondary" onClick={() => useStudyUi.getState().openLog()}>
-                    <Plus />
-                    {st("logform_title_new")}
-                  </Button>
+                {planArchived ? null : (
+                  <GateTooltip gate={writeGate}>
+                    <Button
+                      variant="secondary"
+                      disabled={!writeGate.allowed}
+                      onClick={() => useStudyUi.getState().openLog()}
+                    >
+                      {writeGate.allowed ? <Plus /> : <Lock />}
+                      {st("logform_title_new")}
+                    </Button>
+                  </GateTooltip>
                 )}
                 <Button variant="ghost" onClick={openStudyPreferences}>
                   <SlidersHorizontal />

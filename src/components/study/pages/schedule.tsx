@@ -35,6 +35,7 @@ import {
   Flag,
   GripVertical,
   ListPlus,
+  Lock,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -90,6 +91,8 @@ import { CycleWizard } from "../cycle-wizard";
 import { ReminderDialog } from "../dialogs";
 import { FocusButton, Segmented, StudyHeader, StudyLoading, StudyPage, useStartFocus } from "../ui";
 import { TaskDialog, TaskLine, TasksPanel, type TaskDialogState } from "../tasks";
+import { useGoalGates, usePlanGates } from "@/lib/plans/gates";
+import { GateTooltip, PlanLockBadge } from "@/components/plans/plan-lock";
 
 const SHEET = "rounded-[20px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_1px_2px_rgba(15,44,76,0.04)]";
 const DURATIONS = [15, 20, 25, 30, 40, 45, 50, 60, 75, 90, 120, 150, 180];
@@ -176,7 +179,8 @@ function ScheduleBody() {
   const { st, locale } = useStudyT();
   const router = useRouter();
   const params = useSearchParams();
-  const { planCycle, planReviews, planSubjects, reminders, settings, today, actions, focusPlan, planReadOnly, subjectById } = useStudy();
+  const { planCycle, planReviews, planSubjects, reminders, settings, today, actions, focusPlan, planReadOnly, planArchived, subjectById } = useStudy();
+  const writeGate = usePlanGates().write;
   const { tasks } = usePlanning();
   const view = useStudyUi((state) => state.scheduleView);
   const [anchor, setAnchor] = useState(today);
@@ -370,17 +374,21 @@ function ScheduleBody() {
           showLog={false}
           actions={
             <>
-              {focusPlan && planSubjects.length && !planReadOnly ? (
-                <Button variant="secondary" onClick={() => commands.scheduleOn(null)}>
-                  <CalendarPlus />
-                  {st("agenda_title_new")}
-                </Button>
+              {focusPlan && planSubjects.length && !planArchived ? (
+                <GateTooltip gate={writeGate}>
+                  <Button variant="secondary" disabled={!writeGate.allowed} onClick={() => commands.scheduleOn(null)}>
+                    {writeGate.allowed ? <CalendarPlus /> : <Lock />}
+                    {st("agenda_title_new")}
+                  </Button>
+                </GateTooltip>
               ) : null}
-              <Button variant="secondary" onClick={() => newTask(today)}>
-                <ListPlus />
-                {st("task_new")}
-              </Button>
-              {planCycle && focusPlan && !planReadOnly ? (
+              <GateTooltip gate={writeGate}>
+                <Button variant="secondary" disabled={!writeGate.allowed} onClick={() => newTask(today)}>
+                  {writeGate.allowed ? <ListPlus /> : <Lock />}
+                  {st("task_new")}
+                </Button>
+              </GateTooltip>
+              {planCycle && focusPlan && !planArchived ? (
                 <Menu>
                   <MenuTrigger asChild>
                     <Button variant="secondary" size="icon" className="size-9" aria-label={st("more_actions")}>
@@ -388,11 +396,13 @@ function ScheduleBody() {
                     </Button>
                   </MenuTrigger>
                   <MenuContent align="end">
-                    <MenuItem onSelect={() => openWizard("manual")}>
+                    <MenuItem disabled={!writeGate.allowed} onSelect={() => openWizard("manual")}>
                       <SlidersHorizontal /> {st("schedule_reconfigure")}
+                      <PlanLockBadge gate={writeGate} />
                     </MenuItem>
-                    <MenuItem onSelect={() => openWizard("auto")}>
+                    <MenuItem disabled={!writeGate.allowed} onSelect={() => openWizard("auto")}>
                       <Scale /> {st("schedule_setup_auto")}
+                      <PlanLockBadge gate={writeGate} />
                     </MenuItem>
                     <MenuSeparator />
                     <MenuItem destructive onSelect={() => void removeCycle()}>
@@ -454,7 +464,8 @@ function ScheduleBody() {
 
 function CycleBand({ cycle, progress, week }: { cycle: StudyCycle; progress: RoundProgress; week: WeekTotals }) {
   const { st, duration } = useStudyT();
-  const { subjectById, actions, planReadOnly } = useStudy();
+  const { subjectById, actions, planArchived } = useStudy();
+  const writeGate = usePlanGates().write;
   const current = cycle.items.length ? cycle.items[cycle.pointer % cycle.items.length] : null;
   const subject = current ? subjectById(current.subjectId) : undefined;
   const topic = subject?.topics.find((entry) => !entry.done) ?? null;
@@ -502,17 +513,21 @@ function CycleBand({ cycle, progress, week }: { cycle: StudyCycle; progress: Rou
               <p className="mt-1 text-[15px] text-muted">{st("cycle_empty")}</p>
             )}
           </div>
-          {current && !planReadOnly ? (
+          {current && !planArchived ? (
             <div className="col-span-2 flex flex-wrap gap-2 @2xl:col-span-1 @2xl:col-start-2 @2xl:self-start">
               <FocusButton variant="primary" size="md" subjectId={current.subjectId} topicId={topic?.id ?? null} minutes={current.minutes} label={st("next_up_start")} />
-              <Button variant="secondary" onClick={() => void mark(false)}>
-                <Check />
-                {st("cycle_mark_done")}
-              </Button>
-              <Button variant="ghost" onClick={() => void mark(true)}>
-                <SkipForward />
-                {st("cycle_skip")}
-              </Button>
+              <GateTooltip gate={writeGate}>
+                <Button variant="secondary" disabled={!writeGate.allowed} onClick={() => void mark(false)}>
+                  {writeGate.allowed ? <Check /> : <Lock />}
+                  {st("cycle_mark_done")}
+                </Button>
+              </GateTooltip>
+              <GateTooltip gate={writeGate}>
+                <Button variant="ghost" disabled={!writeGate.allowed} onClick={() => void mark(true)}>
+                  {writeGate.allowed ? <SkipForward /> : <Lock />}
+                  {st("cycle_skip")}
+                </Button>
+              </GateTooltip>
             </div>
           ) : null}
         </div>
@@ -643,8 +658,10 @@ function WeekLedger({ week }: { week: WeekTotals }) {
 
 function SetupBand({ onSetup }: { onSetup: (mode: WizardMode) => void }) {
   const { st } = useStudyT();
+  const newGoalGate = useGoalGates().newGoal;
   const router = useRouter();
-  const { focusPlan, planReadOnly, planSubjects } = useStudy();
+  const { focusPlan, planArchived, planSubjects } = useStudy();
+  const writeGate = usePlanGates().write;
   return (
     <section className="mb-8 flex flex-wrap items-center gap-x-8 gap-y-5">
       <svg viewBox="0 0 120 120" aria-hidden className="size-[5.5rem] shrink-0 -rotate-90 sm:size-28">
@@ -660,19 +677,34 @@ function SetupBand({ onSetup }: { onSetup: (mode: WizardMode) => void }) {
         {focusPlan && !planSubjects.length ? <p className="mt-2 text-[12.5px] text-muted">{st("cycle_no_subjects_warning")}</p> : null}
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
           {!focusPlan ? (
-            <Button variant="primary" onClick={() => router.push("/home/study/goals/new")}>
-              <Plus />
-              {st("empty_goal_cta")}
-            </Button>
-          ) : planReadOnly ? null : !planSubjects.length ? (
-            <Button variant="primary" onClick={() => router.push("/home/study/subjects")}>
-              <BookOpen />
-              {st("cycle_add_subjects_cta")}
-            </Button>
+            <GateTooltip gate={newGoalGate}>
+              <Button
+                variant="primary"
+                disabled={!newGoalGate.allowed}
+                onClick={() => router.push("/home/study/goals/new")}
+              >
+                {newGoalGate.allowed ? <Plus /> : <Lock />}
+                {st("empty_goal_cta")}
+              </Button>
+            </GateTooltip>
+          ) : planArchived ? null : !planSubjects.length ? (
+            <GateTooltip gate={writeGate}>
+              <Button
+                variant="primary"
+                disabled={!writeGate.allowed}
+                onClick={() => router.push("/home/study/subjects")}
+              >
+                {writeGate.allowed ? <BookOpen /> : <Lock />}
+                {st("cycle_add_subjects_cta")}
+              </Button>
+            </GateTooltip>
           ) : (
-            <Button variant="primary" onClick={() => onSetup("manual")}>
-              {st("schedule_setup_manual")}
-            </Button>
+            <GateTooltip gate={writeGate}>
+              <Button variant="primary" disabled={!writeGate.allowed} onClick={() => onSetup("manual")}>
+                {writeGate.allowed ? null : <Lock />}
+                {st("schedule_setup_manual")}
+              </Button>
+            </GateTooltip>
           )}
         </div>
       </div>
@@ -782,7 +814,8 @@ function LayerGlyph({ layer }: { layer: keyof ScheduleLayers }) {
 
 function DayAddMenu({ day, className, children }: { day: DayKey; className?: string; children: ReactNode }) {
   const { st, locale } = useStudyT();
-  const { planSubjects, focusPlan, planReadOnly } = useStudy();
+  const { planSubjects, focusPlan, planArchived } = useStudy();
+  const writeGate = usePlanGates().write;
   const commands = useScheduleCommands();
   const label = st("day_add", { date: formatDay(day, locale, { day: "numeric", month: "long" }) });
   return (
@@ -793,13 +826,15 @@ function DayAddMenu({ day, className, children }: { day: DayKey; className?: str
         </button>
       </MenuTrigger>
       <MenuContent align="end">
-        {focusPlan && planSubjects.length && !planReadOnly ? (
-          <MenuItem onSelect={() => commands.scheduleOn(day)}>
+        {focusPlan && planSubjects.length && !planArchived ? (
+          <MenuItem disabled={!writeGate.allowed} onSelect={() => commands.scheduleOn(day)}>
             <CalendarPlus /> {st("agenda_title_new")}
+            <PlanLockBadge gate={writeGate} />
           </MenuItem>
         ) : null}
-        <MenuItem onSelect={() => commands.newTask(day)}>
+        <MenuItem disabled={!writeGate.allowed} onSelect={() => commands.newTask(day)}>
           <ListPlus /> {st("task_new")}
+          <PlanLockBadge gate={writeGate} />
         </MenuItem>
       </MenuContent>
     </Menu>
@@ -1611,7 +1646,8 @@ function CycleSequence({
 }) {
   const { st, locale, duration } = useStudyT();
   const router = useRouter();
-  const { planSubjects, subjectById, settings, today, actions, planReadOnly } = useStudy();
+  const { planSubjects, subjectById, settings, today, actions, planReadOnly, planArchived } = useStudy();
+  const writeGate = usePlanGates().write;
   const commands = useScheduleCommands();
   const { summary } = useAgendaLabels();
   const [order, setOrder] = useState<string[] | null>(null);
@@ -1886,7 +1922,7 @@ function CycleSequence({
                     </button>
                   )}
                   <span className="shrink-0 text-[11.5px] tabular-nums text-muted">{duration(entry.minutes * 60)}</span>
-                  {planReadOnly ? null : (
+                  {planArchived ? null : (
                   <Menu>
                     <MenuTrigger asChild>
                       <Button
@@ -1899,8 +1935,9 @@ function CycleSequence({
                       </Button>
                     </MenuTrigger>
                     <MenuContent align="end">
-                      <MenuItem onSelect={() => commands.editAgenda(entry, null)}>
+                      <MenuItem disabled={!writeGate.allowed} onSelect={() => commands.editAgenda(entry, null)}>
                         <Pencil /> {st("edit")}
+                        <PlanLockBadge gate={writeGate} />
                       </MenuItem>
                       <MenuSeparator />
                       <MenuItem destructive onSelect={() => commands.deleteAgenda(entry, null)}>
@@ -1919,19 +1956,28 @@ function CycleSequence({
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-1 border-t border-[var(--border)] px-2 py-1.5">
-        {cycle.history.length && !planReadOnly ? (
-          <Button variant="ghost" size="sm" onClick={() => void undo()} title={st("cycle_undo")} aria-label={st("cycle_undo")}>
-            <Undo2 />
+        {cycle.history.length && !planArchived ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!writeGate.allowed}
+            onClick={() => void undo()}
+            title={writeGate.reason ?? st("cycle_undo")}
+            aria-label={st("cycle_undo")}
+          >
+            {writeGate.allowed ? <Undo2 /> : <Lock />}
             {st("undo")}
           </Button>
         ) : (
           <span />
         )}
-        {planReadOnly ? <span /> : (
-        <Button variant="ghost" size="sm" onClick={() => onReconfigure("manual")}>
-          <SlidersHorizontal />
-          {st("schedule_reconfigure")}
-        </Button>
+        {planArchived ? <span /> : (
+        <GateTooltip gate={writeGate}>
+          <Button variant="ghost" size="sm" disabled={!writeGate.allowed} onClick={() => onReconfigure("manual")}>
+            {writeGate.allowed ? <SlidersHorizontal /> : <Lock />}
+            {st("schedule_reconfigure")}
+          </Button>
+        </GateTooltip>
         )}
       </div>
     </section>

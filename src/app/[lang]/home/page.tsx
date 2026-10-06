@@ -813,6 +813,7 @@ function WeekStrip({ selected, onSelect }: { selected: DayKey; onSelect: (day: D
 function StudyOverview() {
   const router = useRouter();
   const goalGates = useGoalGates();
+  const writeGate = usePlanGates().write;
   const { st } = useStudyT();
   const study = useStudy();
   const plan = study.focusPlan;
@@ -881,16 +882,25 @@ function StudyOverview() {
       {study.planReadOnly ? <ArchivedPlanBanner className="mb-0 rounded-none border-x-0 border-t-0" /> : null}
       <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-4 px-5 pb-4 pt-5 sm:px-6">
         <GoalSwitcher />
-        {study.planReadOnly ? null : (
+        {study.planArchived ? null : (
           <div className="flex flex-wrap items-center gap-1.5">
-            <Button variant="primary" size="sm" onClick={openBlankTimer}>
-              <Timer />
-              {st("next_up_start")}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => useStudyUi.getState().openLog()}>
-              <Plus />
-              {st("logform_title_new")}
-            </Button>
+            <GateTooltip gate={writeGate}>
+              <Button variant="primary" size="sm" disabled={!writeGate.allowed} onClick={openBlankTimer}>
+                {writeGate.allowed ? <Timer /> : <Lock />}
+                {st("next_up_start")}
+              </Button>
+            </GateTooltip>
+            <GateTooltip gate={writeGate}>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!writeGate.allowed}
+                onClick={() => useStudyUi.getState().openLog()}
+              >
+                {writeGate.allowed ? <Plus /> : <Lock />}
+                {st("logform_title_new")}
+              </Button>
+            </GateTooltip>
           </div>
         )}
       </div>
@@ -1371,6 +1381,7 @@ function PageCard({ notebook, notebooks, livePages }: { notebook: Notebook; note
 }
 
 function TodayReviewsTile() {
+  const newGoalGate = useGoalGates().newGoal;
   const { st } = useStudyT();
   const study = useStudy();
   const plan = study.focusPlan;
@@ -1426,14 +1437,25 @@ function TodayReviewsTile() {
         <div className="flex flex-1 flex-col items-center justify-center py-8 text-center">
           <p className="text-[13.5px] font-medium text-ink">{st("home_study_intro_title")}</p>
           <p className="mt-1 max-w-xs text-[12.5px] text-muted">{st("home_study_intro_desc")}</p>
-          <Link
-            href="/home/study/goals/new"
-            prefetch
-            className="mt-4 inline-flex items-center gap-1.5 rounded-[12px] bg-[var(--accent)] px-3.5 py-2 text-[12.5px] font-medium text-white shadow-sm transition hover:opacity-90"
-          >
-            <Plus className="size-3.5" />
-            {st("home_study_intro_cta")}
-          </Link>
+          {newGoalGate.allowed ? (
+            <Link
+              href="/home/study/goals/new"
+              prefetch
+              className="mt-4 inline-flex items-center gap-1.5 rounded-[12px] bg-[var(--accent)] px-3.5 py-2 text-[12.5px] font-medium text-white shadow-sm transition hover:opacity-90"
+            >
+              <Plus className="size-3.5" />
+              {st("home_study_intro_cta")}
+            </Link>
+          ) : (
+            <span
+              aria-disabled="true"
+              title={newGoalGate.reason ?? undefined}
+              className="mt-4 inline-flex cursor-not-allowed items-center gap-1.5 rounded-[12px] bg-[var(--accent)] px-3.5 py-2 text-[12.5px] font-medium text-white opacity-50 shadow-sm"
+            >
+              <Lock className="size-3.5" />
+              {st("home_study_intro_cta")}
+            </span>
+          )}
         </div>
       </section>
     );

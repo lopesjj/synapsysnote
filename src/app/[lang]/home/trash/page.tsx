@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Check, Database, FileText, Notebook as NotebookGlyph, NotebookText, RotateCcw, Search, X } from "lucide-react";
+import { Check, Database, FileText, Lock, Notebook as NotebookGlyph, NotebookText, RotateCcw, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/lib/i18n/navigation";
 import { useWorkspace, TRASH_RETENTION_DAYS } from "@/lib/data/provider";
@@ -14,6 +14,8 @@ import { localizeErrorMessage, useTranslation } from "@/lib/i18n/translations";
 import { intlLocale } from "@/lib/study/format";
 import { isPlanningName } from "@/components/database/database-i18n";
 import type { Notebook } from "@/types/models";
+import { usePlanGates, type PlanGate, type PlanGates } from "@/lib/plans/gates";
+import { notifyPlanError } from "@/lib/plans/client";
 
 type Kind = "note" | "page" | "notebook" | "database";
 type Filter = "all" | "notes" | "folders" | "databases";
@@ -30,6 +32,7 @@ interface TrashRow {
   excerpt: string;
   deletedAt: number;
   restore: () => Promise<void>;
+  restoreGate: (gates: PlanGates) => PlanGate;
   purge: () => Promise<void>;
   restoredMessage: string;
   purgedMessage: string;
@@ -135,6 +138,7 @@ export default function TrashPage() {
         excerpt: "",
         deletedAt: Number(notebook.deletedAt) || now,
         restore: () => adapter.restoreNotebook(notebook.id),
+        restoreGate: (gates) => gates.restoreNotebook(notebook.id),
         purge: () => adapter.purgeNotebook(notebook.id),
         restoredMessage: t("notebook_restored"),
         purgedMessage: t("notebook_purged"),
@@ -153,6 +157,7 @@ export default function TrashPage() {
         excerpt: truncate((page.plainText ?? "").replace(/\s+/g, " ").trim(), 140),
         deletedAt: Number(page.deletedAt) || now,
         restore: () => adapter.restorePage(page.id),
+        restoreGate: (gates) => gates.restorePage(page.id),
         purge: () => adapter.purgePage(page.id),
         restoredMessage: t("page_restored"),
         purgedMessage: t("page_purged"),
@@ -171,6 +176,7 @@ export default function TrashPage() {
         excerpt: "",
         deletedAt: Number(database.deletedAt) || now,
         restore: () => adapter.restoreDatabase(database.id),
+        restoreGate: (gates) => gates.restoreDatabase(database.notebookId),
         purge: () => adapter.purgeDatabase(database.id),
         restoredMessage: t("database_restored"),
         purgedMessage: t("database_purged"),
@@ -179,6 +185,12 @@ export default function TrashPage() {
 
     return out.sort((a, b) => b.deletedAt - a.deletedAt);
   }, [adapter, livePages, notebooks, now, t, trashedDatabases, trashedNotebooks, trashedPages, untitled]);
+
+  const planGates = usePlanGates();
+  const restoreGates = useMemo(
+    () => new Map(rows.map((row) => [row.key, row.restoreGate(planGates)])),
+    [planGates, rows]
+  );
 
   const counts = useMemo(() => {
     const result: Record<Filter, number> = { all: rows.length, notes: 0, folders: 0, databases: 0 };
@@ -256,7 +268,7 @@ export default function TrashPage() {
       forget([row.key]);
       toast.success(mode === "restore" ? row.restoredMessage : row.purgedMessage);
     } catch (error) {
-      toast.error(errorText(error, t(mode === "restore" ? "restore_failed" : "purge_failed")));
+      if (!notifyPlanError(error)) toast.error(errorText(error, t(mode === "restore" ? "restore_failed" : "purge_failed")));
     } finally {
       setBusy(null);
     }
@@ -402,6 +414,7 @@ export default function TrashPage() {
                         expiry={expiryText(row.deletedAt)}
                         deletedLabel={formatRelative(row.deletedAt, language)}
                         onToggle={() => toggle(row.key)}
+                        restoreGate={restoreGates.get(row.key) ?? null}
                         onRestore={() => void runOne(row, "restore")}
                         onPurge={() => void runOne(row, "purge")}
                       />
@@ -505,6 +518,7 @@ function TrashItem({
   days,
   expiry,
   deletedLabel,
+  restoreGate,
   onToggle,
   onRestore,
   onPurge,
@@ -517,6 +531,7 @@ function TrashItem({
   days: number;
   expiry: string;
   deletedLabel: string;
+  restoreGate: PlanGate | null;
   onToggle: () => void;
   onRestore: () => void;
   onPurge: () => void;
@@ -597,12 +612,13 @@ function TrashItem({
         <Button
           variant="ghost"
           size="sm"
-          disabled={disabled}
+          disabled={disabled || restoreGate?.allowed === false}
           onClick={onRestore}
+          title={restoreGate?.reason ?? undefined}
           className="rounded-full px-2.5 text-muted hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
-          aria-label={t("trash_restore")}
+          aria-label={restoreGate?.reason ? `${t("trash_restore")}: ${restoreGate.reason}` : t("trash_restore")}
         >
-          <RotateCcw className="size-3.5" />
+          {restoreGate?.allowed === false ? <Lock className="size-3.5" /> : <RotateCcw className="size-3.5" />}
           <span className="hidden @2xl:inline">{t("trash_restore")}</span>
         </Button>
         <Button

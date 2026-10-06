@@ -23,6 +23,7 @@ import {
   MasteredIcon,
   ReplayIcon,
 } from "@/lib/icons/flashcard-icon";
+import { notifyPlanError } from "@/lib/plans/client";
 
 interface FlashcardStudySessionProps {
   cards: Flashcard[];
@@ -263,8 +264,8 @@ export function FlashcardStudySession({
       );
       setEditing(false);
       toast.success(t("card_updated"));
-    } catch {
-      toast.error(t("card_save_failed"));
+    } catch (error) {
+      if (!notifyPlanError(error)) toast.error(t("card_save_failed"));
     } finally {
       setSavingEdit(false);
     }

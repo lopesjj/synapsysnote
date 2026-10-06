@@ -14,6 +14,7 @@ import {
   FileText,
   Link2,
   Link2Off,
+  Lock,
   MoreHorizontal,
   NotebookPen,
   Pencil,
@@ -41,6 +42,8 @@ import { Combobox } from "../combobox";
 import { SubjectDialog } from "../subject-dialog";
 import { AccuracyTag, CompletionMark, FocusButton, Segmented, StudyEmpty, StudyGate, StudyHeader, StudyPage } from "../ui";
 import { relativeDay } from "../widgets";
+import { usePlanGates } from "@/lib/plans/gates";
+import { GateTooltip, PlanLockBadge } from "@/components/plans/plan-lock";
 
 type SortKey = "custom" | "time" | "accuracy" | "coverage" | "stale";
 type Filter = "all" | "pending" | "done";
@@ -96,7 +99,8 @@ function SubjectsBody() {
   const { st } = useStudyT();
   const params = useSearchParams();
   const focusSubject = params.get("subject");
-  const { focusPlan, planReadOnly, planSubjects, planSessions, planExams, today } = useStudy();
+  const { focusPlan, planReadOnly, planArchived, planSubjects, planSessions, planExams, today } = useStudy();
+  const writeGate = usePlanGates().write;
   const [sort, setSort] = useState<SortKey>("custom");
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -179,11 +183,17 @@ function SubjectsBody() {
         title={st("nav_subjects")}
         subtitle={st("subjects_subtitle", { goal: focusPlan.name || st("untitled_goal") })}
         actions={
-          planReadOnly ? null : (
-            <Button variant="secondary" onClick={() => setDialog({ open: true, subject: null })}>
-              <Plus />
-              {st("goal_add_subject")}
-            </Button>
+          planArchived ? null : (
+            <GateTooltip gate={writeGate}>
+              <Button
+                variant="secondary"
+                disabled={!writeGate.allowed}
+                onClick={() => setDialog({ open: true, subject: null })}
+              >
+                {writeGate.allowed ? <Plus /> : <Lock />}
+                {st("goal_add_subject")}
+              </Button>
+            </GateTooltip>
           )
         }
       />
@@ -311,11 +321,17 @@ function SubjectsBody() {
           title={st("empty_subjects_title")}
           description={st("empty_subjects_desc")}
           action={
-            planReadOnly ? undefined : (
-              <Button variant="primary" onClick={() => setDialog({ open: true, subject: null })}>
-                <Plus />
-                {st("empty_subjects_cta")}
-              </Button>
+            planArchived ? undefined : (
+              <GateTooltip gate={writeGate}>
+                <Button
+                  variant="primary"
+                  disabled={!writeGate.allowed}
+                  onClick={() => setDialog({ open: true, subject: null })}
+                >
+                  {writeGate.allowed ? <Plus /> : <Lock />}
+                  {st("empty_subjects_cta")}
+                </Button>
+              </GateTooltip>
             )
           }
         />
@@ -488,7 +504,8 @@ function SubjectGroup({
   onLink: (topic: StudyTopic) => void;
 }) {
   const { st, duration, locale } = useStudyT();
-  const { planReadOnly } = useStudy();
+  const { planArchived } = useStudy();
+  const writeGate = usePlanGates().write;
   const router = useRouter();
   const { settings, today } = useStudy();
   const { subject, agg, done, stale, topics } = row;
@@ -539,9 +556,13 @@ function SubjectGroup({
               </Button>
             </MenuTrigger>
             <MenuContent align="end">
-              {planReadOnly ? null : (
-                <MenuItem onSelect={() => useStudyUi.getState().openLog({ subjectId: subject.id })}>
+              {planArchived ? null : (
+                <MenuItem
+                  disabled={!writeGate.allowed}
+                  onSelect={() => useStudyUi.getState().openLog({ subjectId: subject.id })}
+                >
                   <Plus /> {st("logform_title_new")}
+                  <PlanLockBadge gate={writeGate} />
                 </MenuItem>
               )}
               <MenuItem onSelect={() => router.push(`/home/study/subjects/${subject.id}`)}>
@@ -552,11 +573,12 @@ function SubjectGroup({
                   <NotebookPen /> {st("subject_open_notebook")}
                 </MenuItem>
               ) : null}
-              {planReadOnly ? null : (
+              {planArchived ? null : (
                 <>
                   <MenuSeparator />
-                  <MenuItem onSelect={onEdit}>
+                  <MenuItem disabled={!writeGate.allowed} onSelect={onEdit}>
                     <Pencil /> {st("edit")}
+                    <PlanLockBadge gate={writeGate} />
                   </MenuItem>
                 </>
               )}
@@ -642,7 +664,8 @@ function TopicRow({
 }) {
   const { st, locale, duration } = useStudyT();
   const router = useRouter();
-  const { actions, settings, today, planReadOnly } = useStudy();
+  const { actions, settings, today, planReadOnly, planArchived } = useStudy();
+  const writeGate = usePlanGates().write;
   const { adapter, pageById } = useWorkspace();
   const note = topic.pageId ? pageById(topic.pageId) : undefined;
   const noteAlive = Boolean(note && !note.deletedAt);
@@ -708,7 +731,7 @@ function TopicRow({
 
       <div className="flex items-center justify-end gap-0.5 lg:order-last lg:opacity-0 lg:transition-opacity lg:group-hover/topic:opacity-100 lg:focus-within:opacity-100">
         <FocusButton variant="ghost" size="icon-sm" subjectId={subject.id} topicId={topic.id} label={st("subject_start_focus")} />
-        {planReadOnly && !noteAlive ? null : (
+        {planArchived && !noteAlive ? null : (
         <Menu>
           <MenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label={st("more_actions")}>
@@ -716,28 +739,38 @@ function TopicRow({
             </Button>
           </MenuTrigger>
           <MenuContent align="end">
-            {planReadOnly ? null : (
-              <MenuItem onSelect={() => useStudyUi.getState().openLog({ subjectId: subject.id, topicId: topic.id })}>
+            {planArchived ? null : (
+              <MenuItem
+                disabled={!writeGate.allowed}
+                onSelect={() => useStudyUi.getState().openLog({ subjectId: subject.id, topicId: topic.id })}
+              >
                 <Plus /> {st("logform_title_new")}
+                <PlanLockBadge gate={writeGate} />
               </MenuItem>
             )}
             {noteAlive ? (
               <MenuItem onSelect={() => router.push(`/home/p/${topic.pageId}`)}>
                 <FileText /> {st("topic_open_note")}
               </MenuItem>
-            ) : planReadOnly ? null : (
-              <MenuItem onSelect={() => void createNote()}>
+            ) : planArchived ? null : (
+              <MenuItem disabled={!writeGate.allowed} onSelect={() => void createNote()}>
                 <FileText /> {st("topic_create_note")}
+                <PlanLockBadge gate={writeGate} />
               </MenuItem>
             )}
-            {planReadOnly ? null : (
-              <MenuItem onSelect={onLink}>
+            {planArchived ? null : (
+              <MenuItem disabled={!writeGate.allowed} onSelect={onLink}>
                 <Link2 /> {st("topic_link_note")}
+                <PlanLockBadge gate={writeGate} />
               </MenuItem>
             )}
-            {topic.pageId && !planReadOnly ? (
-              <MenuItem onSelect={() => void actions.updateTopic(subject.id, topic.id, { pageId: null })}>
+            {topic.pageId && !planArchived ? (
+              <MenuItem
+                disabled={!writeGate.allowed}
+                onSelect={() => void actions.updateTopic(subject.id, topic.id, { pageId: null })}
+              >
                 <Link2Off /> {st("topic_unlink_note")}
+                <PlanLockBadge gate={writeGate} />
               </MenuItem>
             ) : null}
           </MenuContent>

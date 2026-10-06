@@ -8,6 +8,7 @@ import {
   Globe,
   Image as ImageIcon,
   Loader2,
+  Lock,
   Mic,
   Paperclip,
   Pencil,
@@ -54,6 +55,10 @@ import {
   StudyIcon,
 } from "@/lib/icons/flashcard-icon";
 import { FlashcardStudySession } from "./flashcard-study-session";
+import { OPEN_GATE, usePlanGates, type PlanGate } from "@/lib/plans/gates";
+import { openPlanDialog } from "@/lib/plans/client";
+import { usePlanT } from "@/lib/plans/i18n";
+import { PlanLockBadge } from "@/components/plans/plan-lock";
 
 interface NoteFlashcardsModalProps {
   page: Page;
@@ -93,6 +98,9 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
   const { adapter, flashcards } = useWorkspace();
   const { t, language } = useTranslation();
   const { settings } = useFlashcardSettings();
+  const gates = usePlanGates();
+  const flashGate = gates.feature("flashcards");
+  const aiGate = gates.feature("aiFlashcards");
 
   const [tab, setTab] = useState<TabMode>("list");
   const [studying, setStudying] = useState(false);
@@ -659,18 +667,20 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
   const selectedGeneratedCount = generated.filter((c) => c.selected).length;
   const activeLanguage = getLanguageDefinition(targetLanguage);
 
-  const tabs: { id: TabMode; label: string; icon: React.ReactNode | null }[] = [
+  const tabs: { id: TabMode; label: string; icon: React.ReactNode | null; gate: PlanGate }[] = [
     {
       id: "list",
       label: t("cards_count", { count: noteCards.length }),
       icon: <FlashcardsIcon className="size-3.5" />,
+      gate: OPEN_GATE,
     },
     {
       id: "editor",
       label: editingId ? t("edit_card") : t("create_manually"),
       icon: editingId ? <Pencil className="size-3.5" /> : <Plus className="size-3.5" />,
+      gate: flashGate,
     },
-    { id: "ai", label: t("generate_ai"), icon: <SparkIcon className="size-[1.125rem]" /> },
+    { id: "ai", label: t("generate_ai"), icon: <SparkIcon className="size-[1.125rem]" />, gate: aiGate },
   ];
 
   return (
@@ -703,13 +713,15 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
               key={item.id}
               type="button"
               role="tab"
+              disabled={!item.gate.allowed}
+              title={item.gate.reason ?? undefined}
               onClick={() => {
                 if (item.id !== "editor") resetEditor();
                 setTab(item.id);
               }}
               aria-selected={tab === item.id}
               className={cn(
-                "relative flex shrink-0 items-center gap-1.5 px-2.5 pb-2.5 pt-1 text-[12px] font-medium transition-colors sm:px-3 sm:text-[12.5px]",
+                "relative flex shrink-0 items-center gap-1.5 px-2.5 pb-2.5 pt-1 text-[12px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-muted sm:px-3 sm:text-[12.5px]",
                 tab === item.id ? "text-ink" : "text-muted hover:text-ink"
               )}
             >
@@ -719,6 +731,7 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                 </span>
               ) : null}
               <span className="truncate">{item.label}</span>
+              {item.gate.allowed ? null : <PlanLockBadge gate={item.gate} className="ml-0.5" />}
               {tab === item.id ? (
                 <span className="absolute inset-x-1 -bottom-px h-[2px] rounded-full bg-[var(--accent)]" />
               ) : null}
@@ -736,19 +749,30 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                 {t("no_note_flashcards_desc")}
               </p>
               <div className="mt-5 flex w-full max-w-xs flex-col items-stretch justify-center gap-2 min-[380px]:max-w-none min-[380px]:flex-row min-[380px]:flex-wrap min-[380px]:items-center">
-                <Button variant="secondary" size="sm" className="h-10 sm:h-7" onClick={() => setTab("editor")}>
-                  <Plus className="size-3.5" />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-10 sm:h-7"
+                  disabled={!flashGate.allowed}
+                  title={flashGate.reason ?? undefined}
+                  onClick={() => setTab("editor")}
+                >
+                  {flashGate.allowed ? <Plus className="size-3.5" /> : <Lock className="size-3.5" />}
                   {t("create_manually")}
                 </Button>
                 <Button
                   variant="primary"
                   size="sm"
                   className="h-10 font-semibold sm:h-7"
+                  disabled={!aiGate.allowed}
+                  title={aiGate.reason ?? undefined}
                   onClick={() => setTab("ai")}
                 >
+                  {aiGate.allowed ? null : <Lock className="size-3.5" />}
                   {t("generate_ai")}
                 </Button>
               </div>
+              <FlashcardPlanNotice flashGate={flashGate} aiGate={aiGate} />
             </div>
           ) : (
             <div className="space-y-3">
@@ -800,13 +824,17 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                     variant="primary"
                     size="sm"
                     className="ms-auto h-10 flex-1 gap-1.5 font-semibold @min-[36rem]/cards:ms-0 @min-[36rem]/cards:h-7 @min-[36rem]/cards:flex-none"
+                    disabled={!flashGate.allowed}
+                    title={flashGate.reason ?? undefined}
                     onClick={() => setStudying(true)}
                   >
-                    <StudyIcon className="size-3" />
+                    {flashGate.allowed ? <StudyIcon className="size-3" /> : <Lock className="size-3" />}
                     {t("study_this_note")}
                   </Button>
                 </div>
               </div>
+
+              {flashGate.allowed ? null : <FlashcardPlanNotice flashGate={flashGate} aiGate={aiGate} />}
 
               {searchOpen ? (
                 <div className="flex flex-wrap items-center gap-2">
@@ -937,11 +965,12 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
                               variant="ghost"
                               size="icon-sm"
                               className="size-10 text-faint hover:text-ink sm:size-7"
+                              disabled={!flashGate.allowed}
                               onClick={() => startEdit(card)}
                               aria-label={t("edit_card")}
-                              title={t("edit_card")}
+                              title={flashGate.reason ?? t("edit_card")}
                             >
-                              <Pencil className="size-3.5" />
+                              {flashGate.allowed ? <Pencil className="size-3.5" /> : <Lock className="size-3.5" />}
                             </Button>
                             <Button
                               variant="ghost"
@@ -1505,5 +1534,27 @@ function DetectedChip({
       <span className="font-semibold text-ink tabular-nums">{value}</span>
       <span className="min-w-0 break-words text-muted">{label}</span>
     </span>
+  );
+}
+
+function FlashcardPlanNotice({ flashGate, aiGate }: { flashGate: PlanGate; aiGate: PlanGate }) {
+  const { tp } = usePlanT();
+  const readOnly = usePlanGates().readOnly;
+  if (flashGate.allowed && aiGate.allowed) return null;
+  const title = readOnly ? null : flashGate.allowed ? tp("upsell_ai_title") : tp("upsell_flashcards_title");
+  const body = readOnly ? tp("flashcards_read_only") : flashGate.allowed ? tp("upsell_ai_body") : tp("upsell_flashcards_body");
+  return (
+    <div className="mt-4 flex w-full flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)]/60 px-3 py-2.5 text-left sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-start gap-2">
+        <Lock className="mt-0.5 size-3.5 shrink-0 text-muted" />
+        <div className="min-w-0">
+          {title ? <p className="text-[12.5px] font-semibold text-ink">{title}</p> : null}
+          <p className="text-[12px] leading-relaxed text-muted">{body}</p>
+        </div>
+      </div>
+      <Button variant="secondary" size="sm" className="h-9 shrink-0 sm:h-7" onClick={openPlanDialog}>
+        {tp("view_plans")}
+      </Button>
+    </div>
   );
 }

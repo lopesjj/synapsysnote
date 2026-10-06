@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   FileText,
   Flag,
+  Lock,
   NotebookPen,
   Plus,
   RotateCcw,
@@ -29,6 +30,8 @@ import { useLiveNote, useMaterialNote } from "@/lib/study/hooks";
 import { splitDuration } from "@/lib/study/format";
 import { BUILT_IN_CATEGORIES, SUBJECT_COLORS, subjectTone } from "@/lib/study/defaults";
 import type { PerformanceBand, StudyCategory, StudyPlan } from "@/types/study";
+import { useGoalGates, usePlanGates } from "@/lib/plans/gates";
+import { GateTooltip, PlanLockBadge } from "@/components/plans/plan-lock";
 
 const MONOGRAM_SKIP = new Set(["de", "da", "do", "das", "dos", "e", "a", "o", "the", "of", "and", "la", "le", "el", "di", "del", "der", "die", "und"]);
 
@@ -159,8 +162,9 @@ export function chooseStudyPlan(plan: StudyPlan, setActive: (id: string) => Prom
 
 export function ArchivedPlanBanner({ className }: { className?: string }) {
   const { st } = useStudyT();
-  const { focusPlan, planReadOnly, actions } = useStudy();
-  if (!planReadOnly || !focusPlan) return null;
+  const { focusPlan, planArchived, actions } = useStudy();
+  const unarchiveGate = useGoalGates().unarchive;
+  if (!planArchived || !focusPlan) return null;
   const name = focusPlan.name || st("untitled_goal");
   return (
     <div className={cn("mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3", className)}>
@@ -169,14 +173,18 @@ export function ArchivedPlanBanner({ className }: { className?: string }) {
         {" · "}
         {st("goal_archived_notice")} {st("goal_readonly_banner")}
       </p>
-      <Button
-        variant="secondary"
-        size="sm"
-        className="shrink-0"
-        onClick={() => void reactivatePlan(focusPlan.id, actions).then(() => toast.success(st("goal_unarchived")))}
-      >
-        {st("goals_unarchive")}
-      </Button>
+      <GateTooltip gate={unarchiveGate}>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
+          disabled={!unarchiveGate.allowed}
+          onClick={() => void reactivatePlan(focusPlan.id, actions).then(() => toast.success(st("goal_unarchived")))}
+        >
+          {unarchiveGate.allowed ? null : <Lock />}
+          {st("goals_unarchive")}
+        </Button>
+      </GateTooltip>
     </div>
   );
 }
@@ -204,7 +212,8 @@ export function StudyHeader({
   showLog?: boolean;
 }) {
   const { st, textDir } = useStudyT();
-  const { focusPlan, planReadOnly } = useStudy();
+  const { focusPlan, planArchived } = useStudy();
+  const writeGate = usePlanGates().write;
   return (
     <header className="mb-7 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-b border-[var(--border)] pb-5">
       <div className="min-w-0 flex-1 basis-72">
@@ -224,11 +233,18 @@ export function StudyHeader({
             <GoalSwitcher />
           </div>
         ) : null}
-        {showLog && focusPlan && !planReadOnly ? (
-          <Button variant="primary" size="md" onClick={() => useStudyUi.getState().openLog()}>
-            <Plus />
-            {st("logform_title_new")}
-          </Button>
+        {showLog && focusPlan && !planArchived ? (
+          <GateTooltip gate={writeGate}>
+            <Button
+              variant="primary"
+              size="md"
+              disabled={!writeGate.allowed}
+              onClick={() => useStudyUi.getState().openLog()}
+            >
+              {writeGate.allowed ? <Plus /> : <Lock />}
+              {st("logform_title_new")}
+            </Button>
+          </GateTooltip>
         ) : null}
       </div>
     </header>
@@ -249,6 +265,7 @@ export function GoalSwitcher({
   const { st, textDir } = useStudyT();
   const router = useRouter();
   const { plans, focusPlan, actions } = useStudy();
+  const newGoalGate = useGoalGates().newGoal;
   const live = plans.filter((plan) => !plan.archived);
   const archived = plans.filter((plan) => plan.archived);
   const name = focusPlan ? focusPlan.name || st("untitled_goal") : st("sidebar_no_goal");
@@ -340,8 +357,9 @@ export function GoalSwitcher({
           </>
         ) : null}
         {live.length || archived.length ? <MenuSeparator /> : null}
-        <MenuItem onSelect={() => router.push("/home/study/goals/new")}>
+        <MenuItem disabled={!newGoalGate.allowed} onSelect={() => router.push("/home/study/goals/new")}>
           <Plus /> {st("goal_switch_new")}
+          <PlanLockBadge gate={newGoalGate} />
         </MenuItem>
         <MenuItem onSelect={() => router.push("/home/study/goals")}>
           <Settings2 /> {st("goal_switch_manage")}
@@ -664,6 +682,7 @@ export function NoGoalState({ title }: { title: string }) {
   const { st } = useStudyT();
   const router = useRouter();
   const { plans } = useStudy();
+  const newGoalGate = useGoalGates().newGoal;
   const archived = plans.filter((plan) => plan.archived);
   return (
     <StudyPage>
@@ -673,10 +692,16 @@ export function NoGoalState({ title }: { title: string }) {
         title={st("empty_goal_title")}
         description={st("empty_goal_desc")}
         action={
-          <Button variant="primary" onClick={() => router.push("/home/study/goals/new")}>
-            <Plus />
-            {st("empty_goal_cta")}
-          </Button>
+          <GateTooltip gate={newGoalGate}>
+            <Button
+              variant="primary"
+              disabled={!newGoalGate.allowed}
+              onClick={() => router.push("/home/study/goals/new")}
+            >
+              {newGoalGate.allowed ? <Plus /> : <Lock />}
+              {st("empty_goal_cta")}
+            </Button>
+          </GateTooltip>
         }
       />
       {archived.length ? (
@@ -773,15 +798,25 @@ export function FocusButton({
   const { st } = useStudyT();
   const { subjects, plans } = useStudy();
   const startFocus = useStartFocus();
+  const writeGate = usePlanGates().write;
   const subject = subjectId ? subjects.find((entry) => entry.id === subjectId) : undefined;
   const locked = Boolean(subject && plans.some((plan) => plan.id === subject.planId && plan.archived));
   if (locked) return null;
   const start = () => startFocus({ subjectId, topicId, reviewId, minutes });
   return (
-    <Button variant={variant} size={size} onClick={start} className={className} aria-label={label ?? st("sidebar_focus_idle")}>
-      <Timer />
-      {size === "icon-sm" ? null : (label ?? st("sidebar_focus_idle"))}
-    </Button>
+    <GateTooltip gate={writeGate}>
+      <Button
+        variant={variant}
+        size={size}
+        onClick={start}
+        disabled={!writeGate.allowed}
+        className={className}
+        aria-label={label ?? st("sidebar_focus_idle")}
+      >
+        {writeGate.allowed ? <Timer /> : <Lock />}
+        {size === "icon-sm" ? null : (label ?? st("sidebar_focus_idle"))}
+      </Button>
+    </GateTooltip>
   );
 }
 
