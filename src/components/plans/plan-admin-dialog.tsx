@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Lock, Search, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { DialogHeader, DialogShell } from "@/components/ui/dialog";
@@ -267,39 +267,43 @@ function AccountDetail({ uid, onBack, onSaved }: { uid: string; onBack: () => vo
   const [trial, setTrial] = useState("");
   const [note, setNote] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await firebaseJson<{ account?: unknown; history?: unknown[]; now?: number }>(
-        `/api/admin/plans?uid=${encodeURIComponent(uid)}`
-      );
-      const row = normalizeRow(response.account);
-      setAccount(row);
-      setHistory(
-        (response.history ?? [])
-          .map((entry) => {
-            const raw = entry as { id?: unknown };
-            return normalizeHistoryEntry(typeof raw.id === "string" ? raw.id : "", entry);
-          })
-          .filter((entry): entry is PlanHistoryEntry => Boolean(entry))
-      );
-      if (typeof response.now === "number") setNow(response.now);
-      const record = row?.record ?? null;
-      setPlan(record && record.plan !== "owner" ? record.plan : "free");
-      setExpires(toDateInput(record?.expiresAt ?? null));
-      setTrial(toDateInput(record?.trialEndsAt ?? null));
-      setNote(record?.note ?? "");
-      setError(null);
-    } catch (failure) {
-      setError(errorText(failure, tp));
-    } finally {
-      setLoading(false);
-    }
-  }, [tp, uid]);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+    firebaseJson<{ account?: unknown; history?: unknown[]; now?: number }>(
+      `/api/admin/plans?uid=${encodeURIComponent(uid)}`
+    )
+      .then((response) => {
+        if (cancelled) return;
+        const row = normalizeRow(response.account);
+        setAccount(row);
+        setHistory(
+          (response.history ?? [])
+            .map((entry) => {
+              const raw = entry as { id?: unknown };
+              return normalizeHistoryEntry(typeof raw.id === "string" ? raw.id : "", entry);
+            })
+            .filter((entry): entry is PlanHistoryEntry => Boolean(entry))
+        );
+        if (typeof response.now === "number") setNow(response.now);
+        const record = row?.record ?? null;
+        setPlan(record && record.plan !== "owner" ? record.plan : "free");
+        setExpires(toDateInput(record?.expiresAt ?? null));
+        setTrial(toDateInput(record?.trialEndsAt ?? null));
+        setNote(record?.note ?? "");
+        setError(null);
+      })
+      .catch((failure) => {
+        if (!cancelled) setError(errorText(failure, tp));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey, tp, uid]);
 
   const record = account?.record ?? null;
   const entitlements = useMemo(() => (record ? resolveEntitlements(record, now) : null), [now, record]);
@@ -328,7 +332,7 @@ function AccountDetail({ uid, onBack, onSaved }: { uid: string; onBack: () => vo
       });
       toast.success(tp("admin_saved"));
       onSaved();
-      await load();
+      setReloadKey((key) => key + 1);
     } catch (failure) {
       toast.error(errorText(failure, tp));
     } finally {

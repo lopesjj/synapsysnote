@@ -3,7 +3,7 @@ import type { ArchivePlan } from "@/lib/data/archive";
 import type { LimitKey, PlanLimits } from "./definitions";
 import { PlanError, type LimitViolation } from "./errors";
 
-export const UNFILED = "~unfiled";
+const UNFILED = "~unfiled";
 
 export interface UsageNotebook {
   id: string;
@@ -209,7 +209,7 @@ export function summarizeUsage(usage: Usage): UsageSummary {
   };
 }
 
-export function growthViolations(before: Usage, after: Usage, limits: PlanLimits): LimitViolation[] {
+function growthViolations(before: Usage, after: Usage, limits: PlanLimits): LimitViolation[] {
   const violations: LimitViolation[] = [];
   const check = (key: LimitKey, previous: number, next: number) => {
     const limit = limits[key];
@@ -626,7 +626,7 @@ function deletedFlag(value: unknown): number | null {
   return value ? 1 : null;
 }
 
-export function restoredWorkspaceState(
+function restoredWorkspaceState(
   current: WorkspaceState,
   notebooks: RestoreNotebookInput[],
   pages: RestorePageInput[],
@@ -664,7 +664,7 @@ export function restoredWorkspaceState(
   return { notebooks: [...notebookMap.values()], pages: [...pageMap.values()] };
 }
 
-export function restoredGoals(current: GoalState[], restored: Array<{ id?: unknown; archived?: unknown }>, clean: boolean): GoalState[] {
+function restoredGoals(current: GoalState[], restored: Array<{ id?: unknown; archived?: unknown }>, clean: boolean): GoalState[] {
   const map = new Map<string, GoalState>((clean ? [] : current).map((goal) => [goal.id, goal]));
   for (const entry of restored) {
     const id = optionalId(entry?.id);
@@ -678,7 +678,7 @@ export function restoredGoals(current: GoalState[], restored: Array<{ id?: unkno
   return [...map.values()];
 }
 
-export function activeGoalCount(goals: Array<{ archived?: boolean }>): number {
+function activeGoalCount(goals: Array<{ archived?: boolean }>): number {
   return goals.filter((goal) => !goal.archived).length;
 }
 

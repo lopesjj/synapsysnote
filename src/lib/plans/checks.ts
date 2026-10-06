@@ -26,6 +26,15 @@ export interface CheckState {
 
 const READ_ONLY: PlanErrorDetail = { code: "read_only", violation: null, feature: null };
 
+export interface NoteTarget {
+  notebookId: string | null;
+  parentPageId: string | null;
+}
+
+export function noteTargetFor<T extends NoteTarget>(target: T, entitlements: Entitlements): T {
+  return target.parentPageId && entitlements.limits.subnotesPerNote === 0 ? { ...target, parentPageId: null } : target;
+}
+
 export function writeCheck(entitlements: Entitlements): PlanErrorDetail | null {
   return entitlements.readOnly ? READ_ONLY : null;
 }
@@ -52,7 +61,7 @@ function parentIdOf(notebook: Pick<UsageNotebook, "parentId">): string | null {
   return notebook.parentId && notebook.parentId !== "null" ? notebook.parentId : null;
 }
 
-export function pageTreeIds(pages: UsagePage[], rootIds: string[]): Set<string> {
+function pageTreeIds(pages: UsagePage[], rootIds: string[]): Set<string> {
   const ids = new Set(rootIds);
   const stack = [...rootIds];
   while (stack.length) {
@@ -67,7 +76,7 @@ export function pageTreeIds(pages: UsagePage[], rootIds: string[]): Set<string> 
   return ids;
 }
 
-export function notebookTreeIds(notebooks: UsageNotebook[], rootId: string): Set<string> {
+function notebookTreeIds(notebooks: UsageNotebook[], rootId: string): Set<string> {
   const ids = new Set([rootId]);
   let added = true;
   while (added) {

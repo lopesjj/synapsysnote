@@ -47,7 +47,7 @@ export interface PlanChange {
   note?: string | null;
 }
 
-export function ownerEmails(): Set<string> {
+function ownerEmails(): Set<string> {
   return new Set(
     (process.env.OWNER_EMAILS ?? "")
       .split(/[\s,;]+/)
@@ -56,7 +56,7 @@ export function ownerEmails(): Set<string> {
   );
 }
 
-export function planRef(uid: string): DocumentReference {
+function planRef(uid: string): DocumentReference {
   return adminDb().collection(ACCOUNT_PLANS).doc(uid);
 }
 

@@ -61,7 +61,7 @@ export function writeCachedPlan(uid: string, record: AccountPlanRecord) {
   } catch {}
 }
 
-export function planNow(): number {
+function planNow(): number {
   return Date.now() + usePlanStore.getState().clockOffset;
 }
 
@@ -86,10 +86,6 @@ export function usePlanNow(): number {
   const clockOffset = usePlanStore((state) => state.clockOffset);
   const tick = usePlanStore((state) => state.tick);
   return tick + clockOffset;
-}
-
-export function usePlanLoaded(): boolean {
-  return usePlanStore((state) => state.loaded);
 }
 
 export function waitForPlan(): Promise<void> {
@@ -141,10 +137,6 @@ export function notifyPlanError(error: unknown): boolean {
 export function planFailure(error: PlanError): PlanError {
   notifyPlanError(error);
   return error;
-}
-
-export function planAllows(feature: FeatureKey): boolean {
-  return currentEntitlements().features[feature];
 }
 
 export function assertPlanWritable(): Entitlements {

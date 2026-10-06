@@ -16,11 +16,13 @@ import {
   duplicatePageCheck,
   featureCheck,
   limitDetail,
+  noteTargetFor,
   restoreDatabaseCheck,
   restoreNotebookCheck,
   restorePageCheck,
   writeCheck,
   type CheckState,
+  type NoteTarget,
 } from "./checks";
 import { goalGrowthViolation, newNotebookViolation, newPageViolation, usageIndexOf } from "./usage";
 
@@ -32,16 +34,11 @@ export interface PlanGate {
 
 export const OPEN_GATE: PlanGate = { allowed: true, reason: null, badge: null };
 
-export interface NoteTarget {
-  notebookId: string | null;
-  parentPageId: string | null;
-}
-
 export function planNoteTarget<T extends NoteTarget>(
   target: T,
   entitlements: Entitlements = currentEntitlements()
 ): T {
-  return target.parentPageId && entitlements.limits.subnotesPerNote === 0 ? { ...target, parentPageId: null } : target;
+  return noteTargetFor(target, entitlements);
 }
 
 export interface PlanGates {
@@ -66,7 +63,7 @@ function cheapestPlanWith(feature: FeatureKey): (typeof CATALOG_PLANS)[number] |
   return CATALOG_PLANS.find((plan) => plan !== "free" && catalogFeatures(plan)[feature]) ?? null;
 }
 
-export function buildPlanGates(entitlements: Entitlements, state: CheckState, language: string): PlanGates {
+function buildPlanGates(entitlements: Entitlements, state: CheckState, language: string): PlanGates {
   const tp = (key: Parameters<typeof planTranslate>[1]) => planTranslate(language, key);
 
   const detail = (value: PlanErrorDetail | null): PlanGate => {
@@ -123,7 +120,7 @@ export interface GoalGates {
   activeGoals: number;
 }
 
-export function buildGoalGates(entitlements: Entitlements, activeGoals: number, language: string): GoalGates {
+function buildGoalGates(entitlements: Entitlements, activeGoals: number, language: string): GoalGates {
   const gates = buildPlanGates(entitlements, { notebooks: [], pages: [] }, language);
   const capacity = gates.limit(goalGrowthViolation(activeGoals, activeGoals + 1, entitlements.limits.activeGoals));
   const archive = gates.feature("goalArchive");

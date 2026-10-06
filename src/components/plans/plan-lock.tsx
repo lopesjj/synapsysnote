@@ -21,11 +21,6 @@ export function PlanLockBadge({ gate, className }: { gate: PlanGate; className?:
   );
 }
 
-export function PlanLockIcon({ gate, className }: { gate: PlanGate; className?: string }) {
-  if (gate.allowed) return null;
-  return <Lock className={cn("size-3 shrink-0 text-faint", className)} aria-hidden />;
-}
-
 export function GateTooltip({
   gate,
   label,

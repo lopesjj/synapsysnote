@@ -15,7 +15,7 @@ import {
   type PlanTier,
 } from "./definitions";
 
-export const PLAN_SOURCES = ["signup", "admin", "cli", "owner-env", "system"] as const;
+const PLAN_SOURCES = ["signup", "admin", "cli", "owner-env", "system"] as const;
 export type PlanSource = (typeof PLAN_SOURCES)[number];
 
 export interface AccountPlanRecord {
@@ -153,7 +153,7 @@ export function guestEntitlements(): Entitlements {
   };
 }
 
-export function provisionalEntitlements(): Entitlements {
+function provisionalEntitlements(): Entitlements {
   return {
     plan: "free",
     tier: TRIAL_TIER,
