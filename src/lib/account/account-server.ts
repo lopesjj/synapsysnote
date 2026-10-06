@@ -6,6 +6,7 @@ import { adminAuth, adminBucket, adminDb, isAdminConfigured } from "@/lib/fireba
 import { clearEvernoteConnection } from "@/lib/evernote/store";
 import { readStoredToken, revokeGoogleToken, revokeNotionToken, settleWithin } from "@/lib/import/integration-disconnect";
 import { CARD_IMAGE_FIELDS, extractStoragePath, parseStoredBlocks } from "@/lib/trash/purge-core";
+import { ACCOUNT_PLANS } from "@/lib/plans/server";
 
 const SECRET_FIELDS = new Set(["accessTokenCipher", "refreshTokenCipher", "blocks"]);
 
@@ -105,6 +106,7 @@ export async function deleteAccount(uid: string): Promise<DeletionSummary> {
     ...ownedTasks,
     ...memberTasks,
     db.recursiveDelete(db.collection("users").doc(uid)).catch(() => undefined),
+    db.recursiveDelete(db.collection(ACCOUNT_PLANS).doc(uid)).catch(() => undefined),
     bucket.deleteFiles({ prefix: `users/${uid}/` }).catch(() => undefined),
     adminAuth()
       .deleteUser(uid)
@@ -184,11 +186,14 @@ async function workspaceData(workspace: DocumentReference, uid: string, owner: b
 
 export async function accountSnapshot(uid: string) {
   const db = adminDb();
-  const [user, profile, accessLogs, workspaces] = await Promise.all([
+  const planDoc = db.collection(ACCOUNT_PLANS).doc(uid);
+  const [user, profile, accessLogs, workspaces, plan, planHistory] = await Promise.all([
     adminAuth().getUser(uid),
     db.collection("users").doc(uid).get(),
     db.collection("access_logs").where("uid", "==", uid).get(),
     workspacesOf(uid),
+    planDoc.get(),
+    planDoc.collection("history").get(),
   ]);
   const owned = await Promise.all(workspaces.owned.map((ref) => workspaceData(ref, uid, true)));
   const memberOf = await Promise.all(workspaces.member.map((ref) => workspaceData(ref, uid, false)));
@@ -205,6 +210,7 @@ export async function accountSnapshot(uid: string) {
       lastSignInAt: user.metadata.lastSignInTime,
     },
     profile: profile.exists ? docData(profile) : null,
+    plan: plan.exists ? { ...docData(plan), history: planHistory.docs.map(docData) } : null,
     accessLogs: accessLogs.docs.map(docData),
     workspaces: owned,
     memberships: memberOf,

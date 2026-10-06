@@ -65,6 +65,7 @@ import type {
   RecordImportJobInput,
   CreatePageInput,
   DataAdapter,
+  DuplicateOptions,
   MediaCopyTarget,
   Unsubscribe,
   UpdatePageOptions,
@@ -316,7 +317,6 @@ export class FirestoreAdapter implements DataAdapter {
             emoji: "🧠",
             ownerId: this.userId,
             memberIds: [this.userId],
-            plan: "free",
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
@@ -557,12 +557,14 @@ export class FirestoreAdapter implements DataAdapter {
     return snaps.flatMap((snap) => snap.docs);
   }
 
-  async duplicateNotebook(id: string): Promise<Notebook> {
+  async duplicateNotebook(id: string, options: DuplicateOptions = {}): Promise<Notebook> {
     const notebooksSnap = await getDocs(this.col("notebooks"));
     // Subcaderno na lixeira nao entra na copia.
     const notebooks = notebooksSnap.docs.map(mapNotebook).filter((notebook) => !notebook.deletedAt);
     const pageDocs = await this.docsWhereIn("pages", "notebookId", notebookSubtreeIds(notebooks, id));
-    return duplicateNotebookTree(this, notebooks, pageDocs.map(mapPage), id);
+    return duplicateNotebookTree(this, notebooks, pageDocs.map(mapPage), id, {
+      includeFlashcards: options.includeFlashcards,
+    });
   }
 
   async updateNotebook(id: string, patch: Partial<Notebook>) {
@@ -876,14 +878,14 @@ export class FirestoreAdapter implements DataAdapter {
     return page;
   }
 
-  async duplicatePage(id: string): Promise<Page> {
+  async duplicatePage(id: string, options: DuplicateOptions = {}): Promise<Page> {
     const [page, descendants] = await Promise.all([
       getDoc(this.docRef("pages", id)),
       getDocs(query(this.col("pages"), where("path", "array-contains", id))),
     ]);
     if (!page.exists()) throw new Error("Nota não encontrada");
     const docs = [page as QueryDocumentSnapshot<DocumentData>, ...descendants.docs];
-    return duplicatePageTree(this, docs.map(mapPage), id);
+    return duplicatePageTree(this, docs.map(mapPage), id, { includeFlashcards: options.includeFlashcards });
   }
 
   private lastWritten = new Map<string, { blocks: AppBlock[]; at: number }>();

@@ -72,6 +72,9 @@ import {
   type CycleTally,
 } from "./cycle";
 import { PlanningProvider } from "./planning";
+import { assertPlanFeature, assertPlanWritable, currentEntitlements, planFailure, useEntitlements } from "@/lib/plans/client";
+import { goalGrowthViolation } from "@/lib/plans/usage";
+import { PlanError } from "@/lib/plans/errors";
 
 export interface SubjectDraft {
   name: string;
@@ -184,6 +187,7 @@ export interface StudyContextValue extends StudyState {
   activePlan: StudyPlan | null;
   focusPlan: StudyPlan | null;
   planReadOnly: boolean;
+  planArchived: boolean;
   planSubjects: StudySubject[];
   planSessions: StudySession[];
   planReviews: StudyReview[];
@@ -400,6 +404,16 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       data: { ...patch, updatedAt: now() },
     });
 
+    const writable = () => {
+      assertPlanWritable();
+    };
+    const goalCapacity = (planId?: string) => {
+      const entitlements = assertPlanWritable();
+      const active = current().plans.filter((plan) => !plan.archived && plan.id !== planId).length;
+      const violation = goalGrowthViolation(active, active + 1, entitlements.limits.activeGoals);
+      if (violation) throw planFailure(PlanError.limit(violation));
+    };
+
     const planLocked = (planId: string | null | undefined) =>
       Boolean(planId && current().plans.some((plan) => plan.id === planId && plan.archived));
     const assertOpen = (planId: string | null | undefined) => {
@@ -602,6 +616,8 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       async savePlan(input) {
         const existing = input.id ? current().plans.find((plan) => plan.id === input.id) : undefined;
         if (existing?.archived) throw new Error("archived-plan");
+        if (existing) writable();
+        else goalCapacity();
         const id = existing?.id ?? backend.newId();
         const writes: StudyWrite[] = [{ kind: "set", collection: "study_plans", id, data: planDoc(input, id, existing) }];
         const settings = current().settings;
@@ -613,6 +629,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         return id;
       },
       async createPlanWithSubjects(input, drafts) {
+        goalCapacity();
         const id = backend.newId();
         const writes: StudyWrite[] = [
           { kind: "set", collection: "study_plans", id, data: planDoc(input, id) },
@@ -627,6 +644,9 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         await commit([settingsWrite({ activePlanId: id })]);
       },
       async archivePlan(id, archived) {
+        const entitlements = assertPlanFeature("goalArchive");
+        const target = current().plans.find((plan) => plan.id === id);
+        if (!archived && target?.archived && !entitlements.readOnly) goalCapacity(id);
         const writes: StudyWrite[] = [
           { kind: "merge", collection: "study_plans", id, data: { archived, updatedAt: now() } },
         ];
@@ -658,6 +678,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         if (removed?.icon) await releaseIcons([removed.icon], id);
       },
       async saveSubject(planId, input) {
+        writable();
         const snapshot = current();
         const existing = input.id ? snapshot.subjects.find((subject) => subject.id === input.id) : undefined;
         assertOpen(existing?.planId ?? planId);
@@ -734,6 +755,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         return id;
       },
       async addSubjects(planId, drafts) {
+        writable();
         assertOpen(planId);
         const siblings = current().subjects.filter((subject) => subject.planId === planId);
         const writes = subjectDocs(
@@ -804,12 +826,14 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         await commit(writes);
       },
       async reorderSubjects(ids) {
+        writable();
         for (const id of ids) assertSubjectOpen(id);
         await commit(
           ids.map((id, index) => ({ kind: "merge" as const, collection: "study_subjects" as const, id, data: { order: index, updatedAt: now() } }))
         );
       },
       async addTopic(subjectId, name) {
+        writable();
         assertSubjectOpen(subjectId);
         const subject = current().subjects.find((entry) => entry.id === subjectId);
         const clean = name.replace(/\s+/g, " ").trim().slice(0, MAX_TOPIC_LENGTH);
@@ -838,6 +862,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         return resultId;
       },
       async updateTopic(subjectId, topicId, patch) {
+        writable();
         assertSubjectOpen(subjectId);
         await commit([
           {
@@ -860,6 +885,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         ]);
       },
       async logSession(rawInput, options, create) {
+        writable();
         assertOpen(rawInput.planId);
         if (rawInput.reviewId) {
           const review = current().reviews.find((entry) => entry.id === rawInput.reviewId);
@@ -918,6 +944,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         return session;
       },
       async updateSession(id, rawInput, options, create) {
+        writable();
         const snapshot = current();
         const previous = snapshot.sessions.find((session) => session.id === id);
         if (!previous) return;
@@ -1035,6 +1062,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       },
       async resolveReviews(ids, status) {
         if (!ids.length) return;
+        writable();
         for (const id of ids) {
           const review = current().reviews.find((entry) => entry.id === id);
           if (review) assertOpen(review.planId);
@@ -1067,6 +1095,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         await commit(writes);
       },
       async rescheduleReview(id, day) {
+        writable();
         const review = current().reviews.find((entry) => entry.id === id);
         if (review) assertOpen(review.planId);
         await commit([
@@ -1079,6 +1108,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         ]);
       },
       async saveExam(input) {
+        writable();
         const existing = input.id ? current().exams.find((exam) => exam.id === input.id) : undefined;
         assertOpen(existing?.planId ?? input.planId);
         const id = existing?.id ?? backend.newId();
@@ -1107,6 +1137,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         await commit([{ kind: "delete", collection: "study_exams", id }]);
       },
       async saveCycle(planId, config) {
+        writable();
         assertOpen(planId);
         const existing = cycleOf(planId);
         const items =
@@ -1154,6 +1185,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         ]);
       },
       async editCycleItems(planId, edit) {
+        writable();
         assertOpen(planId);
         const cycle = cycleOf(planId);
         if (!cycle) return;
@@ -1183,6 +1215,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         ]);
       },
       async setCyclePointer(planId, itemId) {
+        writable();
         assertOpen(planId);
         const cycle = cycleOf(planId);
         if (!cycle) return;
@@ -1200,6 +1233,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         ]);
       },
       async completeCycleBlock(planId, skipped) {
+        writable();
         assertOpen(planId);
         const cycle = cycleOf(planId);
         if (!cycle) return;
@@ -1223,6 +1257,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         ]);
       },
       async undoCycleBlock(planId) {
+        writable();
         assertOpen(planId);
         const cycle = cycleOf(planId);
         if (!cycle) return;
@@ -1257,6 +1292,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         ]);
       },
       async editAgenda(planId, edit, options) {
+        writable();
         assertOpen(planId);
         const finish = (agenda: AgendaEntry[]) =>
           agenda
@@ -1304,6 +1340,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         ]);
       },
       async markAgendaDay(planId, entryId, day, skipped) {
+        writable();
         assertOpen(planId);
         const cycle = cycleOf(planId);
         if (!cycle) return;
@@ -1331,6 +1368,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         if (cycle) await commit([{ kind: "delete", collection: "study_cycles", id: cycle.id }]);
       },
       async saveReminder(input) {
+        writable();
         const existing = input.id ? current().reminders.find((reminder) => reminder.id === input.id) : undefined;
         assertOpen(existing?.planId);
         assertOpen(input.planId);
@@ -1353,6 +1391,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         await commit([{ kind: "delete", collection: "study_reminders", id }]);
       },
       async createSticky(color = "sun") {
+        writable();
         const id = backend.newId();
         await commit([
           {
@@ -1371,6 +1410,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         return id;
       },
       async updateSticky(id, patch) {
+        writable();
         const data: Record<string, unknown> = { ...patch, updatedAt: now() };
         if (typeof patch.html === "string") data.html = patch.html.slice(0, 200_000);
         await commit([{ kind: "merge", collection: "study_stickies", id, data }]);
@@ -1397,6 +1437,8 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       async updateSettings(patch) {
         let next = patch;
         if (patch.awardOrder) {
+          assertPlanFeature("awards");
+          writable();
           const currentOrder = current().settings.awardOrder;
           const awardOrder = { ...patch.awardOrder };
           for (const plan of current().plans) {
@@ -1438,6 +1480,8 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       async claimAwards(keys) {
         const fresh = keys.filter((key) => key && !current().settings.claimedAwards[key] && !planLocked(key.split("~")[0]));
         if (!fresh.length) return;
+        const entitlements = currentEntitlements();
+        if (!entitlements.features.awards || entitlements.readOnly) return;
         const stamp = now();
         await commit([
           {
@@ -1457,6 +1501,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   }, [adapter, backend, commit]);
 
   const browsePlanId = useStudyUi((store) => store.browsePlanId);
+  const accountReadOnly = useEntitlements().readOnly;
   useEffect(() => {
     if (!browsePlanId) return;
     const plan = state.plans.find((entry) => entry.id === browsePlanId);
@@ -1477,7 +1522,8 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       today,
       activePlan,
       focusPlan,
-      planReadOnly: Boolean(browsed),
+      planReadOnly: Boolean(browsed) || accountReadOnly,
+      planArchived: Boolean(browsed),
       planSubjects: planId ? state.subjects.filter((subject) => subject.planId === planId) : [],
       planSessions: planId ? state.sessions.filter((session) => session.planId === planId) : [],
       planReviews: planId ? state.reviews.filter((review) => review.planId === planId) : [],
@@ -1488,7 +1534,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         subjectId && topicId ? subjectIndex.get(subjectId)?.topics.find((topic) => topic.id === topicId) : undefined,
       actions,
     };
-  }, [actions, browsePlanId, ready, state, today]);
+  }, [accountReadOnly, actions, browsePlanId, ready, state, today]);
 
   return (
     <StudyContext.Provider value={value}>

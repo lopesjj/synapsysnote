@@ -1,3 +1,5 @@
+import { planErrorBody, toPlanError } from "@/lib/plans/errors";
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -9,6 +11,10 @@ export class ApiError extends Error {
 }
 
 export function jsonError(error: unknown) {
+  const planError = toPlanError(error);
+  if (planError) {
+    return Response.json(planErrorBody(planError), { status: 403 });
+  }
   if (error instanceof ApiError) {
     return Response.json({ error: error.message }, { status: error.status });
   }

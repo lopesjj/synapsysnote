@@ -19,7 +19,7 @@ import { WizardFooter } from "./wizard-footer";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/primitives";
 import { useWorkspace } from "@/lib/data/provider";
-import { useTranslation } from "@/lib/i18n/translations";
+import { localizeErrorMessage, useTranslation } from "@/lib/i18n/translations";
 import {
   executeWorkspaceRestore,
   getPersistedRestoreJob,
@@ -288,8 +288,8 @@ export function SynapsysWorkspaceImportDialog({
         }
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : t("synapsys_import_failed");
-      setErrorMsg(message);
+      const message = err instanceof Error ? localizeErrorMessage(err.message, t) : t("synapsys_import_failed");
+      setErrorMsg(message || t("synapsys_import_failed"));
       setRestoring(false);
     }
   };

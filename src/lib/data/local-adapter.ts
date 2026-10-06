@@ -33,6 +33,7 @@ import type {
   RecordImportJobInput,
   CreatePageInput,
   DataAdapter,
+  DuplicateOptions,
   MediaCopyTarget,
   Unsubscribe,
   UpdatePageOptions,
@@ -227,8 +228,10 @@ export class LocalAdapter implements DataAdapter {
     return notebook;
   }
 
-  async duplicateNotebook(id: string): Promise<Notebook> {
-    const notebook = await duplicateNotebookTree(this, this.state.notebooks, this.state.pages, id);
+  async duplicateNotebook(id: string, options: DuplicateOptions = {}): Promise<Notebook> {
+    const notebook = await duplicateNotebookTree(this, this.state.notebooks, this.state.pages, id, {
+      includeFlashcards: options.includeFlashcards,
+    });
     this.emit();
     return notebook;
   }
@@ -384,8 +387,8 @@ export class LocalAdapter implements DataAdapter {
     return page;
   }
 
-  async duplicatePage(id: string): Promise<Page> {
-    const page = await duplicatePageTree(this, this.state.pages, id);
+  async duplicatePage(id: string, options: DuplicateOptions = {}): Promise<Page> {
+    const page = await duplicatePageTree(this, this.state.pages, id, { includeFlashcards: options.includeFlashcards });
     this.reindexBacklinks();
     this.emit();
     return page;

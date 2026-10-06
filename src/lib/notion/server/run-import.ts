@@ -47,6 +47,8 @@ import {
   type BucketLike,
 } from "@/lib/trash/purge-core";
 import { NOTION_REIMPORT_LABEL } from "@/lib/data/version-labels";
+import { GrowthTracker, hasStructuralLimits } from "@/lib/plans/usage";
+import { entitlementsFor, loadWorkspaceUsageState } from "@/lib/plans/server";
 
 const LEASE_MS = 120_000;
 const MAX_PAGE_BYTES = 900_000;
@@ -422,17 +424,22 @@ interface ImportArgs {
   idMap: Map<string, string>;
   roles: Map<string, ImportRole>;
   progress: ProgressReporter;
+  quota: GrowthTracker | null;
   cachedTopLevel?: NotionBlock[];
 }
 
 async function importNotebook(args: ImportArgs): Promise<string> {
-  const { workspaceId, node, parents, idMap, roles, progress } = args;
+  const { workspaceId, node, parents, idMap, roles, progress, quota } = args;
   const parentId = resolveNotebookParentId({
     notionId: node.id,
     parents,
     roles,
     idMap,
   });
+
+  const existing = await notebooksRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
+  const previous = existing.empty ? null : existing.docs[0];
+  if (!previous) quota?.checkNotebook(parentId);
 
   let icon = node.icon ?? "📓";
   if (node.icon && /^https?:\/\//i.test(node.icon)) {
@@ -443,8 +450,6 @@ async function importNotebook(args: ImportArgs): Promise<string> {
     }
   }
 
-  const existing = await notebooksRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
-  const previous = existing.empty ? null : existing.docs[0];
   const ref = previous ? previous.ref : notebooksRef(workspaceId).doc(`nb_${randomUUID().slice(0, 8)}`);
 
   await ref.set(
@@ -463,6 +468,7 @@ async function importNotebook(args: ImportArgs): Promise<string> {
     },
     { merge: true }
   );
+  if (!previous) quota?.addNotebook(ref.id, parentId);
   if (previous?.get("deletedAt")) await restoreTrashedWith(workspaceId, ref.id, progress.requestedBy);
 
   const [oldPages, oldDatabases] = await Promise.all([
@@ -479,7 +485,28 @@ async function importNotebook(args: ImportArgs): Promise<string> {
 }
 
 async function importPage(args: ImportArgs): Promise<string> {
-  const { notion, workspaceId, jobId, node, parents, idMap, roles, progress, cachedTopLevel } = args;
+  const { notion, workspaceId, jobId, node, parents, idMap, roles, progress, cachedTopLevel, quota } = args;
+
+  let fallbackNotebookId = progress.targetNotebookId;
+  if (fallbackNotebookId) {
+    const targetDoc = await notebooksRef(workspaceId).doc(fallbackNotebookId).get();
+    if (!targetDoc.exists || targetDoc.get("deletedAt")) {
+      fallbackNotebookId = null;
+    }
+  }
+
+  const { notebookId, parentPageId } = resolveImportPlacement({
+    notionId: node.id,
+    parents,
+    roles,
+    idMap,
+    fallbackNotebookId,
+    preserveHierarchy: progress.options.preserveHierarchy,
+  });
+
+  const existing = await pagesRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
+  const previous = existing.empty ? null : existing.docs[0];
+  if (!previous) quota?.checkPage(notebookId, parentPageId);
 
   const topLevel = cachedTopLevel ?? (await fetchAllChildren(notion, node.id));
   if (!cachedTopLevel) await progress.addFiles(countMediaBlocks(topLevel));
@@ -531,23 +558,6 @@ async function importPage(args: ImportArgs): Promise<string> {
     throw new Error("A página passa do limite de 1 MB por nota. Divida-a em páginas menores no Notion e importe de novo.");
   }
 
-  let fallbackNotebookId = progress.targetNotebookId;
-  if (fallbackNotebookId) {
-    const targetDoc = await notebooksRef(workspaceId).doc(fallbackNotebookId).get();
-    if (!targetDoc.exists || targetDoc.get("deletedAt")) {
-      fallbackNotebookId = null;
-    }
-  }
-
-  const { notebookId, parentPageId } = resolveImportPlacement({
-    notionId: node.id,
-    parents,
-    roles,
-    idMap,
-    fallbackNotebookId,
-    preserveHierarchy: progress.options.preserveHierarchy,
-  });
-
   let path: string[] = [];
   if (parentPageId) {
     const parentDoc = await pagesRef(workspaceId).doc(parentPageId).get();
@@ -563,8 +573,6 @@ async function importPage(args: ImportArgs): Promise<string> {
     }
   }
 
-  const existing = await pagesRef(workspaceId).where("notionPageId", "==", node.id).limit(1).get();
-  const previous = existing.empty ? null : existing.docs[0];
   const ref = previous ? previous.ref : pagesRef(workspaceId).doc(`page_${randomUUID().slice(0, 10)}`);
   const replaceContent = converted || !previous;
 
@@ -614,6 +622,7 @@ async function importPage(args: ImportArgs): Promise<string> {
     },
     { merge: true }
   );
+  if (!previous) quota?.addPage(ref.id, notebookId, parentPageId);
 
   const [oldNotebooks, oldDatabases] = await Promise.all([
     notebooksRef(workspaceId).where("notionPageId", "==", node.id).get(),
@@ -1109,6 +1118,15 @@ async function runLeasedImportStep(
   }
 
   const progress = new ProgressReporter(jobRef, jobData);
+  const entitlements = jobData.requestedBy ? await entitlementsFor({ uid: jobData.requestedBy }) : null;
+  if (entitlements?.readOnly) {
+    await progress.fail("PLAN_READ_ONLY");
+    return { done: true, status: "failed" };
+  }
+  const quota =
+    entitlements && hasStructuralLimits(entitlements.limits)
+      ? new GrowthTracker(await loadWorkspaceUsageState(workspaceId), entitlements.limits)
+      : null;
   let discoveredTree: TreeMetadata | null = null;
 
   if (jobData.status === "pending") {
@@ -1261,7 +1279,7 @@ async function runLeasedImportStep(
         hasRoleUpdates = true;
       }
 
-      const shared = { notion, workspaceId, jobId, node, parents, idMap, roles, progress };
+      const shared = { notion, workspaceId, jobId, node, parents, idMap, roles, progress, quota };
       const appId =
         role === "notebook"
           ? await importNotebook(shared)

@@ -18,6 +18,7 @@ import type {
   Page,
   PageVersion,
 } from "@/types/models";
+import type { ArchivePlan } from "./archive";
 
 export type Unsubscribe = () => void;
 
@@ -85,6 +86,12 @@ export interface CopiedMedia {
   storagePath: string;
 }
 
+export interface DuplicateOptions {
+  includeFlashcards?: boolean;
+}
+
+export type PlanOperation = { kind: "archive-plan"; plan: ArchivePlan };
+
 export interface FlashcardResetScope {
   cardIds?: string[];
   pageId?: string;
@@ -96,6 +103,7 @@ export interface DataAdapter {
   readonly workspaceId: string;
 
   ensureWorkspace(): Promise<void>;
+  assertPlan?(operation: PlanOperation): Promise<void>;
 
   subscribeNotebooks(cb: (notebooks: Notebook[]) => void, onError?: (error: Error) => void): Unsubscribe;
   subscribePages(cb: (pages: Page[]) => void, onError?: (error: Error) => void): Unsubscribe;
@@ -104,7 +112,7 @@ export interface DataAdapter {
   subscribeIntegration(cb: (integration: NotionIntegration | null) => void): Unsubscribe;
   subscribeCloudIntegration?(provider: "notion" | "google-docs" | "evernote", cb: (integration: CloudIntegration | null) => void): Unsubscribe;
 
-  duplicateNotebook(id: string): Promise<Notebook>;
+  duplicateNotebook(id: string, options?: DuplicateOptions): Promise<Notebook>;
   createNotebook(input: {
     name: string;
     emoji?: string;
@@ -120,7 +128,7 @@ export interface DataAdapter {
   purgeNotebook(id: string): Promise<void>;
 
   createPage(input: CreatePageInput): Promise<Page>;
-  duplicatePage(id: string): Promise<Page>;
+  duplicatePage(id: string, options?: DuplicateOptions): Promise<Page>;
   updatePage(id: string, patch: Partial<Page>, options?: UpdatePageOptions): Promise<UpdatePageResult | void>;
   applyPageOrders(updates: { id: string; order: number }[]): Promise<void>;
   applyNotebookOrders(updates: { id: string; order: number }[]): Promise<void>;

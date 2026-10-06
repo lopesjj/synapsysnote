@@ -3,6 +3,10 @@ import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { requireUser } from "@/lib/api/session";
 import { adminDb, isAdminConfigured } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { assertPlanAllows, loadGoalStates, loadWorkspaceUsageState } from "@/lib/plans/server";
+import { hasStructuralLimits, restoreGrowthViolation } from "@/lib/plans/usage";
+import { PlanError } from "@/lib/plans/errors";
+import { pageContainsVideo } from "@/lib/plans/definitions";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -115,11 +119,12 @@ interface RestoreFlashcard {
 interface RestorePayload {
   workspaceId: string;
   clean?: boolean;
+  validate?: boolean;
+  containsVideo?: boolean;
   data: {
     workspace?: {
       name?: string;
       emoji?: string;
-      plan?: string;
       language?: string;
     };
     notebooks?: RestoreNotebook[];
@@ -190,6 +195,37 @@ export async function POST(request: Request) {
       }
     }
 
+    const entitlements = await assertPlanAllows(user.uid, { write: true });
+    if (entitlements && !entitlements.features.video) {
+      const restoredPages = Array.isArray(payload.data?.pages) ? payload.data.pages : [];
+      const hasVideo =
+        payload.containsVideo === true ||
+        restoredPages.some(
+          (page) =>
+            pageContainsVideo(page) ||
+            (Array.isArray(page?.versions) && page.versions.some((version) => pageContainsVideo(version)))
+        );
+      if (hasVideo) throw PlanError.feature("video");
+    }
+    if (entitlements && (hasStructuralLimits(entitlements.limits) || entitlements.limits.activeGoals !== null)) {
+      const [current, currentGoals] = await Promise.all([
+        loadWorkspaceUsageState(workspaceId),
+        loadGoalStates(workspaceId),
+      ]);
+      const violation = restoreGrowthViolation({
+        limits: entitlements.limits,
+        current,
+        currentGoals,
+        notebooks: Array.isArray(payload.data?.notebooks) ? payload.data.notebooks : [],
+        pages: Array.isArray(payload.data?.pages) ? payload.data.pages : [],
+        goals: Array.isArray(payload.data?.study?.study_plans) ? payload.data.study.study_plans : [],
+        clean: Boolean(payload.clean && wsSnap.exists),
+      });
+      if (violation) throw PlanError.limit(violation);
+    }
+
+    if (payload.validate) return Response.json({ ok: true });
+
     if (payload.clean && wsSnap.exists) {
       const collectionsToClean = ["pages", "notebooks", "databases", "flashcards", ...STUDY_RESTORE_COLLECTIONS];
       for (const collName of collectionsToClean) {
@@ -221,7 +257,6 @@ export async function POST(request: Request) {
             emoji: wsData.emoji || (wsSnap.exists ? wsSnap.get("emoji") : "🧠"),
             ownerId: wsSnap.exists ? (wsSnap.get("ownerId") || user.uid) : user.uid,
             memberIds: wsSnap.exists ? Array.from(new Set([...((wsSnap.get("memberIds") as string[]) || []), user.uid])) : [user.uid],
-            plan: wsSnap.exists ? (wsSnap.get("plan") || "free") : "free",
             language: wsData.language || (wsSnap.exists ? wsSnap.get("language") : "pt"),
             updatedAt: FieldValue.serverTimestamp(),
             ...(wsSnap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),

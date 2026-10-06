@@ -21,6 +21,10 @@ function isDevelopmentRuntime(): boolean {
 
 const DEV_USER = "dev";
 
+export function isDevSessionUser(uid: string | null): boolean {
+  return uid === DEV_USER;
+}
+
 const REVOCATION_TTL_MS = 5 * 60 * 1000;
 const revocation = new Map<string, { validAfterMs: number; checkedAt: number }>();
 

@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 import { useUiStore } from "@/lib/store/ui-store";
 import { textDirection } from "@/lib/i18n/locale";
+import { describePlanError } from "@/lib/plans/client";
 import type { SupportedLanguage } from "@/types/models";
 
 export type TranslationKey =
@@ -14766,6 +14767,8 @@ export function localizeErrorMessage(
   t: (key: TranslationKey, params?: Record<string, string | number>) => string
 ): string {
   if (!msg) return "";
+  const planMessage = describePlanError(msg);
+  if (planMessage) return planMessage;
   const byCode: Partial<Record<string, TranslationKey>> = {
     NOTE_TOO_LARGE: "note_too_large",
     google_account_mismatch: "google_account_mismatch",

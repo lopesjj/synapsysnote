@@ -18,6 +18,7 @@ import {
   Hand,
   Languages,
   Loader2,
+  Lock,
   MoreVertical,
   Pause,
   Pencil,
@@ -61,6 +62,8 @@ import {
   isVideoFile,
 } from "@/lib/media/compress-attachment";
 import { useMediaProgressStore } from "@/lib/store/media-progress-store";
+import { notifyPlanError, openPlanDialog, useEntitlements } from "@/lib/plans/client";
+import { usePlanT } from "@/lib/plans/i18n";
 
 function isPdf(mimeType: unknown, name: unknown) {
   if (typeof mimeType === "string" && mimeType.includes("pdf")) return true;
@@ -734,7 +737,9 @@ function ResizableVideo({
 
 function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeViewProps) {
   const { t, language } = useTranslation();
+  const { tp } = usePlanT();
   const libras = useUiStore((state) => state.libras);
+  const canTranscribe = useEntitlements().features.transcription;
   const {
     mediaType,
     url,
@@ -1626,7 +1631,7 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                               effectiveTranscribeLang,
                               // A mesma aula acabou de ser transcrita (ou está
                               // sendo, pelos flashcards): reaproveita.
-                              { reuseCache: true }
+                              { reuseCache: true, purpose: "accessibility" }
                             );
                             if (result) {
                               transcriptText = result;
@@ -1695,165 +1700,184 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                     </button>
                   ) : null}
 
-                  <button
-                    type="button"
-                    disabled={isBusy || isTranscribing || isLibrasLoading}
-                    onTouchStart={(e) => {
-                      e.stopPropagation();
-                      if (document.activeElement instanceof HTMLElement) {
-                        document.activeElement.blur();
-                      }
-                    }}
-                    onClick={async (e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (document.activeElement instanceof HTMLElement) {
-                        document.activeElement.blur();
-                      }
-                      if (!url || typeof url !== "string") return;
-                      setIsTranscribing(true);
-                      setTranscribeProgress(0);
-                      try {
-                        const transcriptText = await transcribeAudioSource(
-                          url,
-                          null,
-                          (partialText, percent) => {
-                            setEphemeralTranscript(partialText);
-                            setTranscribeProgress((prev) => Math.max(prev, percent));
-                          },
-                          effectiveTranscribeLang
-                        );
-                        if (transcriptText) {
-                          setEphemeralTranscript(transcriptText);
-                          setIsTranscriptCollapsed(false);
-                          persistMediaAttributes({
-                            transcript: transcriptText,
-                            transcriptLanguage: effectiveTranscribeLang,
-                            transcriptCollapsed: false,
-                          });
-                          toast.success(
-                            t(isVideo ? "video_transcribed_success" : "audio_transcribed_success")
-                          );
-                        } else {
-                          toast.error(
-                            t(isVideo ? "no_speech_detected_video" : "no_speech_detected")
-                          );
+                  {canTranscribe ? (
+                    <button
+                      type="button"
+                      disabled={isBusy || isTranscribing || isLibrasLoading}
+                      onTouchStart={(e) => {
+                        e.stopPropagation();
+                        if (document.activeElement instanceof HTMLElement) {
+                          document.activeElement.blur();
                         }
-                      } catch (err) {
-                        if (isQuotaError(err)) {
-                          toast.error(t(getQuotaErrorMessageKey(err)));
-                        } else if (err instanceof Error && err.message === "SERVICE_BUSY") {
-                          toast.error(t("transcription_service_busy"));
-                        } else {
-                          toast.error(
-                            t(isVideo ? "video_transcribe_error" : "audio_transcribe_error")
-                          );
+                      }}
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (document.activeElement instanceof HTMLElement) {
+                          document.activeElement.blur();
                         }
-                      } finally {
-                        setIsTranscribing(false);
+                        if (!url || typeof url !== "string") return;
+                        setIsTranscribing(true);
                         setTranscribeProgress(0);
-                      }
-                    }}
-                    className="touch-manipulation inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11.5px] font-medium text-ink shadow-2xs transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
-                    title={
-                      mediaTranscript
-                        ? t(isVideo ? "transcribe_video_again_title" : "transcribe_again_title")
-                        : t(
-                            isVideo
-                              ? "transcribe_video_speech_with_ai"
-                              : "transcribing_speech_with_ai"
-                          )
-                    }
-                  >
-                    {isTranscribing ? (
-                      <Loader2 className="size-3.5 animate-spin text-[var(--accent)]" />
-                    ) : (
-                      <Sparkles className="size-3.5 text-[var(--accent)]" />
-                    )}
-                    <span className="inline-flex items-center gap-1">
-                      {isTranscribing ? (
-                        <>
-                          <span>{t("transcribing_progress")}</span>
-                          <span dir="ltr" className="inline-block tabular-nums">
-                            ({transcribeProgress}%)
-                          </span>
-                          <span>...</span>
-                        </>
-                      ) : mediaTranscript ? (
-                        t("retranscribe_speech")
-                      ) : (
-                        t("transcribe_speech")
-                      )}
-                    </span>
-                  </button>
-
-                  <Menu modal={false}>
-                    <MenuTrigger asChild>
-                      <button
-                        type="button"
-                        disabled={isBusy || isTranscribing || isLibrasLoading}
-                        onTouchStart={(e) => {
-                          e.stopPropagation();
-                          if (document.activeElement instanceof HTMLElement) {
-                            document.activeElement.blur();
+                        try {
+                          const transcriptText = await transcribeAudioSource(
+                            url,
+                            null,
+                            (partialText, percent) => {
+                              setEphemeralTranscript(partialText);
+                              setTranscribeProgress((prev) => Math.max(prev, percent));
+                            },
+                            effectiveTranscribeLang
+                          );
+                          if (transcriptText) {
+                            setEphemeralTranscript(transcriptText);
+                            setIsTranscriptCollapsed(false);
+                            persistMediaAttributes({
+                              transcript: transcriptText,
+                              transcriptLanguage: effectiveTranscribeLang,
+                              transcriptCollapsed: false,
+                            });
+                            toast.success(
+                              t(isVideo ? "video_transcribed_success" : "audio_transcribed_success")
+                            );
+                          } else {
+                            toast.error(
+                              t(isVideo ? "no_speech_detected_video" : "no_speech_detected")
+                            );
                           }
-                        }}
-                        className="touch-manipulation inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11.5px] font-medium text-ink shadow-2xs transition hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] active:scale-95 disabled:opacity-40 cursor-pointer"
-                        title={t("language")}
-                      >
-                        <Languages className="size-3.5 text-[var(--accent)]" />
-                        <span>
-                          {selectedTranscribeLang
-                            ? `${SUPPORTED_LANGUAGES.find((l) => l.code === selectedTranscribeLang)?.flag || ""} ${t((`lang_${selectedTranscribeLang}`) as TranslationKey)}`
-                            : `${SUPPORTED_LANGUAGES.find((l) => l.code === language)?.flag || "🌐"} ${t((`lang_${language}`) as TranslationKey)}`}
-                        </span>
-                        <ChevronDown className="size-3 text-muted" />
-                      </button>
-                    </MenuTrigger>
-                    <MenuContent
-                      align="start"
-                      data-scrollable="true"
-                      className="w-56 max-h-60 overflow-y-auto overscroll-contain touch-pan-y p-1"
-                      style={{ maxHeight: "240px", overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
-                      onTouchMove={(e) => e.stopPropagation()}
-                      onPointerDown={(e) => e.stopPropagation()}
+                        } catch (err) {
+                          if (isQuotaError(err)) {
+                            toast.error(t(getQuotaErrorMessageKey(err)));
+                          } else if (err instanceof Error && err.message === "SERVICE_BUSY") {
+                            toast.error(t("transcription_service_busy"));
+                          } else if (!notifyPlanError(err)) {
+                            toast.error(
+                              t(isVideo ? "video_transcribe_error" : "audio_transcribe_error")
+                            );
+                          }
+                        } finally {
+                          setIsTranscribing(false);
+                          setTranscribeProgress(0);
+                        }
+                      }}
+                      className="touch-manipulation inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11.5px] font-medium text-ink shadow-2xs transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+                      title={
+                        mediaTranscript
+                          ? t(isVideo ? "transcribe_video_again_title" : "transcribe_again_title")
+                          : t(
+                              isVideo
+                                ? "transcribe_video_speech_with_ai"
+                                : "transcribing_speech_with_ai"
+                            )
+                      }
                     >
-                      <div className="px-2 py-1 text-[10.5px] font-semibold text-muted uppercase tracking-wider">
-                        {t("language")}
-                      </div>
-                      <MenuItem
-                        onSelect={() => handleSelectTranscribeLang(null)}
-                        className="flex items-center justify-between cursor-pointer touch-pan-y"
+                      {isTranscribing ? (
+                        <Loader2 className="size-3.5 animate-spin text-[var(--accent)]" />
+                      ) : (
+                        <Sparkles className="size-3.5 text-[var(--accent)]" />
+                      )}
+                      <span className="inline-flex items-center gap-1">
+                        {isTranscribing ? (
+                          <>
+                            <span>{t("transcribing_progress")}</span>
+                            <span dir="ltr" className="inline-block tabular-nums">
+                              ({transcribeProgress}%)
+                            </span>
+                            <span>...</span>
+                          </>
+                        ) : mediaTranscript ? (
+                          t("retranscribe_speech")
+                        ) : (
+                          t("transcribe_speech")
+                        )}
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onTouchStart={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openPlanDialog();
+                      }}
+                      className="touch-manipulation inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11.5px] font-medium text-muted transition hover:border-[var(--accent)] hover:text-[var(--accent)] active:scale-95"
+                      title={tp("error_feature_transcription")}
+                    >
+                      <Lock className="size-3.5" />
+                      <span>{tp("transcription_locked")}</span>
+                    </button>
+                  )}
+
+                  {canTranscribe || libras ? (
+                    <Menu modal={false}>
+                      <MenuTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={isBusy || isTranscribing || isLibrasLoading}
+                          onTouchStart={(e) => {
+                            e.stopPropagation();
+                            if (document.activeElement instanceof HTMLElement) {
+                              document.activeElement.blur();
+                            }
+                          }}
+                          className="touch-manipulation inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11.5px] font-medium text-ink shadow-2xs transition hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] active:scale-95 disabled:opacity-40 cursor-pointer"
+                          title={t("language")}
+                        >
+                          <Languages className="size-3.5 text-[var(--accent)]" />
+                          <span>
+                            {selectedTranscribeLang
+                              ? `${SUPPORTED_LANGUAGES.find((l) => l.code === selectedTranscribeLang)?.flag || ""} ${t((`lang_${selectedTranscribeLang}`) as TranslationKey)}`
+                              : `${SUPPORTED_LANGUAGES.find((l) => l.code === language)?.flag || "🌐"} ${t((`lang_${language}`) as TranslationKey)}`}
+                          </span>
+                          <ChevronDown className="size-3 text-muted" />
+                        </button>
+                      </MenuTrigger>
+                      <MenuContent
+                        align="start"
+                        data-scrollable="true"
+                        className="w-56 max-h-60 overflow-y-auto overscroll-contain touch-pan-y p-1"
+                        style={{ maxHeight: "240px", overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+                        onTouchMove={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
                       >
-                        <div className="flex items-center gap-2">
-                          <Globe className="size-3.5 text-muted" />
-                          <span>{t((`lang_${language}`) as TranslationKey)} ({t("language")})</span>
+                        <div className="px-2 py-1 text-[10.5px] font-semibold text-muted uppercase tracking-wider">
+                          {t("language")}
                         </div>
-                        {!selectedTranscribeLang ? (
-                          <Check className="size-3.5 text-[var(--accent)]" />
-                        ) : null}
-                      </MenuItem>
-                      <MenuSeparator />
-                      {SUPPORTED_LANGUAGES.map((langDef) => {
-                        const isSelected = selectedTranscribeLang === langDef.code;
-                        return (
-                          <MenuItem
-                            key={langDef.code}
-                            onSelect={() => handleSelectTranscribeLang(langDef.code)}
-                            className="flex items-center justify-between cursor-pointer touch-pan-y"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm">{langDef.flag}</span>
-                              <span className="text-[12px]">{t((`lang_${langDef.code}`) as TranslationKey)}</span>
-                            </div>
-                            {isSelected ? (
-                              <Check className="size-3.5 text-[var(--accent)]" />
-                            ) : null}
-                          </MenuItem>
-                        );
-                      })}
-                    </MenuContent>
-                  </Menu>
+                        <MenuItem
+                          onSelect={() => handleSelectTranscribeLang(null)}
+                          className="flex items-center justify-between cursor-pointer touch-pan-y"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Globe className="size-3.5 text-muted" />
+                            <span>{t((`lang_${language}`) as TranslationKey)} ({t("language")})</span>
+                          </div>
+                          {!selectedTranscribeLang ? (
+                            <Check className="size-3.5 text-[var(--accent)]" />
+                          ) : null}
+                        </MenuItem>
+                        <MenuSeparator />
+                        {SUPPORTED_LANGUAGES.map((langDef) => {
+                          const isSelected = selectedTranscribeLang === langDef.code;
+                          return (
+                            <MenuItem
+                              key={langDef.code}
+                              onSelect={() => handleSelectTranscribeLang(langDef.code)}
+                              className="flex items-center justify-between cursor-pointer touch-pan-y"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm">{langDef.flag}</span>
+                                <span className="text-[12px]">{t((`lang_${langDef.code}`) as TranslationKey)}</span>
+                              </div>
+                              {isSelected ? (
+                                <Check className="size-3.5 text-[var(--accent)]" />
+                              ) : null}
+                            </MenuItem>
+                          );
+                        })}
+                      </MenuContent>
+                    </Menu>
+                  ) : null}
                 </div>
               </div>
 

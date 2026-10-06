@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { appRequestUser, rateLimitKey } from "@/lib/api/app-session";
+import { assertPlanAllows } from "@/lib/plans/server";
+import { planErrorBody, toPlanError } from "@/lib/plans/errors";
 import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { createRateLimiter } from "@/lib/api/rate-limit";
 import { clientIpOf } from "@/lib/api/client-ip";
@@ -71,6 +73,13 @@ export async function POST(request: NextRequest) {
   if (isCrossSiteRequest(request)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const uid = await appRequestUser(request);
   if (!uid) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  try {
+    await assertPlanAllows(uid, { write: true });
+  } catch (error) {
+    const planError = toPlanError(error);
+    if (!planError) throw error;
+    return NextResponse.json(planErrorBody(planError), { status: 403 });
+  }
   const declared = Number(request.headers.get("content-length") || 0);
   if (declared > MAX_BODY_BYTES) return NextResponse.json({ error: "payload_too_large" }, { status: 413 });
   const key = rateLimitKey(uid, clientIpOf(request));

@@ -3,6 +3,9 @@ import { ApiError, jsonError } from "@/lib/api/errors";
 import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { requireUser } from "@/lib/api/session";
 import { adminBucket, adminDb, isAdminConfigured } from "@/lib/firebase/admin";
+import { assertPlanAllows } from "@/lib/plans/server";
+import { PlanError } from "@/lib/plans/errors";
+import { isVideoMedia } from "@/lib/plans/definitions";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -75,6 +78,17 @@ export async function POST(request: Request) {
 
     if (fallbackFiles.length === 0 || fallbackPaths.length === 0) {
       throw new ApiError(400, "Arquivo ou caminho de armazenamento ausente");
+    }
+
+    const entitlements = await assertPlanAllows(user.uid, { write: true });
+    if (
+      entitlements &&
+      !entitlements.features.video &&
+      fallbackFiles.some((file, index) =>
+        isVideoMedia({ name: file?.name || fallbackPaths[index], type: file?.type })
+      )
+    ) {
+      throw PlanError.feature("video");
     }
 
     const bucket = adminBucket();

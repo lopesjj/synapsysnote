@@ -24,11 +24,13 @@ import type { DataAdapter } from "./adapter";
 import { FirestoreAdapter } from "./firestore-adapter";
 import { getLocalAdapter } from "./local-adapter";
 import { childrenOf, isParkedNotebook, notebookAncestors } from "./notebook-tree";
+import { partitionWorkspace } from "./workspace-partition";
 import { endOfDay, isCardDueForReview } from "@/lib/flashcards/srs";
 import { compareNatural } from "@/lib/utils";
 import { toast } from "sonner";
 import { useUiStore } from "@/lib/store/ui-store";
 import { translate } from "@/lib/i18n/translations";
+import { createPlanGuard, type GuardSnapshot } from "@/lib/plans/guard";
 
 
 export interface PageTreeNode {
@@ -138,6 +140,21 @@ function stripHeavyFlashcardFields(cards: Flashcard[]): Flashcard[] {
 
 export { TRASH_RETENTION_DAYS } from "@/lib/trash/retention";
 
+const guardSnapshots = new WeakMap<DataAdapter, Partial<GuardSnapshot>>();
+
+function recordGuardSnapshot(adapter: DataAdapter, patch: Partial<GuardSnapshot>) {
+  guardSnapshots.set(adapter, { ...guardSnapshots.get(adapter), ...patch });
+}
+
+function guardSnapshotOf(adapter: DataAdapter, userKey: string): GuardSnapshot {
+  const live = guardSnapshots.get(adapter) ?? {};
+  return {
+    notebooks: live.notebooks ?? readLocalStore<Notebook[]>(`synapsys.cache.notebooks.${userKey}`, []),
+    pages: live.pages ?? readLocalStore<Page[]>(`synapsys.cache.pages.${userKey}`, []),
+    databases: live.databases ?? readLocalStore<AppDatabase[]>(`synapsys.cache.databases.${userKey}`, []),
+  };
+}
+
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const userKey = user?.uid ?? "default";
@@ -161,12 +178,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [loadedAdapter, setLoadedAdapter] = useState<DataAdapter | null>(null);
   const [dayStamp, setDayStamp] = useState(() => endOfDay());
 
-  const adapter = useMemo<DataAdapter>(() => {
+  const baseAdapter = useMemo<DataAdapter>(() => {
     if (isFirebaseConfigured() && user && user.uid !== "demo-user") {
       return new FirestoreAdapter(workspaceIdFor(user.uid), user.uid);
     }
     return getLocalAdapter();
   }, [user]);
+  const adapter = useMemo<DataAdapter>(
+    () => createPlanGuard(baseAdapter, () => guardSnapshotOf(baseAdapter, userKey)),
+    [baseAdapter, userKey]
+  );
 
   // No primeiro render a autenticacao ainda pode nao ter resolvido, entao o
   // initializer acima leu o cache da chave "default". Quando a identidade chega,
@@ -217,17 +238,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       unsubs.push(
         adapter.subscribeNotebooks((next) => {
           if (cancelled) return;
+          recordGuardSnapshot(baseAdapter, { notebooks: next });
           setNotebooks(next);
           writeLocalStore(`synapsys.cache.notebooks.${userKey}`, () => next);
         }, reportSyncError),
         adapter.subscribePages((next) => {
           if (cancelled) return;
+          recordGuardSnapshot(baseAdapter, { pages: next });
           setPages(next);
           setLoadedAdapter(adapter);
           writeLocalStore(`synapsys.cache.pages.${userKey}`, () => stripHeavyPageFields(next));
         }, reportSyncError),
         adapter.subscribeDatabases((next) => {
           if (cancelled) return;
+          recordGuardSnapshot(baseAdapter, { databases: next });
           setDatabases(next);
           writeLocalStore(`synapsys.cache.databases.${userKey}`, () => next);
         }),
@@ -274,7 +298,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       unsubs.forEach((unsub) => unsub());
     };
-  }, [adapter, userKey]);
+  }, [adapter, baseAdapter, userKey]);
 
   // Sem isto o contador de cards vencidos ficaria congelado no dia em que a aba
   // foi aberta, ate que algum dado do workspace mudasse.
@@ -289,52 +313,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const flashcardsReady = flashcardsAdapter === adapter || flashcards.length > 0;
 
   const value = useMemo<WorkspaceContextValue>(() => {
-    const nonTrashedNotebooks = notebooks.filter((notebook) => !notebook.deletedAt);
     const trashedNotebooks = notebooks
       .filter((notebook) => notebook.deletedAt)
       .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
-    const nonTrashedPages = pages.filter((p) => !p.deletedAt);
     const trashedPages = pages
       .filter((p) => p.deletedAt)
       .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
 
-    const archivedNotebookIds = new Set<string>();
-    for (const nb of nonTrashedNotebooks) {
-      if (nb.archived) archivedNotebookIds.add(nb.id);
-    }
-    let nbAdded = true;
-    while (nbAdded) {
-      nbAdded = false;
-      for (const nb of nonTrashedNotebooks) {
-        if (!archivedNotebookIds.has(nb.id) && nb.parentId && archivedNotebookIds.has(nb.parentId)) {
-          archivedNotebookIds.add(nb.id);
-          nbAdded = true;
-        }
-      }
-    }
-
-    const liveNotebooks = nonTrashedNotebooks.filter((nb) => !archivedNotebookIds.has(nb.id));
-    const archivedNotebooks = nonTrashedNotebooks.filter((nb) => archivedNotebookIds.has(nb.id));
-
-    const archivedPageIds = new Set<string>();
-    for (const p of nonTrashedPages) {
-      if (p.archived || (p.notebookId && archivedNotebookIds.has(p.notebookId))) {
-        archivedPageIds.add(p.id);
-      }
-    }
-    let pAdded = true;
-    while (pAdded) {
-      pAdded = false;
-      for (const p of nonTrashedPages) {
-        if (!archivedPageIds.has(p.id) && p.parentPageId && archivedPageIds.has(p.parentPageId)) {
-          archivedPageIds.add(p.id);
-          pAdded = true;
-        }
-      }
-    }
-
-    const livePages = nonTrashedPages.filter((p) => !archivedPageIds.has(p.id));
-    const archivedPages = nonTrashedPages.filter((p) => archivedPageIds.has(p.id));
+    const { liveNotebooks, archivedNotebooks, livePages, archivedPages, archivedNotebookIds, archivedPageIds } =
+      partitionWorkspace(notebooks, pages);
     const archivedCount = archivedNotebooks.length + archivedPages.length;
 
     const livePageById = new Map(livePages.map((p) => [p.id, p]));

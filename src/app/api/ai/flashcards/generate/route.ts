@@ -7,6 +7,8 @@ import {
 } from "@/lib/flashcards/duplicate-cards";
 import { filterSemanticDuplicates } from "@/lib/flashcards/semantic-duplicates";
 import { appRequestUser, rateLimitKey } from "@/lib/api/app-session";
+import { assertPlanAllows } from "@/lib/plans/server";
+import { planErrorBody, toPlanError } from "@/lib/plans/errors";
 import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { createRateLimiter } from "@/lib/api/rate-limit";
 import { clientIpOf } from "@/lib/api/client-ip";
@@ -527,6 +529,13 @@ export async function POST(req: NextRequest) {
   const uid = await appRequestUser(req);
   if (!uid) {
     return NextResponse.json({ error: "unauthorized", flashcards: [] }, { status: 401 });
+  }
+  try {
+    await assertPlanAllows(uid, { write: true, feature: "aiFlashcards" });
+  } catch (error) {
+    const planError = toPlanError(error);
+    if (!planError) throw error;
+    return NextResponse.json({ ...planErrorBody(planError), flashcards: [] }, { status: 403 });
   }
   const declaredBytes = Number(req.headers.get("content-length") || 0);
   if (declaredBytes > MAX_BODY_BYTES) {

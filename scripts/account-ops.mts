@@ -2,22 +2,36 @@ import { createWriteStream } from "node:fs";
 import { resolve } from "node:path";
 import { adminAuth, isAdminConfigured } from "../src/lib/firebase/admin";
 import { accountExportStream, deleteAccount, workspacesOf } from "../src/lib/account/account-server";
+import { DAY_MS, PLAN_IDS, isPaidPlan, isPlanId, type PlanId } from "../src/lib/plans/definitions";
+import { resolveEntitlements } from "../src/lib/plans/entitlements";
+import { listPlanHistory, loadAccountPlan, setAccountPlan } from "../src/lib/plans/server";
+
+const COMMANDS = ["export", "delete", "suspend", "plan"] as const;
+type Command = (typeof COMMANDS)[number];
 
 interface ParsedArgs {
-  command: "export" | "delete" | "suspend" | null;
+  command: Command | null;
   email?: string;
   uid?: string;
   confirm: boolean;
   unsuspend: boolean;
   output?: string;
+  plan?: string;
+  until?: string;
+  trialDays?: string;
+  note?: string;
 }
 
 function parseCliArgs(): ParsedArgs {
   const args = process.argv.slice(2);
-  const command = (args[0] as ParsedArgs["command"]) || null;
+  const command = (COMMANDS as readonly string[]).includes(args[0]) ? (args[0] as Command) : null;
   let email: string | undefined;
   let uid: string | undefined;
   let output: string | undefined;
+  let plan: string | undefined;
+  let until: string | undefined;
+  let trialDays: string | undefined;
+  let note: string | undefined;
   let confirm = false;
   let unsuspend = false;
 
@@ -29,6 +43,14 @@ function parseCliArgs(): ParsedArgs {
       uid = args[++i].trim();
     } else if (arg === "--output" && args[i + 1]) {
       output = args[++i].trim();
+    } else if (arg === "--set" && args[i + 1]) {
+      plan = args[++i].trim().toLowerCase();
+    } else if (arg === "--until" && args[i + 1]) {
+      until = args[++i].trim();
+    } else if (arg === "--trial-days" && args[i + 1]) {
+      trialDays = args[++i].trim();
+    } else if (arg === "--note" && args[i + 1]) {
+      note = args[++i];
     } else if (arg === "--confirm") {
       confirm = true;
     } else if (arg === "--unsuspend") {
@@ -36,8 +58,17 @@ function parseCliArgs(): ParsedArgs {
     }
   }
 
-  return { command, email, uid, confirm, unsuspend, output };
+  return { command, email, uid, confirm, unsuspend, output, plan, until, trialDays, note };
 }
+
+const USAGE = [
+  "Uso: npm run account:<export|delete|suspend|plan> -- [--email <email> | --uid <uid>] [opções]",
+  "  export   [--output <arquivo.zip>]",
+  "  delete   [--confirm]",
+  "  suspend  [--unsuspend] [--confirm]",
+  `  plan     [--set <${PLAN_IDS.join("|")}>] [--until AAAA-MM-DD] [--trial-days N] [--note "texto"] [--confirm]`,
+  "           Sem --set, só mostra o plano atual e o histórico.",
+].join("\n");
 
 async function resolveUser(email?: string, uid?: string) {
   const auth = adminAuth();
@@ -100,21 +131,88 @@ async function runDelete(user: Awaited<ReturnType<typeof resolveUser>>, confirm:
   console.log(`Exclusão definitiva da conta ${user.email} (${user.uid}) realizada com sucesso.`, summary);
 }
 
+function formatDate(value: number | null): string {
+  return value === null ? "—" : new Date(value).toISOString().slice(0, 10);
+}
+
+function endOfDayUtc(value: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = Date.parse(`${value}T23:59:59.999Z`);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function runPlan(user: Awaited<ReturnType<typeof resolveUser>>, args: ParsedArgs) {
+  const current = await loadAccountPlan(user.uid);
+  const now = Date.now();
+  const status = resolveEntitlements(current, now);
+  console.log(`Conta: ${user.email} (${user.uid})`);
+  if (current) {
+    console.log(`Plano atual: ${current.plan} · situação: ${status.status}${status.readOnly ? " (somente leitura)" : ""}`);
+    console.log(`Teste: ${formatDate(current.trialStartedAt)} → ${formatDate(current.trialEndsAt)} · validade: ${formatDate(current.expiresAt)}`);
+  } else {
+    console.log("Plano atual: nenhum registro ainda (o teste começa no primeiro acesso).");
+  }
+
+  if (!args.plan) {
+    const history = await listPlanHistory(user.uid, 10);
+    for (const entry of history) {
+      console.log(
+        `  ${new Date(entry.at).toISOString()} · ${entry.from?.plan ?? "—"} → ${entry.to.plan} · ${entry.source}${entry.byEmail ? ` · ${entry.byEmail}` : ""}${entry.note ? ` · ${entry.note}` : ""}`
+      );
+    }
+    return;
+  }
+
+  if (!isPlanId(args.plan)) throw new Error(`Plano inválido: ${args.plan}. Use ${PLAN_IDS.join(", ")}.`);
+  const plan: PlanId = args.plan;
+
+  let expiresAt: number | null = null;
+  if (args.until) {
+    if (!isPaidPlan(plan)) throw new Error("--until só vale para os planos basic, pro e ultra.");
+    expiresAt = endOfDayUtc(args.until);
+    if (expiresAt === null || expiresAt <= now) throw new Error("--until precisa ser uma data futura no formato AAAA-MM-DD.");
+  }
+
+  let trialEndsAt: number | undefined;
+  if (args.trialDays !== undefined) {
+    const days = Number(args.trialDays);
+    if (!Number.isInteger(days) || days < 0 || days > 3650) throw new Error("--trial-days precisa ser um inteiro entre 0 e 3650.");
+    trialEndsAt = now + days * DAY_MS;
+  }
+
+  const summary = `${current?.plan ?? "—"} → ${plan} · validade ${formatDate(expiresAt)}${trialEndsAt !== undefined ? ` · teste até ${formatDate(trialEndsAt)}` : ""}`;
+  if (!args.confirm) {
+    console.log(`[SIMULAÇÃO] ${summary}`);
+    console.log("Para efetivar a alteração, execute o comando com a flag --confirm.");
+    return;
+  }
+
+  const next = await setAccountPlan(
+    user.uid,
+    { plan, expiresAt, trialEndsAt, note: args.note },
+    { uid: null, email: null, source: "cli" },
+    { identity: { email: user.email ?? "", emailVerified: user.emailVerified } }
+  );
+  const after = resolveEntitlements(next, Date.now());
+  console.log(`Sucesso: ${summary}. Situação agora: ${after.status}${after.readOnly ? " (somente leitura)" : ""}.`);
+}
+
 async function main() {
   if (!isAdminConfigured()) {
     console.error("Erro: Firebase Admin não configurado no ambiente local.");
     process.exit(1);
   }
 
-  const { command, email, uid, confirm, unsuspend, output } = parseCliArgs();
+  const args = parseCliArgs();
+  const { command, email, uid, confirm, unsuspend, output } = args;
 
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
-    console.log("Uso: npm run account:<export|delete|suspend> -- [--email <email> | --uid <uid>] [--confirm] [--unsuspend] [--output <path>]");
+    console.log(USAGE);
     process.exit(0);
   }
 
-  if (!command || !["export", "delete", "suspend"].includes(command)) {
-    console.log("Uso: npm run account:<export|delete|suspend> -- [--email <email> | --uid <uid>] [--confirm] [--unsuspend] [--output <path>]");
+  if (!command) {
+    console.log(USAGE);
     process.exit(1);
   }
 
@@ -126,6 +224,8 @@ async function main() {
     await runSuspend(user, unsuspend, confirm);
   } else if (command === "delete") {
     await runDelete(user, confirm);
+  } else if (command === "plan") {
+    await runPlan(user, args);
   }
 }
 

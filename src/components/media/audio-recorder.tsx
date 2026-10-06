@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { AudioLines, Mic, Square } from "lucide-react";
+import { AudioLines, Lock, Mic, Square } from "lucide-react";
 import { toast } from "sonner";
 import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,8 @@ import { Checkbox } from "@/components/ui/primitives";
 import { formatDuration } from "@/lib/utils";
 import { localizeErrorMessage, useTranslation } from "@/lib/i18n/translations";
 import { prepareAudioAttachment } from "@/lib/media/compress-attachment";
+import { notifyPlanError, openPlanDialog, useEntitlements } from "@/lib/plans/client";
+import { usePlanT } from "@/lib/plans/i18n";
 
 interface SpeechResultEvent {
   results: ArrayLike<ArrayLike<{ transcript?: string }>>;
@@ -52,6 +54,8 @@ export function AudioRecorder({
   onSave: (blob: Blob, durationSeconds: number, transcript?: string) => Promise<void>;
 }) {
   const { t, language } = useTranslation();
+  const { tp } = usePlanT();
+  const canTranscribe = useEntitlements().features.transcription;
   const [recording, setRecording] = useState(false);
   const [liveTranscription, setLiveTranscription] = useState(false);
   const [seconds, setSeconds] = useState(0);
@@ -159,7 +163,7 @@ export function AudioRecorder({
             (window as unknown as SpeechWindow).webkitSpeechRecognition
           : null;
 
-      if (liveTranscription && SpeechRec) {
+      if (liveTranscription && canTranscribe && SpeechRec) {
         try {
           const rec = new SpeechRec();
           rec.continuous = true;
@@ -234,14 +238,16 @@ export function AudioRecorder({
     setSaving(true);
     try {
       const blob = await prepareAudioAttachment(rawBlob);
-      await onSave(blob, duration, capturedTranscript);
+      await onSave(blob, duration, canTranscribe ? capturedTranscript : "");
       close(false);
       toast.success(t("voice_note_saved"));
     } catch (err) {
-      toast.error(
-        localizeErrorMessage(err instanceof Error ? err.message : null, t) ||
-          t("voice_note_save_error")
-      );
+      if (!notifyPlanError(err)) {
+        toast.error(
+          localizeErrorMessage(err instanceof Error ? err.message : null, t) ||
+            t("voice_note_save_error")
+        );
+      }
     } finally {
       setSaving(false);
     }
@@ -282,7 +288,7 @@ export function AudioRecorder({
 
         {error ? <p className="max-w-xs text-center text-[12px] text-[var(--danger)]">{error}</p> : null}
 
-        {!recording ? (
+        {!recording && canTranscribe ? (
           <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-muted">
             <Checkbox
               checked={liveTranscription}
@@ -290,6 +296,16 @@ export function AudioRecorder({
             />
             <span>{t("voice_note_live_transcribe")}</span>
           </label>
+        ) : null}
+        {!recording && !canTranscribe ? (
+          <button
+            type="button"
+            onClick={openPlanDialog}
+            className="flex max-w-xs items-center gap-2 text-center text-[12px] text-muted transition hover:text-[var(--accent)]"
+          >
+            <Lock className="size-3.5 shrink-0" />
+            <span>{tp("live_transcription_locked")}</span>
+          </button>
         ) : null}
 
         {!recording ? (

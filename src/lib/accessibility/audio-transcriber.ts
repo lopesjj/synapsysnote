@@ -1,4 +1,6 @@
 import { optionalAuthHeader } from "@/lib/firebase/auth-headers";
+import { TRANSCRIBE_PURPOSE_HEADER } from "@/lib/plans/definitions";
+import { isPlanError, toPlanError } from "@/lib/plans/errors";
 import {
   TRANSCRIPTION_SAMPLE_RATE,
   createMonoFrameReader,
@@ -9,6 +11,19 @@ import {
 
 export interface TranscribeProgressCallback {
   (currentText: string, percent: number, isInitialReady: boolean): void;
+}
+
+export type TranscribePurpose = "accessibility";
+
+function purposeHeader(purpose?: TranscribePurpose): Record<string, string> {
+  return purpose ? { [TRANSCRIBE_PURPOSE_HEADER]: purpose } : {};
+}
+
+async function throwIfPlanRefused(res: Response): Promise<void> {
+  if (res.status !== 403) return;
+  const data = await res.clone().json().catch(() => null);
+  const planError = toPlanError(new Error(typeof data?.error === "string" ? data.error : ""));
+  if (planError) throw planError;
 }
 
 export function isQuotaError(err: unknown): boolean {
@@ -187,6 +202,7 @@ function retryAfterMsOf(res: Response): number | undefined {
 }
 
 async function readTranscribeResponse(res: Response): Promise<TranscribeResponse> {
+  await throwIfPlanRefused(res);
   if (res.status === 429) {
     // Antes, qualquer 429 virava exceção e derrubava a mídia inteira. Mas o
     // 429 pode ser o limite por minuto (passa sozinho) ou o teto de requisições
@@ -218,7 +234,7 @@ async function readTranscribeResponse(res: Response): Promise<TranscribeResponse
 }
 
 /** Envia um arquivo de áudio e devolve o texto (ou o aviso de congestionamento). */
-async function postAudioFile(blob: Blob, targetLang: string): Promise<TranscribeResponse> {
+async function postAudioFile(blob: Blob, targetLang: string, purpose?: TranscribePurpose): Promise<TranscribeResponse> {
   return withTranscribeSlot(async () => {
     const formData = new FormData();
     const fileName =
@@ -237,12 +253,14 @@ async function postAudioFile(blob: Blob, targetLang: string): Promise<Transcribe
         method: "POST",
         headers: {
           "x-target-language": targetLang,
+          ...purposeHeader(purpose),
           ...(await optionalAuthHeader()),
         },
         body: formData,
       });
       return await readTranscribeResponse(res);
-    } catch {
+    } catch (error) {
+      if (isPlanError(error)) throw error;
       return { text: "", busy: false, reason: "NETWORK" };
     }
   });
@@ -252,7 +270,8 @@ async function tryRemoteTranscription(
   blob: Blob,
   audioUrl: string | undefined,
   targetLang: string,
-  onProgress?: TranscribeProgressCallback
+  onProgress?: TranscribeProgressCallback,
+  purpose?: TranscribePurpose
 ): Promise<RemoteAttempt> {
   const startedAt = Date.now();
   let currentPercent = 10;
@@ -271,7 +290,7 @@ async function tryRemoteTranscription(
   let busy = false;
 
   try {
-    const attempt = await postAudioFile(blob, targetLang);
+    const attempt = await postAudioFile(blob, targetLang, purpose);
     clearInterval(timer);
     // Cota do dia esgotada: nem o caminho por URL nem o Whisper local mudam
     // isso, e quem chamou precisa ouvir o motivo certo.
@@ -300,6 +319,7 @@ async function tryRemoteTranscription(
         headers: {
           "Content-Type": "application/json",
           "x-target-language": targetLang,
+          ...purposeHeader(purpose),
           ...(await optionalAuthHeader()),
         },
         body: JSON.stringify({
@@ -328,7 +348,7 @@ async function tryRemoteTranscription(
     }
   } catch (err) {
     clearInterval(timer);
-    if (isQuotaError(err)) {
+    if (isQuotaError(err) || isPlanError(err)) {
       throw err;
     }
   }
@@ -351,17 +371,19 @@ function peakGain(audioBuffer: AudioBuffer): number {
   return Math.min(0.95 / peak, 3.5);
 }
 
-async function postPcmChunk(chunk: Float32Array, langCode: string): Promise<string> {
+async function postPcmChunk(chunk: Float32Array, langCode: string, purpose?: TranscribePurpose): Promise<string> {
   const body = new Uint8Array(chunk.buffer as ArrayBuffer, chunk.byteOffset, chunk.byteLength);
   const res = await fetch("/api/ai/transcribe", {
     method: "POST",
     headers: {
       "Content-Type": "application/octet-stream",
       "x-target-language": langCode,
+      ...purposeHeader(purpose),
       ...(await optionalAuthHeader()),
     },
     body,
   });
+  await throwIfPlanRefused(res);
   if (!res.ok) return "";
   const data = await res.json();
   return typeof data?.transcript === "string" ? data.transcript.trim() : "";
@@ -382,7 +404,8 @@ const LOCAL_FALLBACK_MAX_SECONDS = 15 * 60;
 async function tryWhisperLocalTranscription(
   blob: Blob,
   targetLang: string,
-  onProgress?: TranscribeProgressCallback
+  onProgress?: TranscribeProgressCallback,
+  purpose?: TranscribePurpose
 ): Promise<string | null> {
   const audioBuffer = await decodeAudioBlob(blob, TRANSCRIPTION_SAMPLE_RATE);
   if (!audioBuffer || !audioBuffer.duration) return null;
@@ -420,7 +443,7 @@ async function tryWhisperLocalTranscription(
     }, 500);
 
     try {
-      const text = await postPcmChunk(takeChunk(0, totalSamples), langCode);
+      const text = await postPcmChunk(takeChunk(0, totalSamples), langCode, purpose);
       clearInterval(timer);
       onProgress?.(text, 100, true);
       return text || null;
@@ -449,7 +472,7 @@ async function tryWhisperLocalTranscription(
   let consecutiveFailures = 0;
   for (let i = 0; i < cuts.length; i++) {
     const { start: from, end: to } = cuts[i];
-    const text = await postPcmChunk(takeChunk(from, to), langCode);
+    const text = await postPcmChunk(takeChunk(from, to), langCode, purpose);
 
     if (text) {
       consecutiveFailures = 0;
@@ -498,12 +521,13 @@ async function postSegmentWithRetry(
   segment: Blob,
   lang: string,
   allowRetry: boolean,
-  backoffMs: number
+  backoffMs: number,
+  purpose?: TranscribePurpose
 ): Promise<TranscribeResponse> {
-  const first = await postAudioFile(segment, lang);
+  const first = await postAudioFile(segment, lang, purpose);
   if (first.text || first.fatalQuota || !first.busy || !allowRetry) return first;
   await delay(Math.max(backoffMs, first.retryAfterMs ?? 0));
-  return postAudioFile(segment, lang);
+  return postAudioFile(segment, lang, purpose);
 }
 
 /**
@@ -585,7 +609,8 @@ export async function transcribeInSegments(
   segments: Blob[] | SegmentSource,
   lang: string,
   onProgress?: TranscribeProgressCallback,
-  tuning?: SegmentRunTuning
+  tuning?: SegmentRunTuning,
+  purpose?: TranscribePurpose
 ): Promise<{
   text: string;
   busy: boolean;
@@ -653,7 +678,8 @@ export async function transcribeInSegments(
       blob,
       lang,
       allowRetry && !stalled(),
-      retryBackoffMs
+      retryBackoffMs,
+      purpose
     );
     lastReason = attempt.reason || lastReason;
 
@@ -769,6 +795,7 @@ export interface TranscribeOptions {
    * mídia não usa — ali "transcrever de novo" significa refazer de verdade.
    */
   reuseCache?: boolean;
+  purpose?: TranscribePurpose;
 }
 
 const sessionTranscripts = new Map<string, string>();
@@ -823,7 +850,7 @@ export async function transcribeAudioSource(
     }
   }
 
-  const job = runTranscription(audioUrl, audioBlob, monotonicProgress, lang);
+  const job = runTranscription(audioUrl, audioBlob, monotonicProgress, lang, options?.purpose);
   if (cacheKey) inFlightTranscripts.set(cacheKey, job);
   try {
     const text = await job;
@@ -838,7 +865,8 @@ export async function transcribeAudioSource(
 async function transcribeByAudioUrl(
   audioUrl: string,
   targetLang: string,
-  onProgress?: TranscribeProgressCallback
+  onProgress?: TranscribeProgressCallback,
+  purpose?: TranscribePurpose
 ): Promise<string | null> {
   return withTranscribeSlot(async () => {
     const startedAt = Date.now();
@@ -861,6 +889,7 @@ async function transcribeByAudioUrl(
         headers: {
           "Content-Type": "application/json",
           "x-target-language": targetLang,
+          ...purposeHeader(purpose),
           ...(await optionalAuthHeader()),
         },
         body: JSON.stringify({
@@ -891,7 +920,7 @@ async function transcribeByAudioUrl(
       }
     } catch (err) {
       clearInterval(timer);
-      if (isQuotaError(err) || (err instanceof Error && err.message === "SERVICE_BUSY")) {
+      if (isQuotaError(err) || isPlanError(err) || (err instanceof Error && err.message === "SERVICE_BUSY")) {
         throw err;
       }
     }
@@ -903,7 +932,8 @@ async function runTranscription(
   audioUrl: string,
   audioBlob: Blob | null | undefined,
   onProgress: TranscribeProgressCallback | undefined,
-  lang: string
+  lang: string,
+  purpose?: TranscribePurpose
 ): Promise<string> {
   if (!audioUrl && !audioBlob) return "";
   if (typeof window === "undefined") return "";
@@ -917,7 +947,7 @@ async function runTranscription(
       !audioUrl.includes("192.168.")
     ) {
       onProgress?.("", 10, false);
-      const urlText = await transcribeByAudioUrl(audioUrl, lang, onProgress);
+      const urlText = await transcribeByAudioUrl(audioUrl, lang, onProgress, purpose);
       if (urlText) return urlText;
     }
 
@@ -931,7 +961,7 @@ async function runTranscription(
 
     if (!blob) return "";
 
-    const attempt = await tryRemoteTranscription(blob, undefined, lang, onProgress);
+    const attempt = await tryRemoteTranscription(blob, undefined, lang, onProgress, purpose);
     if (attempt.text) return attempt.text;
     if (attempt.busy) throw new Error("SERVICE_BUSY");
 
@@ -958,7 +988,8 @@ async function runTranscription(
               { count: plan.ranges.length, load: (index) => plan.encode(index) },
               lang,
               report,
-              { progressFrom: 14, progressTo: 99 }
+              { progressFrom: 14, progressTo: 99 },
+              purpose
             )
         );
         if (result.quotaExhausted) {
@@ -1005,12 +1036,12 @@ async function runTranscription(
 
     let serviceBusy = false;
     if (sourceBlob.size <= INLINE_UPLOAD_LIMIT) {
-      const attempt = await tryRemoteTranscription(sourceBlob, urlFallback, lang, onProgress);
+      const attempt = await tryRemoteTranscription(sourceBlob, urlFallback, lang, onProgress, purpose);
       if (attempt.text) return attempt.text;
       serviceBusy = attempt.busy;
     }
 
-    const whisperResult = await tryWhisperLocalTranscription(sourceBlob, lang, onProgress);
+    const whisperResult = await tryWhisperLocalTranscription(sourceBlob, lang, onProgress, purpose);
     if (whisperResult) return whisperResult;
 
     // Sem transcrição e com o serviço congestionado: dizer isso é mais útil que
@@ -1019,6 +1050,7 @@ async function runTranscription(
   } catch (e) {
     if (
       isQuotaError(e) ||
+      isPlanError(e) ||
       (e instanceof Error &&
         (e.message === "SERVICE_BUSY" ||
           e.message === "TRANSCRIBE_FAILED"))

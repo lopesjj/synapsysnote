@@ -52,6 +52,7 @@
     "account:export": "tsx --conditions=react-server scripts/account-ops.mts export",
     "account:delete": "tsx --conditions=react-server scripts/account-ops.mts delete",
     "account:suspend": "tsx --conditions=react-server scripts/account-ops.mts suspend",
+    "account:plan": "tsx --conditions=react-server scripts/account-ops.mts plan",
     "verify:block-merge": "tsx scripts/verify-block-merge.mts",
     "verify:shared": "node scripts/sync-functions-shared.mjs --check",
     "predev": "node scripts/copy-vendor.mjs",

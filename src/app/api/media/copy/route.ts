@@ -6,6 +6,9 @@ import { isCrossSiteRequest } from "@/lib/api/request-origin";
 import { requireWorkspaceEditor } from "@/lib/api/session";
 import { adminBucket, isAdminConfigured } from "@/lib/firebase/admin";
 import { extractStoragePath } from "@/lib/trash/purge-server";
+import { assertPlanAllows } from "@/lib/plans/server";
+import { PlanError } from "@/lib/plans/errors";
+import { isVideoMedia } from "@/lib/plans/definitions";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -34,13 +37,24 @@ export async function POST(request: Request) {
     };
     const { workspaceId } = body;
     if (!workspaceId) throw new ApiError(400, "workspaceId é obrigatório");
-    await requireWorkspaceEditor(request, workspaceId);
+    const user = await requireWorkspaceEditor(request, workspaceId);
+    const entitlements = await assertPlanAllows(user.uid, { write: true });
 
     const target = body.target === "icons" ? "icons" : "page";
     const pageId = String(body.pageId ?? "");
     if (target === "page" && !/^[\w-]{1,80}$/.test(pageId)) throw new ApiError(400, "pageId inválido");
     if (!Array.isArray(body.sources)) throw new ApiError(400, "sources é obrigatório");
     if (body.sources.length > MAX_FILES) throw new ApiError(413, "Arquivos demais para copiar de uma vez");
+    if (
+      entitlements &&
+      !entitlements.features.video &&
+      body.sources.some((raw) => {
+        const source = typeof raw === "string" ? extractStoragePath(raw) : null;
+        return Boolean(source && isVideoMedia({ name: baseName(source) }));
+      })
+    ) {
+      throw PlanError.feature("video");
+    }
     if (!isAdminConfigured()) return Response.json({ copies: {} });
 
     const bucket = adminBucket();

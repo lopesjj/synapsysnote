@@ -1,6 +1,7 @@
 import { requireWorkspaceEditor } from "@/lib/api/session";
 import { jsonError } from "@/lib/api/errors";
 import { enqueueNotionImport, runNotionImportStep } from "@/lib/notion/server/run-import";
+import { assertPlanAllows } from "@/lib/plans/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
     }
 
     const user = await requireWorkspaceEditor(request, workspaceId);
+    await assertPlanAllows(user.uid, { write: true });
     const jobId = await enqueueNotionImport({
       workspaceId,
       uid: user.uid,

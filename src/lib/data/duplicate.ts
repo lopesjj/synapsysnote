@@ -156,6 +156,7 @@ export async function duplicatePageTree(
     parentPageId?: string | null;
     notebookId?: string | null;
     rename?: boolean;
+    includeFlashcards?: boolean;
   } = {}
 ): Promise<Page> {
   const source = livePages(pages).find((page) => page.id === pageId);
@@ -191,7 +192,7 @@ export async function duplicatePageTree(
     await host.updatePage(created.id, { outgoingLinks });
   }
 
-  await duplicatePageFlashcards(host, source.id, created);
+  if (options.includeFlashcards !== false) await duplicatePageFlashcards(host, source.id, created);
 
   const children = livePages(pages)
     .filter((page) => page.parentPageId === source.id)
@@ -201,6 +202,7 @@ export async function duplicatePageTree(
       parentPageId: created.id,
       notebookId: created.notebookId,
       rename: false,
+      includeFlashcards: options.includeFlashcards,
     });
   }
 
@@ -215,6 +217,7 @@ export async function duplicateNotebookTree(
   options: {
     parentId?: string | null;
     rename?: boolean;
+    includeFlashcards?: boolean;
   } = {}
 ): Promise<Notebook> {
   const source = notebooks.find((notebook) => notebook.id === notebookId);
@@ -249,6 +252,7 @@ export async function duplicateNotebookTree(
       notebookId: created.id,
       parentPageId: null,
       rename: false,
+      includeFlashcards: options.includeFlashcards,
     });
   }
 
@@ -256,6 +260,7 @@ export async function duplicateNotebookTree(
     await duplicateNotebookTree(host, notebooks, pages, child.id, {
       parentId: created.id,
       rename: false,
+      includeFlashcards: options.includeFlashcards,
     });
   }
 

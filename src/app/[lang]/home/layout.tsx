@@ -8,11 +8,13 @@ import { FlashcardNotificationsWatcher } from "@/components/flashcards/flashcard
 import { FlashcardSettingsSync } from "@/components/flashcards/flashcard-settings-sync";
 import { ImageLightbox } from "@/components/editor/image-lightbox";
 import { LegalLayer } from "@/components/legal/legal-layer";
+import { PlanSync } from "@/components/plans/plan-sync";
 
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   return (
     <HomeHostGate>
       <RegistrationGate>
+        <PlanSync />
         <WorkspaceProvider>
           <StudyProvider>
             <FlashcardSettingsSync />

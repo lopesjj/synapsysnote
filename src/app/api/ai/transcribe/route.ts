@@ -13,6 +13,9 @@ import {
   type WhisperResult,
 } from "@/lib/ai/groq-whisper";
 import { extractAudioTrack } from "@/lib/media/server-audio-extractor";
+import { assertPlanAllows } from "@/lib/plans/server";
+import { planErrorBody, toPlanError } from "@/lib/plans/errors";
+import { TRANSCRIBE_PURPOSE_HEADER } from "@/lib/plans/definitions";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -237,6 +240,14 @@ export async function POST(req: NextRequest) {
     const uid = await appRequestUser(req);
     if (!uid) {
       return NextResponse.json({ transcript: "", reason: "UNAUTHORIZED" }, { status: 401 });
+    }
+    try {
+      const accessibility = req.headers.get(TRANSCRIBE_PURPOSE_HEADER) === "accessibility";
+      await assertPlanAllows(uid, accessibility ? {} : { write: true, feature: "transcription" });
+    } catch (error) {
+      const planError = toPlanError(error);
+      if (!planError) throw error;
+      return NextResponse.json({ transcript: "", reason: planError.message, ...planErrorBody(planError) }, { status: 403 });
     }
 
     const limitKey = rateLimitKey(uid, clientIpOf(req));

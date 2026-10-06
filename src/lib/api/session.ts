@@ -10,6 +10,7 @@ export interface AuthedUser {
   uid: string;
   email?: string;
   name?: string;
+  emailVerified?: boolean;
 }
 
 export async function requireUser(request: Request): Promise<AuthedUser> {
@@ -27,7 +28,12 @@ export async function requireUser(request: Request): Promise<AuthedUser> {
 
   try {
     const decoded = await adminAuth().verifyIdToken(header.slice(7), true);
-    return { uid: decoded.uid, email: decoded.email, name: decoded.name };
+    return {
+      uid: decoded.uid,
+      email: decoded.email,
+      name: decoded.name,
+      emailVerified: decoded.email_verified === true,
+    };
   } catch {
     throw new ApiError(401, "Sessão inválida ou expirada");
   }
@@ -64,7 +70,6 @@ export async function ensureWorkspace(
         language,
         ownerId: user.uid,
         memberIds: [user.uid],
-        plan: "free",
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
@@ -73,6 +78,9 @@ export async function ensureWorkspace(
       const memberIds = (data.memberIds as string[] | undefined) ?? [];
       if (!memberIds.includes(user.uid) && data.ownerId !== user.uid) {
         throw new ApiError(403, "Você não é membro deste workspace");
+      }
+      if (data.plan !== undefined && data.ownerId === user.uid) {
+        tx.update(wsRef, { plan: FieldValue.delete() });
       }
     }
 

@@ -26,7 +26,6 @@ export interface BackupWorkspaceMeta extends BackupRecord {
   id?: string;
   name?: string;
   emoji?: string;
-  plan?: string;
   language?: string;
 }
 

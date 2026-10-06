@@ -5,6 +5,9 @@ import { extractZipEntry, type SlicedZipEntry } from "./sliced-zip";
 import { optionalAuthHeader } from "@/lib/firebase/auth-headers";
 import { translate } from "@/lib/i18n/translations";
 import { useUiStore } from "@/lib/store/ui-store";
+import { isVideoMedia, pageContainsVideo } from "@/lib/plans/definitions";
+import { isPlanError, toPlanError, type PlanError } from "@/lib/plans/errors";
+import { notifyPlanError } from "@/lib/plans/client";
 import {
   useBackgroundImportStore,
   type BackgroundImportRun,
@@ -13,6 +16,7 @@ import {
   isRestorableBackup,
   readWorkspaceBackup,
   summarizeWorkspaceBackup,
+  type BackupRecord,
   type RestoreSummary,
   type WorkspaceBackup,
 } from "./workspace-backup";
@@ -181,6 +185,78 @@ function extractTokensMap(rawJson: string): Map<string, string> {
   return tokenMap;
 }
 
+async function planErrorOf(response: Response): Promise<PlanError | null> {
+  if (response.status !== 403) return null;
+  const body = (await response
+    .clone()
+    .json()
+    .catch(() => ({}))) as { error?: unknown };
+  return typeof body.error === "string" ? toPlanError(new Error(body.error)) : null;
+}
+
+function recordContainsVideo(value: unknown): boolean {
+  return Boolean(value) && typeof value === "object" && pageContainsVideo(value as BackupRecord);
+}
+
+function backupContainsVideo(backup: WorkspaceBackup): boolean {
+  const pageHasVideo = backup.pages.some(
+    (page) => pageContainsVideo(page) || (Array.isArray(page.versions) && page.versions.some(recordContainsVideo))
+  );
+  return pageHasVideo || backup.files.some((item) => isVideoMedia({ name: item.name, type: item.mimeType }));
+}
+
+function structuralPreview(backup: WorkspaceBackup) {
+  return {
+    notebooks: backup.notebooks.map((notebook) => ({
+      id: notebook.id,
+      parentId: notebook.parentId ?? null,
+      deletedAt: notebook.deletedAt ?? null,
+      trashedWith: notebook.trashedWith ?? null,
+    })),
+    pages: backup.pages.map((page) => ({
+      id: page.id,
+      notebookId: page.notebookId ?? null,
+      parentPageId: page.parentPageId ?? null,
+      path: Array.isArray(page.path) ? page.path : [],
+      archived: page.archived === true,
+      deletedAt: page.deletedAt ?? null,
+      trashedWith: page.trashedWith ?? null,
+    })),
+    study: {
+      study_plans: (backup.study?.study_plans ?? []).map((goal) => ({ id: goal.id, archived: goal.archived })),
+    },
+  };
+}
+
+async function validateRestore(
+  workspaceId: string,
+  backup: WorkspaceBackup,
+  clean: boolean,
+  authHeader: { current: Record<string, string> },
+  signal: AbortSignal
+): Promise<void> {
+  const send = () =>
+    fetch("/api/workspace/restore", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeader.current },
+      body: JSON.stringify({
+        workspaceId,
+        clean,
+        validate: true,
+        containsVideo: backupContainsVideo(backup),
+        data: structuralPreview(backup),
+      }),
+      signal,
+    });
+  let response = await send();
+  if (response.status === 401) {
+    authHeader.current = await getFreshAuthHeader();
+    response = await send();
+  }
+  const planError = await planErrorOf(response);
+  if (planError) throw planError;
+}
+
 type RestorableData = Omit<WorkspaceBackup, "files">;
 
 function remapWorkspaceData(parsedData: WorkspaceBackup, targetWorkspaceId: string): RestorableData {
@@ -307,7 +383,10 @@ async function uploadBatchFilesWithRetry(
       if (res.ok) {
         return true;
       }
-    } catch {
+      const planError = await planErrorOf(res);
+      if (planError) throw planError;
+    } catch (error) {
+      if (isPlanError(error)) throw error;
       if (signal?.aborted) return false;
       const delay = Math.min(600 * Math.pow(1.6, attempts - 1), 6000);
       await new Promise((r) => setTimeout(r, delay));
@@ -398,6 +477,13 @@ export async function executeWorkspaceRestore(
     });
 
     const authHeaderRef = { current: await getFreshAuthHeader() };
+    await validateRestore(
+      workspaceId,
+      parsedData,
+      mode === "clean" && restoredBatchIndex === 0,
+      authHeaderRef,
+      abortCtrl.signal
+    );
     const tokenMap = extractTokensMap(JSON.stringify(parsedData));
 
     if (manifestFiles.length > 0) {
@@ -498,7 +584,11 @@ export async function executeWorkspaceRestore(
 
       const pool = Array.from(
         { length: Math.min(CONCURRENCY, Math.ceil(pendingItems.length / BATCH_FILE_COUNT) || 1) },
-        () => worker()
+        () =>
+          worker().catch((error) => {
+            abortCtrl.abort();
+            throw error;
+          })
       );
       await Promise.all(pool);
 
@@ -588,10 +678,13 @@ export async function executeWorkspaceRestore(
           if (restoreRes.ok) {
             success = true;
           } else {
+            const planError = await planErrorOf(restoreRes);
+            if (planError) throw planError;
             const errJson = await restoreRes.json().catch(() => ({}));
             throw new Error(errJson.error?.message || `Erro ${restoreRes.status}`);
           }
-        } catch {
+        } catch (error) {
+          if (isPlanError(error)) throw error;
           if (abortCtrl.signal.aborted) return;
           const delay = Math.min(800 * Math.pow(1.6, attempts - 1), 6000);
           await new Promise((r) => setTimeout(r, delay));
@@ -644,8 +737,11 @@ export async function executeWorkspaceRestore(
       }, 700);
     }
   } catch (err) {
+    abortCtrl.abort();
     activeAbortControllers.delete(workspaceId);
     setGlobalActiveFlag(false);
+    const planError = toPlanError(err);
+    if (planError) await deletePersistedRestoreJob(workspaceId);
     const failure = err instanceof Error && err.message ? err.message : message("synapsys_import_failed");
     useBackgroundImportStore.getState().patch(WORKSPACE_RESTORE_KEY, { status: "done" });
     onProgress?.({
@@ -657,7 +753,7 @@ export async function executeWorkspaceRestore(
       percent: 0,
       message: failure,
     });
-    toast.error(failure);
+    if (!notifyPlanError(err)) toast.error(failure);
     throw err;
   }
 }
