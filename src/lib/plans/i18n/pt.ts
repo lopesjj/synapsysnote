@@ -46,7 +46,7 @@ export const pt = {
   compare_current: "Atual",
   compare_included: "Incluído",
   compare_not_included: "Não incluído",
-  compare_free_note: "30 dias com tudo do Ultra; depois, só para ver, arquivar e excluir.",
+  compare_free_note: "{days} {days|dia|dias} com tudo do Ultra; depois, só para ver, arquivar e excluir.",
 
   feature_pages: "Páginas ativas",
   feature_notebooks: "Cadernos por página",
@@ -102,12 +102,7 @@ export const pt = {
   archive_locked_title: "Arquivamento nos planos Pro e Ultra",
   archive_locked_body: "Seu plano não inclui arquivamento. Você ainda pode abrir e excluir os itens arquivados; para desarquivar, mude para o Pro ou o Ultra.",
   flashcards_read_only: "Você pode ver e excluir os seus cards. Criar, editar e revisar estão disponíveis nos planos Pro e Ultra.",
-  transcription_locked: "Transcrição nos planos Pro e Ultra",
   live_transcription_locked: "A transcrição ao vivo está disponível nos planos Pro e Ultra.",
-  read_only_page: "Sua conta está em modo somente leitura.",
-  goals_limit_reached: "Você já tem {count} {count|objetivo ativo|objetivos ativos}, o máximo do seu plano. Arquive ou exclua um objetivo para criar outro.",
-  goals_limit_reached_basic: "Seu plano permite {limit} {limit|objetivo ativo|objetivos ativos}. Exclua o objetivo atual para criar outro, ou mude de plano.",
-  goal_archive_locked: "Arquivar objetivos está disponível nos planos Pro e Ultra.",
 
   admin_title: "Gerenciar contas",
   admin_description: "Atribua ou altere o plano de qualquer conta. As mudanças valem na hora.",

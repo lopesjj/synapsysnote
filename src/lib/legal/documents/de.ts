@@ -35,6 +35,7 @@ const de: LegalBundle = {
               "das Gelernte mit Spaced Repetition wiederholen.",
             ],
           },
+          "Einige Funktionen und wie viele Inhalte du erstellen kannst, hängen vom Tarif deines Kontos ab, wie unter [Tarife und Preise](doc:terms#pricing) erklärt.",
           "Der Dienst entwickelt sich ständig weiter. Wir können Funktionen hinzufügen, ändern oder einstellen; wenn sich eine Änderung wesentlich auf das auswirkt, was du nutzt, informieren wir dich mit angemessenem Vorlauf.",
         ],
       },
@@ -101,9 +102,31 @@ const de: LegalBundle = {
       },
       {
         id: "pricing",
-        title: "Preise und Pläne",
+        title: "Tarife und Preise",
         blocks: [
-          "{brand} wird derzeit kostenlos angeboten. Wenn wir kostenpflichtige Pläne einführen, werden Preis, Zahlungsmethode und Kündigungsbedingungen vor jeder Berechnung klar dargestellt — es wird nichts ohne deine ausdrückliche Zustimmung berechnet.",
+          "{brand} bietet die Tarife Kostenlos, Basis, Pro und Ultra an. Jedes neue Konto startet im Tarif Kostenlos, der {trialDays} Tage lang alle Funktionen des Tarifs Ultra kostenlos freischaltet. Die Grenzen und Funktionen der kostenpflichtigen Tarife sind:",
+          {
+            table: {
+              head: ["Funktion", "Basis", "Pro", "Ultra"],
+              rows: [
+                ["Aktive Seiten", "{basicPages}", "{proPages}", "{ultraPages}"],
+                ["Notizbücher pro Seite", "{basicNotebooksPerPage}", "{proNotebooksPerPage}", "{ultraNotebooksPerPage}"],
+                ["Notizen pro Notizbuch", "{basicNotesPerNotebook}", "{proNotesPerNotebook}", "{ultraNotesPerNotebook}"],
+                ["Unternotizen pro Notiz", "{basicSubnotesPerNote}", "{proSubnotesPerNote}", "{ultraSubnotesPerNote}"],
+                ["Aktive Ziele", "{basicActiveGoals}", "{proActiveGoals}", "{ultraActiveGoals}"],
+                ["Videos in Notizen", "Nein", "Ja", "Ja"],
+                ["Transkription von Audio und Video", "Nein", "Ja", "Ja"],
+                ["Manuelle Karteikarten", "Nein", "Ja", "Ja"],
+                ["KI-generierte Karteikarten", "Nein", "Nein", "Ja"],
+                ["Archivieren von Seiten, Notizbüchern und Notizen", "Nein", "Ja", "Ja"],
+                ["Archivieren von Zielen", "Nein", "Ja", "Ja"],
+                ["Erfolgsvitrine", "Nein", "Ja", "Ja"],
+              ],
+            },
+          },
+          "Endet der Test, ohne dass ein Tarif gebucht wurde, oder läuft ein gebuchter Tarif ohne Verlängerung ab, wechselt das Konto in den Nur-Lesen-Modus: Alles, was du erstellt hast, bleibt einsehbar, und du kannst weiterhin archivieren, aus dem Archiv zurückholen, in den Papierkorb verschieben, wiederherstellen und löschen, aber keine Inhalte erstellen oder bearbeiten, bis du einen Tarif wählst.",
+          "Ein Tarifwechsel löscht niemals deine Inhalte. Hat der neue Tarif niedrigere Grenzen, bleibt alles Vorhandene gespeichert und verfügbar, du kannst aber keine neuen Elemente eines Typs erstellen, solange die Gesamtzahl über der Grenze liegt. Funktionen, die dein Tarif nicht enthält, bleiben sichtbar, aber deaktiviert.",
+          "Buchung und Wechsel eines Tarifs erfolgen über unseren Support unter {contactEmail}. Preis, Zahlungsmethode, Laufzeit und Kündigungsbedingungen werden vor jeder Berechnung klar dargestellt — es wird nichts ohne deine ausdrückliche Zustimmung berechnet.",
         ],
       },
       {
@@ -188,6 +211,7 @@ const de: LegalBundle = {
                 ["Inhalte", "Notizen, Seiten, Notizbücher, Lernkarten, Anhänge, Audio und Video; im Lernmodul Ziele, Fächer und Themen (mit den externen Links, die du hinzufügst), Lerneinheiten (mit Material und verknüpften Notizen), Aufgaben, Wiederholungen, Probeprüfungen, Lernpläne, Erinnerungen, Notizblock und die in deiner Vitrine aufbewahrten Erfolge (mit dem Datum der Aufbewahrung und der Reihenfolge, in der du sie anordnest), den Tagesspruch und die Liste der bereits gezeigten Sprüche, damit sie sich nicht wiederholen", "Du und die von dir durchgeführten Importe"],
                 ["Integrationen", "Zugriffstoken für Notion, Evernote und Google Docs", "Der verbundene Dienst, mit deiner Autorisierung"],
                 ["Einstellungen", "Sprache, Design, Barrierefreiheit und Layout", "Du"],
+                ["Tarif des Kontos", "Aktueller Tarif, Daten des Testzeitraums und der Gültigkeit des Tarifs sowie der Verlauf der Tarifwechsel mit Datum, der Person, die die Änderung vorgenommen hat, und einer optionalen Notiz", "Wir, bei der Kontoerstellung und bei jedem Tarifwechsel"],
                 ["Zustimmung zu Dokumenten", "Version und Datum, an dem du die Nutzungsbedingungen und diese Richtlinie akzeptiert hast", "Du"],
                 ["Technische Daten", "IP-Adresse, ungefähres Land, Browser, Gerät, Datum und Uhrzeit des Zugriffs", "Automatisch erfasst"],
               ],
@@ -207,6 +231,7 @@ const de: LegalBundle = {
                 ["Dein Konto erstellen und pflegen, Zugang authentifizieren und Inhalte synchronisieren", "Vertragserfüllung (Art. 7, V)"],
                 ["Von dir ausgelöste Funktionen ausführen: Importe, Transkripte, Lernkarten und Übersetzungen", "Vertragserfüllung (Art. 7, V)"],
                 ["Statistiken, geplante Wiederholungen und Lernpläne aus deinen Lerneinträgen berechnen", "Vertragserfüllung (Art. 7, V)"],
+                ["Die Grenzen und Funktionen deines Tarifs anwenden, den Testzeitraum und die Gültigkeit des Tarifs verwalten und Tarifwechsel protokollieren", "Vertragserfüllung (Art. 7, V)"],
                 ["Den Tagesspruch aus einem externen Bestand holen und bereits gezeigte Sprüche speichern, damit sie sich nicht wiederholen", "Vertragserfüllung (Art. 7, V)"],
                 ["Konten vor Betrug und unbefugtem Zugriff schützen, auch mithilfe von reCAPTCHA", "Berechtigtes Interesse (Art. 7, IX)"],
                 ["Zugriffsprotokolle für die im brasilianischen Marco Civil da Internet vorgeschriebene Dauer aufbewahren", "Rechtliche Verpflichtung (Art. 7, II)"],
@@ -283,6 +308,7 @@ const de: LegalBundle = {
           {
             list: [
               "**Konto und Inhalte:** solange dein Konto aktiv ist.",
+              "**Tarif des Kontos:** Der Tarif und sein Änderungsverlauf werden gespeichert, solange das Konto besteht, und zusammen mit ihm gelöscht.",
               "**Papierkorb:** Gelöschte Elemente verbleiben {trashDays} Tage im Papierkorb und werden dann dauerhaft gelöscht.",
               "**Erneuter Notion-Import:** die vorherige Version einer Notiz und die Dateien, die sie nicht mehr verwendet, werden sofort gelöscht, ohne in den Papierkorb zu gelangen.",
               "**Kontolöschung:** Über Einstellungen › Datenschutz & Daten werden die Daten sofort gelöscht; auf Anfrage per E-Mail innerhalb von 30 Tagen. Es bleibt nur, was wir gesetzlich aufbewahren müssen, etwa die Zugriffsprotokolle.",
@@ -411,9 +437,9 @@ const de: LegalBundle = {
             list: [
               "die Firebase-Authentifizierungssitzung, die dich angemeldet hält;",
               "einen Zähler für Anmeldeversuche, mit dem reCAPTCHA bei Bedarf angezeigt wird;",
-              "Einstellungen der Oberfläche wie Design, Seitenleiste, zuletzt verwendete Notizbücher und die für Transkripte und Lernkarten gewählten Sprachen;",
+              "Einstellungen der Oberfläche wie Design, Seitenleiste, zuletzt verwendete Notizbücher, bereits geschlossene Tarifhinweise und die für Transkripte und Lernkarten gewählten Sprachen;",
               "den Zustand des Lernmoduls, etwa einen laufenden Fokus-Timer, die zuletzt geöffnete Ansicht und die sichtbaren Ebenen der Planung;",
-              "eine Kopie deiner Notizen, Notizbücher und Lerndaten, damit sich die App schneller öffnet und auch offline funktioniert.",
+              "eine Kopie deiner Notizen, Notizbücher, Lerndaten und des Tarifs deines Kontos, damit sich die App schneller öffnet und auch offline funktioniert.",
             ],
           },
           "Diese Informationen verbleiben nur in deinem Browser und werden gelöscht, wenn du dich abmeldest, die Sitzung abläuft oder du die Website-Daten löschst.",

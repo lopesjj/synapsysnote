@@ -35,6 +35,7 @@ const fr: LegalBundle = {
               "réviser ce que vous avez étudié avec la répétition espacée.",
             ],
           },
+          "Certaines fonctionnalités, ainsi que la quantité de contenu que vous pouvez créer, dépendent de la formule de votre compte, comme expliqué dans [Formules et tarifs](doc:terms#pricing).",
           "Le service évolue constamment. Nous pouvons ajouter, modifier ou cesser de proposer des fonctionnalités ; lorsqu'un changement affectera de manière significative ce que vous utilisez, nous vous en informerons avec un préavis raisonnable.",
         ],
       },
@@ -101,9 +102,31 @@ const fr: LegalBundle = {
       },
       {
         id: "pricing",
-        title: "Tarifs et abonnements",
+        title: "Formules et tarifs",
         blocks: [
-          "{brand} est actuellement proposé gratuitement. Si nous lançons des abonnements payants, le prix, le mode de paiement et les conditions d'annulation seront clairement présentés avant tout débit — rien ne sera facturé sans votre accord exprès.",
+          "{brand} propose les formules Gratuit, Essentiel, Pro et Ultra. Tout nouveau compte commence avec la formule Gratuit, qui donne accès à toutes les fonctionnalités de la formule Ultra pendant {trialDays} jours, sans aucun frais. Les limites et fonctionnalités des formules payantes sont les suivantes :",
+          {
+            table: {
+              head: ["Fonction", "Essentiel", "Pro", "Ultra"],
+              rows: [
+                ["Pages actives", "{basicPages}", "{proPages}", "{ultraPages}"],
+                ["Carnets par page", "{basicNotebooksPerPage}", "{proNotebooksPerPage}", "{ultraNotebooksPerPage}"],
+                ["Notes par carnet", "{basicNotesPerNotebook}", "{proNotesPerNotebook}", "{ultraNotesPerNotebook}"],
+                ["Sous-notes par note", "{basicSubnotesPerNote}", "{proSubnotesPerNote}", "{ultraSubnotesPerNote}"],
+                ["Objectifs actifs", "{basicActiveGoals}", "{proActiveGoals}", "{ultraActiveGoals}"],
+                ["Vidéos dans les notes", "Non", "Oui", "Oui"],
+                ["Transcription audio et vidéo", "Non", "Oui", "Oui"],
+                ["Cartes mémoire manuelles", "Non", "Oui", "Oui"],
+                ["Cartes mémoire générées par l'IA", "Non", "Non", "Oui"],
+                ["Archivage des pages, carnets et notes", "Non", "Oui", "Oui"],
+                ["Archivage des objectifs", "Non", "Oui", "Oui"],
+                ["Vitrine des réussites", "Non", "Oui", "Oui"],
+              ],
+            },
+          },
+          "Lorsque l'essai se termine sans qu'une formule soit souscrite, ou lorsqu'une formule souscrite expire sans être renouvelée, le compte passe en mode lecture seule : tout ce que vous avez créé reste consultable, et vous pouvez toujours archiver, désarchiver, mettre à la corbeille, restaurer et supprimer, mais vous ne pouvez ni créer ni modifier de contenu tant que vous n'avez pas choisi de formule.",
+          "Changer de formule ne supprime jamais votre contenu. Si la nouvelle formule a des limites plus basses, ce qui existe déjà reste enregistré et accessible, mais vous ne pourrez pas créer de nouveaux éléments d'un type tant que le total dépasse la limite. Les fonctionnalités que votre formule n'inclut pas restent visibles, mais désactivées.",
+          "La souscription et le changement de formule se font auprès de notre service client, à l'adresse {contactEmail}. Le prix, le mode de paiement, la durée et les conditions d'annulation seront clairement présentés avant tout débit — rien ne sera facturé sans votre accord exprès.",
         ],
       },
       {
@@ -188,6 +211,7 @@ const fr: LegalBundle = {
                 ["Contenu", "Notes, pages, carnets, flashcards, pièces jointes, fichiers audio et vidéos ; dans le module d'étude, objectifs, matières et sujets (avec les liens externes que vous ajoutez), séances (avec le support et les notes liées), questions, révisions, examens blancs, plannings, rappels, bloc-notes et les réussites rangées dans votre vitrine (avec leur date et l'ordre dans lequel vous les rangez), la phrase du jour et la liste des phrases déjà affichées, afin de ne pas les répéter", "Vous et les importations que vous effectuez"],
                 ["Intégrations", "Jetons d'accès à Notion, Evernote et Google Docs", "Le service connecté, avec votre autorisation"],
                 ["Préférences", "Langue, thème, accessibilité et disposition", "Vous"],
+                ["Formule du compte", "Formule actuelle, dates de la période d'essai et de validité de la formule, et l'historique des changements de formule, avec la date, l'auteur de la modification et une note facultative", "Nous, à la création du compte et à chaque changement de formule"],
                 ["Données techniques", "Adresse IP, pays approximatif, navigateur, appareil, date et heure d'accès", "Collecte automatique"],
                 ["Acceptation des documents", "Version et date auxquelles vous avez accepté les Conditions d'utilisation et cette politique", "Vous"],
               ],
@@ -207,6 +231,7 @@ const fr: LegalBundle = {
                 ["Créer et maintenir votre compte, authentifier l'accès et synchroniser votre contenu", "Exécution d'un contrat (art. 7, V)"],
                 ["Exécuter les fonctionnalités que vous activez : importations, transcriptions, flashcards et traductions", "Exécution d'un contrat (art. 7, V)"],
                 ["Calculer des statistiques, des révisions programmées et des plannings à partir de vos enregistrements d'étude", "Exécution d'un contrat (art. 7, V)"],
+                ["Appliquer les limites et les fonctionnalités de votre formule, gérer la période d'essai et la validité de la formule et enregistrer les changements de formule", "Exécution d'un contrat (art. 7, V)"],
                 ["Obtenir la phrase du jour dans un fonds externe et mémoriser celles déjà affichées, afin de ne pas les répéter", "Exécution d'un contrat (art. 7, V)"],
                 ["Protéger les comptes contre la fraude et les accès non autorisés, notamment avec reCAPTCHA", "Intérêt légitime (art. 7, IX)"],
                 ["Conserver les journaux d'accès pendant la durée prévue par le Marco Civil da Internet (cadre civil de l'Internet au Brésil)", "Obligation légale (art. 7, II)"],
@@ -283,6 +308,7 @@ const fr: LegalBundle = {
           {
             list: [
               "**Compte et contenu :** tant que votre compte est actif.",
+              "**Formule du compte :** la formule et l'historique de ses changements sont conservés tant que le compte existe et sont supprimés avec lui.",
               "**Corbeille :** les éléments supprimés restent dans la corbeille pendant {trashDays} jours, puis sont définitivement effacés.",
               "**Réimportation depuis Notion :** la version précédente de la note et les fichiers qu'elle n'utilise plus sont effacés immédiatement, sans passer par la corbeille.",
               "**Suppression du compte :** faite dans Préférences › Confidentialité et données, les données sont effacées immédiatement ; demandée par e-mail, sous 30 jours maximum. Seul reste ce que la loi nous oblige à conserver, comme les journaux d'accès.",
@@ -411,9 +437,9 @@ const fr: LegalBundle = {
             list: [
               "la session d'authentification Firebase, qui vous maintient connecté ;",
               "un compteur de tentatives de connexion, utilisé pour afficher le reCAPTCHA si nécessaire ;",
-              "les préférences d'interface, comme le thème, la barre latérale, les carnets récents et les langues de transcription et des flashcards ;",
+              "les préférences d'interface, comme le thème, la barre latérale, les carnets récents, les avis de formule déjà fermés et les langues de transcription et des flashcards ;",
               "l'état du module d'étude, comme un minuteur de concentration en cours, le dernier écran ouvert et les calques visibles de la Planification ;",
-              "une copie de vos notes, carnets et données d'étude, pour que l'application s'ouvre plus vite et continue de fonctionner hors ligne.",
+              "une copie de vos notes, carnets, données d'étude et de la formule de votre compte, pour que l'application s'ouvre plus vite et continue de fonctionner hors ligne.",
             ],
           },
           "Ces informations restent uniquement dans votre navigateur et sont supprimées lorsque vous vous déconnectez, lorsque la session expire ou lorsque vous effacez les données du site.",

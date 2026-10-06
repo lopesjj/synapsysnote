@@ -35,6 +35,7 @@ const en: LegalBundle = {
               "review what you have studied with spaced repetition.",
             ],
           },
+          "Some features, and how much content you can create, depend on your account's plan, as explained in [Plans and pricing](doc:terms#pricing).",
           "The service is constantly evolving. We may add, change or discontinue features; when a change materially affects something you use, we will give you reasonable advance notice.",
         ],
       },
@@ -101,9 +102,31 @@ const en: LegalBundle = {
       },
       {
         id: "pricing",
-        title: "Pricing and plans",
+        title: "Plans and pricing",
         blocks: [
-          "{brand} is currently offered free of charge. If we launch paid plans, the price, payment method and cancellation terms will be clearly presented before any charge is made — you will not be charged anything without your express acceptance.",
+          "{brand} offers the Free, Basic, Pro and Ultra plans. Every new account starts on the Free plan, which unlocks all Ultra features for {trialDays} days at no charge. The limits and features of the paid plans are:",
+          {
+            table: {
+              head: ["Feature", "Basic", "Pro", "Ultra"],
+              rows: [
+                ["Active pages", "{basicPages}", "{proPages}", "{ultraPages}"],
+                ["Notebooks per page", "{basicNotebooksPerPage}", "{proNotebooksPerPage}", "{ultraNotebooksPerPage}"],
+                ["Notes per notebook", "{basicNotesPerNotebook}", "{proNotesPerNotebook}", "{ultraNotesPerNotebook}"],
+                ["Subnotes per note", "{basicSubnotesPerNote}", "{proSubnotesPerNote}", "{ultraSubnotesPerNote}"],
+                ["Active goals", "{basicActiveGoals}", "{proActiveGoals}", "{ultraActiveGoals}"],
+                ["Videos inside notes", "No", "Yes", "Yes"],
+                ["Audio and video transcription", "No", "Yes", "Yes"],
+                ["Manual flashcards", "No", "Yes", "Yes"],
+                ["AI-generated flashcards", "No", "No", "Yes"],
+                ["Archiving pages, notebooks and notes", "No", "Yes", "Yes"],
+                ["Archiving goals", "No", "Yes", "Yes"],
+                ["Achievements showcase", "No", "Yes", "Yes"],
+              ],
+            },
+          },
+          "When the trial ends without a plan being purchased, or when a purchased plan expires without renewal, the account switches to read-only mode: everything you created remains available to view, and you can still archive, unarchive, move to the trash, restore and delete, but you cannot create or edit content until you choose a plan.",
+          "Changing plans never deletes your content. If the new plan has lower limits, everything that already exists stays stored and available, but you will not be able to create new items of a given type while the total is above the limit. Features your plan does not include remain visible but disabled.",
+          "Plans are purchased and changed through our support team at {contactEmail}. The price, payment method, term and cancellation conditions will be clearly presented before any charge is made — you will not be charged anything without your express acceptance.",
         ],
       },
       {
@@ -188,6 +211,7 @@ const en: LegalBundle = {
                 ["Content", "Notes, pages, notebooks, flashcards, attachments, audio and video; in the study module, goals, subjects and topics (with any external links you add), sessions (with their material and linked notes), questions, reviews, mock exams, schedules, reminders, notepad and the achievements kept in your showcase (with the date they were kept and the order you arrange them), the daily phrase and the list of phrases already shown, so they are not repeated", "You and the imports you make"],
                 ["Integrations", "Access tokens for Notion, Evernote and Google Docs", "The connected service, with your authorization"],
                 ["Preferences", "Language, theme, accessibility and layout", "You"],
+                ["Account plan", "Current plan, trial and plan validity dates, and the history of plan changes, with the date, who made the change and an optional note", "Us, when the account is created and at each plan change"],
                 ["Technical data", "IP address, approximate country, browser, device, date and time of access", "Collected automatically"],
                 ["Document acceptance", "Version and timestamp when you accepted the Terms of Use and this policy", "You"],
               ],
@@ -207,6 +231,7 @@ const en: LegalBundle = {
                 ["Creating and maintaining your account, authenticating access and syncing your content", "Performance of a contract (art. 7, V)"],
                 ["Running features you trigger: imports, transcriptions, flashcards and translations", "Performance of a contract (art. 7, V)"],
                 ["Calculating statistics, scheduled reviews and study schedules from your study records", "Performance of a contract (art. 7, V)"],
+                ["Applying your plan's limits and features, managing the trial period and plan validity, and recording plan changes", "Performance of a contract (art. 7, V)"],
                 ["Fetching the daily phrase from an external collection and storing which phrases were already shown, so they are not repeated", "Performance of a contract (art. 7, V)"],
                 ["Protecting accounts against fraud and unauthorized access, including with reCAPTCHA", "Legitimate interest (art. 7, IX)"],
                 ["Keeping access logs for the period set by the Brazilian Civil Rights Framework for the Internet (Marco Civil da Internet)", "Legal obligation (art. 7, II)"],
@@ -283,6 +308,7 @@ const en: LegalBundle = {
           {
             list: [
               "**Account and content:** for as long as your account is active.",
+              "**Account plan:** the plan and its change history are kept for as long as the account exists and are deleted along with it.",
               "**Trash:** deleted items stay in the trash for {trashDays} days and are then permanently erased.",
               "**Notion re-import:** the previous version of a note and the files it no longer uses are deleted immediately, without going to the trash.",
               "**Account deletion:** when done under Preferences › Privacy & data, data is erased immediately; when requested by email, within 30 days. Only what the law requires us to keep, such as access logs, remains.",
@@ -411,9 +437,9 @@ const en: LegalBundle = {
             list: [
               "the Firebase authentication session, which keeps you signed in;",
               "a counter of sign-in attempts, used to show reCAPTCHA when needed;",
-              "interface preferences, such as theme, sidebar, recent notebooks and the languages for transcriptions and flashcards;",
+              "interface preferences, such as theme, sidebar, recent notebooks, plan notices you have dismissed and the languages for transcriptions and flashcards;",
               "the state of the study module, such as a running focus timer, the last screen you opened and the visible layers of Planning;",
-              "a copy of your notes, notebooks and study data, so the app opens faster and keeps working offline.",
+              "a copy of your notes, notebooks, study data and account plan, so the app opens faster and keeps working offline.",
             ],
           },
           "This information stays only in your browser and is erased when you sign out, when the session expires or when you clear the site's data.",

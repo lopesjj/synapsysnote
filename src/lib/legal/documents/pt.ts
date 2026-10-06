@@ -35,6 +35,7 @@ const pt: LegalBundle = {
               "revisar o que estudou com repetição espaçada.",
             ],
           },
+          "Alguns recursos e a quantidade de conteúdo que você pode criar dependem do plano da sua conta, como explicado em [Planos e preços](doc:terms#pricing).",
           "O serviço está em evolução constante. Podemos adicionar, alterar ou descontinuar recursos; quando uma mudança afetar de forma relevante o que você usa, avisaremos com antecedência razoável.",
         ],
       },
@@ -101,9 +102,31 @@ const pt: LegalBundle = {
       },
       {
         id: "pricing",
-        title: "Preço e planos",
+        title: "Planos e preços",
         blocks: [
-          "Hoje o {brand} é oferecido sem custo. Se lançarmos planos pagos, preço, forma de pagamento e condições de cancelamento serão apresentados com clareza antes de qualquer cobrança — nada será cobrado sem a sua aceitação expressa.",
+          "O {brand} oferece os planos Gratuito, Básico, Pro e Ultra. Toda conta nova começa no plano Gratuito, que libera todos os recursos do plano Ultra por {trialDays} dias, sem nenhuma cobrança. Os limites e recursos dos planos pagos são:",
+          {
+            table: {
+              head: ["Recurso", "Básico", "Pro", "Ultra"],
+              rows: [
+                ["Páginas ativas", "{basicPages}", "{proPages}", "{ultraPages}"],
+                ["Cadernos por página", "{basicNotebooksPerPage}", "{proNotebooksPerPage}", "{ultraNotebooksPerPage}"],
+                ["Notas por caderno", "{basicNotesPerNotebook}", "{proNotesPerNotebook}", "{ultraNotesPerNotebook}"],
+                ["Subnotas por nota", "{basicSubnotesPerNote}", "{proSubnotesPerNote}", "{ultraSubnotesPerNote}"],
+                ["Objetivos ativos", "{basicActiveGoals}", "{proActiveGoals}", "{ultraActiveGoals}"],
+                ["Inserção de vídeos nas notas", "Não", "Sim", "Sim"],
+                ["Transcrição de áudio e vídeo", "Não", "Sim", "Sim"],
+                ["Flashcards manuais", "Não", "Sim", "Sim"],
+                ["Flashcards gerados por IA", "Não", "Não", "Sim"],
+                ["Arquivamento de páginas, cadernos e notas", "Não", "Sim", "Sim"],
+                ["Arquivamento de objetivos", "Não", "Sim", "Sim"],
+                ["Vitrine de conquistas", "Não", "Sim", "Sim"],
+              ],
+            },
+          },
+          "Quando o período de teste termina sem a contratação de um plano, ou quando um plano contratado vence sem renovação, a conta passa ao modo somente leitura: tudo o que você criou continua disponível para consulta, e você ainda pode arquivar, desarquivar, mover para a lixeira, restaurar e excluir, mas não pode criar nem editar conteúdo até escolher um plano.",
+          "Mudar de plano nunca apaga o seu conteúdo. Se o novo plano tiver limites menores, o que já existe continua guardado e disponível, mas não será possível criar novos itens de um tipo enquanto o total estiver acima do limite. Recursos que o seu plano não inclui continuam visíveis, porém desativados.",
+          "A contratação e a mudança de plano são feitas pelo nosso atendimento, em {contactEmail}. Preço, forma de pagamento, vigência e condições de cancelamento serão apresentados com clareza antes de qualquer cobrança — nada será cobrado sem a sua aceitação expressa.",
         ],
       },
       {
@@ -188,6 +211,7 @@ const pt: LegalBundle = {
                 ["Conteúdo", "Notas, páginas, cadernos, flashcards, anexos, áudios e vídeos; no módulo de estudos, objetivos, matérias e tópicos (com os links externos que você adicionar), sessões (com o material e as notas vinculadas), questões, revisões, simulados, cronogramas, lembretes, bloco de notas e as conquistas guardadas na vitrine (com a data em que foram guardadas e a ordem em que você as organiza), a frase do dia e a lista das frases já exibidas, para que não se repitam", "Você e as importações que fizer"],
                 ["Integrações", "Tokens de acesso ao Notion, Evernote e Google Docs e dados da conta conectada (nome, e-mail e foto)", "O serviço conectado, com sua autorização"],
                 ["Preferências", "Idioma, tema, acessibilidade e layout", "Você"],
+                ["Plano da conta", "Plano atual, datas do período de teste e da validade do plano e o histórico de mudanças de plano, com a data, quem fez a alteração e uma observação opcional", "Nós, na criação da conta e a cada mudança de plano"],
                 ["Dados técnicos", "IP, país aproximado, navegador, dispositivo, data e hora de acesso", "Coleta automática"],
                 ["Aceite dos documentos", "Versão e data em que você aceitou os Termos de Uso e esta política", "Você"],
               ],
@@ -207,6 +231,7 @@ const pt: LegalBundle = {
                 ["Criar e manter sua conta, autenticar o acesso e sincronizar seu conteúdo", "Execução de contrato (art. 7º, V)"],
                 ["Executar recursos que você aciona: importações, transcrições, flashcards e traduções", "Execução de contrato (art. 7º, V)"],
                 ["Calcular estatísticas, revisões programadas e cronogramas a partir dos seus registros de estudo", "Execução de contrato (art. 7º, V)"],
+                ["Aplicar os limites e recursos do seu plano, controlar o período de teste e a validade do plano e registrar as mudanças de plano", "Execução de contrato (art. 7º, V)"],
                 ["Buscar a frase do dia em um acervo externo e guardar quais frases já foram exibidas, para não repeti-las", "Execução de contrato (art. 7º, V)"],
                 ["Proteger contas contra fraudes e acessos indevidos, inclusive com reCAPTCHA", "Legítimo interesse (art. 7º, IX)"],
                 ["Guardar registros de acesso pelo prazo do Marco Civil da Internet", "Obrigação legal (art. 7º, II)"],
@@ -283,6 +308,7 @@ const pt: LegalBundle = {
           {
             list: [
               "**Conta e conteúdo:** enquanto sua conta estiver ativa.",
+              "**Plano da conta:** o plano e o histórico de mudanças ficam guardados enquanto a conta existir e são apagados junto com ela.",
               "**Lixeira:** itens excluídos ficam {trashDays} dias na lixeira e depois são apagados definitivamente.",
               "**Reimportação do Notion:** a versão anterior da nota e os arquivos que ela deixou de usar são apagados na hora, sem passar pela lixeira.",
               "**Exclusão da conta:** feita em Preferências › Privacidade e dados, os dados são apagados na hora; pedida por e-mail, em até 30 dias. Fica só o que a lei nos obriga a manter, como os registros de acesso.",
@@ -411,9 +437,9 @@ const pt: LegalBundle = {
             list: [
               "a sessão de autenticação do Firebase, que mantém seu login ativo;",
               "um contador de tentativas de login, usado para exibir o reCAPTCHA quando necessário;",
-              "preferências de interface, como tema, barra lateral, cadernos recentes e idiomas de transcrição e flashcards;",
+              "preferências de interface, como tema, barra lateral, cadernos recentes, avisos de plano já dispensados e idiomas de transcrição e flashcards;",
               "o estado do módulo de estudos, como o cronômetro de foco em andamento, a última tela aberta e as camadas visíveis do Planejamento;",
-              "uma cópia das suas notas, cadernos e dados de estudo, para o aplicativo abrir mais rápido e continuar funcionando sem internet.",
+              "uma cópia das suas notas, cadernos, dados de estudo e do plano da sua conta, para o aplicativo abrir mais rápido e continuar funcionando sem internet.",
             ],
           },
           "Essas informações ficam só no seu navegador e são apagadas quando você sai da conta, quando a sessão expira ou quando você limpa os dados do site.",

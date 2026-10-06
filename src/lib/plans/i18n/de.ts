@@ -48,7 +48,7 @@ export const de: PlanStrings = {
   compare_current: "Aktuell",
   compare_included: "Enthalten",
   compare_not_included: "Nicht enthalten",
-  compare_free_note: "30 Tage mit allem aus Ultra; danach nur Ansehen, Archivieren und Löschen.",
+  compare_free_note: "{days} {days|Tag|Tage} mit allem aus Ultra; danach nur Ansehen, Archivieren und Löschen.",
 
   feature_pages: "Aktive Seiten",
   feature_notebooks: "Notizbücher pro Seite",
@@ -104,12 +104,7 @@ export const de: PlanStrings = {
   archive_locked_title: "Archivieren in Pro und Ultra",
   archive_locked_body: "Dein Tarif enthält kein Archivieren. Du kannst archivierte Elemente weiterhin öffnen und löschen; zum Wiederherstellen wechsle zu Pro oder Ultra.",
   flashcards_read_only: "Du kannst deine Karten ansehen und löschen. Erstellen, Bearbeiten und Lernen sind in den Tarifen Pro und Ultra verfügbar.",
-  transcription_locked: "Transkription in Pro und Ultra",
   live_transcription_locked: "Die Live-Transkription ist in den Tarifen Pro und Ultra verfügbar.",
-  read_only_page: "Dein Konto ist schreibgeschützt.",
-  goals_limit_reached: "Du hast bereits {count} aktive {count|Ziel|Ziele}, das Maximum deines Tarifs. Archiviere oder lösche ein Ziel, um ein neues anzulegen.",
-  goals_limit_reached_basic: "Dein Tarif erlaubt {limit} aktive {limit|Ziel|Ziele}. Lösche das aktuelle Ziel, um ein neues anzulegen, oder wechsle den Tarif.",
-  goal_archive_locked: "Das Archivieren von Zielen ist in den Tarifen Pro und Ultra verfügbar.",
 
   admin_title: "Konten verwalten",
   admin_description: "Weise jedem Konto einen Tarif zu oder ändere ihn. Änderungen gelten sofort.",

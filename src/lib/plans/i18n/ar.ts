@@ -48,7 +48,7 @@ export const ar: PlanStrings = {
   compare_current: "الحالية",
   compare_included: "مشمولة",
   compare_not_included: "غير مشمولة",
-  compare_free_note: "30 يومًا بكل ما في ألترا؛ بعدها للعرض والأرشفة والحذف فقط.",
+  compare_free_note: "{days} {days|يوم|أيام|يومًا} بكل ما في ألترا؛ بعدها للعرض والأرشفة والحذف فقط.",
 
   feature_pages: "الصفحات النشطة",
   feature_notebooks: "الدفاتر لكل صفحة",
@@ -104,12 +104,7 @@ export const ar: PlanStrings = {
   archive_locked_title: "الأرشفة في خطتي برو وألترا",
   archive_locked_body: "خطتك لا تتضمن الأرشفة. ما زال بإمكانك فتح العناصر المؤرشفة وحذفها؛ ولإلغاء أرشفتها انتقل إلى برو أو ألترا.",
   flashcards_read_only: "يمكنك عرض بطاقاتك وحذفها. الإنشاء والتعديل والمراجعة متاحة في خطتي برو وألترا.",
-  transcription_locked: "التفريغ في برو وألترا",
   live_transcription_locked: "التفريغ المباشر متاح في خطتي برو وألترا.",
-  read_only_page: "حسابك في وضع القراءة فقط.",
-  goals_limit_reached: "لديك بالفعل {count} {count|هدف نشط|أهداف نشطة|هدفًا نشطًا}، وهو الحد الأقصى لخطتك. أرشف هدفًا أو احذفه لإنشاء هدف آخر.",
-  goals_limit_reached_basic: "تسمح خطتك بـ {limit} {limit|هدف نشط|أهداف نشطة|هدفًا نشطًا}. احذف الهدف الحالي لإنشاء هدف آخر، أو غيّر خطتك.",
-  goal_archive_locked: "أرشفة الأهداف متاحة في خطتي برو وألترا.",
 
   admin_title: "إدارة الحسابات",
   admin_description: "عيّن خطة أي حساب أو غيّرها. تسري التغييرات فورًا.",

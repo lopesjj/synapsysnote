@@ -183,6 +183,7 @@ const SIGNED_OUT_SESSION_KEYS = [
   "synapsys.session.expandedPages",
   "synapsys_open_notebooks",
   "synapsys_expanded_pages",
+  "synapsys.plan-banner.dismissed",
 ];
 
 function clearSignedOutStorage(): void {

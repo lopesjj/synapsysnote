@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Cloud, Download, FileText, FolderArchive, Layers, Loader2, NotebookPen, ShieldCheck, Upload } from "lucide-react";
+import { Cloud, Download, FileText, FolderArchive, Layers, Loader2, Lock, NotebookPen, ShieldCheck, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/lib/data/provider";
 import { useUiStore } from "@/lib/store/ui-store";
@@ -12,6 +12,8 @@ import { formatRelative } from "@/lib/utils";
 import { useTranslation, localizeErrorMessage, type TranslationKey } from "@/lib/i18n/translations";
 import { connectGoogleDocsAccount } from "@/lib/import/google-connect";
 import { downloadAccountData } from "@/lib/account/account-client";
+import { usePlanGates } from "@/lib/plans/gates";
+import { GateTooltip } from "@/components/plans/plan-lock";
 
 export default function IntegrationsPage() {
   return (
@@ -31,6 +33,7 @@ function IntegrationsBody() {
     importJobs,
     adapter,
   } = useWorkspace();
+  const writeGate = usePlanGates().write;
 
   const [busyService, setBusyService] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -214,13 +217,17 @@ function IntegrationsBody() {
             <div className="mt-4 space-y-2 border-t border-[var(--border)] pt-4">
               {integration?.connected ? (
                 <>
-                  <Button
-                    variant="primary"
-                    className="w-full"
-                    onClick={() => useUiStore.getState().setImportOpen(true)}
-                  >
-                    {t("import_pages")}
-                  </Button>
+                  <GateTooltip gate={writeGate}>
+                    <Button
+                      variant="primary"
+                      className="w-full"
+                      disabled={!writeGate.allowed}
+                      onClick={() => useUiStore.getState().setImportOpen(true)}
+                    >
+                      {writeGate.allowed ? null : <Lock />}
+                      {t("import_pages")}
+                    </Button>
+                  </GateTooltip>
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       variant="secondary"
@@ -283,18 +290,21 @@ function IntegrationsBody() {
             <div className="mt-4 space-y-2 border-t border-[var(--border)] pt-4">
               {googleDocsIntegration?.connected ? (
                 <>
-                  <Button
-                    variant="primary"
-                    className="w-full"
-                    disabled={busyService === "google"}
-                    onClick={() =>
-                      googleSessionExpired
-                        ? void connectGoogle()
-                        : useUiStore.getState().setGoogleDocsImportOpen(true)
-                    }
-                  >
-                    {t("import_google_docs")}
-                  </Button>
+                  <GateTooltip gate={writeGate}>
+                    <Button
+                      variant="primary"
+                      className="w-full"
+                      disabled={busyService === "google" || !writeGate.allowed}
+                      onClick={() =>
+                        googleSessionExpired
+                          ? void connectGoogle()
+                          : useUiStore.getState().setGoogleDocsImportOpen(true)
+                      }
+                    >
+                      {writeGate.allowed ? null : <Lock />}
+                      {t("import_google_docs")}
+                    </Button>
+                  </GateTooltip>
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       variant="secondary"
@@ -355,13 +365,17 @@ function IntegrationsBody() {
             <div className="mt-4 space-y-2 border-t border-[var(--border)] pt-4">
               {evernoteIntegration?.connected ? (
                 <>
-                  <Button
-                    variant="primary"
-                    className="w-full"
-                    onClick={() => useUiStore.getState().setEvernoteImportOpen(true)}
-                  >
-                    {t("import_evernote_notes")}
-                  </Button>
+                  <GateTooltip gate={writeGate}>
+                    <Button
+                      variant="primary"
+                      className="w-full"
+                      disabled={!writeGate.allowed}
+                      onClick={() => useUiStore.getState().setEvernoteImportOpen(true)}
+                    >
+                      {writeGate.allowed ? null : <Lock />}
+                      {t("import_evernote_notes")}
+                    </Button>
+                  </GateTooltip>
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       variant="secondary"
@@ -419,13 +433,17 @@ function IntegrationsBody() {
                 {t("fimp_card_word_desc")}
               </p>
             </div>
-            <Button
-              variant="secondary"
-              className="mt-4 w-full"
-              onClick={() => useUiStore.getState().setFileImportProvider("word")}
-            >
-              {t("word_file_import_button")}
-            </Button>
+            <GateTooltip gate={writeGate}>
+              <Button
+                variant="secondary"
+                className="mt-4 w-full"
+                disabled={!writeGate.allowed}
+                onClick={() => useUiStore.getState().setFileImportProvider("word")}
+              >
+                {writeGate.allowed ? null : <Lock />}
+                {t("word_file_import_button")}
+              </Button>
+            </GateTooltip>
           </div>
 
           <div className="flex flex-col justify-between rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-2)] p-5 shadow-xs transition-all hover:border-[var(--border-strong)]">
@@ -440,13 +458,17 @@ function IntegrationsBody() {
                 {t("fimp_card_evernote_desc")}
               </p>
             </div>
-            <Button
-              variant="secondary"
-              className="mt-4 w-full"
-              onClick={() => useUiStore.getState().setFileImportProvider("evernote")}
-            >
-              {t("evernote_file_import_button")}
-            </Button>
+            <GateTooltip gate={writeGate}>
+              <Button
+                variant="secondary"
+                className="mt-4 w-full"
+                disabled={!writeGate.allowed}
+                onClick={() => useUiStore.getState().setFileImportProvider("evernote")}
+              >
+                {writeGate.allowed ? null : <Lock />}
+                {t("evernote_file_import_button")}
+              </Button>
+            </GateTooltip>
           </div>
         </div>
       </div>
@@ -494,15 +516,18 @@ function IntegrationsBody() {
                 <span>{t("synapsys_workspace_export_btn")}</span>
               </Button>
 
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => useUiStore.getState().setWorkspaceRestoreOpen(true)}
-                className="flex items-center justify-center gap-1.5 flex-1 sm:flex-initial"
-              >
-                <Upload className="size-3.5" />
-                <span>{t("synapsys_workspace_import_btn")}</span>
-              </Button>
+              <GateTooltip gate={writeGate}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={!writeGate.allowed}
+                  onClick={() => useUiStore.getState().setWorkspaceRestoreOpen(true)}
+                  className="flex items-center justify-center gap-1.5 flex-1 sm:flex-initial"
+                >
+                  {writeGate.allowed ? <Upload className="size-3.5" /> : <Lock className="size-3.5" />}
+                  <span>{t("synapsys_workspace_import_btn")}</span>
+                </Button>
+              </GateTooltip>
             </div>
           </div>
         </div>

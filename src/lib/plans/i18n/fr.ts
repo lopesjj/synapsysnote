@@ -48,7 +48,7 @@ export const fr: PlanStrings = {
   compare_current: "Actuelle",
   compare_included: "Inclus",
   compare_not_included: "Non inclus",
-  compare_free_note: "30 jours avec tout Ultra ; ensuite, consultation, archivage et suppression uniquement.",
+  compare_free_note: "{days} {days|jour|jours} avec tout Ultra ; ensuite, consultation, archivage et suppression uniquement.",
 
   feature_pages: "Pages actives",
   feature_notebooks: "Carnets par page",
@@ -104,12 +104,7 @@ export const fr: PlanStrings = {
   archive_locked_title: "Archivage avec Pro et Ultra",
   archive_locked_body: "Votre formule n'inclut pas l'archivage. Vous pouvez toujours ouvrir et supprimer les éléments archivés ; pour les désarchiver, passez à Pro ou Ultra.",
   flashcards_read_only: "Vous pouvez consulter et supprimer vos cartes. Créer, modifier et réviser sont disponibles avec les formules Pro et Ultra.",
-  transcription_locked: "Transcription avec Pro et Ultra",
   live_transcription_locked: "La transcription en direct est disponible avec les formules Pro et Ultra.",
-  read_only_page: "Votre compte est en lecture seule.",
-  goals_limit_reached: "Vous avez déjà {count} {count|objectif actif|objectifs actifs}, le maximum de votre formule. Archivez ou supprimez un objectif pour en créer un autre.",
-  goals_limit_reached_basic: "Votre formule permet {limit} {limit|objectif actif|objectifs actifs}. Supprimez l'objectif actuel pour en créer un autre, ou changez de formule.",
-  goal_archive_locked: "L'archivage des objectifs est disponible avec les formules Pro et Ultra.",
 
   admin_title: "Gérer les comptes",
   admin_description: "Attribuez ou modifiez la formule de n'importe quel compte. Les changements s'appliquent immédiatement.",

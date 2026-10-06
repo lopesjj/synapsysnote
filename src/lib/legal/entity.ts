@@ -1,4 +1,5 @@
 import { REMEMBER_DAYS } from "@/lib/auth/remember";
+import { LIMIT_KEYS, PAID_PLANS, PLAN_LIMITS, TRIAL_DAYS, type LimitKey, type PaidPlanId } from "@/lib/plans/definitions";
 import { TRASH_RETENTION_DAYS } from "@/lib/trash/retention";
 
 /**
@@ -17,8 +18,8 @@ export const LEGAL_ENTITY = {
   privacyEmail: "atendimento@synapsysnt.com.br",
 };
 
-export const LEGAL_VERSION = "1.3";
-export const LEGAL_UPDATED_AT = "2026-10-03";
+export const LEGAL_VERSION = "1.4";
+export const LEGAL_UPDATED_AT = "2026-10-06";
 
 /**
  * Prazos citados nos documentos. Os que existem no código vêm de lá, e o
@@ -34,7 +35,23 @@ export const LEGAL_FACTS = {
   minimumAge: 14,
   responseDays: 15,
   noticeDays: 15,
+  trialDays: TRIAL_DAYS,
 };
+
+export function planLimitPlaceholder(plan: PaidPlanId, key: LimitKey): string {
+  return `${plan}${key[0].toUpperCase()}${key.slice(1)}`;
+}
+
+function planLimitFacts(): Record<string, string> {
+  return Object.fromEntries(
+    PAID_PLANS.flatMap((plan) =>
+      LIMIT_KEYS.map((key) => {
+        const limit = PLAN_LIMITS[plan][key];
+        return [planLimitPlaceholder(plan, key), limit === null ? "∞" : String(limit)];
+      })
+    )
+  );
+}
 
 export function legalController(): string {
   const { brand, legalName, taxId } = LEGAL_ENTITY;
@@ -49,5 +66,6 @@ export function legalPlaceholders(): Record<string, string> {
     contactEmail: LEGAL_ENTITY.contactEmail,
     privacyEmail: LEGAL_ENTITY.privacyEmail,
     ...Object.fromEntries(Object.entries(LEGAL_FACTS).map(([key, value]) => [key, String(value)])),
+    ...planLimitFacts(),
   };
 }

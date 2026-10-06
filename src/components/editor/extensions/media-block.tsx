@@ -62,8 +62,8 @@ import {
   isVideoFile,
 } from "@/lib/media/compress-attachment";
 import { useMediaProgressStore } from "@/lib/store/media-progress-store";
-import { notifyPlanError, openPlanDialog, useEntitlements } from "@/lib/plans/client";
-import { usePlanT } from "@/lib/plans/i18n";
+import { notifyPlanError } from "@/lib/plans/client";
+import { usePlanGates } from "@/lib/plans/gates";
 
 function isPdf(mimeType: unknown, name: unknown) {
   if (typeof mimeType === "string" && mimeType.includes("pdf")) return true;
@@ -737,9 +737,11 @@ function ResizableVideo({
 
 function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeViewProps) {
   const { t, language } = useTranslation();
-  const { tp } = usePlanT();
   const libras = useUiStore((state) => state.libras);
-  const canTranscribe = useEntitlements().features.transcription;
+  const transcriptionGate = usePlanGates().feature("transcription");
+  const canTranscribe = transcriptionGate.allowed;
+  const transcriptionReason = transcriptionGate.reason;
+  const transcriptionBadge = transcriptionGate.badge;
   const {
     mediaType,
     url,
@@ -1793,20 +1795,18 @@ function MediaView({ node, updateAttributes, editor, selected, getPos }: NodeVie
                       </span>
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      onTouchStart={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        openPlanDialog();
-                      }}
-                      className="touch-manipulation inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11.5px] font-medium text-muted transition hover:border-[var(--accent)] hover:text-[var(--accent)] active:scale-95"
-                      title={tp("error_feature_transcription")}
-                    >
-                      <Lock className="size-3.5" />
-                      <span>{tp("transcription_locked")}</span>
-                    </button>
+                    <span title={transcriptionReason ?? undefined} className="inline-flex">
+                      <button
+                        type="button"
+                        disabled
+                        aria-label={`${t("transcribe_speech")}: ${transcriptionReason ?? ""}`}
+                        className="pointer-events-none inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11.5px] font-medium text-ink opacity-50 shadow-2xs"
+                      >
+                        <Lock className="size-3.5 text-muted" />
+                        <span>{t("transcribe_speech")}</span>
+                        <span className="text-[10.5px] font-normal text-faint">{transcriptionBadge}</span>
+                      </button>
+                    </span>
                   )}
 
                   {canTranscribe || libras ? (

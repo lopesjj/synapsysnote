@@ -48,7 +48,7 @@ export const en: PlanStrings = {
   compare_current: "Current",
   compare_included: "Included",
   compare_not_included: "Not included",
-  compare_free_note: "30 days with everything in Ultra; after that, view, archive and delete only.",
+  compare_free_note: "{days} {days|day|days} with everything in Ultra; after that, view, archive and delete only.",
 
   feature_pages: "Active pages",
   feature_notebooks: "Notebooks per page",
@@ -104,12 +104,7 @@ export const en: PlanStrings = {
   archive_locked_title: "Archiving on the Pro and Ultra plans",
   archive_locked_body: "Your plan does not include archiving. You can still open and delete archived items; to unarchive them, switch to Pro or Ultra.",
   flashcards_read_only: "You can view and delete your cards. Creating, editing and reviewing are available on the Pro and Ultra plans.",
-  transcription_locked: "Transcription on Pro and Ultra",
   live_transcription_locked: "Live transcription is available on the Pro and Ultra plans.",
-  read_only_page: "Your account is read-only.",
-  goals_limit_reached: "You already have {count} active {count|goal|goals}, the maximum for your plan. Archive or delete a goal to create another one.",
-  goals_limit_reached_basic: "Your plan allows {limit} active {limit|goal|goals}. Delete the current goal to create another one, or change your plan.",
-  goal_archive_locked: "Archiving goals is available on the Pro and Ultra plans.",
 
   admin_title: "Manage accounts",
   admin_description: "Assign or change the plan of any account. Changes take effect immediately.",

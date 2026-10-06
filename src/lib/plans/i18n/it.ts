@@ -48,7 +48,7 @@ export const it: PlanStrings = {
   compare_current: "Attuale",
   compare_included: "Incluso",
   compare_not_included: "Non incluso",
-  compare_free_note: "30 giorni con tutto di Ultra; poi solo consultazione, archiviazione ed eliminazione.",
+  compare_free_note: "{days} {days|giorno|giorni} con tutto di Ultra; poi solo consultazione, archiviazione ed eliminazione.",
 
   feature_pages: "Pagine attive",
   feature_notebooks: "Quaderni per pagina",
@@ -104,12 +104,7 @@ export const it: PlanStrings = {
   archive_locked_title: "Archiviazione nei piani Pro e Ultra",
   archive_locked_body: "Il tuo piano non include l'archiviazione. Puoi comunque aprire ed eliminare gli elementi archiviati; per ripristinarli, passa a Pro o Ultra.",
   flashcards_read_only: "Puoi vedere ed eliminare le tue flashcard. Creare, modificare e ripassare sono disponibili nei piani Pro e Ultra.",
-  transcription_locked: "Trascrizione nei piani Pro e Ultra",
   live_transcription_locked: "La trascrizione in tempo reale è disponibile nei piani Pro e Ultra.",
-  read_only_page: "Il tuo account è in sola lettura.",
-  goals_limit_reached: "Hai già {count} {count|obiettivo attivo|obiettivi attivi}, il massimo del tuo piano. Archivia o elimina un obiettivo per crearne un altro.",
-  goals_limit_reached_basic: "Il tuo piano consente {limit} {limit|obiettivo attivo|obiettivi attivi}. Elimina l'obiettivo attuale per crearne un altro, oppure cambia piano.",
-  goal_archive_locked: "L'archiviazione degli obiettivi è disponibile nei piani Pro e Ultra.",
 
   admin_title: "Gestisci account",
   admin_description: "Assegna o cambia il piano di qualsiasi account. Le modifiche valgono subito.",

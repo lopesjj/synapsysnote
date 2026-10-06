@@ -48,7 +48,7 @@ export const ja: PlanStrings = {
   compare_current: "現在",
   compare_included: "含まれる",
   compare_not_included: "含まれない",
-  compare_free_note: "30日間ウルトラのすべてを利用可能。その後は閲覧・アーカイブ・削除のみ。",
+  compare_free_note: "{days}日間ウルトラのすべてを利用可能。その後は閲覧・アーカイブ・削除のみ。",
 
   feature_pages: "有効なページ",
   feature_notebooks: "ページあたりのノートブック",
@@ -104,12 +104,7 @@ export const ja: PlanStrings = {
   archive_locked_title: "アーカイブはプロとウルトラで",
   archive_locked_body: "このプランにはアーカイブが含まれていません。アーカイブ済みの項目は引き続き開いたり削除したりできます。アーカイブを解除するには、プロまたはウルトラに変更してください。",
   flashcards_read_only: "カードの閲覧と削除ができます。作成・編集・復習はプロとウルトラのプランで利用できます。",
-  transcription_locked: "文字起こしはプロとウルトラで",
   live_transcription_locked: "リアルタイム文字起こしはプロとウルトラのプランで利用できます。",
-  read_only_page: "アカウントは閲覧のみのモードです。",
-  goals_limit_reached: "有効な目標はすでに{count}件あり、プランの上限です。新しい目標を作るには、目標をアーカイブまたは削除してください。",
-  goals_limit_reached_basic: "このプランで有効にできる目標は{limit}件です。新しい目標を作るには現在の目標を削除するか、プランを変更してください。",
-  goal_archive_locked: "目標のアーカイブはプロとウルトラのプランで利用できます。",
 
   admin_title: "アカウント管理",
   admin_description: "任意のアカウントのプランを割り当て・変更できます。変更はすぐに反映されます。",

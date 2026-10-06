@@ -7,10 +7,10 @@ import { toast } from "sonner";
 import { DialogFooter, DialogHeader, DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/primitives";
-import { formatDuration } from "@/lib/utils";
+import { cn, formatDuration } from "@/lib/utils";
 import { localizeErrorMessage, useTranslation } from "@/lib/i18n/translations";
 import { prepareAudioAttachment } from "@/lib/media/compress-attachment";
-import { notifyPlanError, openPlanDialog, useEntitlements } from "@/lib/plans/client";
+import { notifyPlanError, useEntitlements } from "@/lib/plans/client";
 import { usePlanT } from "@/lib/plans/i18n";
 
 interface SpeechResultEvent {
@@ -288,24 +288,25 @@ export function AudioRecorder({
 
         {error ? <p className="max-w-xs text-center text-[12px] text-[var(--danger)]">{error}</p> : null}
 
-        {!recording && canTranscribe ? (
-          <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-muted">
-            <Checkbox
-              checked={liveTranscription}
-              onCheckedChange={(val) => setLiveTranscription(val === true)}
-            />
-            <span>{t("voice_note_live_transcribe")}</span>
-          </label>
-        ) : null}
-        {!recording && !canTranscribe ? (
-          <button
-            type="button"
-            onClick={openPlanDialog}
-            className="flex max-w-xs items-center gap-2 text-center text-[12px] text-muted transition hover:text-[var(--accent)]"
-          >
-            <Lock className="size-3.5 shrink-0" />
-            <span>{tp("live_transcription_locked")}</span>
-          </button>
+        {!recording ? (
+          <div className="flex max-w-xs flex-col items-center gap-1 text-center">
+            <label
+              className={cn(
+                "flex items-center gap-2 text-[12.5px] text-muted",
+                canTranscribe ? "cursor-pointer" : "cursor-not-allowed opacity-60"
+              )}
+              title={canTranscribe ? undefined : tp("live_transcription_locked")}
+            >
+              <Checkbox
+                checked={canTranscribe && liveTranscription}
+                disabled={!canTranscribe}
+                onCheckedChange={(val) => setLiveTranscription(val === true)}
+              />
+              <span>{t("voice_note_live_transcribe")}</span>
+              {canTranscribe ? null : <Lock className="size-3.5 shrink-0" />}
+            </label>
+            {canTranscribe ? null : <p className="text-[11.5px] leading-snug text-faint">{tp("live_transcription_locked")}</p>}
+          </div>
         ) : null}
 
         {!recording ? (

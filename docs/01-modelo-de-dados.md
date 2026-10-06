@@ -20,8 +20,19 @@ Arquivos: [`firestore.rules`](../firestore.rules) ·
     uid, email, ip, userAgent, event, createdAt
     expiresAt                                   ← TTL: apagado após 190 dias
 
+/account_plans/{userId}                         ← tipo de conta; só Admin SDK grava, o dono lê
+    uid, email, plan (free | basic | pro | ultra | owner)
+    trialStartedAt, trialEndsAt                 ← teste de 30 dias com tudo do Ultra
+    expiresAt                                   ← validade do plano pago (nulo = sem vencimento)
+    readOnlyAfter                               ← quando a conta passa a somente leitura (nulo = nunca)
+    source (signup | admin | cli | owner-env | system), note
+    createdAt, updatedAt, updatedBy
+
+  /history/{entryId}                            ← trilha de cada mudança de plano
+      at, by, byEmail, source, note, from { plan, expiresAt, trialEndsAt }, to { … }
+
 /workspaces/{workspaceId}                       ← hoje sempre ws_{uid}
-    name, emoji, language, ownerId, memberIds[], plan, createdAt, updatedAt
+    name, emoji, language, ownerId, memberIds[], createdAt, updatedAt
 
   /members/{userId}
       userId, email, displayName, photoURL, role, joinedAt
@@ -264,6 +275,18 @@ Pontos não óbvios das regras:
   existe o documento `settings`.
 - **Versões são imutáveis.** `allow update: if false`; histórico que pode ser
   reescrito não é histórico.
+- **Planos.** `account_plans` é lido só pelo próprio usuário e gravado só pelo
+  servidor (`/api/account/plan`, `/api/admin/plans` e `npm run account:plan`).
+  Depois de `readOnlyAfter` mais 3 dias de folga (relógio e gravações offline
+  pendentes), `planActive()` nega criar cadernos, notas, versões, bases,
+  registros, flashcards e documentos de estudo (`study_meta` continua livre).
+  Em notas, cadernos e bases a conta somente leitura ainda pode arquivar,
+  desarquivar, mandar para a lixeira, restaurar e excluir: as atualizações que
+  só mexem nesses campos passam por `pageLifecycle()`, `notebookLifecycle()` e
+  `databaseLifecycle()`. Os limites de quantidade (páginas, cadernos, notas,
+  subnotas e objetivos) e os recursos (vídeo, transcrição, flashcards, IA,
+  arquivamento, conquistas) são aplicados no cliente e nas rotas do servidor,
+  porque as regras não conseguem contar documentos.
 
 ## 4. Regras do Storage
 

@@ -301,7 +301,7 @@ function PlanDialogBody() {
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-[11px] leading-relaxed text-faint">{tp("compare_free_note")}</p>
+        <p className="mt-2 text-[11px] leading-relaxed text-faint">{tp("compare_free_note", { days: TRIAL_DAYS })}</p>
       </section>
 
       {isOwner ? (

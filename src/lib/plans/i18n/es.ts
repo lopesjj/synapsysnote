@@ -48,7 +48,7 @@ export const es: PlanStrings = {
   compare_current: "Actual",
   compare_included: "Incluido",
   compare_not_included: "No incluido",
-  compare_free_note: "30 días con todo lo de Ultra; después, solo para ver, archivar y eliminar.",
+  compare_free_note: "{days} {days|día|días} con todo lo de Ultra; después, solo para ver, archivar y eliminar.",
 
   feature_pages: "Páginas activas",
   feature_notebooks: "Cuadernos por página",
@@ -104,12 +104,7 @@ export const es: PlanStrings = {
   archive_locked_title: "Archivo en los planes Pro y Ultra",
   archive_locked_body: "Tu plan no incluye archivo. Aún puedes abrir y eliminar los elementos archivados; para desarchivarlos, cambia a Pro o Ultra.",
   flashcards_read_only: "Puedes ver y eliminar tus tarjetas. Crear, editar y repasar están disponibles en los planes Pro y Ultra.",
-  transcription_locked: "Transcripción en Pro y Ultra",
   live_transcription_locked: "La transcripción en vivo está disponible en los planes Pro y Ultra.",
-  read_only_page: "Tu cuenta está en modo solo lectura.",
-  goals_limit_reached: "Ya tienes {count} {count|objetivo activo|objetivos activos}, el máximo de tu plan. Archiva o elimina un objetivo para crear otro.",
-  goals_limit_reached_basic: "Tu plan permite {limit} {limit|objetivo activo|objetivos activos}. Elimina el objetivo actual para crear otro, o cambia de plan.",
-  goal_archive_locked: "Archivar objetivos está disponible en los planes Pro y Ultra.",
 
   admin_title: "Gestionar cuentas",
   admin_description: "Asigna o cambia el plan de cualquier cuenta. Los cambios se aplican al momento.",

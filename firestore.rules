@@ -99,6 +99,51 @@ service cloud.firestore {
       return ['legalAcceptedVersion', 'legalAcceptedAt', 'sessionRevokedAt'];
     }
 
+    function planPath() {
+      return /databases/$(database)/documents/account_plans/$(request.auth.uid);
+    }
+
+    function planActive() {
+      return !exists(planPath())
+        || get(planPath()).data.get('readOnlyAfter', null) == null
+        || request.time.toMillis() < get(planPath()).data.readOnlyAfter + 259200000;
+    }
+
+    function changedOnly(keys) {
+      return incoming().diff(existing()).affectedKeys().hasOnly(keys);
+    }
+
+    function notebookLifecycle() {
+      return changedOnly(['archived', 'parentId', 'archivedFromParentId', 'deletedAt', 'trashedWith', 'updatedAt']);
+    }
+
+    function pageLifecycle() {
+      return changedOnly([
+        'archived', 'notebookId', 'parentPageId', 'path', 'archivedFromNotebookId',
+        'archivedFromParentPageId', 'archivedFromPath', 'deletedAt', 'trashedWith', 'updatedBy', 'updatedAt'
+      ]);
+    }
+
+    function databaseLifecycle() {
+      return changedOnly(['deletedAt', 'trashedWith', 'updatedAt']);
+    }
+
+    function validNamed() {
+      return incoming().name is string
+        && incoming().name.size() > 0
+        && incoming().name.size() <= 200;
+    }
+
+    match /account_plans/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if false;
+
+      match /history/{entryId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow write: if false;
+      }
+    }
+
     match /users/{userId} {
       allow read: if isSignedIn() && request.auth.uid == userId;
       allow create: if isSignedIn()
@@ -159,10 +204,8 @@ service cloud.firestore {
 
       match /notebooks/{notebookId} {
         allow read: if isMember(workspaceId);
-        allow create, update: if canWrite(workspaceId)
-          && incoming().name is string
-          && incoming().name.size() > 0
-          && incoming().name.size() <= 200;
+        allow create: if canWrite(workspaceId) && planActive() && validNamed();
+        allow update: if canWrite(workspaceId) && validNamed() && (planActive() || notebookLifecycle());
         allow delete: if canWrite(workspaceId);
       }
 
@@ -170,6 +213,7 @@ service cloud.firestore {
         allow read: if isMember(workspaceId);
 
         allow create: if canWrite(workspaceId)
+          && planActive()
           && incoming().createdBy == request.auth.uid
           && incoming().title is string
           && incoming().title.size() <= 500
@@ -178,6 +222,7 @@ service cloud.firestore {
           && validImportSource();
 
         allow update: if canWrite(workspaceId)
+          && (planActive() || pageLifecycle())
           && incoming().createdBy == existing().createdBy
           && incoming().updatedBy == request.auth.uid
           && unchanged('extractedOCRText')
@@ -192,7 +237,7 @@ service cloud.firestore {
 
         match /versions/{versionId} {
           allow read: if isMember(workspaceId);
-          allow create: if canWrite(workspaceId) && incoming().authorId == request.auth.uid;
+          allow create: if canWrite(workspaceId) && planActive() && incoming().authorId == request.auth.uid;
           allow update: if false;
           allow delete: if isAdmin(workspaceId);
         }
@@ -200,21 +245,21 @@ service cloud.firestore {
 
       match /databases/{databaseId} {
         allow read: if isMember(workspaceId);
-        allow create, update: if canWrite(workspaceId)
-          && incoming().name is string
-          && incoming().name.size() > 0
-          && incoming().name.size() <= 200;
+        allow create: if canWrite(workspaceId) && planActive() && validNamed();
+        allow update: if canWrite(workspaceId) && validNamed() && (planActive() || databaseLifecycle());
         allow delete: if isAdmin(workspaceId);
 
         match /rows/{rowId} {
           allow read: if isMember(workspaceId);
-          allow create, update, delete: if canWrite(workspaceId);
+          allow create, update: if canWrite(workspaceId) && planActive();
+          allow delete: if canWrite(workspaceId);
         }
       }
 
       match /attachments/{attachmentId} {
         allow read: if isMember(workspaceId);
         allow create: if canWrite(workspaceId)
+          && planActive()
           && incoming().uploadedBy == request.auth.uid
           && incoming().storagePath.matches('workspaces/' + workspaceId + '/.*');
         allow update: if canWrite(workspaceId)
@@ -259,12 +304,17 @@ service cloud.firestore {
 
       match /flashcards/{flashcardId} {
         allow read: if isMember(workspaceId);
-        allow create, update, delete: if canWrite(workspaceId);
+        allow create, update: if canWrite(workspaceId) && planActive();
+        allow delete: if canWrite(workspaceId);
       }
 
       match /{studyCollection}/{studyDocId} {
         allow read: if studyCollection in studyCollections() && isMember(workspaceId);
-        allow create, update: if studyCollection in studyCollections()
+        allow create: if studyCollection in studyCollections()
+          && canWrite(workspaceId)
+          && (studyCollection == 'study_meta' || planActive())
+          && validStudyDoc(studyCollection, studyDocId);
+        allow update: if studyCollection in studyCollections()
           && canWrite(workspaceId)
           && validStudyDoc(studyCollection, studyDocId);
         allow delete: if studyCollection in studyCollections() && canWrite(workspaceId);

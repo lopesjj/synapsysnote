@@ -48,7 +48,7 @@ export const zh: PlanStrings = {
   compare_current: "当前",
   compare_included: "包含",
   compare_not_included: "不包含",
-  compare_free_note: "30 天内享有旗舰版全部功能；之后仅可查看、归档和删除。",
+  compare_free_note: "{days} 天内享有旗舰版全部功能；之后仅可查看、归档和删除。",
 
   feature_pages: "活跃页面",
   feature_notebooks: "每页笔记本数",
@@ -104,12 +104,7 @@ export const zh: PlanStrings = {
   archive_locked_title: "专业版和旗舰版提供归档",
   archive_locked_body: "你的方案不包含归档。你仍可打开和删除已归档的项目；如需取消归档，请升级到专业版或旗舰版。",
   flashcards_read_only: "你可以查看和删除自己的卡片。创建、编辑和复习适用于专业版和旗舰版。",
-  transcription_locked: "专业版和旗舰版提供转写",
   live_transcription_locked: "实时转写适用于专业版和旗舰版。",
-  read_only_page: "你的账号处于只读模式。",
-  goals_limit_reached: "你已有 {count} 个活跃目标，已达方案上限。归档或删除一个目标后才能新建。",
-  goals_limit_reached_basic: "你的方案允许 {limit} 个活跃目标。请删除当前目标后再新建，或更换方案。",
-  goal_archive_locked: "归档目标适用于专业版和旗舰版。",
 
   admin_title: "管理账号",
   admin_description: "为任意账号分配或更改方案，更改立即生效。",
