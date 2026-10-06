@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Loader2, Lock, Search, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { DialogHeader, DialogShell } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/primitives";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
 import { firebaseJson } from "@/lib/firebase/auth-headers";
 import {
@@ -23,9 +30,21 @@ import {
   type PlanHistoryEntry,
   type PlanSource,
 } from "@/lib/plans/entitlements";
-import { usePlanStore } from "@/lib/plans/client";
+import { usePlanStore, type AdminTab } from "@/lib/plans/client";
+import {
+  planFormExpiryInvalid,
+  planFormPayload,
+  planFormTrialConflict,
+  timestampToDateInput,
+  type PlanForm,
+} from "@/lib/plans/admin";
 import { planNameKey, statusNameKey, usePlanT, type PlanKey, type PlanT } from "@/lib/plans/i18n";
 import { cn } from "@/lib/utils";
+import { PlanMark, StatusDot } from "./plan-mark";
+import { SubscriptionPanel } from "./subscription-panel";
+
+/** O Select do Radix não aceita valor vazio; "todos" vira uma opção de verdade. */
+const ALL_PLANS = "all";
 
 interface AccountRow {
   uid: string;
@@ -75,42 +94,79 @@ function normalizeRow(raw: unknown): AccountRow | null {
   };
 }
 
-function toDateInput(timestamp: number | null): string {
-  if (!timestamp) return "";
-  const date = new Date(timestamp);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-function fromDateInput(value: string): number | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const timestamp = new Date(`${value}T23:59:59`).getTime();
-  return Number.isFinite(timestamp) ? timestamp : null;
-}
-
 function planLabel(tp: PlanT, plan: PlanId | null | undefined): string {
   return plan ? tp(planNameKey(plan)) : "—";
 }
 
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <span className="mb-1.5 block text-[12px] font-medium text-ink">{children}</span>;
+}
+
+function FieldHint({ children }: { children: React.ReactNode }) {
+  return <span className="mt-1.5 block text-[11px] leading-relaxed text-faint">{children}</span>;
+}
+
+/** Painel do proprietário: o próprio plano e as contas, em uma só janela. */
 export function PlanAdminDialog() {
   const open = usePlanStore((state) => state.adminOpen);
-  const setOpen = usePlanStore((state) => state.setAdminOpen);
+  const tab = usePlanStore((state) => state.adminTab);
+  const setAdminOpen = usePlanStore((state) => state.setAdminOpen);
   const { tp } = usePlanT();
+
+  const tabs: { id: AdminTab; label: string }[] = [
+    { id: "plan", label: tp("menu_my_plan") },
+    { id: "accounts", label: tp("manage_accounts") },
+  ];
+
   return (
-    <DialogShell open={open} onOpenChange={setOpen} className="max-w-2xl" closeAriaLabel={tp("close")}>
-      <DialogHeader
-        title={tp("admin_title")}
-        description={tp("admin_description")}
-        icon={<ShieldCheck className="size-4" />}
-        iconClassName="bg-[var(--accent-soft)] text-[var(--accent)]"
-        className="pr-12"
-      />
-      <AdminBody />
+    <DialogShell
+      open={open}
+      onOpenChange={(value) => setAdminOpen(value)}
+      className="h-[88dvh] max-w-4xl sm:h-[85dvh] md:h-[680px]"
+      closeAriaLabel={tp("close")}
+    >
+      <DialogHeader title={tp("menu_admin")} description={tp("admin_description")} className="pr-12" />
+
+      <div
+        role="tablist"
+        aria-label={tp("menu_admin")}
+        className="flex shrink-0 items-center gap-5 border-b border-[var(--border)] px-5 sm:px-6"
+      >
+        {tabs.map((item) => {
+          const active = tab === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setAdminOpen(true, item.id)}
+              className={cn(
+                "relative py-2.5 text-[12.5px] font-medium transition",
+                active ? "text-ink" : "text-muted hover:text-ink"
+              )}
+            >
+              {item.label}
+              {active ? (
+                <span aria-hidden className="absolute inset-x-0 -bottom-px h-[2px] bg-[var(--accent)]" />
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === "plan" ? (
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-6">
+          <SubscriptionPanel />
+        </div>
+      ) : (
+        <AccountsPanel />
+      )}
     </DialogShell>
   );
 }
 
-function AdminBody() {
+function AccountsPanel() {
   const { tp } = usePlanT();
   const [query, setQuery] = useState("");
   const [planFilter, setPlanFilter] = useState<PlanId | "">("");
@@ -148,107 +204,132 @@ function AdminBody() {
     };
   }, [planFilter, query, reloadKey, tp]);
 
-  if (selected) {
-    return (
-      <AccountDetail
-        uid={selected}
-        onBack={() => setSelected(null)}
-        onSaved={() => setReloadKey((key) => key + 1)}
-      />
-    );
-  }
-
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 flex-col gap-2 border-b border-[var(--border)] px-4 py-3 sm:flex-row sm:px-5">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={tp("admin_search_placeholder")}
-            className="h-9 pl-8"
-            type="search"
-            autoComplete="off"
-          />
-        </div>
-        <select
-          value={planFilter}
-          onChange={(event) => setPlanFilter(event.target.value as PlanId | "")}
-          className="h-9 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 text-[12.5px] text-ink outline-none focus:border-[var(--accent)] sm:w-44"
-          aria-label={tp("admin_plan_label")}
-        >
-          <option value="">{tp("admin_filter_all")}</option>
-          {PLAN_IDS.map((plan) => (
-            <option key={plan} value={plan}>
-              {tp(planNameKey(plan))}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {error ? (
-          <p className="px-5 py-8 text-center text-[12.5px] text-[var(--danger)]">{error}</p>
-        ) : loading && !accounts.length ? (
-          <p className="flex items-center justify-center gap-2 px-5 py-8 text-[12.5px] text-muted">
-            <Loader2 className="size-3.5 animate-spin" /> {tp("admin_loading")}
-          </p>
-        ) : !accounts.length ? (
-          <p className="px-5 py-8 text-center text-[12.5px] text-muted">{tp("admin_empty")}</p>
-        ) : (
-          <ul className="divide-y divide-[var(--border)]">
-            {accounts.map((account) => (
-              <li key={account.uid}>
-                <AccountListItem account={account} now={now} onOpen={() => setSelected(account.uid)} />
-              </li>
-            ))}
-          </ul>
+    <div className="flex min-h-0 flex-1 md:flex-row">
+      <aside
+        className={cn(
+          "min-h-0 w-full flex-col border-[var(--border)] md:flex md:w-[304px] md:shrink-0 md:border-r",
+          selected ? "hidden md:flex" : "flex"
         )}
-      </div>
+      >
+        <div className="flex shrink-0 flex-col gap-2 border-b border-[var(--border)] px-4 py-3 sm:px-5">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute start-2.5 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={tp("admin_search_placeholder")}
+              className="h-9 ps-8"
+              type="search"
+              autoComplete="off"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Select
+              value={planFilter || ALL_PLANS}
+              onValueChange={(value) => setPlanFilter(value === ALL_PLANS ? "" : (value as PlanId))}
+            >
+              <SelectTrigger className="h-8 min-w-0 flex-1" aria-label={tp("admin_plan_label")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_PLANS}>{tp("admin_filter_all")}</SelectItem>
+                {PLAN_IDS.map((plan) => (
+                  <SelectItem key={plan} value={plan}>
+                    {tp(planNameKey(plan))}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {accounts.length ? (
+              <span className="shrink-0 text-[11px] tabular-nums text-faint">
+                {tp("admin_accounts_total", { count: accounts.length })}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {error ? (
+            <p className="px-5 py-8 text-[12.5px] leading-relaxed text-[var(--danger)]">{error}</p>
+          ) : loading && !accounts.length ? (
+            <p className="flex items-center gap-2 px-5 py-8 text-[12.5px] text-muted">
+              <Loader2 className="size-3.5 animate-spin" /> {tp("admin_loading")}
+            </p>
+          ) : !accounts.length ? (
+            <p className="px-5 py-8 text-[12.5px] text-muted">{tp("admin_empty")}</p>
+          ) : (
+            <ul>
+              {accounts.map((account) => (
+                <li key={account.uid}>
+                  <AccountListItem
+                    account={account}
+                    now={now}
+                    active={selected === account.uid}
+                    onOpen={() => setSelected(account.uid)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </aside>
+
+      <section className={cn("min-h-0 min-w-0 flex-1 flex-col", selected ? "flex" : "hidden md:flex")}>
+        {selected ? (
+          <AccountDetail
+            uid={selected}
+            onBack={() => setSelected(null)}
+            onSaved={() => setReloadKey((key) => key + 1)}
+          />
+        ) : (
+          <div className="flex min-h-0 flex-1 items-center justify-center px-8 py-10">
+            <p className="max-w-[26ch] text-center text-[12.5px] leading-relaxed text-faint">
+              {tp("admin_accounts_hint")}
+            </p>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
 
-function AccountListItem({ account, now, onOpen }: { account: AccountRow; now: number; onOpen: () => void }) {
-  const { tp, date } = usePlanT();
+function AccountListItem({
+  account,
+  now,
+  active,
+  onOpen,
+}: {
+  account: AccountRow;
+  now: number;
+  active: boolean;
+  onOpen: () => void;
+}) {
+  const { tp } = usePlanT();
   const entitlements = account.record ? resolveEntitlements(account.record, now) : null;
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full flex-col gap-1 px-4 py-3 text-left transition hover:bg-[var(--surface-hover)] sm:flex-row sm:items-center sm:gap-3 sm:px-5"
+      aria-current={active ? "true" : undefined}
+      className={cn(
+        "relative flex w-full items-center gap-2.5 px-4 py-2.5 text-start transition sm:px-5",
+        active ? "bg-[var(--surface-2)]/70" : "hover:bg-[var(--surface-hover)]"
+      )}
     >
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-medium text-ink">{account.email || account.uid}</p>
-        <p className="truncate text-[11.5px] text-faint">
-          {account.displayName ? `${account.displayName} · ` : ""}
-          {account.lastSignInAt
-            ? tp("admin_last_sign_in", { date: date(account.lastSignInAt) })
-            : tp("admin_never")}
-        </p>
-      </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-        {account.disabled ? (
-          <span className="rounded-full bg-[color-mix(in_oklab,var(--danger)_14%,transparent)] px-2 py-0.5 text-[10.5px] font-medium text-[var(--danger)]">
-            {tp("admin_disabled")}
-          </span>
-        ) : null}
-        {account.record && entitlements ? (
-          <>
-            <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--accent)]">
-              {planLabel(tp, account.record.plan)}
-            </span>
-            <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10.5px] text-muted">
-              {tp(statusNameKey(entitlements.status))}
-            </span>
-          </>
-        ) : (
-          <span className="rounded-full border border-dashed border-[var(--border)] px-2 py-0.5 text-[10.5px] text-faint">
-            {tp("admin_no_record")}
-          </span>
-        )}
-      </div>
+      {active ? (
+        <span aria-hidden className="absolute inset-y-0 start-0 w-[2px] bg-[var(--accent)]" />
+      ) : null}
+      <PlanMark plan={account.record?.plan ?? "guest"} size={15} muted={!account.record} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12.5px] font-medium text-ink">{account.email || account.uid}</span>
+        <span className="mt-0.5 block truncate text-[11px] text-faint">
+          {account.record && entitlements
+            ? `${planLabel(tp, account.record.plan)} · ${tp(statusNameKey(entitlements.status))}`
+            : tp("admin_no_record")}
+        </span>
+      </span>
+      {account.disabled ? <StatusDot tone="danger">{tp("admin_disabled")}</StatusDot> : null}
     </button>
   );
 }
@@ -265,6 +346,7 @@ function AccountDetail({ uid, onBack, onSaved }: { uid: string; onBack: () => vo
   const [plan, setPlan] = useState<AssignablePlanId>("free");
   const [expires, setExpires] = useState("");
   const [trial, setTrial] = useState("");
+  const [savedTrial, setSavedTrial] = useState("");
   const [note, setNote] = useState("");
 
   const [reloadKey, setReloadKey] = useState(0);
@@ -288,9 +370,11 @@ function AccountDetail({ uid, onBack, onSaved }: { uid: string; onBack: () => vo
         );
         if (typeof response.now === "number") setNow(response.now);
         const record = row?.record ?? null;
+        const trialInput = timestampToDateInput(record?.trialEndsAt ?? null);
         setPlan(record && record.plan !== "owner" ? record.plan : "free");
-        setExpires(toDateInput(record?.expiresAt ?? null));
-        setTrial(toDateInput(record?.trialEndsAt ?? null));
+        setExpires(timestampToDateInput(record?.expiresAt ?? null));
+        setTrial(trialInput);
+        setSavedTrial(trialInput);
         setNote(record?.note ?? "");
         setError(null);
       })
@@ -311,10 +395,12 @@ function AccountDetail({ uid, onBack, onSaved }: { uid: string; onBack: () => vo
   const selfLocked = user?.uid === uid;
   const locked = ownerLocked || selfLocked;
 
+  const form: PlanForm = { plan, expires, trial, loadedTrial: savedTrial, note };
+  const trialConflict = planFormTrialConflict(form);
+
   const save = async () => {
     if (locked || saving) return;
-    const expiresAt = isPaidPlan(plan) && expires ? fromDateInput(expires) : null;
-    if (isPaidPlan(plan) && expires && (!expiresAt || expiresAt <= Date.now())) {
+    if (planFormExpiryInvalid(form)) {
       toast.error(tp("admin_invalid_expiry"));
       return;
     }
@@ -322,13 +408,7 @@ function AccountDetail({ uid, onBack, onSaved }: { uid: string; onBack: () => vo
     try {
       await firebaseJson("/api/admin/plans", {
         method: "POST",
-        body: JSON.stringify({
-          uid,
-          plan,
-          expiresAt,
-          trialEndsAt: trial ? fromDateInput(trial) : null,
-          note: note.trim() ? note.trim() : null,
-        }),
+        body: JSON.stringify({ uid, ...planFormPayload(form) }),
       });
       toast.success(tp("admin_saved"));
       onSaved();
@@ -342,90 +422,104 @@ function AccountDetail({ uid, onBack, onSaved }: { uid: string; onBack: () => vo
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] px-4 py-2.5 sm:px-5">
-        <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2">
+      <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] px-3 py-2 md:hidden">
+        <Button variant="ghost" size="sm" onClick={onBack} className="-ms-1.5">
           <ArrowLeft /> {tp("admin_back")}
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-6">
         {loading && !account ? (
-          <p className="flex items-center justify-center gap-2 py-8 text-[12.5px] text-muted">
+          <p className="flex items-center gap-2 py-8 text-[12.5px] text-muted">
             <Loader2 className="size-3.5 animate-spin" /> {tp("admin_loading")}
           </p>
         ) : error ? (
-          <p className="py-8 text-center text-[12.5px] text-[var(--danger)]">{error}</p>
+          <p className="py-8 text-[12.5px] leading-relaxed text-[var(--danger)]">{error}</p>
         ) : !account ? (
-          <p className="py-8 text-center text-[12.5px] text-muted">{tp("admin_not_found")}</p>
+          <p className="py-8 text-[12.5px] text-muted">{tp("admin_not_found")}</p>
         ) : (
           <>
-            <section className="space-y-1">
-              <p className="break-all text-[15px] font-semibold text-ink">{account.email || account.uid}</p>
-              {account.displayName ? <p className="text-[12.5px] text-muted">{account.displayName}</p> : null}
-              <p className="text-[11.5px] text-faint">
+            <header>
+              <h3 className="break-all text-[17px] font-semibold leading-tight tracking-[-0.02em] text-ink">
+                {account.email || account.uid}
+              </h3>
+              {account.displayName ? (
+                <p className="mt-1 text-[12.5px] text-muted">{account.displayName}</p>
+              ) : null}
+
+              <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11.5px]">
+                <span className="inline-flex items-center gap-1.5">
+                  <PlanMark plan={record?.plan ?? "guest"} size={15} muted={!record} />
+                  <span className={cn("font-medium", record ? "text-ink" : "text-faint")}>
+                    {record ? planLabel(tp, record.plan) : tp("admin_no_record")}
+                  </span>
+                </span>
+                {entitlements ? (
+                  <>
+                    <span aria-hidden className="text-faint">
+                      ·
+                    </span>
+                    <span className="text-muted">{tp(statusNameKey(entitlements.status))}</span>
+                  </>
+                ) : null}
+                {account.disabled ? <StatusDot tone="danger">{tp("admin_disabled")}</StatusDot> : null}
+              </div>
+
+              <p className="mt-2 text-[11px] leading-relaxed text-faint">
                 {account.createdAt ? tp("admin_created", { date: date(account.createdAt) }) : null}
                 {account.createdAt && account.lastSignInAt ? " · " : null}
                 {account.lastSignInAt ? tp("admin_last_sign_in", { date: date(account.lastSignInAt) }) : null}
               </p>
-              <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
-                {record ? (
-                  <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--accent)]">
-                    {planLabel(tp, record.plan)}
-                  </span>
-                ) : (
-                  <span className="rounded-full border border-dashed border-[var(--border)] px-2 py-0.5 text-[10.5px] text-faint">
-                    {tp("admin_no_record")}
-                  </span>
-                )}
-                {entitlements ? (
-                  <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10.5px] text-muted">
-                    {tp(statusNameKey(entitlements.status))}
-                  </span>
-                ) : null}
-                {account.disabled ? (
-                  <span className="rounded-full bg-[color-mix(in_oklab,var(--danger)_14%,transparent)] px-2 py-0.5 text-[10.5px] font-medium text-[var(--danger)]">
-                    {tp("admin_disabled")}
-                  </span>
-                ) : null}
-              </div>
-            </section>
+            </header>
 
             {locked ? (
-              <p className="flex items-start gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-[12px] leading-relaxed text-muted">
-                <Lock className="mt-0.5 size-3.5 shrink-0" />
-                <span>{ownerLocked ? tp("admin_owner_locked") : tp("admin_self_locked")}</span>
+              <p className="mt-5 border-s-2 border-[var(--border-strong)] ps-3 text-[12px] leading-relaxed text-muted">
+                {ownerLocked ? tp("admin_owner_locked") : tp("admin_self_locked")}
               </p>
             ) : null}
 
-            <section className="space-y-3.5">
-              <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">{tp("admin_edit")}</h3>
-              <div>
-                <p className="mb-1.5 text-[12px] font-medium text-ink">{tp("admin_plan_label")}</p>
-                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4" role="radiogroup" aria-label={tp("admin_plan_label")}>
-                  {ASSIGNABLE_PLANS.map((option) => (
+            <section className="mt-7 border-t border-[var(--border)] pt-5">
+              <h4 className="text-[14.5px] font-semibold tracking-[-0.015em] text-ink">{tp("admin_edit")}</h4>
+
+              <div
+                className="mt-3.5 grid grid-cols-2 gap-1.5 sm:grid-cols-4"
+                role="radiogroup"
+                aria-label={tp("admin_plan_label")}
+              >
+                {ASSIGNABLE_PLANS.map((option) => {
+                  const active = plan === option;
+                  return (
                     <button
                       key={option}
                       type="button"
                       role="radio"
-                      aria-checked={plan === option}
+                      aria-checked={active}
                       disabled={locked}
                       onClick={() => setPlan(option)}
                       className={cn(
-                        "rounded-[var(--radius-md)] border px-3 py-2 text-[12.5px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
-                        plan === option
-                          ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                          : "border-[var(--border)] text-ink hover:bg-[var(--surface-hover)]"
+                        "flex items-center gap-2 rounded-[var(--radius-sm)] border px-2.5 py-2 text-start transition disabled:cursor-not-allowed disabled:opacity-50",
+                        active
+                          ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                          : "border-[var(--border)] hover:bg-[var(--surface-hover)]"
                       )}
                     >
-                      {tp(planNameKey(option))}
+                      <PlanMark plan={option} size={15} muted={!active} />
+                      <span
+                        className={cn(
+                          "min-w-0 truncate text-[12.5px] font-medium",
+                          active ? "text-[var(--accent)]" : "text-ink"
+                        )}
+                      >
+                        {tp(planNameKey(option))}
+                      </span>
                     </button>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
 
-              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className={cn("block", !isPaidPlan(plan) && "opacity-50")}>
-                  <span className="mb-1.5 block text-[12px] font-medium text-ink">{tp("admin_expires_label")}</span>
+                  <FieldLabel>{tp("admin_expires_label")}</FieldLabel>
                   <Input
                     type="date"
                     value={isPaidPlan(plan) ? expires : ""}
@@ -433,10 +527,10 @@ function AccountDetail({ uid, onBack, onSaved }: { uid: string; onBack: () => vo
                     disabled={locked || !isPaidPlan(plan)}
                     className="h-9"
                   />
-                  <span className="mt-1 block text-[11px] text-faint">{tp("admin_expires_hint")}</span>
+                  <FieldHint>{tp("admin_expires_hint")}</FieldHint>
                 </label>
                 <label className="block">
-                  <span className="mb-1.5 block text-[12px] font-medium text-ink">{tp("admin_trial_label")}</span>
+                  <FieldLabel>{tp("admin_trial_label")}</FieldLabel>
                   <Input
                     type="date"
                     value={trial}
@@ -444,12 +538,20 @@ function AccountDetail({ uid, onBack, onSaved }: { uid: string; onBack: () => vo
                     disabled={locked}
                     className="h-9"
                   />
-                  <span className="mt-1 block text-[11px] text-faint">{tp("admin_trial_hint")}</span>
+                  <FieldHint>
+                    {tp("admin_trial_hint")} {tp("admin_trial_clear")}
+                  </FieldHint>
                 </label>
               </div>
 
-              <label className="block">
-                <span className="mb-1.5 block text-[12px] font-medium text-ink">{tp("admin_note_label")}</span>
+              {trialConflict !== null ? (
+                <p className="mt-3.5 border-s-2 border-[var(--warning)] ps-3 text-[11.5px] leading-relaxed text-muted">
+                  {tp("admin_trial_conflict", { date: date(trialConflict) })}
+                </p>
+              ) : null}
+
+              <label className="mt-4 block">
+                <FieldLabel>{tp("admin_note_label")}</FieldLabel>
                 <Textarea
                   value={note}
                   onChange={(event) => setNote(event.target.value.slice(0, 500))}
@@ -459,39 +561,52 @@ function AccountDetail({ uid, onBack, onSaved }: { uid: string; onBack: () => vo
                 />
               </label>
 
-              <div className="flex justify-end">
-                <Button variant="primary" onClick={() => void save()} disabled={locked || saving} className="w-full sm:w-auto">
+              <div className="mt-4 flex justify-end">
+                <Button
+                  variant="primary"
+                  onClick={() => void save()}
+                  disabled={locked || saving}
+                  className="w-full sm:w-auto"
+                >
                   {saving ? <Loader2 className="animate-spin" /> : null}
                   {tp("admin_save")}
                 </Button>
               </div>
             </section>
 
-            <section>
-              <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">{tp("admin_history")}</h3>
+            <section className="mt-7 border-t border-[var(--border)] pt-5">
+              <h4 className="text-[14.5px] font-semibold tracking-[-0.015em] text-ink">{tp("admin_history")}</h4>
               {history.length ? (
-                <ul className="space-y-1.5">
+                <ol className="mt-3.5 border-s border-[var(--border)] ps-4">
                   {history.map((entry) => (
-                    <li key={entry.id} className="rounded-[var(--radius-md)] border border-[var(--border)] px-3 py-2">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-ink">
+                    <li key={entry.id} className="relative pb-4 last:pb-0">
+                      <span
+                        aria-hidden
+                        className="absolute -start-[20.5px] top-[5px] size-[7px] rounded-full bg-[var(--border-strong)] ring-2 ring-[var(--surface)]"
+                      />
+                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12.5px] text-ink">
                         <span className="font-medium">
                           {entry.from ? `${planLabel(tp, entry.from.plan)} → ` : ""}
                           {planLabel(tp, entry.to.plan)}
                         </span>
                         {entry.to.expiresAt ? (
-                          <span className="text-faint">{tp("status_active_until", { date: date(entry.to.expiresAt) })}</span>
+                          <span className="text-[11.5px] text-faint">
+                            {tp("status_active_until", { date: date(entry.to.expiresAt) })}
+                          </span>
                         ) : null}
                       </div>
                       <p className="mt-0.5 text-[11px] text-faint">
                         {entry.at ? date(entry.at) : tp("admin_never")} · {tp(SOURCE_LABEL[entry.source])}
                         {entry.byEmail ? ` · ${tp("admin_by", { email: entry.byEmail })}` : ""}
                       </p>
-                      {entry.note ? <p className="mt-1 break-words text-[11.5px] text-muted">{entry.note}</p> : null}
+                      {entry.note ? (
+                        <p className="mt-1 break-words text-[11.5px] leading-relaxed text-muted">{entry.note}</p>
+                      ) : null}
                     </li>
                   ))}
-                </ul>
+                </ol>
               ) : (
-                <p className="text-[12px] text-faint">{tp("admin_history_empty")}</p>
+                <p className="mt-3 text-[12px] text-faint">{tp("admin_history_empty")}</p>
               )}
             </section>
           </>

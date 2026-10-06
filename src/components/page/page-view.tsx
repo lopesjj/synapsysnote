@@ -324,11 +324,19 @@ export function PageView({ pageId }: { pageId: string }) {
   );
 
   const createSubnote = useCallback(async () => {
-    const newPage = await adapter.createPage({
-      notebookId: page?.notebookId ?? null,
-      parentPageId: pageId,
-      title: t("untitled"),
-    });
+    // Em .catch() e não em try/catch: um try aqui dentro impede o React
+    // Compiler de preservar a memoização deste useCallback.
+    const newPage = await adapter
+      .createPage({
+        notebookId: page?.notebookId ?? null,
+        parentPageId: pageId,
+        title: t("untitled"),
+      })
+      .catch((error: unknown) => {
+        if (!notifyPlanError(error)) throw error;
+        return null;
+      });
+    if (!newPage) return;
     router.push(`/home/p/${newPage.id}`);
   }, [adapter, page?.notebookId, pageId, router, t]);
 
@@ -794,13 +802,17 @@ export function PageView({ pageId }: { pageId: string }) {
               disabled={isArchived || !newNoteGate.allowed}
               onSelect={async () => {
                 const target = newNoteTarget;
-                const newPage = await adapter.createPage({
-                  notebookId: target.notebookId,
-                  parentPageId: target.parentPageId,
-                  title: t("untitled"),
-                });
-                expandContainerInSession(target);
-                router.push(`/home/p/${newPage.id}`);
+                try {
+                  const newPage = await adapter.createPage({
+                    notebookId: target.notebookId,
+                    parentPageId: target.parentPageId,
+                    title: t("untitled"),
+                  });
+                  expandContainerInSession(target);
+                  router.push(`/home/p/${newPage.id}`);
+                } catch (error) {
+                  if (!notifyPlanError(error)) throw error;
+                }
               }}
             >
               <FilePlus /> {t("new_note")}

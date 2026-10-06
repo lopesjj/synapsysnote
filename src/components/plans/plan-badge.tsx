@@ -21,7 +21,7 @@ export function planBadgeInfo(entitlements: Entitlements, now: number, tp: PlanT
   if (entitlements.status === "trial") {
     const days = daysUntil(entitlements.trialEndsAt, now) ?? 0;
     return {
-      text: days <= 1 ? tp("badge_trial_last_day") : tp("badge_trial", { days }),
+      text: days <= 0 ? tp("badge_trial_last_day") : tp("badge_trial", { days }),
       tone: days <= TRIAL_WARNING_DAYS ? "warning" : "accent",
     };
   }

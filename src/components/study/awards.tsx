@@ -15,7 +15,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowRight, Clock, Lock, X } from "lucide-react";
+import { ArrowRight, Clock, X } from "lucide-react";
 import { Link } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/primitives";
@@ -28,7 +28,7 @@ import { formatDay } from "@/lib/study/dates";
 import { CLAIM_WINDOW_DAYS, arrangeAwards, sortAwards, type Award, type StreakAward } from "@/lib/study/awards";
 import { GoalMark, Panel } from "./ui";
 import { useGoalGates } from "@/lib/plans/gates";
-import { openPlanDialog } from "@/lib/plans/client";
+import { PlanNotice } from "@/components/plans/plan-lock";
 import { usePlanT } from "@/lib/plans/i18n";
 
 const SEAL_TONES = ["#c96d42", "#1f7b78", "#4b56a4", "#8d3657", "#2f7049", "#b8860b", "#52606f", "#1c1e26"] as const;
@@ -500,18 +500,7 @@ export function AwardsPanel() {
   return (
     <Panel title={st("awards_title")} description={st("awards_desc", { earned: earned.length, total })}>
       {awardsGate.allowed ? null : (
-        <div className="mb-4 flex flex-col gap-2.5 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)]/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-start gap-2">
-            <Lock className="mt-0.5 size-3.5 shrink-0 text-muted" />
-            <div className="min-w-0">
-              <p className="text-[12.5px] font-semibold text-ink">{tp("upsell_awards_title")}</p>
-              <p className="text-[12px] leading-relaxed text-muted">{tp("upsell_awards_body")}</p>
-            </div>
-          </div>
-          <Button variant="secondary" size="sm" className="shrink-0" onClick={openPlanDialog}>
-            {tp("view_plans")}
-          </Button>
-        </div>
+        <PlanNotice className="mb-4" title={tp("upsell_awards_title")} body={tp("upsell_awards_body")} />
       )}
       <div
         aria-disabled={awardsGate.allowed ? undefined : true}

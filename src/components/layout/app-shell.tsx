@@ -43,9 +43,9 @@ import { useStudyT } from "@/lib/study/i18n";
 import { openBlankTimer } from "@/lib/study/ui-store";
 import { useActiveModule, useSwitchModule } from "@/components/study/study-sidebar";
 import { FocusPill, useFocusPillVisible } from "@/components/study/focus-timer";
-import { PlanDialog } from "@/components/plans/plan-dialog";
 import { PlanAdminDialog } from "@/components/plans/plan-admin-dialog";
 import { PlanBanner } from "@/components/plans/plan-banner";
+import { notifyPlanError } from "@/lib/plans/client";
 import { planNoteTarget, usePlanGates } from "@/lib/plans/gates";
 
 const EvernoteImportWizard = dynamic(
@@ -291,21 +291,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           return;
         }
         event.preventDefault();
-        if (event.shiftKey) {
-          const notebook = await adapter.createNotebook({ name: t("untitled") });
-          toast.success(t("page_created"));
-          router.push(`/home/n/${notebook.id}`);
-          return;
+        // Os botões de criar já saem desabilitados pelos gates do plano; o
+        // atalho não tem como, então o limite chega aqui como rejeição do
+        // guard. Sem este catch, vira unhandledRejection.
+        try {
+          if (event.shiftKey) {
+            const notebook = await adapter.createNotebook({ name: t("untitled") });
+            toast.success(t("page_created"));
+            router.push(`/home/n/${notebook.id}`);
+            return;
+          }
+          const target = planNoteTarget(resolveNoteCreationTarget(pathname, pages, databases));
+          const page = await adapter.createPage({
+            notebookId: target.notebookId,
+            parentPageId: target.parentPageId,
+            title: t("untitled"),
+          });
+          expandContainerInSession(target);
+          useUiStore.getState().closeMenu();
+          router.push(`/home/p/${page.id}`);
+        } catch (error) {
+          // planFailure já avisou o usuário; falhas de verdade seguem visíveis.
+          if (!notifyPlanError(error)) throw error;
         }
-        const target = planNoteTarget(resolveNoteCreationTarget(pathname, pages, databases));
-        const page = await adapter.createPage({
-          notebookId: target.notebookId,
-          parentPageId: target.parentPageId,
-          title: t("untitled"),
-        });
-        expandContainerInSession(target);
-        useUiStore.getState().closeMenu();
-        router.push(`/home/p/${page.id}`);
         return;
       }
 
@@ -526,7 +534,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         open={workspaceRestoreOpen}
         onOpenChange={(open) => useUiStore.getState().setWorkspaceRestoreOpen(open)}
       />
-      <PlanDialog />
       <PlanAdminDialog />
       <ScreenReaderLiveRegion />
       <LibrasPlayer />

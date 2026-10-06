@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useRouter } from "@/lib/i18n/navigation";
 import { useWorkspace } from "@/lib/data/provider";
+import { notifyPlanError } from "@/lib/plans/client";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT, type StudyKey } from "@/lib/study/i18n";
 import { useStudyUi } from "@/lib/study/ui-store";
@@ -173,8 +174,8 @@ export function Scratchpad() {
       toast.success(st("pad_to_note_done"));
       useStudyUi.getState().setPadOpen(false);
       router.push(`/home/p/${page.id}`);
-    } catch {
-      toast.error(st("error_generic"));
+    } catch (error) {
+      if (!notifyPlanError(error)) toast.error(st("error_generic"));
     }
   };
 

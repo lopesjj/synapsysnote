@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
   Cookie,
-  Crown,
   KeyRound,
   LogOut,
   Minimize2,
@@ -28,7 +27,7 @@ import { isCustomAvatar } from "@/lib/data/user-avatar";
 import { useLegalStore } from "@/lib/legal/store";
 import { COOKIE_PREFERENCES_SECTION } from "@/components/legal/legal-article";
 import { PlanBadge, usePlanBadge } from "@/components/plans/plan-badge";
-import { openPlanDialog, useEntitlements, usePlanStore } from "@/lib/plans/client";
+import { openPlanDialog, useEntitlements } from "@/lib/plans/client";
 import { usePlanT } from "@/lib/plans/i18n";
 
 const AVATAR_CLASS =
@@ -154,17 +153,9 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
         <MenuSeparator />
 
         <div className="p-1">
-          <MenuItem onSelect={openPlanDialog}>
-            <Crown className="size-4" /> {tp("menu_my_plan")}
-          </MenuItem>
           {isOwner ? (
-            <MenuItem
-              onSelect={() => {
-                useUiStore.getState().setMobileSidebarOpen(false);
-                usePlanStore.getState().setAdminOpen(true);
-              }}
-            >
-              <ShieldCheck className="size-4" /> {tp("manage_accounts")}
+            <MenuItem onSelect={openPlanDialog}>
+              <ShieldCheck className="size-4" /> {tp("menu_admin")}
             </MenuItem>
           ) : null}
           <MenuItem

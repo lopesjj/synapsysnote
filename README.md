@@ -36,7 +36,7 @@ conexão e importação do Notion** (arquivos, páginas aninhadas e bases de dad
 | **Organização** | Páginas (cadernos-raiz) e cadernos aninhados, árvore infinita de notas, ícone e capa, duplicar com subárvore, reordenação por arrastar, tags globais, favoritos, histórico de versões, lixeira com retenção de 30 dias |
 | **Interface** | Modo foco/Zen, barra lateral recolhível e redimensionável, menu da conta, trilho de navegação (voltar/avançar + migalhas), título da aba por rota, tema claro/escuro, 13 famílias tipográficas auto-hospedadas com corpo e largura de leitura ajustáveis |
 | **Conta** | E-mail/senha e Google — o Google só entra com e-mails já cadastrados na autenticação. Perfil e preferências em `users/{uid}`, então o layout acompanha a conta entre dispositivos |
-| **Planos** | Gratuito (30 dias com tudo do Ultra; depois só ver, arquivar e excluir), Básico, Pro, Ultra e Proprietário, com limites de páginas, cadernos, notas, subnotas e objetivos e recursos por plano (vídeo, transcrição, flashcards, IA, arquivamento, conquistas). Recursos fora do plano aparecem desabilitados. O proprietário atribui planos pelo menu da conta ("Gerenciar contas") ou por `npm run account:plan` |
+| **Planos** | Gratuito (30 dias com tudo do Ultra; depois só ver, arquivar e excluir), Básico, Pro, Ultra e Proprietário, com limites de páginas, cadernos, notas, subnotas e objetivos e recursos por plano (vídeo, transcrição, flashcards, IA, arquivamento, conquistas). Recursos fora do plano aparecem desabilitados. Cada conta vê o próprio plano em **Preferências → Assinatura**; o proprietário usa o painel **Administrador** (plano próprio e de todas as contas) ou `npm run account:plan` |
 | **Infra** | Regras de segurança de Firestore e Storage, índices compostos e vetoriais, 12 Cloud Functions (OCR, IA, lixeira e fallback do Notion), persistência offline nativa |
 
 ### Vocabulário da árvore
@@ -289,8 +289,8 @@ NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true npm run dev
 ## Planos de conta
 
 Cada conta tem um registro em `account_plans/{uid}`, criado no primeiro acesso
-com 30 dias de teste. Para definir o proprietário (sem nenhuma restrição),
-use uma das opções:
+com 30 dias de teste. Para definir o proprietário (acesso completo, sem
+limites), use uma das opções:
 
 - variável `OWNER_EMAILS` no servidor (e-mails separados por vírgula; vale no
   próximo acesso, com o e-mail verificado);
@@ -299,7 +299,16 @@ use uma das opções:
 O mesmo comando consulta (`npm run account:plan -- --email ...`) e altera
 qualquer plano (`--set basic|pro|ultra|free`, `--until AAAA-MM-DD`,
 `--trial-days N`, `--note "..."`); sem `--confirm` ele só mostra o que faria.
-Pelo app, o proprietário usa **Menu da conta → Gerenciar contas**.
+
+No app, cada conta vê o próprio plano, o uso e o comparativo em **Preferências
+→ Assinatura**. O proprietário tem o painel **Menu da conta → Administrador**,
+com as guias *Meu plano* e *Gerenciar contas* (busca, atribuição de plano,
+validade, fim do teste, observação interna e histórico).
+
+Em desenvolvimento, para abrir essas telas em qualquer estado sem mexer na
+conta, grave um registro de plano em `localStorage` na chave
+`synapsys.plan.preview` e recarregue; o bloco que lê essa chave não existe no
+build de produção.
 
 ## Deploy
 

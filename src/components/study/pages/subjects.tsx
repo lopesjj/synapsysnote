@@ -42,6 +42,7 @@ import { Combobox } from "../combobox";
 import { SubjectDialog } from "../subject-dialog";
 import { AccuracyTag, CompletionMark, FocusButton, Segmented, StudyEmpty, StudyGate, StudyHeader, StudyPage } from "../ui";
 import { relativeDay } from "../widgets";
+import { notifyPlanError } from "@/lib/plans/client";
 import { usePlanGates } from "@/lib/plans/gates";
 import { GateTooltip, PlanLockBadge } from "@/components/plans/plan-lock";
 
@@ -682,8 +683,8 @@ function TopicRow({
       await actions.updateTopic(subject.id, topic.id, { pageId: page.id });
       toast.success(st("topic_note_created"));
       router.push(`/home/p/${page.id}`);
-    } catch {
-      toast.error(st("error_generic"));
+    } catch (error) {
+      if (!notifyPlanError(error)) toast.error(st("error_generic"));
     }
   };
 

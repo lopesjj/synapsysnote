@@ -56,9 +56,8 @@ import {
 } from "@/lib/icons/flashcard-icon";
 import { FlashcardStudySession } from "./flashcard-study-session";
 import { OPEN_GATE, usePlanGates, type PlanGate } from "@/lib/plans/gates";
-import { openPlanDialog } from "@/lib/plans/client";
 import { usePlanT } from "@/lib/plans/i18n";
-import { PlanLockBadge } from "@/components/plans/plan-lock";
+import { PlanLockBadge, PlanNotice } from "@/components/plans/plan-lock";
 
 interface NoteFlashcardsModalProps {
   page: Page;
@@ -1543,18 +1542,5 @@ function FlashcardPlanNotice({ flashGate, aiGate }: { flashGate: PlanGate; aiGat
   if (flashGate.allowed && aiGate.allowed) return null;
   const title = readOnly ? null : flashGate.allowed ? tp("upsell_ai_title") : tp("upsell_flashcards_title");
   const body = readOnly ? tp("flashcards_read_only") : flashGate.allowed ? tp("upsell_ai_body") : tp("upsell_flashcards_body");
-  return (
-    <div className="mt-4 flex w-full flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)]/60 px-3 py-2.5 text-left sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 items-start gap-2">
-        <Lock className="mt-0.5 size-3.5 shrink-0 text-muted" />
-        <div className="min-w-0">
-          {title ? <p className="text-[12.5px] font-semibold text-ink">{title}</p> : null}
-          <p className="text-[12px] leading-relaxed text-muted">{body}</p>
-        </div>
-      </div>
-      <Button variant="secondary" size="sm" className="h-9 shrink-0 sm:h-7" onClick={openPlanDialog}>
-        {tp("view_plans")}
-      </Button>
-    </div>
-  );
+  return <PlanNotice className="mt-4 w-full text-left" title={title} body={body} />;
 }

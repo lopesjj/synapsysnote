@@ -46,14 +46,14 @@ export function PlanBanner() {
     const days = daysUntil(entitlements.trialEndsAt, now);
     if (days !== null && days <= TRIAL_WARNING_DAYS) {
       key = `trial:${Math.floor(now / DAY_MS)}`;
-      message = days <= 1 ? tp("banner_trial_last_day") : tp("banner_trial_ending", { days });
+      message = days <= 0 ? tp("banner_trial_last_day") : tp("banner_trial_ending", { days });
     }
   } else if (entitlements.status === "active" && entitlements.expiresAt && entitlements.plan !== "guest") {
     const days = daysUntil(entitlements.expiresAt, now);
     if (days !== null && days <= TRIAL_WARNING_DAYS) {
       const plan = tp(planNameKey(entitlements.plan));
       key = `expiring:${Math.floor(now / DAY_MS)}`;
-      message = days <= 1 ? tp("banner_plan_last_day", { plan }) : tp("banner_plan_ending", { plan, days });
+      message = days <= 0 ? tp("banner_plan_last_day", { plan }) : tp("banner_plan_ending", { plan, days });
     }
   }
 

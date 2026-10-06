@@ -618,18 +618,26 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
   }
 
   const createSubnotebook = async () => {
-    const created = await adapter.createNotebook({
-      name: t("new_notebook"),
-      parentId: notebookId,
-    });
-    toast.success(t("notebook_created"));
-    router.push(`/home/n/${created.id}`);
+    try {
+      const created = await adapter.createNotebook({
+        name: t("new_notebook"),
+        parentId: notebookId,
+      });
+      toast.success(t("notebook_created"));
+      router.push(`/home/n/${created.id}`);
+    } catch (error) {
+      if (!notifyPlanError(error)) throw error;
+    }
   };
 
   const createNote = async () => {
-    const page = await adapter.createPage({ notebookId, title: t("untitled") });
-    useUiStore.getState().closeMenu();
-    router.push(`/home/p/${page.id}`);
+    try {
+      const page = await adapter.createPage({ notebookId, title: t("untitled") });
+      useUiStore.getState().closeMenu();
+      router.push(`/home/p/${page.id}`);
+    } catch (error) {
+      if (!notifyPlanError(error)) throw error;
+    }
   };
 
   const newNotebookGate = isArchived ? OPEN_GATE : gates.newNotebook(notebookId);

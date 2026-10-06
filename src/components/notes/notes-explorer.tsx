@@ -28,6 +28,7 @@ import { useTranslation } from "@/lib/i18n/translations";
 import { IMPORT_ORIGIN_SHORT_KEY, pageImportOrigin } from "@/lib/import/source-label";
 import type { Page } from "@/types/models";
 import { expandContainerInSession } from "@/lib/data/page-tree";
+import { notifyPlanError } from "@/lib/plans/client";
 import { usePlanGates } from "@/lib/plans/gates";
 import { GateTooltip } from "@/components/plans/plan-lock";
 
@@ -122,15 +123,19 @@ export function NotesExplorer({
 
   const createNote = async () => {
     const { notebookId, parentPageId } = noteTarget;
-    const page = await adapter.createPage({
-      notebookId,
-      parentPageId,
-      tags: scope.tag ? [scope.tag] : [],
-      title: t("untitled"),
-    });
-    expandContainerInSession({ notebookId, parentPageId });
-    useUiStore.getState().closeMenu();
-    router.push(`/home/p/${page.id}`);
+    try {
+      const page = await adapter.createPage({
+        notebookId,
+        parentPageId,
+        tags: scope.tag ? [scope.tag] : [],
+        title: t("untitled"),
+      });
+      expandContainerInSession({ notebookId, parentPageId });
+      useUiStore.getState().closeMenu();
+      router.push(`/home/p/${page.id}`);
+    } catch (error) {
+      if (!notifyPlanError(error)) throw error;
+    }
   };
 
   return (

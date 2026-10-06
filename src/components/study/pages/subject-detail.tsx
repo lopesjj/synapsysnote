@@ -9,6 +9,7 @@ import { Checkbox, Input, Tooltip } from "@/components/ui/primitives";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/menu";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/data/provider";
+import { notifyPlanError } from "@/lib/plans/client";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
 import { useStudyUi } from "@/lib/study/ui-store";
@@ -188,8 +189,8 @@ function TopicsPanel({
       await actions.updateTopic(subject.id, topic.id, { pageId: page.id });
       toast.success(st("topic_note_created"));
       router.push(`/home/p/${page.id}`);
-    } catch {
-      toast.error(st("error_generic"));
+    } catch (error) {
+      if (!notifyPlanError(error)) toast.error(st("error_generic"));
     }
   };
 

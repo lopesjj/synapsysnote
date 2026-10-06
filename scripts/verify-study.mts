@@ -757,11 +757,15 @@ assert.equal(new Set(seen).size, catalog.length);
 
 console.log("verify-study: ok");
 
+// Dia livre vem da semana de estudo: o domingo fica livre antes do início, no passado e no futuro, e só estudar no dia muda isso.
 {
   const studied = new Set(["2026-09-21", "2026-09-23"]);
   const weekdays = [1, 2, 3, 4, 5];
   const today = "2026-09-29";
-  assert.equal(dayStatus("2026-09-20", studied, "2026-09-21", today, weekdays), "before");
+  assert.equal(dayStatus("2026-09-20", studied, "2026-09-21", today, weekdays), "rest");
+  assert.equal(dayStatus("2026-10-04", studied, "2026-09-21", today, weekdays), "rest");
+  assert.equal(dayStatus("2026-09-20", new Set(["2026-09-20"]), "2026-09-20", today, weekdays), "studied");
+  assert.equal(dayStatus("2026-09-18", studied, "2026-09-21", today, weekdays), "before");
   assert.equal(dayStatus("2026-09-21", studied, "2026-09-21", today, weekdays), "studied");
   assert.equal(dayStatus("2026-09-22", studied, "2026-09-21", today, weekdays), "missed");
   assert.equal(dayStatus("2026-09-27", studied, "2026-09-21", today, weekdays), "rest");

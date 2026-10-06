@@ -374,13 +374,17 @@ export function CommandPalette({
                         disabled={!newNoteGate.allowed}
                         onSelect={async () => {
                           const target = noteTarget;
-                          const page = await adapter.createPage({
-                            notebookId: target.notebookId,
-                            parentPageId: target.parentPageId,
-                            title: t("untitled"),
-                          });
-                          expandContainerInSession(target);
-                          go(`/home/p/${page.id}`);
+                          try {
+                            const page = await adapter.createPage({
+                              notebookId: target.notebookId,
+                              parentPageId: target.parentPageId,
+                              title: t("untitled"),
+                            });
+                            expandContainerInSession(target);
+                            go(`/home/p/${page.id}`);
+                          } catch (error) {
+                            if (!notifyPlanError(error)) throw error;
+                          }
                         }}
                       >
                         <span className="flex-1 text-[13px] text-ink">{t("new_note")}</span>
@@ -392,8 +396,12 @@ export function CommandPalette({
                         className={itemClass}
                         disabled={!newRootGate.allowed}
                         onSelect={async () => {
-                          const notebook = await adapter.createNotebook({ name: t("new_page") });
-                          go(`/home/n/${notebook.id}`);
+                          try {
+                            const notebook = await adapter.createNotebook({ name: t("new_page") });
+                            go(`/home/n/${notebook.id}`);
+                          } catch (error) {
+                            if (!notifyPlanError(error)) throw error;
+                          }
                         }}
                       >
                         <span className="flex-1 text-[13px] text-ink">{t("new_page")}</span>

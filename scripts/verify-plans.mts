@@ -65,6 +65,14 @@ import {
   type WorkspaceState,
 } from "../src/lib/plans/usage";
 import {
+  dateInputToTimestamp,
+  planFormExpiryInvalid,
+  planFormPayload,
+  planFormTrialConflict,
+  timestampToDateInput,
+  type PlanForm,
+} from "../src/lib/plans/admin";
+import {
   archivePlanCheck,
   duplicateNotebookCheck,
   duplicatePageCheck,
@@ -228,9 +236,90 @@ function entitlementsOf(plan: PlanId, overrides: Partial<AccountPlanRecord> = {}
 
   assert.equal(nextChangeAt(record("pro", { expiresAt: NOW + 2 * DAY_MS }), NOW), NOW + 2 * DAY_MS);
   assert.equal(nextChangeAt(record("owner"), NOW), null);
-  assert.equal(daysUntil(NOW + 1, NOW), 1);
-  assert.equal(daysUntil(NOW - DAY_MS, NOW), 0);
   assert.equal(daysUntil(null, NOW), null);
+}
+
+{
+  // Os dias que faltam contam pelo calendário: a hora gravada não muda o número.
+  const trial = record("free");
+  const sameDay = (timestamp: number, hours: number, minutes = 0, seconds = 0) => {
+    const date = new Date(timestamp);
+    date.setHours(hours, minutes, seconds, 0);
+    return date.getTime();
+  };
+
+  assert.equal(daysUntil(trial.trialEndsAt, NOW), TRIAL_DAYS);
+  assert.equal(
+    daysUntil(sameDay(trial.trialEndsAt, 23, 59, 59), NOW),
+    TRIAL_DAYS,
+    "fim do teste gravado no fim do dia não pode somar um dia a mais"
+  );
+  assert.equal(daysUntil(sameDay(trial.trialEndsAt, 0), NOW), TRIAL_DAYS);
+  assert.equal(daysUntil(trial.trialEndsAt, sameDay(NOW, 23, 59, 59)), TRIAL_DAYS);
+  assert.equal(daysUntil(trial.trialEndsAt, NOW + 29 * DAY_MS), 1);
+  assert.equal(daysUntil(trial.trialEndsAt, NOW + TRIAL_MS - 1), 0, "no último dia a contagem chega a zero");
+  assert.equal(daysUntil(NOW + 1, NOW), 0, "ainda hoje não é um dia inteiro");
+  assert.equal(daysUntil(NOW - DAY_MS, NOW), 0);
+
+  let previous = TRIAL_DAYS + 1;
+  for (let offset = 0; offset < TRIAL_MS; offset += DAY_MS / 6) {
+    const left = daysUntil(trial.trialEndsAt, NOW + offset) ?? -1;
+    assert.ok(left <= TRIAL_DAYS, `teste de ${TRIAL_DAYS} dias não pode mostrar ${left}`);
+    assert.ok(left <= previous, "a contagem do teste não pode subir");
+    previous = left;
+  }
+  assert.equal(previous, 0);
+}
+
+{
+  // Formulário de plano do painel do proprietário.
+  const trial = record("free");
+  const trialInput = timestampToDateInput(trial.trialEndsAt);
+  const base: PlanForm = { plan: "free", expires: "", trial: trialInput, loadedTrial: trialInput, note: "  " };
+
+  assert.equal(timestampToDateInput(dateInputToTimestamp("2026-11-05")), "2026-11-05");
+  assert.equal(timestampToDateInput(null), "");
+  assert.equal(dateInputToTimestamp("05/11/2026"), null);
+
+  const untouched = planFormPayload(base);
+  assert.equal("trialEndsAt" in untouched, false, "gravar sem mexer na data não pode reescrever o fim do teste");
+  assert.equal(untouched.note, null);
+  assert.equal(untouched.expiresAt, null);
+  assert.equal(
+    daysUntil(dateInputToTimestamp(trialInput), NOW),
+    daysUntil(trial.trialEndsAt, NOW),
+    "a data reenviada do formulário mostra os mesmos dias do registro"
+  );
+
+  assert.equal(planFormPayload({ ...base, trial: "2026-12-05" }).trialEndsAt, dateInputToTimestamp("2026-12-05"));
+  assert.equal(planFormPayload({ ...base, trial: "" }).trialEndsAt, 0, "em branco encerra o teste");
+  assert.equal(planFormPayload({ ...base, note: " cortesia " }).note, "cortesia");
+  assert.equal(planFormPayload({ ...base, plan: "free", expires: "2026-12-01" }).expiresAt, null, "plano gratuito não vence");
+  assert.equal(planFormPayload({ ...base, plan: "pro", expires: "2026-12-01" }).expiresAt, dateInputToTimestamp("2026-12-01"));
+
+  assert.equal(planFormExpiryInvalid({ ...base, plan: "pro", expires: "2026-11-05" }, NOW), false);
+  assert.equal(planFormExpiryInvalid({ ...base, plan: "pro", expires: "2026-10-05" }, NOW), true);
+  assert.equal(planFormExpiryInvalid({ ...base, plan: "pro", expires: "" }, NOW), false);
+  assert.equal(planFormExpiryInvalid({ ...base, plan: "free", expires: "2020-01-01" }, NOW), false);
+
+  const conflicting: PlanForm = { ...base, plan: "pro", expires: "2026-10-20", trial: "2026-11-05" };
+  assert.equal(planFormTrialConflict(conflicting), dateInputToTimestamp("2026-11-05"));
+  assert.equal(planFormTrialConflict({ ...conflicting, expires: "2026-12-20" }), null);
+  assert.equal(planFormTrialConflict({ ...conflicting, plan: "free" }), null);
+  assert.equal(planFormTrialConflict({ ...conflicting, trial: "" }), null);
+
+  // O aviso tem que bater com o que o resolvedor faz: plano pago vencido
+  // dentro do teste devolve a conta ao teste até o fim dele.
+  const conflicted = record("pro", {
+    expiresAt: dateInputToTimestamp("2026-10-20")!,
+    trialEndsAt: dateInputToTimestamp("2026-11-05")!,
+  });
+  const afterExpiry = resolveEntitlements(conflicted, dateInputToTimestamp("2026-10-21")!);
+  assert.equal(afterExpiry.status, "trial");
+  assert.equal(afterExpiry.readOnly, false);
+  const afterTrial = resolveEntitlements(conflicted, dateInputToTimestamp("2026-11-06")!);
+  assert.equal(afterTrial.status, "expired");
+  assert.equal(afterTrial.readOnly, true);
 
   const rules = readFileSync(new URL("../firestore.rules", import.meta.url), "utf8");
   assert.ok(

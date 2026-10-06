@@ -225,9 +225,21 @@ export function resolveEntitlements(record: AccountPlanRecord | null, now: numbe
   };
 }
 
+function startOfDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+/**
+ * Dias que faltam contados pelo calendário: a mesma data vale o mesmo número
+ * independentemente da hora gravada. Sem isso, um fim de teste às 23:59 de uma
+ * data aparecia como um dia a mais do que o mesmo dia gravado de manhã.
+ * Zero significa que termina hoje.
+ */
 export function daysUntil(timestamp: number | null, now: number): number | null {
   if (timestamp === null) return null;
-  return Math.max(0, Math.ceil((timestamp - now) / DAY_MS));
+  return Math.max(0, Math.round((startOfDay(timestamp) - startOfDay(now)) / DAY_MS));
 }
 
 export function nextChangeAt(record: AccountPlanRecord | null, now: number): number | null {

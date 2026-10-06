@@ -5,6 +5,7 @@ import {
   Accessibility,
   Camera,
   Check,
+  Crown,
   Globe,
   Keyboard,
   Loader2,
@@ -65,6 +66,9 @@ import { loginHref, navigateTo } from "@/lib/domains";
 import { resetFirestoreCache } from "@/lib/firebase/client";
 import { useStudyT } from "@/lib/study/i18n";
 import { StudyPreferencesSection } from "@/components/study/study-preferences";
+import { useEntitlements } from "@/lib/plans/client";
+import { usePlanT } from "@/lib/plans/i18n";
+import { SubscriptionPanel } from "@/components/plans/subscription-panel";
 
 export function PreferencesDialog({
   open,
@@ -75,8 +79,11 @@ export function PreferencesDialog({
 }) {
   const { t } = useTranslation();
   const { st } = useStudyT();
-  const activeTab = useUiStore((state) => state.preferencesTab);
+  const { tp } = usePlanT();
+  const storedTab = useUiStore((state) => state.preferencesTab);
   const setActiveTab = useUiStore((state) => state.setPreferencesTab);
+  // O proprietário vê o plano no painel Administrador, não aqui.
+  const isOwner = useEntitlements().status === "owner";
 
   const navItems: { id: PreferencesTab; label: string; icon: React.ReactNode }[] = [
     { id: "appearance", label: t("appearance"), icon: <Palette className="size-4" /> },
@@ -86,8 +93,13 @@ export function PreferencesDialog({
     { id: "profile", label: t("profile"), icon: <User className="size-4" /> },
     { id: "study", label: st("prefs_tab"), icon: <StudyIcon className="size-4" /> },
     { id: "privacy", label: t("privacy_data"), icon: <ShieldCheck className="size-4" /> },
+    ...(isOwner
+      ? []
+      : [{ id: "subscription" as const, label: tp("subscription_tab"), icon: <Crown className="size-4" /> }]),
     { id: "shortcuts", label: t("shortcuts"), icon: <Keyboard className="size-4" /> },
   ];
+
+  const activeTab = navItems.some((item) => item.id === storedTab) ? storedTab : "appearance";
 
   const getSectionTitle = () => {
     switch (activeTab) {
@@ -103,6 +115,8 @@ export function PreferencesDialog({
         return t("profile");
       case "privacy":
         return t("privacy_data");
+      case "subscription":
+        return tp("subscription_tab");
       case "study":
         return st("prefs_tab");
       case "shortcuts":
@@ -120,6 +134,8 @@ export function PreferencesDialog({
         return t("language_description");
       case "privacy":
         return t("privacy_data_description");
+      case "subscription":
+        return tp("dialog_description");
       case "study":
         return st("prefs_desc");
       default:
@@ -219,6 +235,7 @@ export function PreferencesDialog({
             {activeTab === "typography" && <TypographySection />}
             {activeTab === "profile" && <ProfileSection />}
             {activeTab === "privacy" && <PrivacySection />}
+            {activeTab === "subscription" && <SubscriptionPanel />}
             {activeTab === "study" && <StudyPreferencesSection />}
             {activeTab === "shortcuts" && <ShortcutsSection />}
           </div>

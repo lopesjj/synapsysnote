@@ -7,6 +7,22 @@ import { normalizePlanRecord, type AccountPlanRecord } from "@/lib/plans/entitle
 import { readCachedPlan, usePlanStore, writeCachedPlan } from "@/lib/plans/client";
 
 const TICK_MS = 30_000;
+const PREVIEW_KEY = "synapsys.plan.preview";
+
+/**
+ * Só em desenvolvimento: um registro gravado em `synapsys.plan.preview` abre as
+ * telas de plano em qualquer estado (teste, vencido, somente leitura) sem tocar
+ * na conta. Em produção o bloco não existe.
+ */
+function previewRecord(uid: string): AccountPlanRecord | null {
+  if (process.env.NODE_ENV !== "development" || typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(PREVIEW_KEY);
+    return raw ? normalizePlanRecord(JSON.parse(raw), uid) : null;
+  } catch {
+    return null;
+  }
+}
 
 export function PlanSync() {
   const { user, mode } = useAuth();
@@ -18,6 +34,12 @@ export function PlanSync() {
       usePlanStore.setState({ uid: null, guest: false, record: null, loaded: false });
       return;
     }
+    const preview = previewRecord(uid);
+    if (preview) {
+      usePlanStore.setState({ uid, guest: false, record: preview, loaded: true, clockOffset: 0 });
+      return;
+    }
+
     if (guest) {
       usePlanStore.setState({ uid, guest: true, record: null, loaded: true });
       return;

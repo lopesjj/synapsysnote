@@ -28,8 +28,7 @@ import {
 } from "@/lib/data/archive";
 import { usePlanGates, type PlanGate } from "@/lib/plans/gates";
 import { usePlanT } from "@/lib/plans/i18n";
-import { openPlanDialog } from "@/lib/plans/client";
-import { GateTooltip } from "@/components/plans/plan-lock";
+import { GateTooltip, PlanNotice } from "@/components/plans/plan-lock";
 import type { Notebook, Page } from "@/types/models";
 
 type Filter = "all" | "pages" | "notebooks" | "notes";
@@ -279,18 +278,11 @@ export default function ArchivePage() {
       </header>
 
       {archiveFeature.allowed ? null : (
-        <div className="mt-5 flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-2)]/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <Lock className="mt-0.5 size-4 shrink-0 text-muted" />
-            <div className="min-w-0">
-              <p className="text-[13px] font-semibold text-ink">{tp("archive_locked_title")}</p>
-              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{tp("archive_locked_body")}</p>
-            </div>
-          </div>
-          <Button variant="secondary" size="sm" className="w-full shrink-0 sm:w-auto" onClick={openPlanDialog}>
-            {tp("view_plans")}
-          </Button>
-        </div>
+        <PlanNotice
+          className="mt-5"
+          title={tp("archive_locked_title")}
+          body={tp("archive_locked_body")}
+        />
       )}
 
       {rows.length > 0 ? (

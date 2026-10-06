@@ -26,7 +26,7 @@ import { DeckIcon, FlashcardsIcon, StudyIcon } from "@/lib/icons/flashcard-icon"
 import { FlashcardStudySession } from "./flashcard-study-session";
 import { FlashcardsSettingsModal } from "./flashcards-settings-modal";
 import { usePlanGates } from "@/lib/plans/gates";
-import { openPlanDialog } from "@/lib/plans/client";
+import { PlanNotice } from "@/components/plans/plan-lock";
 import { usePlanT } from "@/lib/plans/i18n";
 
 /* ------------------------------------------------------------------ */
@@ -844,22 +844,11 @@ export function FlashcardsHub() {
         </section>
 
         {flashGate.allowed ? null : (
-          <div className="mt-4 flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-start gap-2.5">
-              <Lock className="mt-0.5 size-4 shrink-0 text-muted" />
-              <div className="min-w-0">
-                {flashGate.badge && !planReadOnly ? (
-                  <p className="text-[13px] font-semibold text-ink">{tp("upsell_flashcards_title")}</p>
-                ) : null}
-                <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
-                  {planReadOnly ? tp("flashcards_read_only") : tp("upsell_flashcards_body")}
-                </p>
-              </div>
-            </div>
-            <Button variant="secondary" size="sm" className="w-full shrink-0 sm:w-auto" onClick={openPlanDialog}>
-              {tp("view_plans")}
-            </Button>
-          </div>
+          <PlanNotice
+            className="mt-4"
+            title={flashGate.badge && !planReadOnly ? tp("upsell_flashcards_title") : null}
+            body={planReadOnly ? tp("flashcards_read_only") : tp("upsell_flashcards_body")}
+          />
         )}
 
         {/* ---------------- Progresso ---------------- */}

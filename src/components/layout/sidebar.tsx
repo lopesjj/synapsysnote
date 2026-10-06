@@ -155,14 +155,18 @@ export function SidebarRail() {
 
   const createPage = async () => {
     const target = noteTarget;
-    const page = await adapter.createPage({
-      notebookId: target.notebookId,
-      parentPageId: target.parentPageId,
-      title: t("untitled"),
-    });
-    expandContainerInSession(target);
-    useUiStore.getState().closeMenu();
-    router.push(`/home/p/${page.id}`);
+    try {
+      const page = await adapter.createPage({
+        notebookId: target.notebookId,
+        parentPageId: target.parentPageId,
+        title: t("untitled"),
+      });
+      expandContainerInSession(target);
+      useUiStore.getState().closeMenu();
+      router.push(`/home/p/${page.id}`);
+    } catch (error) {
+      if (!notifyPlanError(error)) throw error;
+    }
   };
 
   return (
@@ -441,22 +445,30 @@ export function Sidebar({
   ]);
 
   const createPage = async (notebookId: string | null) => {
-    const page = await adapter.createPage({ notebookId, title: t("untitled") });
-    if (notebookId) setOpenNotebooks((prev) => ({ ...prev, [notebookId]: true }));
-    useUiStore.getState().closeMenu();
-    router.push(`/home/p/${page.id}`);
+    try {
+      const page = await adapter.createPage({ notebookId, title: t("untitled") });
+      if (notebookId) setOpenNotebooks((prev) => ({ ...prev, [notebookId]: true }));
+      useUiStore.getState().closeMenu();
+      router.push(`/home/p/${page.id}`);
+    } catch (error) {
+      if (!notifyPlanError(error)) throw error;
+    }
   };
 
   const createNotebook = async (parentId: string | null = null) => {
-    const notebook = await adapter.createNotebook({
-      name: parentId ? t("new_notebook") : t("new_page"),
-      parentId,
-    });
-    if (parentId) setOpenNotebooks((prev) => ({ ...prev, [parentId]: true }));
-    setOpenNotebooks((prev) => ({ ...prev, [notebook.id]: true }));
-    toast.success(parentId ? t("notebook_created") : t("page_created"));
-    useUiStore.getState().setMobileSidebarOpen(false);
-    router.push(`/home/n/${notebook.id}`);
+    try {
+      const notebook = await adapter.createNotebook({
+        name: parentId ? t("new_notebook") : t("new_page"),
+        parentId,
+      });
+      if (parentId) setOpenNotebooks((prev) => ({ ...prev, [parentId]: true }));
+      setOpenNotebooks((prev) => ({ ...prev, [notebook.id]: true }));
+      toast.success(parentId ? t("notebook_created") : t("page_created"));
+      useUiStore.getState().setMobileSidebarOpen(false);
+      router.push(`/home/n/${notebook.id}`);
+    } catch (error) {
+      if (!notifyPlanError(error)) throw error;
+    }
   };
 
   const onDragMove = (event: DragMoveEvent) => {
@@ -783,14 +795,18 @@ export function Sidebar({
               setMoveDialogOpen(true);
             }}
             onCreateChild={async () => {
-              const child = await adapter.createPage({
-                parentPageId: node.page.id,
-                notebookId: node.page.notebookId,
-                title: t("untitled"),
-              });
-              setExpanded((prev) => ({ ...prev, [node.page.id]: true }));
-              useUiStore.getState().closeMenu();
-              router.push(`/home/p/${child.id}`);
+              try {
+                const child = await adapter.createPage({
+                  parentPageId: node.page.id,
+                  notebookId: node.page.notebookId,
+                  title: t("untitled"),
+                });
+                setExpanded((prev) => ({ ...prev, [node.page.id]: true }));
+                useUiStore.getState().closeMenu();
+                router.push(`/home/p/${child.id}`);
+              } catch (error) {
+                if (!notifyPlanError(error)) throw error;
+              }
             }}
             onToggleFavorite={() =>
               adapter.updatePage(node.page.id, { favorite: !node.page.favorite })

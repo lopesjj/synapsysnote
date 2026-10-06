@@ -18,6 +18,8 @@ import { planErrorText, planTranslate } from "./i18n";
 const CACHE_PREFIX = "synapsys.cache.plan.";
 const LOAD_TIMEOUT_MS = 8000;
 
+export type AdminTab = "plan" | "accounts";
+
 interface PlanState {
   uid: string | null;
   guest: boolean;
@@ -25,10 +27,9 @@ interface PlanState {
   loaded: boolean;
   clockOffset: number;
   tick: number;
-  dialogOpen: boolean;
   adminOpen: boolean;
-  setDialogOpen: (open: boolean) => void;
-  setAdminOpen: (open: boolean) => void;
+  adminTab: AdminTab;
+  setAdminOpen: (open: boolean, tab?: AdminTab) => void;
 }
 
 export const usePlanStore = create<PlanState>()((set) => ({
@@ -38,10 +39,9 @@ export const usePlanStore = create<PlanState>()((set) => ({
   loaded: false,
   clockOffset: 0,
   tick: Date.now(),
-  dialogOpen: false,
   adminOpen: false,
-  setDialogOpen: (open) => set({ dialogOpen: open }),
-  setAdminOpen: (open) => set({ adminOpen: open }),
+  adminTab: "plan",
+  setAdminOpen: (open, tab) => set(tab ? { adminOpen: open, adminTab: tab } : { adminOpen: open }),
 }));
 
 export function readCachedPlan(uid: string): AccountPlanRecord | null {
@@ -107,9 +107,24 @@ export function waitForPlan(): Promise<void> {
 
 const notified = new WeakSet<object>();
 
+/**
+ * O plano do proprietário vive no painel Administrador; o das outras contas é
+ * uma guia das Preferências.
+ */
 export function openPlanDialog() {
+  const ui = useUiStore.getState();
+  ui.setMobileSidebarOpen(false);
+  if (currentEntitlements().status === "owner") {
+    usePlanStore.getState().setAdminOpen(true, "plan");
+    return;
+  }
+  ui.setPreferencesTab("subscription");
+  ui.setPreferencesOpen(true);
+}
+
+export function openAccountsAdmin() {
   useUiStore.getState().setMobileSidebarOpen(false);
-  usePlanStore.getState().setDialogOpen(true);
+  usePlanStore.getState().setAdminOpen(true, "accounts");
 }
 
 export function describePlanError(error: unknown): string | null {

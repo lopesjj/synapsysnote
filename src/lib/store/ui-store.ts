@@ -32,6 +32,7 @@ export type PreferencesTab =
   | "typography"
   | "profile"
   | "privacy"
+  | "subscription"
   | "study"
   | "shortcuts";
 
