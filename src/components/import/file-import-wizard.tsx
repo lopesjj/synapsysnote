@@ -54,6 +54,7 @@ const WARNING_KEY: Record<ImportWarningCode, TranslationKey> = {
   remote_asset: "fimp_warning_remote_asset",
   nested_table: "fimp_warning_nested_table",
   unsupported_content: "fimp_warning_unsupported_content",
+  plan_video: "fimp_warning_plan_video",
 };
 
 const ISSUE_KEY: Record<string, TranslationKey> = {

@@ -18,6 +18,7 @@ import {
   History,
   ImageOff,
   Loader2,
+  Lock,
   MoreHorizontal,
   Paperclip,
   Pause,
@@ -70,7 +71,10 @@ import {
 import { IconPickerMenu } from "@/components/ui/icon-picker";
 import { CoverPicker } from "./cover-picker";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
-import { unarchivePageTree, archivePageTree } from "@/lib/data/archive";
+import { unarchivePageTree, archivePageTree, planUnarchivePageTree } from "@/lib/data/archive";
+import { OPEN_GATE, usePlanGates } from "@/lib/plans/gates";
+import { notifyPlanError } from "@/lib/plans/client";
+import { GateTooltip, PlanLockBadge } from "@/components/plans/plan-lock";
 import { useLibrasStore } from "@/lib/store/libras-store";
 import { FlashcardsIcon } from "@/lib/icons/flashcard-icon";
 import { NoteFlashcardsModal } from "@/components/flashcards/note-flashcards-modal";
@@ -261,6 +265,8 @@ export function PageView({ pageId }: { pageId: string }) {
   const { adapter, pages, livePages, archivedPages, notebooks, databases, pageById, ready, flashcards, isPageArchived } = useWorkspace();
   const page = pageById(pageId);
   const isArchived = Boolean(page && isPageArchived(page.id));
+  const gates = usePlanGates();
+  const locked = isArchived || gates.readOnly;
   const importOrigin = page ? pageImportOrigin(page) : null;
   const [flashcardsModalOpen, setFlashcardsModalOpen] = useState(false);
   const noteFlashcardsCount = useMemo(
@@ -609,10 +615,12 @@ export function PageView({ pageId }: { pageId: string }) {
                   : t("file_attached")
         );
       } catch (error) {
-        toast.error(
-          localizeErrorMessage(error instanceof Error ? error.message : null, t) ||
-            t("file_attach_error")
-        );
+        if (!notifyPlanError(error)) {
+          toast.error(
+            localizeErrorMessage(error instanceof Error ? error.message : null, t) ||
+              t("file_attach_error")
+          );
+        }
       }
     }
   };
@@ -627,6 +635,14 @@ export function PageView({ pageId }: { pageId: string }) {
 
   const hasCover = Boolean(page.coverUrl);
   const showCoverHeader = hasCover && !isArchived;
+  const writeGate = isArchived ? OPEN_GATE : gates.write;
+  const newNoteTarget = gates.noteTarget(resolveNoteCreationTarget(`/home/p/${pageId}`, pages, databases));
+  const newNoteGate = isArchived ? OPEN_GATE : gates.newPage(newNoteTarget);
+  const subnoteGate = isArchived ? OPEN_GATE : gates.newPage({ notebookId: page.notebookId ?? null, parentPageId: pageId });
+  const archiveGate = isArchived
+    ? gates.archive(planUnarchivePageTree([...livePages, ...archivedPages], pageId))
+    : gates.archive(null);
+  const videoAllowed = gates.entitlements.features.video;
 
   return (
     <div
@@ -661,17 +677,18 @@ export function PageView({ pageId }: { pageId: string }) {
           />
         ) : null}
 
-        <Tooltip label={page.favorite ? t("unfavorite") : t("favorite")}>
+        <GateTooltip gate={gates.write} label={page.favorite ? t("unfavorite") : t("favorite")}>
           <Button
             variant="ghost"
             size="icon-sm"
+            disabled={!gates.write.allowed}
             className={showCoverHeader ? "text-white hover:bg-white/15 hover:text-white" : undefined}
             onClick={() => adapter.updatePage(pageId, { favorite: !page.favorite })}
             aria-label={t("favorite")}
           >
             <Star className={cn(page.favorite && "fill-[var(--warning)] text-[var(--warning)]")} />
           </Button>
-        </Tooltip>
+        </GateTooltip>
 
         <Tooltip label={t("flashcards")}>
           <Button
@@ -774,9 +791,9 @@ export function PageView({ pageId }: { pageId: string }) {
           </MenuTrigger>
           <MenuContent align="end">
             <MenuItem
-              disabled={isArchived}
+              disabled={isArchived || !newNoteGate.allowed}
               onSelect={async () => {
-                const target = resolveNoteCreationTarget(`/home/p/${pageId}`, pages, databases);
+                const target = newNoteTarget;
                 const newPage = await adapter.createPage({
                   notebookId: target.notebookId,
                   parentPageId: target.parentPageId,
@@ -787,6 +804,7 @@ export function PageView({ pageId }: { pageId: string }) {
               }}
             >
               <FilePlus /> {t("new_note")}
+              <PlanLockBadge gate={newNoteGate} />
             </MenuItem>
             {libras ? (
               <MenuItem onSelect={handleInterpretLibras}>
@@ -798,8 +816,9 @@ export function PageView({ pageId }: { pageId: string }) {
                 <Volume2 /> {narrating ? t("stop_reading") : t("read_note_aloud")}
               </MenuItem>
             ) : null}
-            <MenuItem onSelect={() => fileInput.current?.click()} disabled={isArchived}>
+            <MenuItem onSelect={() => fileInput.current?.click()} disabled={locked}>
               <Paperclip /> {t("attach_file")}
+              <PlanLockBadge gate={writeGate} />
             </MenuItem>
             <MenuItem
               onSelect={() => {
@@ -809,27 +828,30 @@ export function PageView({ pageId }: { pageId: string }) {
               <FlashcardsIcon /> {t("flashcards")}
             </MenuItem>
             <MenuItem
-              disabled={isArchived}
+              disabled={locked}
               onSelect={(event) => {
                 event.preventDefault();
                 setAudioOpen(true);
               }}
             >
               <AudioLines /> {t("record_audio")}
+              <PlanLockBadge gate={writeGate} />
             </MenuItem>
             {hasCover ? (
               <MenuItem
-                disabled={isArchived}
+                disabled={locked}
                 onSelect={async () => {
                   await adapter.updatePage(pageId, { coverUrl: null });
                   toast.success(t("remove_cover"));
                 }}
               >
                 <ImageOff /> {t("remove_cover")}
+                <PlanLockBadge gate={writeGate} />
               </MenuItem>
             ) : null}
             <MenuSeparator />
             <MenuItem
+              disabled={!gates.write.allowed}
               onSelect={async () => {
                 await flushNow();
                 await adapter.snapshotVersion(pageId, MANUAL_VERSION_LABEL);
@@ -837,6 +859,7 @@ export function PageView({ pageId }: { pageId: string }) {
               }}
             >
               <Clock /> {t("save_version")}
+              <PlanLockBadge gate={gates.write} />
             </MenuItem>
             <MenuItem
               onSelect={async () => {
@@ -846,23 +869,23 @@ export function PageView({ pageId }: { pageId: string }) {
             >
               <History /> {t("history_versions")}
             </MenuItem>
-            <MenuItem
-              onSelect={async () => {
+            <PageDuplicateItem
+              pageId={pageId}
+              onDuplicate={async () => {
                 try {
                   await flushNow();
                   const copy = await adapter.duplicatePage(pageId);
                   toast.success(t("note_duplicated"));
                   useUiStore.getState().closeMenu();
                   router.push(`/home/p/${copy.id}`);
-                } catch {
-                  toast.error(t("could_not_duplicate"));
+                } catch (error) {
+                  if (!notifyPlanError(error)) toast.error(t("could_not_duplicate"));
                 }
               }}
-            >
-              <Copy /> {t("duplicate_note")}
-            </MenuItem>
-            <MenuItem onSelect={() => setMoveOpen(true)} disabled={isArchived}>
+            />
+            <MenuItem onSelect={() => setMoveOpen(true)} disabled={locked}>
               <FolderInput /> {t("move_to")}
+              <PlanLockBadge gate={writeGate} />
             </MenuItem>
             <MenuItem
               disabled={exportingPdf}
@@ -871,6 +894,7 @@ export function PageView({ pageId }: { pageId: string }) {
               <FileDown /> {t("export_pdf")}
             </MenuItem>
             <MenuItem
+              disabled={!archiveGate.allowed}
               onSelect={async () => {
                 if (isArchived) {
                   await unarchivePageTree(
@@ -892,6 +916,7 @@ export function PageView({ pageId }: { pageId: string }) {
             >
               {isArchived ? <RotateCcw /> : <Archive />}
               {isArchived ? t("unarchive") : t("archive")}
+              <PlanLockBadge gate={archiveGate} />
             </MenuItem>
             <MenuSeparator />
             <MenuItem
@@ -915,22 +940,25 @@ export function PageView({ pageId }: { pageId: string }) {
               <Archive className="size-4 shrink-0 text-[var(--archive-banner-icon)]" />
               <span>{t("archived_notice_note")}</span>
             </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={async () => {
-                await unarchivePageTree(
-                  adapter,
-                  [...livePages, ...archivedPages],
-                  pageId
-                );
-                toast.success(t("page_unarchived"));
-              }}
-              className="h-7 text-xs bg-[var(--archive-btn-bg)] border border-[var(--archive-btn-border)] text-[var(--archive-btn-text)] hover:bg-[var(--archive-btn-hover)] shadow-xs transition-colors"
-            >
-              <RotateCcw className="mr-1.5 size-3" />
-              {t("unarchive")}
-            </Button>
+            <GateTooltip gate={archiveGate}>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!archiveGate.allowed}
+                onClick={async () => {
+                  await unarchivePageTree(
+                    adapter,
+                    [...livePages, ...archivedPages],
+                    pageId
+                  );
+                  toast.success(t("page_unarchived"));
+                }}
+                className="h-7 text-xs bg-[var(--archive-btn-bg)] border border-[var(--archive-btn-border)] text-[var(--archive-btn-text)] hover:bg-[var(--archive-btn-hover)] shadow-xs transition-colors"
+              >
+                {archiveGate.allowed ? <RotateCcw className="mr-1.5 size-3" /> : <Lock className="mr-1.5 size-3" />}
+                {t("unarchive")}
+              </Button>
+            </GateTooltip>
           </div>
         </div>
       ) : null}
@@ -938,7 +966,7 @@ export function PageView({ pageId }: { pageId: string }) {
       <CoverPicker
         coverUrl={page.coverUrl}
         coverPosition={page.coverPosition}
-        readOnly={isArchived}
+        readOnly={locked}
         onChange={(coverUrl) => adapter.updatePage(pageId, { coverUrl })}
         onPositionChange={(pos) => adapter.updatePage(pageId, { coverPosition: pos })}
         onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
@@ -975,14 +1003,15 @@ export function PageView({ pageId }: { pageId: string }) {
             trigger={
               <button
                 type="button"
-                disabled={isArchived}
+                disabled={locked}
+                title={writeGate.reason ?? undefined}
                 className={cn(
                   "shrink-0 self-start sm:self-center leading-none transition",
                   isIconUrl(page.icon ?? "") ? "rounded-[22px] sm:rounded-[28px]" : "rounded-[10px]",
-                  !hasCover && !isArchived && "hover:bg-[var(--surface-hover)]",
-                  isArchived && "cursor-default"
+                  !hasCover && !locked && "hover:bg-[var(--surface-hover)]",
+                  locked && "cursor-default"
                 )}
-                aria-label={isArchived ? undefined : t("page_icon")}
+                aria-label={locked ? undefined : t("page_icon")}
               >
                 <WorkspaceIcon
                   icon={page.icon}
@@ -1006,7 +1035,7 @@ export function PageView({ pageId }: { pageId: string }) {
               id="page-title-input"
               aria-label={page.title ? t("page_title_label", { title: page.title }) : t("untitled")}
               value={title}
-              disabled={isArchived}
+              disabled={locked}
               rows={1}
               cols={1}
               placeholder={t("untitled")}
@@ -1038,15 +1067,17 @@ export function PageView({ pageId }: { pageId: string }) {
               className="group/tag inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-muted"
             >
               {tag}
-              <button
-                onClick={() =>
-                  adapter.updatePage(pageId, { tags: page.tags.filter((t) => t !== tag) })
-                }
-                className="opacity-0 transition group-hover/tag:opacity-100"
-                aria-label={t("remove_tag_label", { tag })}
-              >
-                <X className="size-2.5" />
-              </button>
+              {locked ? null : (
+                <button
+                  onClick={() =>
+                    adapter.updatePage(pageId, { tags: page.tags.filter((t) => t !== tag) })
+                  }
+                  className="opacity-0 transition group-hover/tag:opacity-100"
+                  aria-label={t("remove_tag_label", { tag })}
+                >
+                  <X className="size-2.5" />
+                </button>
+              )}
             </span>
           ))}
           {showTagInput ? (
@@ -1063,12 +1094,16 @@ export function PageView({ pageId }: { pageId: string }) {
         className="h-7 w-32 text-[11px]"
             />
           ) : (
-            <button
-              onClick={() => setShowTagInput(true)}
-              className="rounded-full border border-dashed border-[var(--border)] px-2 py-0.5 text-[11px] text-faint transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
-            >
-              {t("add_tag")}
-            </button>
+            <GateTooltip gate={writeGate}>
+              <button
+                onClick={() => setShowTagInput(true)}
+                disabled={locked}
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-[var(--border)] px-2 py-0.5 text-[11px] text-faint transition hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:pointer-events-none disabled:opacity-50"
+              >
+                {writeGate.allowed ? null : <Lock className="size-2.5" />}
+                {t("add_tag")}
+              </button>
+            </GateTooltip>
           )}
           {importOrigin ? (
             <Badge tone="accent">{t(IMPORT_ORIGIN_BADGE_KEY[importOrigin])}</Badge>
@@ -1083,7 +1118,7 @@ export function PageView({ pageId }: { pageId: string }) {
           <BlockEditor
             key={`${page.id}-${editorKey}`}
             page={page}
-            editable={!isArchived}
+            editable={!locked}
             mentionCandidates={mentionCandidates}
             onChange={handleEditorChange}
             onRequestUpload={() => fileInput.current?.click()}
@@ -1126,15 +1161,18 @@ export function PageView({ pageId }: { pageId: string }) {
                   direction={subnotesSortDirection}
                 />
               ) : null}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => void createSubnote()}
-                className="h-7 gap-1 px-2 text-[11.5px] text-muted hover:text-ink"
-              >
-                <Plus className="size-3.5" />
-                {t("new_subpage")}
-              </Button>
+              <GateTooltip gate={subnoteGate}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={isArchived || !subnoteGate.allowed}
+                  onClick={() => void createSubnote()}
+                  className="h-7 gap-1 px-2 text-[11.5px] text-muted hover:text-ink"
+                >
+                  {subnoteGate.allowed ? <Plus className="size-3.5" /> : <Lock className="size-3.5" />}
+                  {t("new_subpage")}
+                </Button>
+              </GateTooltip>
             </div>
           </div>
 
@@ -1161,26 +1199,18 @@ export function PageView({ pageId }: { pageId: string }) {
                     </div>
                   </Link>
                   <div className="flex items-center opacity-0 transition-opacity group-hover:opacity-100">
-                    <Tooltip label={t("duplicate_note")}>
-                      <button
-                        type="button"
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          try {
-                            const copy = await adapter.duplicatePage(subnote.id);
-                            toast.success(t("note_duplicated"));
-                            router.push(`/home/p/${copy.id}`);
-                          } catch {
-                            toast.error(t("could_not_duplicate"));
-                          }
-                        }}
-                        className="rounded p-1 text-faint hover:text-ink"
-                        aria-label={t("duplicate_note")}
-                      >
-                        <Copy className="size-3.5" />
-                      </button>
-                    </Tooltip>
+                    <SubnoteDuplicateButton
+                      pageId={subnote.id}
+                      onDuplicate={async () => {
+                        try {
+                          const copy = await adapter.duplicatePage(subnote.id);
+                          toast.success(t("note_duplicated"));
+                          router.push(`/home/p/${copy.id}`);
+                        } catch (error) {
+                          if (!notifyPlanError(error)) toast.error(t("could_not_duplicate"));
+                        }
+                      }}
+                    />
                     <Tooltip label={t("delete_page")}>
                       <button
                         type="button"
@@ -1201,14 +1231,20 @@ export function PageView({ pageId }: { pageId: string }) {
               ))}
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => void createSubnote()}
-              className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-[var(--border)] py-4 text-[12.5px] text-muted transition hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-ink"
-            >
-              <Plus className="size-4" />
-              <span>{t("create_first_subnote")}</span>
-            </button>
+            <>
+              <button
+                type="button"
+                disabled={isArchived || !subnoteGate.allowed}
+                onClick={() => void createSubnote()}
+                className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-[var(--border)] py-4 text-[12.5px] text-muted transition hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-ink disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-[var(--border)] disabled:hover:bg-transparent disabled:hover:text-muted"
+              >
+                {subnoteGate.allowed ? <Plus className="size-4" /> : <Lock className="size-4" />}
+                <span>{t("create_first_subnote")}</span>
+              </button>
+              {subnoteGate.reason ? (
+                <p className="mt-2 text-center text-[11.5px] text-faint">{subnoteGate.reason}</p>
+              ) : null}
+            </>
           )}
         </div>
 
@@ -1282,6 +1318,8 @@ export function PageView({ pageId }: { pageId: string }) {
                     variant="ghost"
                     size="icon-sm"
                     aria-label={t("undo")}
+                    disabled={locked}
+                    title={writeGate.reason ?? undefined}
                     onClick={async () => {
                       const saved = await flushNow();
                       if (!saved) {
@@ -1293,10 +1331,12 @@ export function PageView({ pageId }: { pageId: string }) {
                         await adapter.snapshotVersion(pageId);
                         await adapter.restoreVersion(pageId, version.id);
                       } catch (error) {
-                        toast.error(
-                          localizeErrorMessage(error instanceof Error ? error.message : null, t) ||
-                            t("page_save_error")
-                        );
+                        if (!notifyPlanError(error)) {
+                          toast.error(
+                            localizeErrorMessage(error instanceof Error ? error.message : null, t) ||
+                              t("page_save_error")
+                          );
+                        }
                         return;
                       }
                       discardPending();
@@ -1322,7 +1362,7 @@ export function PageView({ pageId }: { pageId: string }) {
       <input
         ref={fileInput}
         type="file"
-        accept="image/*,application/pdf,audio/*,video/*,.mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,.opus,.wma,.webm,.weba,.mp4,.m4v,.mov,.mkv,.avi,.3gp,.ogv"
+        accept={videoAllowed ? ATTACH_ACCEPT_WITH_VIDEO : ATTACH_ACCEPT}
         multiple
         hidden
         onChange={async (event) => {
@@ -1356,6 +1396,42 @@ export function PageView({ pageId }: { pageId: string }) {
         />
       ) : null}
     </div>
+  );
+}
+
+const ATTACH_ACCEPT = "image/*,application/pdf,audio/*,.mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,.opus,.wma,.webm,.weba";
+const ATTACH_ACCEPT_WITH_VIDEO = `${ATTACH_ACCEPT},video/*,.mp4,.m4v,.mov,.mkv,.avi,.3gp,.ogv`;
+
+function PageDuplicateItem({ pageId, onDuplicate }: { pageId: string; onDuplicate: () => Promise<void> }) {
+  const { t } = useTranslation();
+  const gate = usePlanGates().duplicatePage(pageId);
+  return (
+    <MenuItem disabled={!gate.allowed} onSelect={() => void onDuplicate()}>
+      <Copy /> {t("duplicate_note")}
+      <PlanLockBadge gate={gate} />
+    </MenuItem>
+  );
+}
+
+function SubnoteDuplicateButton({ pageId, onDuplicate }: { pageId: string; onDuplicate: () => Promise<void> }) {
+  const { t } = useTranslation();
+  const gate = usePlanGates().duplicatePage(pageId);
+  return (
+    <GateTooltip gate={gate} label={t("duplicate_note")}>
+      <button
+        type="button"
+        disabled={!gate.allowed}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void onDuplicate();
+        }}
+        className="rounded p-1 text-faint hover:text-ink disabled:opacity-50"
+        aria-label={t("duplicate_note")}
+      >
+        {gate.allowed ? <Copy className="size-3.5" /> : <Lock className="size-3.5" />}
+      </button>
+    </GateTooltip>
   );
 }
 

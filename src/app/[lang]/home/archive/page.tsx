@@ -5,6 +5,7 @@ import {
   Archive,
   ArrowUpRight,
   Check,
+  Lock,
   RotateCcw,
   Search,
   Trash2,
@@ -18,7 +19,17 @@ import { EmptyState } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { useTranslation } from "@/lib/i18n/translations";
-import { unarchiveNotebookTree, unarchivePageTree } from "@/lib/data/archive";
+import {
+  planUnarchiveNotebookTree,
+  planUnarchivePageTree,
+  unarchiveNotebookTree,
+  unarchivePageTree,
+  type ArchivePlan,
+} from "@/lib/data/archive";
+import { usePlanGates, type PlanGate } from "@/lib/plans/gates";
+import { usePlanT } from "@/lib/plans/i18n";
+import { openPlanDialog } from "@/lib/plans/client";
+import { GateTooltip } from "@/components/plans/plan-lock";
 import type { Notebook, Page } from "@/types/models";
 
 type Filter = "all" | "pages" | "notebooks" | "notes";
@@ -34,12 +45,16 @@ interface ArchiveRow {
   href: string;
   badgeLabel: string;
   openLabel: string;
+  plan: ArchivePlan | null;
   unarchive: () => Promise<void>;
   trash: () => Promise<void>;
 }
 
 export default function ArchivePage() {
   const { t } = useTranslation();
+  const { tp } = usePlanT();
+  const gates = usePlanGates();
+  const archiveFeature = gates.feature("archive");
   const {
     archivedNotebooks,
     archivedPages,
@@ -92,6 +107,11 @@ export default function ArchivePage() {
         href: `/home/n/${nb.id}`,
         badgeLabel: isRootPage ? t("trash_kind_page") : t("trash_kind_notebook"),
         openLabel: isRootPage ? t("archived_open_page") : t("archived_open_notebook"),
+        plan: planUnarchiveNotebookTree(
+          [...notebooks, ...archivedNotebooks],
+          [...livePages, ...archivedPages],
+          nb.id
+        ),
         unarchive: async () => {
           const result = await unarchiveNotebookTree(
             adapter,
@@ -134,6 +154,7 @@ export default function ArchivePage() {
         href: `/home/p/${page.id}`,
         badgeLabel: isSubnote ? t("trash_kind_subnote") : t("trash_kind_note"),
         openLabel: t("archived_open_note"),
+        plan: planUnarchivePageTree([...livePages, ...archivedPages], page.id),
         unarchive: async () => {
           await unarchivePageTree(
             adapter,
@@ -156,6 +177,12 @@ export default function ArchivePage() {
 
     return out;
   }, [archivedNotebooks, archivedPages, notebooks, livePages, adapter, t, untitled]);
+
+  const unarchiveGates = useMemo(() => {
+    const map = new Map<string, PlanGate>();
+    for (const row of rows) map.set(row.key, gates.archive(row.plan));
+    return map;
+  }, [gates, rows]);
 
   const counts = useMemo(() => {
     let pagesCount = 0;
@@ -250,6 +277,21 @@ export default function ArchivePage() {
           </p>
         </div>
       </header>
+
+      {archiveFeature.allowed ? null : (
+        <div className="mt-5 flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-2)]/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <Lock className="mt-0.5 size-4 shrink-0 text-muted" />
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-ink">{tp("archive_locked_title")}</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{tp("archive_locked_body")}</p>
+            </div>
+          </div>
+          <Button variant="secondary" size="sm" className="w-full shrink-0 sm:w-auto" onClick={openPlanDialog}>
+            {tp("view_plans")}
+          </Button>
+        </div>
+      )}
 
       {rows.length > 0 ? (
         <>
@@ -386,23 +428,29 @@ export default function ArchivePage() {
                           <ArrowUpRight className="size-3.5 shrink-0 sm:size-3" />
                           <span className="truncate">{row.openLabel}</span>
                         </Link>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={busy === row.key}
-                          onClick={async () => {
-                            setBusy(row.key);
-                            try {
-                              await row.unarchive();
-                            } finally {
-                              setBusy(null);
-                            }
-                          }}
-                          className="h-8 flex-1 text-xs active:scale-[0.98] sm:h-7 sm:flex-initial sm:active:scale-100"
-                        >
-                          <RotateCcw className="mr-1 size-3.5 shrink-0 sm:size-3" />
-                          <span className="truncate">{t("unarchive")}</span>
-                        </Button>
+                        <GateTooltip gate={unarchiveGates.get(row.key) ?? archiveFeature}>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={busy === row.key || !(unarchiveGates.get(row.key) ?? archiveFeature).allowed}
+                            onClick={async () => {
+                              setBusy(row.key);
+                              try {
+                                await row.unarchive();
+                              } finally {
+                                setBusy(null);
+                              }
+                            }}
+                            className="h-8 flex-1 text-xs active:scale-[0.98] sm:h-7 sm:flex-initial sm:active:scale-100"
+                          >
+                            {(unarchiveGates.get(row.key) ?? archiveFeature).allowed ? (
+                              <RotateCcw className="mr-1 size-3.5 shrink-0 sm:size-3" />
+                            ) : (
+                              <Lock className="mr-1 size-3.5 shrink-0 sm:size-3" />
+                            )}
+                            <span className="truncate">{t("unarchive")}</span>
+                          </Button>
+                        </GateTooltip>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -479,11 +527,12 @@ export default function ArchivePage() {
             ) : null}
             <button
               type="button"
-              disabled={busy !== null}
+              disabled={busy !== null || !archiveFeature.allowed}
+              title={archiveFeature.reason ?? undefined}
               onClick={() => void runMany("unarchive")}
               className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-medium transition hover:bg-[color-mix(in_oklab,var(--surface)_14%,transparent)] disabled:opacity-50"
             >
-              <RotateCcw className="size-3.5" />
+              {archiveFeature.allowed ? <RotateCcw className="size-3.5" /> : <Lock className="size-3.5" />}
               <span className="hidden sm:inline">{t("unarchive")}</span>
             </button>
             <button

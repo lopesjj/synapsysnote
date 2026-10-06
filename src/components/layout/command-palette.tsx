@@ -19,6 +19,9 @@ import { useTranslation } from "@/lib/i18n/translations";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
 import { isNestedNotebook } from "@/lib/data/notebook-tree";
 import type { Notebook } from "@/types/models";
+import { OPEN_GATE, useGoalGates, usePlanGates } from "@/lib/plans/gates";
+import { notifyPlanError } from "@/lib/plans/client";
+import { PlanLockBadge } from "@/components/plans/plan-lock";
 
 export function CommandPalette({
   open,
@@ -54,6 +57,14 @@ export function CommandPalette({
 
   const { st } = useStudyT();
   const { focusPlan, planReadOnly } = useStudy();
+  const gates = usePlanGates();
+  const goalGates = useGoalGates();
+  const browsingArchived = planReadOnly && !gates.readOnly;
+  const noteTarget = gates.noteTarget(resolveNoteCreationTarget(pathname, livePages, databases));
+  const newNoteGate = gates.newPage(noteTarget);
+  const newRootGate = gates.newNotebook(null);
+  const duplicatePageGate = open && currentPageId ? gates.duplicatePage(currentPageId) : OPEN_GATE;
+  const duplicateNotebookGate = open && currentNotebookId ? gates.duplicateNotebook(currentNotebookId) : OPEN_GATE;
   const run = (action: () => void) => {
     onOpenChange(false);
     action();
@@ -321,43 +332,48 @@ export function CommandPalette({
                         <Command.Item
                           value="duplicate-note"
                           className={itemClass}
+                          disabled={!duplicatePageGate.allowed}
                           onSelect={async () => {
                             try {
                               const copy = await adapter.duplicatePage(currentPageId);
                               toast.success(t("note_duplicated"));
                               go(`/home/p/${copy.id}`);
-                            } catch {
-                              toast.error(t("could_not_duplicate"));
+                            } catch (error) {
+                              if (!notifyPlanError(error)) toast.error(t("could_not_duplicate"));
                             }
                           }}
                         >
                           <span className="flex-1 text-[13px] text-ink">{t("duplicate_note")}</span>
+                          <PlanLockBadge gate={duplicatePageGate} className="ml-0" />
                         </Command.Item>
                       ) : null}
                       {currentNotebookId ? (
                         <Command.Item
                           value="duplicate-notebook"
                           className={itemClass}
+                          disabled={!duplicateNotebookGate.allowed}
                           onSelect={async () => {
                             try {
                               const copy = await adapter.duplicateNotebook(currentNotebookId);
                               toast.success(t("notebook_duplicated"));
                               go(`/home/n/${copy.id}`);
-                            } catch {
-                              toast.error(t("could_not_duplicate"));
+                            } catch (error) {
+                              if (!notifyPlanError(error)) toast.error(t("could_not_duplicate"));
                             }
                           }}
                         >
                           <span className="flex-1 text-[13px] text-ink">
                             {t("duplicate_notebook")}
                           </span>
+                          <PlanLockBadge gate={duplicateNotebookGate} className="ml-0" />
                         </Command.Item>
                       ) : null}
                       <Command.Item
                         value="new-page"
                         className={itemClass}
+                        disabled={!newNoteGate.allowed}
                         onSelect={async () => {
-                          const target = resolveNoteCreationTarget(pathname, livePages, databases);
+                          const target = noteTarget;
                           const page = await adapter.createPage({
                             notebookId: target.notebookId,
                             parentPageId: target.parentPageId,
@@ -368,17 +384,20 @@ export function CommandPalette({
                         }}
                       >
                         <span className="flex-1 text-[13px] text-ink">{t("new_note")}</span>
+                        <PlanLockBadge gate={newNoteGate} className="ml-0" />
                         <Kbd>{isMac() ? "⌥N" : "Alt N"}</Kbd>
                       </Command.Item>
                       <Command.Item
                         value="new-notebook"
                         className={itemClass}
+                        disabled={!newRootGate.allowed}
                         onSelect={async () => {
                           const notebook = await adapter.createNotebook({ name: t("new_page") });
                           go(`/home/n/${notebook.id}`);
                         }}
                       >
                         <span className="flex-1 text-[13px] text-ink">{t("new_page")}</span>
+                        <PlanLockBadge gate={newRootGate} className="ml-0" />
                         <Kbd>{isMac() ? "⌥⇧N" : "Alt ⇧ N"}</Kbd>
                       </Command.Item>
                       <Command.Item
@@ -434,22 +453,26 @@ export function CommandPalette({
                       </Command.Item>
                     </Command.Group>
                     <Command.Group heading={<GroupLabel>{st("cmd_group")}</GroupLabel>}>
-                      {focusPlan && !planReadOnly ? (
+                      {focusPlan && !browsingArchived ? (
                         <Command.Item
                           value="study-log-session"
                           className={itemClass}
+                          disabled={!gates.write.allowed}
                           onSelect={() => run(() => useStudyUi.getState().openLog())}
                         >
                           <span className="flex-1 text-[13px] text-ink">{st("cmd_log_session")}</span>
+                          <PlanLockBadge gate={gates.write} className="ml-0" />
                         </Command.Item>
                       ) : null}
-                      {planReadOnly ? null : (
+                      {browsingArchived ? null : (
                         <Command.Item
                           value="study-focus"
                           className={itemClass}
+                          disabled={!gates.write.allowed}
                           onSelect={() => run(openBlankTimer)}
                         >
                           <span className="flex-1 text-[13px] text-ink">{st("cmd_start_focus")}</span>
+                          <PlanLockBadge gate={gates.write} className="ml-0" />
                         </Command.Item>
                       )}
                       <Command.Item value="study-overview" className={itemClass} onSelect={() => go("/home/study")}>
@@ -458,8 +481,14 @@ export function CommandPalette({
                       <Command.Item value="study-reviews" className={itemClass} onSelect={() => go("/home/study/reviews")}>
                         <span className="flex-1 text-[13px] text-ink">{st("cmd_reviews")}</span>
                       </Command.Item>
-                      <Command.Item value="study-new-goal" className={itemClass} onSelect={() => go("/home/study/goals/new")}>
+                      <Command.Item
+                        value="study-new-goal"
+                        className={itemClass}
+                        disabled={!goalGates.newGoal.allowed}
+                        onSelect={() => go("/home/study/goals/new")}
+                      >
                         <span className="flex-1 text-[13px] text-ink">{st("cmd_new_goal")}</span>
+                        <PlanLockBadge gate={goalGates.newGoal} className="ml-0" />
                       </Command.Item>
                       <Command.Item
                         value="study-scratchpad"
@@ -493,7 +522,7 @@ export function CommandPalette({
 
 const itemClass = cn(
   "flex cursor-pointer items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 py-2 transition-colors",
-  "data-[selected=true]:bg-[var(--surface-hover)]"
+  "data-[selected=true]:bg-[var(--surface-hover)] data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-50"
 );
 
 function GroupLabel({ children }: { children: React.ReactNode }) {

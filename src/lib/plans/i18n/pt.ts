@@ -145,6 +145,12 @@ export const pt = {
   admin_source_owner_env: "OWNER_EMAILS",
   admin_source_system: "Sistema",
   admin_never: "—",
+  lock_limit: "Limite do plano",
+  compare_trial_days: "{days} dias",
+  compare_choose: "Escolher",
+  upgrade_mail_body: "Olá! Quero mudar o plano da minha conta.\n\nConta: {email}\nPlano desejado: {plan}",
+  banner_plan_ending: "Seu plano {plan} vence em {days} {days|dia|dias}.",
+  banner_plan_last_day: "Seu plano {plan} vence hoje.",
 } as const;
 
 export type PlanStrings = Record<keyof typeof pt, string>;

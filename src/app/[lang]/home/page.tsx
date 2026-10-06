@@ -11,6 +11,7 @@ import {
   FileText,
   Flag,
   Layers,
+  Lock,
   NotebookText,
   Plus,
   RotateCcw,
@@ -49,6 +50,8 @@ import { TaskCheck, TaskDialog, type TaskDialogState } from "@/components/study/
 import type { DayKey, StudyReminder, StudyReview } from "@/types/study";
 import type { Notebook, Page } from "@/types/models";
 import { EDITORIAL_SERIF, SERIF_LANGUAGES } from "@/lib/typography";
+import { useGoalGates, usePlanGates, type PlanGate } from "@/lib/plans/gates";
+import { GateTooltip } from "@/components/plans/plan-lock";
 
 const SERIF = EDITORIAL_SERIF;
 const TILE = "rounded-[22px] bg-[var(--surface)] shadow-[0_0_0_1px_var(--border),0_1px_2px_rgba(15,44,76,0.04)]";
@@ -189,6 +192,9 @@ export default function WorkspaceHome() {
   const { t } = useTranslation();
   const { livePages, adapter, notebooks, notebookById, rootNotebooks, ready } = useWorkspace();
   const studyReady = useStudy().ready;
+  const gates = usePlanGates();
+  const newNoteGate = gates.newPage({ notebookId: null, parentPageId: null });
+  const newRootGate = gates.newNotebook(null);
 
   const recent = useMemo(() => [...livePages].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 10), [livePages]);
   const notebooksSort = useUiStore((state) => state.notebooksSort);
@@ -216,7 +222,7 @@ export default function WorkspaceHome() {
   return (
     <div className="mx-auto w-full max-w-[70rem] px-4 pb-20 pt-4 sm:px-6 sm:pt-6 lg:px-8 2xl:max-w-[78rem] 3xl:max-w-[92rem] 4xl:max-w-[104rem]">
       <Reveal>
-        <SkyHero onCreateNote={() => void createNote()} />
+        <SkyHero onCreateNote={() => void createNote()} noteGate={newNoteGate} />
       </Reveal>
 
       <div className="mt-11 space-y-12">
@@ -235,16 +241,23 @@ export default function WorkspaceHome() {
           <section aria-label={t("continue_where_left")}>
             <SectionTitle title={t("continue_where_left")} action={recent.length ? <QuietLink href="/home/notes">{t("view_all")}</QuietLink> : null} />
             {recent.length ? (
-              <PaperShelf pages={recent} notebookById={notebookById} onCreate={() => void createNote()} />
+              <PaperShelf
+                pages={recent}
+                notebookById={notebookById}
+                onCreate={() => void createNote()}
+                createGate={newNoteGate}
+              />
             ) : (
               <EmptyState
                 title={t("workspace_empty")}
                 description={t("workspace_empty_desc")}
                 action={
-                  <Button variant="primary" onClick={() => void createNote()}>
-                    <Plus />
-                    {t("create_note")}
-                  </Button>
+                  <GateTooltip gate={newNoteGate}>
+                    <Button variant="primary" onClick={() => void createNote()} disabled={!newNoteGate.allowed}>
+                      {newNoteGate.allowed ? <Plus /> : <Lock />}
+                      {t("create_note")}
+                    </Button>
+                  </GateTooltip>
                 }
               />
             )}
@@ -256,14 +269,17 @@ export default function WorkspaceHome() {
             <SectionTitle
               title={t("pages")}
               action={
-                <button
-                  type="button"
-                  onClick={() => void createRootPage()}
-                  className="inline-flex items-center gap-1 text-[13px] text-muted transition hover:text-ink"
-                >
-                  <Plus className="size-3.5" />
-                  {t("new_page")}
-                </button>
+                <GateTooltip gate={newRootGate}>
+                  <button
+                    type="button"
+                    onClick={() => void createRootPage()}
+                    disabled={!newRootGate.allowed}
+                    className="inline-flex items-center gap-1 text-[13px] text-muted transition hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {newRootGate.allowed ? <Plus className="size-3.5" /> : <Lock className="size-3.5" />}
+                    {t("new_page")}
+                  </button>
+                </GateTooltip>
               }
             />
             {sortedRootNotebooks.length ? (
@@ -276,10 +292,13 @@ export default function WorkspaceHome() {
               <button
                 type="button"
                 onClick={() => void createRootPage()}
-                className="flex h-36 w-full flex-col items-center justify-center gap-1.5 rounded-[20px] border border-dashed border-[var(--border-strong)] text-[13px] text-muted transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                disabled={!newRootGate.allowed}
+                title={newRootGate.reason ?? undefined}
+                className="flex h-36 w-full flex-col items-center justify-center gap-1.5 rounded-[20px] border border-dashed border-[var(--border-strong)] text-[13px] text-muted transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-[var(--border-strong)] disabled:hover:bg-transparent disabled:hover:text-muted"
               >
-                <Plus className="size-[18px]" />
+                {newRootGate.allowed ? <Plus className="size-[18px]" /> : <Lock className="size-[18px]" />}
                 {t("new_page")}
+                {newRootGate.reason ? <span className="max-w-xs px-4 text-center text-[11.5px] text-faint">{newRootGate.reason}</span> : null}
               </button>
             )}
           </section>
@@ -289,7 +308,7 @@ export default function WorkspaceHome() {
   );
 }
 
-function SkyHero({ onCreateNote }: { onCreateNote: () => void }) {
+function SkyHero({ onCreateNote, noteGate }: { onCreateNote: () => void; noteGate: PlanGate }) {
   const { user } = useAuth();
   const { t, textDir, language } = useTranslation();
   const { st, locale } = useStudyT();
@@ -366,9 +385,11 @@ function SkyHero({ onCreateNote }: { onCreateNote: () => void }) {
         <button
           type="button"
           onClick={onCreateNote}
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 self-start rounded-full bg-[var(--sky-cta-bg)] px-4 text-[13px] font-semibold text-[var(--sky-cta-fg)] shadow-[0_6px_18px_-8px_rgba(4,10,20,0.45)] transition hover:-translate-y-px active:translate-y-0 @3xl:self-end"
+          disabled={!noteGate.allowed}
+          title={noteGate.reason ?? undefined}
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 self-start rounded-full bg-[var(--sky-cta-bg)] px-4 text-[13px] font-semibold text-[var(--sky-cta-fg)] shadow-[0_6px_18px_-8px_rgba(4,10,20,0.45)] transition hover:-translate-y-px active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 @3xl:self-end"
         >
-          <Plus className="size-4" />
+          {noteGate.allowed ? <Plus className="size-4" /> : <Lock className="size-4" />}
           {t("new_note")}
         </button>
       </div>
@@ -514,10 +535,12 @@ function PaperShelf({
   pages,
   notebookById,
   onCreate,
+  createGate,
 }: {
   pages: Page[];
   notebookById: (id: string) => Notebook | undefined;
   onCreate: () => void;
+  createGate: PlanGate;
 }) {
   const { t } = useTranslation();
   const scroller = useRef<HTMLDivElement>(null);
@@ -561,12 +584,15 @@ function PaperShelf({
         <button
           type="button"
           onClick={onCreate}
-          className="flex h-[14.5rem] w-[11.25rem] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-[18px] border border-dashed border-[var(--border-strong)] text-[13px] text-muted transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+          disabled={!createGate.allowed}
+          title={createGate.reason ?? undefined}
+          className="flex h-[14.5rem] w-[11.25rem] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-[18px] border border-dashed border-[var(--border-strong)] px-3 text-center text-[13px] text-muted transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-[var(--border-strong)] disabled:hover:bg-transparent disabled:hover:text-muted"
         >
           <span className="flex size-9 items-center justify-center rounded-full bg-[var(--surface)] shadow-[0_0_0_1px_var(--border)]">
-            <Plus className="size-4" />
+            {createGate.allowed ? <Plus className="size-4" /> : <Lock className="size-4" />}
           </span>
           {t("new_note")}
+          {createGate.reason ? <span className="text-[11px] leading-snug text-faint">{createGate.reason}</span> : null}
         </button>
       </div>
       {edges.start ? <ShelfArrow side="start" onClick={() => move(-1)} /> : null}
@@ -786,6 +812,7 @@ function WeekStrip({ selected, onSelect }: { selected: DayKey; onSelect: (day: D
 
 function StudyOverview() {
   const router = useRouter();
+  const goalGates = useGoalGates();
   const { st } = useStudyT();
   const study = useStudy();
   const plan = study.focusPlan;
@@ -809,9 +836,17 @@ function StudyOverview() {
             <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-muted">{st("home_study_intro_desc")}</p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-1.5">
-            <Button variant="primary" size="sm" onClick={() => router.push("/home/study/goals/new")}>
-              {st("home_study_intro_cta")}
-            </Button>
+            <GateTooltip gate={goalGates.newGoal}>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!goalGates.newGoal.allowed}
+                onClick={() => router.push("/home/study/goals/new")}
+              >
+                {goalGates.newGoal.allowed ? null : <Lock />}
+                {st("home_study_intro_cta")}
+              </Button>
+            </GateTooltip>
             <Button variant="ghost" size="sm" onClick={openBlankTimer}>
               <Timer />
               {st("home_quick_focus")}

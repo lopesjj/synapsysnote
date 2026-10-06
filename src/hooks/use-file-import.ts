@@ -14,6 +14,7 @@ import {
   useBackgroundImportStore,
   type BackgroundImportRun,
 } from "@/lib/import/background-import-store";
+import { currentEntitlements } from "@/lib/plans/client";
 
 export interface FileImportIssue {
   id: string;
@@ -181,6 +182,7 @@ export function useFileImport(provider: ImportProvider, fallbackTitle: string) {
                 keepTags: options.keepTags,
                 fallbackTitle,
                 provider: jobProvider,
+                allowVideo: currentEntitlements().features.video,
                 containerEmoji: "📓",
                 existingNotebooks: notebooks,
                 isCanceled,
@@ -208,6 +210,7 @@ export function useFileImport(provider: ImportProvider, fallbackTitle: string) {
               keepTags: options.keepTags,
               fallbackTitle,
               provider: jobProvider,
+              allowVideo: currentEntitlements().features.video,
               isCanceled,
               onNoteStart: (index, note) => {
                 patch({ processedNotes: index, currentTitle: note.title });

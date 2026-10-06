@@ -206,8 +206,6 @@ export type TranslationKey =
   | "change_password"
   | "integrations"
   | "open_account_menu"
-  | "guest"
-  | "plan_pro"
   | "attachment"
   | "download"
   | "drag_block"
@@ -1035,6 +1033,7 @@ export type TranslationKey =
   | "fimp_warnings_title"
   | "fimp_warning_encrypted_content"
   | "fimp_warning_missing_asset"
+  | "fimp_warning_plan_video"
   | "fimp_warning_remote_asset"
   | "fimp_warning_nested_table"
   | "fimp_warning_unsupported_content"
@@ -1154,7 +1153,6 @@ export type TranslationKey =
   | "google_token_invalid"
   | "google_scope_missing"
   | "note_too_large"
-  | "plan_free"
   | "notebook_restored"
   | "purge_confirm"
   | "notebook_trash_contents"
@@ -1446,6 +1444,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     fimp_warnings_title: "Avisos",
     fimp_warning_encrypted_content: "Trechos criptografados do Evernote não puderam ser lidos.",
     fimp_warning_missing_asset: "Alguns anexos não foram encontrados no arquivo.",
+    fimp_warning_plan_video: "Os vídeos não foram importados: a inserção de vídeos está disponível nos planos Pro e Ultra.",
     fimp_warning_remote_asset: "Imagens hospedadas fora do arquivo foram mantidas como link.",
     fimp_warning_nested_table: "Tabelas dentro de tabelas viraram texto.",
     fimp_warning_unsupported_content: "Alguns trechos não têm equivalente no editor e foram simplificados.",
@@ -2121,8 +2120,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_password: "Alterar senha",
     integrations: "Integrações",
     open_account_menu: "Abrir menu da conta",
-    guest: "Convidado",
-    plan_pro: "Pro",
     attachment: "Anexo",
     download: "Baixar",
     drag_block: "Arrastar bloco",
@@ -2523,7 +2520,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     google_token_invalid: "O Google não confirmou o acesso. Tente conectar de novo.",
     google_scope_missing: "Na tela do Google, permita o acesso aos documentos para poder importar.",
     note_too_large: "Esta nota ficou grande demais para salvar. Divida o conteúdo em subnotas ou anexe arquivos em vez de colar mídia.",
-    plan_free: "Plano gratuito",
     notebook_restored: "Caderno restaurado",
     purge_confirm: "Excluir “{name}” definitivamente? Esta ação não pode ser desfeita.",
     notebook_trash_contents: "{count} {count|item foi junto|itens foram juntos}",
@@ -2777,6 +2773,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     fimp_warnings_title: "Warnings",
     fimp_warning_encrypted_content: "Encrypted Evernote sections could not be read.",
     fimp_warning_missing_asset: "Some attachments were missing from the file.",
+    fimp_warning_plan_video: "Videos were not imported: adding videos is available on the Pro and Ultra plans.",
     fimp_warning_remote_asset: "Images hosted outside the file were kept as links.",
     fimp_warning_nested_table: "Tables inside tables were converted to text.",
     fimp_warning_unsupported_content: "Some parts have no equivalent in the editor and were simplified.",
@@ -3452,8 +3449,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_password: "Change password",
     integrations: "Integrations",
     open_account_menu: "Open account menu",
-    guest: "Guest",
-    plan_pro: "Pro",
     attachment: "Attachment",
     download: "Download",
     drag_block: "Drag block",
@@ -3854,7 +3849,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     google_token_invalid: "Google didn’t confirm the access. Please try connecting again.",
     google_scope_missing: "On the Google screen, allow access to your documents to be able to import.",
     note_too_large: "This note is too large to save. Split the content into subnotes or attach files instead of pasting media.",
-    plan_free: "Free plan",
     notebook_restored: "Notebook restored",
     purge_confirm: "Delete “{name}” permanently? This can’t be undone.",
     notebook_trash_contents: "{count} {count|item went with it|items went with it}",
@@ -4109,6 +4103,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     fimp_warnings_title: "Avisos",
     fimp_warning_encrypted_content: "No se pudieron leer las secciones cifradas de Evernote.",
     fimp_warning_missing_asset: "Faltaban algunos adjuntos en el archivo.",
+    fimp_warning_plan_video: "Los videos no se importaron: añadir videos está disponible en los planes Pro y Ultra.",
     fimp_warning_remote_asset: "Las imágenes alojadas fuera del archivo se mantuvieron como enlaces.",
     fimp_warning_nested_table: "Las tablas dentro de tablas se convirtieron en texto.",
     fimp_warning_unsupported_content: "Algunas partes no tienen equivalente en el editor y se simplificaron.",
@@ -4784,8 +4779,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_password: "Cambiar contraseña",
     integrations: "Integraciones",
     open_account_menu: "Abrir menú de cuenta",
-    guest: "Invitado",
-    plan_pro: "Pro",
     attachment: "Adjunto",
     download: "Descargar",
     drag_block: "Arrastrar bloque",
@@ -5186,7 +5179,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     google_token_invalid: "Google no confirmó el acceso. Intenta conectar de nuevo.",
     google_scope_missing: "En la pantalla de Google, permite el acceso a los documentos para poder importar.",
     note_too_large: "Esta nota es demasiado grande para guardarse. Divide el contenido en subnotas o adjunta archivos en lugar de pegar medios.",
-    plan_free: "Plan gratuito",
     notebook_restored: "Cuaderno restaurado",
     purge_confirm: "¿Eliminar “{name}” definitivamente? Esta acción no se puede deshacer.",
     notebook_trash_contents: "{count} {count|elemento fue con él|elementos fueron con él}",
@@ -5441,6 +5433,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     fimp_warnings_title: "Avertissements",
     fimp_warning_encrypted_content: "Les passages chiffrés d'Evernote n'ont pas pu être lus.",
     fimp_warning_missing_asset: "Certaines pièces jointes sont absentes du fichier.",
+    fimp_warning_plan_video: "Les vidéos n'ont pas été importées : l'ajout de vidéos est disponible avec les formules Pro et Ultra.",
     fimp_warning_remote_asset: "Les images hébergées hors du fichier ont été conservées sous forme de liens.",
     fimp_warning_nested_table: "Les tableaux imbriqués ont été convertis en texte.",
     fimp_warning_unsupported_content: "Certains éléments n'ont pas d'équivalent dans l'éditeur et ont été simplifiés.",
@@ -6116,8 +6109,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_password: "Changer le mot de passe",
     integrations: "Intégrations",
     open_account_menu: "Ouvrir le menu du compte",
-    guest: "Invité",
-    plan_pro: "Pro",
     attachment: "Pièce jointe",
     download: "Télécharger",
     drag_block: "Glisser le bloc",
@@ -6518,7 +6509,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     google_token_invalid: "Google n’a pas confirmé l’accès. Essayez de vous reconnecter.",
     google_scope_missing: "Sur l’écran de Google, autorisez l’accès aux documents pour pouvoir importer.",
     note_too_large: "Cette note est trop volumineuse pour être enregistrée. Répartissez le contenu en sous-notes ou joignez des fichiers au lieu de coller des médias.",
-    plan_free: "Formule gratuite",
     notebook_restored: "Carnet restauré",
     purge_confirm: "Supprimer « {name} » définitivement ? Cette action est irréversible.",
     notebook_trash_contents: "{count} {count|élément inclus|éléments inclus}",
@@ -6773,6 +6763,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     fimp_warnings_title: "Avvisi",
     fimp_warning_encrypted_content: "Non è stato possibile leggere le parti cifrate di Evernote.",
     fimp_warning_missing_asset: "Alcuni allegati non erano presenti nel file.",
+    fimp_warning_plan_video: "I video non sono stati importati: l'inserimento di video è disponibile nei piani Pro e Ultra.",
     fimp_warning_remote_asset: "Le immagini ospitate fuori dal file sono state mantenute come link.",
     fimp_warning_nested_table: "Le tabelle annidate sono state convertite in testo.",
     fimp_warning_unsupported_content: "Alcune parti non hanno un equivalente nell'editor e sono state semplificate.",
@@ -7448,8 +7439,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_password: "Cambia password",
     integrations: "Integrazioni",
     open_account_menu: "Apri menu account",
-    guest: "Ospite",
-    plan_pro: "Pro",
     attachment: "Allegato",
     download: "Scarica",
     drag_block: "Trascina blocco",
@@ -7850,7 +7839,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     google_token_invalid: "Google non ha confermato l’accesso. Prova a collegarti di nuovo.",
     google_scope_missing: "Nella schermata di Google, consenti l’accesso ai documenti per poter importare.",
     note_too_large: "Questa nota è troppo grande per essere salvata. Dividi il contenuto in sottonote o allega file invece di incollare media.",
-    plan_free: "Piano gratuito",
     notebook_restored: "Quaderno ripristinato",
     purge_confirm: "Eliminare “{name}” definitivamente? Questa azione non può essere annullata.",
     notebook_trash_contents: "{count} {count|elemento incluso|elementi inclusi}",
@@ -8105,6 +8093,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     fimp_warnings_title: "Hinweise",
     fimp_warning_encrypted_content: "Verschlüsselte Evernote-Abschnitte konnten nicht gelesen werden.",
     fimp_warning_missing_asset: "Einige Anhänge fehlten in der Datei.",
+    fimp_warning_plan_video: "Videos wurden nicht importiert: Videos hinzufügen ist in den Tarifen Pro und Ultra verfügbar.",
     fimp_warning_remote_asset: "Bilder außerhalb der Datei wurden als Links übernommen.",
     fimp_warning_nested_table: "Verschachtelte Tabellen wurden in Text umgewandelt.",
     fimp_warning_unsupported_content: "Einige Teile haben im Editor keine Entsprechung und wurden vereinfacht.",
@@ -8780,8 +8769,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_password: "Passwort ändern",
     integrations: "Integrationen",
     open_account_menu: "Kontomenü öffnen",
-    guest: "Gast",
-    plan_pro: "Pro",
     attachment: "Anhang",
     download: "Herunterladen",
     drag_block: "Block ziehen",
@@ -9182,7 +9169,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     google_token_invalid: "Google hat den Zugriff nicht bestätigt. Versuche es erneut.",
     google_scope_missing: "Erlaube auf der Google-Seite den Zugriff auf die Dokumente, um importieren zu können.",
     note_too_large: "Diese Notiz ist zu groß zum Speichern. Teile den Inhalt in Unternotizen auf oder hänge Dateien an, statt Medien einzufügen.",
-    plan_free: "Kostenloser Tarif",
     notebook_restored: "Notizbuch wiederhergestellt",
     purge_confirm: "„{name}“ endgültig löschen? Das kann nicht rückgängig gemacht werden.",
     notebook_trash_contents: "{count} {count|Element enthalten|Elemente enthalten}",
@@ -9437,6 +9423,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     fimp_warnings_title: "Предупреждения",
     fimp_warning_encrypted_content: "Зашифрованные фрагменты Evernote не удалось прочитать.",
     fimp_warning_missing_asset: "Некоторых вложений не оказалось в файле.",
+    fimp_warning_plan_video: "Видео не импортированы: добавление видео доступно в тарифах Про и Ультра.",
     fimp_warning_remote_asset: "Изображения вне файла сохранены в виде ссылок.",
     fimp_warning_nested_table: "Вложенные таблицы преобразованы в текст.",
     fimp_warning_unsupported_content: "Некоторые фрагменты не имеют аналога в редакторе и были упрощены.",
@@ -10112,8 +10099,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_password: "Сменить пароль",
     integrations: "Интеграции",
     open_account_menu: "Открыть меню аккаунта",
-    guest: "Гость",
-    plan_pro: "Про",
     attachment: "Вложение",
     download: "Скачать",
     drag_block: "Перетащить блок",
@@ -10514,7 +10499,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     google_token_invalid: "Google не подтвердил доступ. Попробуйте подключиться снова.",
     google_scope_missing: "На экране Google разрешите доступ к документам, чтобы импортировать их.",
     note_too_large: "Заметка слишком большая для сохранения. Разделите содержимое на подзаметки или прикрепляйте файлы вместо вставки медиа.",
-    plan_free: "Бесплатный тариф",
     notebook_restored: "Блокнот восстановлен",
     purge_confirm: "Удалить «{name}» навсегда? Это действие нельзя отменить.",
     notebook_trash_contents: "{count} {count|элемент внутри|элемента внутри|элементов внутри}",
@@ -10769,6 +10753,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     fimp_warnings_title: "注意",
     fimp_warning_encrypted_content: "Evernote の暗号化された部分は読み取れませんでした。",
     fimp_warning_missing_asset: "一部の添付ファイルが見つかりませんでした。",
+    fimp_warning_plan_video: "動画はインポートされませんでした。動画の挿入はプロとウルトラのプランで利用できます。",
     fimp_warning_remote_asset: "ファイル外にある画像はリンクのまま取り込みました。",
     fimp_warning_nested_table: "入れ子のテーブルはテキストに変換しました。",
     fimp_warning_unsupported_content: "エディタに対応する形式がない部分は簡略化しました。",
@@ -11444,8 +11429,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_password: "パスワードを変更",
     integrations: "連携",
     open_account_menu: "アカウントメニューを開く",
-    guest: "ゲスト",
-    plan_pro: "プロ",
     attachment: "添付ファイル",
     download: "ダウンロード",
     drag_block: "ブロックをドラッグ",
@@ -11846,7 +11829,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     google_token_invalid: "Google がアクセスを確認できませんでした。もう一度接続してください。",
     google_scope_missing: "インポートするには、Google の画面でドキュメントへのアクセスを許可してください。",
     note_too_large: "このノートは大きすぎて保存できません。内容をサブノートに分けるか、メディアを貼り付ける代わりにファイルを添付してください。",
-    plan_free: "無料プラン",
     notebook_restored: "ノートブックを復元しました",
     purge_confirm: "「{name}」を完全に削除しますか？この操作は元に戻せません。",
     notebook_trash_contents: "{count} 件の項目を含む",
@@ -12101,6 +12083,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     fimp_warnings_title: "提示",
     fimp_warning_encrypted_content: "无法读取 Evernote 的加密内容。",
     fimp_warning_missing_asset: "文件中缺少部分附件。",
+    fimp_warning_plan_video: "视频未导入：插入视频功能适用于专业版和旗舰版。",
     fimp_warning_remote_asset: "文件外部的图片以链接形式保留。",
     fimp_warning_nested_table: "嵌套表格已转换为文本。",
     fimp_warning_unsupported_content: "编辑器中没有对应形式的部分已被简化。",
@@ -12776,8 +12759,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     change_password: "修改密码",
     integrations: "集成",
     open_account_menu: "打开账户菜单",
-    guest: "访客",
-    plan_pro: "专业版",
     attachment: "附件",
     download: "下载",
     drag_block: "拖动块",
@@ -13178,7 +13159,6 @@ export const TRANSLATIONS: Record<string, Record<string, string>> & Record<Suppo
     google_token_invalid: "Google 未确认访问权限，请重新连接。",
     google_scope_missing: "请在 Google 页面中允许访问文档，才能导入。",
     note_too_large: "这条笔记太大，无法保存。请将内容拆分为子笔记，或以附件方式添加文件而不是粘贴媒体。",
-    plan_free: "免费方案",
     notebook_restored: "笔记本已恢复",
     purge_confirm: "要永久删除“{name}”吗？此操作无法撤销。",
     notebook_trash_contents: "包含 {count} 个项目",
@@ -13399,6 +13379,7 @@ TRANSLATIONS.ar = {
   fimp_warnings_title: "تنبيهات",
   fimp_warning_encrypted_content: "تعذّرت قراءة الأجزاء المشفّرة من Evernote.",
   fimp_warning_missing_asset: "بعض المرفقات غير موجودة في الملف.",
+  fimp_warning_plan_video: "لم يتم استيراد مقاطع الفيديو: إدراج الفيديو متاح في خطتي برو وألترا.",
   fimp_warning_remote_asset: "الصور المستضافة خارج الملف تم الاحتفاظ بها كروابط.",
   fimp_warning_nested_table: "الجداول المتداخلة تم تحويلها إلى نص.",
   fimp_warning_unsupported_content: "بعض الأجزاء ليس لها مقابل في المحرر وتم تبسيطها.",
@@ -14072,8 +14053,6 @@ TRANSLATIONS.ar = {
   change_password: "تغيير كلمة المرور",
   integrations: "التكاملات والربط",
   open_account_menu: "فتح قائمة الحساب",
-  guest: "ضيف",
-  plan_pro: "برو",
   save_version: "حفظ الإصدار",
   empty_note: "الملاحظة فارغة",
   attachment: "مرفق",
@@ -14476,7 +14455,6 @@ TRANSLATIONS.ar = {
   google_token_invalid: "لم يؤكد Google الوصول. حاول الاتصال مرة أخرى.",
   google_scope_missing: "في شاشة Google، اسمح بالوصول إلى المستندات لتتمكن من الاستيراد.",
   note_too_large: "هذه الملاحظة أكبر من أن تُحفظ. قسّم المحتوى إلى ملاحظات فرعية أو أرفق الملفات بدلاً من لصق الوسائط.",
-  plan_free: "الخطة المجانية",
   notebook_restored: "تمت استعادة الدفتر",
   purge_confirm: "هل تريد حذف “{name}” نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.",
   notebook_trash_contents: "{count} {count|عنصر معه|عنصران معه|عناصر معه}",

@@ -13,6 +13,7 @@ import {
   useBackgroundImportStore,
 } from "@/lib/import/background-import-store";
 import { useImportTree } from "./use-import-tree";
+import { currentEntitlements } from "@/lib/plans/client";
 
 export interface EvernoteImportProgress {
   processed: number;
@@ -130,6 +131,7 @@ export function useEvernoteImport(options?: { active?: boolean }) {
           keepTags: options.keepTags ?? true,
           fallbackTitle: "Evernote",
           provider: "evernote",
+          allowVideo: currentEntitlements().features.video,
           containerEmoji: "📓",
           existingNotebooks: notebooks,
           fetchNote,

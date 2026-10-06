@@ -23,12 +23,15 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Archive, ChevronRight, Copy, FilePlus, FolderPlus, GripVertical, ImageOff, MoreHorizontal, RotateCcw, Search, Trash2, X } from "lucide-react";
+import { Archive, ChevronRight, Copy, FilePlus, FolderPlus, GripVertical, ImageOff, Lock, MoreHorizontal, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useUiStore } from "@/lib/store/ui-store";
 import { useWorkspace, type PageTreeNode } from "@/lib/data/provider";
 import { childrenOf, isNotebookDescendant, notebookSubtreeIds, parentIdOf } from "@/lib/data/notebook-tree";
-import { unarchiveNotebookTree, archiveNotebookTree } from "@/lib/data/archive";
+import { unarchiveNotebookTree, archiveNotebookTree, planUnarchiveNotebookTree } from "@/lib/data/archive";
+import { OPEN_GATE, usePlanGates } from "@/lib/plans/gates";
+import { notifyPlanError } from "@/lib/plans/client";
+import { GateTooltip, PlanLockBadge } from "@/components/plans/plan-lock";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState, Tooltip } from "@/components/ui/primitives";
@@ -98,6 +101,8 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
   const { adapter, notebooks, archivedNotebooks, livePages, archivedPages, databases, treeFor, ready, isNotebookArchived } = useWorkspace();
   const notebook = notebooks.find((candidate) => candidate.id === notebookId) ?? archivedNotebooks.find((candidate) => candidate.id === notebookId);
   const isArchived = Boolean(notebook && isNotebookArchived(notebook.id));
+  const gates = usePlanGates();
+  const locked = isArchived || gates.readOnly;
 
   const [titleDraft, setTitleDraft] = useState<{ id: string; value: string } | null>(null);
   const title = titleDraft?.id === notebookId ? titleDraft.value : (notebook?.name ?? "");
@@ -106,7 +111,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     delay: 600,
     maxWait: 4000,
     onSave: async (name) => {
-      if (isArchived) return;
+      if (locked) return;
       await adapter.updateNotebook(notebookId, { name });
     },
     onUnloadSave: (name) => {
@@ -461,8 +466,8 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
       try {
         await adapter.movePage(note.id, { notebookId: target.id, parentPageId: null });
         toast.success(t("note_moved_to_notebook"));
-      } catch {
-        toast.error(t("cannot_move_note"));
+      } catch (error) {
+        if (!notifyPlanError(error)) toast.error(t("cannot_move_note"));
       }
       return;
     }
@@ -505,8 +510,8 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
           await adapter.applyPageOrders(orderUpdates);
           setExpandedNotes((prev) => ({ ...prev, [target.id]: true }));
           toast.success(t("note_moved_as_subnote"));
-        } catch {
-          toast.error(t("cannot_move_note"));
+        } catch (error) {
+          if (!notifyPlanError(error)) toast.error(t("cannot_move_note"));
         }
         return;
       }
@@ -542,8 +547,8 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
           reordered.map((p, index) => ({ id: p.id, order: index * 100 }))
         );
         toast.success(t("notes_order_updated"));
-      } catch {
-        toast.error(t("notes_order_failed"));
+      } catch (error) {
+        if (!notifyPlanError(error)) toast.error(t("notes_order_failed"));
       }
       return;
     }
@@ -561,8 +566,8 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
         try {
           await adapter.moveNotebook(dragged.id, { parentId: target.id });
           toast.success(t("notebook_moved_inside"));
-        } catch {
-          toast.error(t("cannot_move_notebook"));
+        } catch (error) {
+          if (!notifyPlanError(error)) toast.error(t("cannot_move_notebook"));
         }
         return;
       }
@@ -584,8 +589,8 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
           reordered.map((n, index) => ({ id: n.id, order: index * 100 }))
         );
         toast.success(t("notebook_order_updated"));
-      } catch {
-        toast.error(t("notebook_order_failed"));
+      } catch (error) {
+        if (!notifyPlanError(error)) toast.error(t("notebook_order_failed"));
       }
       return;
     }
@@ -627,6 +632,17 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
     router.push(`/home/p/${page.id}`);
   };
 
+  const newNotebookGate = isArchived ? OPEN_GATE : gates.newNotebook(notebookId);
+  const newNoteGate = isArchived ? OPEN_GATE : gates.newPage({ notebookId, parentPageId: null });
+  const archiveGate = isArchived
+    ? gates.archive(
+        planUnarchiveNotebookTree(
+          [...notebooks, ...archivedNotebooks],
+          [...livePages, ...archivedPages],
+          notebookId
+        )
+      )
+    : gates.archive(null);
   const empty = !childNotebooks.length && !notes.length && !notebookDatabases.length;
   const hasCover = Boolean(notebook.coverUrl);
   const showCoverHeader = hasCover && !isArchived;
@@ -656,39 +672,43 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
             </Button>
           </MenuTrigger>
           <MenuContent align="end">
-            <MenuItem onSelect={() => void createSubnotebook()} disabled={isArchived}>
+            <MenuItem onSelect={() => void createSubnotebook()} disabled={isArchived || !newNotebookGate.allowed}>
               <FolderPlus /> {t("new_notebook")}
+              <PlanLockBadge gate={newNotebookGate} />
             </MenuItem>
-            <MenuItem onSelect={() => void createNote()} disabled={isArchived}>
+            <MenuItem onSelect={() => void createNote()} disabled={isArchived || !newNoteGate.allowed}>
               <FilePlus /> {t("new_note")}
+              <PlanLockBadge gate={newNoteGate} />
             </MenuItem>
             {hasCover ? (
               <MenuItem
-                disabled={isArchived}
+                disabled={locked}
                 onSelect={async () => {
                   await adapter.updateNotebook(notebookId, { coverUrl: null });
                   toast.success(t("remove_cover"));
                 }}
               >
                 <ImageOff /> {t("remove_cover")}
+                {isArchived ? null : <PlanLockBadge gate={gates.write} />}
               </MenuItem>
             ) : null}
-            <MenuItem
-              onSelect={async () => {
+            <NotebookDuplicateItem
+              notebookId={notebookId}
+              label={parentIdOf(notebook) ? t("duplicate_notebook") : t("duplicate_page")}
+              onDuplicate={async () => {
                 try {
                   const copy = await adapter.duplicateNotebook(notebookId);
                   toast.success(
                     parentIdOf(notebook) ? t("notebook_duplicated") : t("page_duplicated")
                   );
                   router.push(`/home/n/${copy.id}`);
-                } catch {
-                  toast.error(t("could_not_duplicate"));
+                } catch (error) {
+                  if (!notifyPlanError(error)) toast.error(t("could_not_duplicate"));
                 }
               }}
-            >
-              <Copy /> {parentIdOf(notebook) ? t("duplicate_notebook") : t("duplicate_page")}
-            </MenuItem>
+            />
             <MenuItem
+              disabled={!archiveGate.allowed}
               onSelect={async () => {
                 if (isArchived) {
                   const result = await unarchiveNotebookTree(
@@ -712,6 +732,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
             >
               {isArchived ? <RotateCcw /> : <Archive />}
               {isArchived ? t("unarchive") : t("archive")}
+              <PlanLockBadge gate={archiveGate} />
             </MenuItem>
             <MenuSeparator />
             <MenuItem
@@ -738,23 +759,26 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
               <Archive className="size-4 shrink-0 text-[var(--archive-banner-icon)]" />
               <span>{isRootPage ? t("archived_notice_page") : t("archived_notice_notebook")}</span>
             </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={async () => {
-                const result = await unarchiveNotebookTree(
-                  adapter,
-                  [...notebooks, ...archivedNotebooks],
-                  [...livePages, ...archivedPages],
-                  notebookId
-                );
-                toast.success(result.isRootPage ? t("root_page_unarchived") : t("notebook_unarchived"));
-              }}
-              className="h-7 text-xs bg-[var(--archive-btn-bg)] border border-[var(--archive-btn-border)] text-[var(--archive-btn-text)] hover:bg-[var(--archive-btn-hover)] shadow-xs transition-colors"
-            >
-              <RotateCcw className="mr-1.5 size-3" />
-              {t("unarchive")}
-            </Button>
+            <GateTooltip gate={archiveGate}>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!archiveGate.allowed}
+                onClick={async () => {
+                  const result = await unarchiveNotebookTree(
+                    adapter,
+                    [...notebooks, ...archivedNotebooks],
+                    [...livePages, ...archivedPages],
+                    notebookId
+                  );
+                  toast.success(result.isRootPage ? t("root_page_unarchived") : t("notebook_unarchived"));
+                }}
+                className="h-7 text-xs bg-[var(--archive-btn-bg)] border border-[var(--archive-btn-border)] text-[var(--archive-btn-text)] hover:bg-[var(--archive-btn-hover)] shadow-xs transition-colors"
+              >
+                {archiveGate.allowed ? <RotateCcw className="mr-1.5 size-3" /> : <Lock className="mr-1.5 size-3" />}
+                {t("unarchive")}
+              </Button>
+            </GateTooltip>
           </div>
         </div>
       ) : null}
@@ -762,7 +786,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
       <CoverPicker
         coverUrl={notebook.coverUrl}
         coverPosition={notebook.coverPosition}
-        readOnly={isArchived}
+        readOnly={locked}
         onChange={(coverUrl) => adapter.updateNotebook(notebookId, { coverUrl })}
         onPositionChange={(pos) => adapter.updateNotebook(notebookId, { coverPosition: pos })}
         onUploadImage={(file) => adapter.uploadWorkspaceIcon(file)}
@@ -795,14 +819,15 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
             trigger={
               <button
                 type="button"
-                disabled={isArchived}
+                disabled={locked}
+                title={!isArchived && locked ? (gates.write.reason ?? undefined) : undefined}
                 className={cn(
                   "shrink-0 self-start sm:self-center leading-none transition",
                   isIconUrl(notebook.emoji ?? "") ? "rounded-[22px] sm:rounded-[28px]" : "rounded-[10px]",
-                  !hasCover && !isArchived && "hover:bg-[var(--surface-hover)]",
-                  isArchived && "cursor-default"
+                  !hasCover && !locked && "hover:bg-[var(--surface-hover)]",
+                  locked && "cursor-default"
                 )}
-                aria-label={isArchived ? undefined : t("change_icon")}
+                aria-label={locked ? undefined : t("change_icon")}
               >
                 <WorkspaceIcon
                   icon={notebook.emoji}
@@ -824,7 +849,7 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
             <textarea
               id="notebook-title-input"
               value={title}
-              disabled={isArchived}
+              disabled={locked}
               rows={1}
               cols={1}
               placeholder={parentIdOf(notebook) ? t("notebook_name_placeholder") : t("page_name_placeholder")}
@@ -858,12 +883,24 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => void createSubnotebook()} disabled={isArchived}>
-              <FolderPlus /> {t("new_notebook")}
-            </Button>
-            <Button variant="secondary" onClick={() => void createNote()} disabled={isArchived}>
-              <FilePlus /> {t("new_note")}
-            </Button>
+            <GateTooltip gate={newNotebookGate}>
+              <Button
+                variant="secondary"
+                onClick={() => void createSubnotebook()}
+                disabled={isArchived || !newNotebookGate.allowed}
+              >
+                {newNotebookGate.allowed ? <FolderPlus /> : <Lock />} {t("new_notebook")}
+              </Button>
+            </GateTooltip>
+            <GateTooltip gate={newNoteGate}>
+              <Button
+                variant="secondary"
+                onClick={() => void createNote()}
+                disabled={isArchived || !newNoteGate.allowed}
+              >
+                {newNoteGate.allowed ? <FilePlus /> : <Lock />} {t("new_note")}
+              </Button>
+            </GateTooltip>
           </div>
 
           {!empty ? (
@@ -897,12 +934,24 @@ export function NotebookView({ notebookId }: { notebookId: string }) {
               description={t("empty_notebook_desc")}
               action={
                 <div className="flex flex-wrap justify-center gap-2">
-                  <Button variant="secondary" onClick={() => void createSubnotebook()}>
-                    <FolderPlus /> {t("new_notebook")}
-                  </Button>
-                  <Button variant="primary" onClick={() => void createNote()}>
-                    <FilePlus /> {t("new_note")}
-                  </Button>
+                  <GateTooltip gate={newNotebookGate}>
+                    <Button
+                      variant="secondary"
+                      onClick={() => void createSubnotebook()}
+                      disabled={isArchived || !newNotebookGate.allowed}
+                    >
+                      {newNotebookGate.allowed ? <FolderPlus /> : <Lock />} {t("new_notebook")}
+                    </Button>
+                  </GateTooltip>
+                  <GateTooltip gate={newNoteGate}>
+                    <Button
+                      variant="primary"
+                      onClick={() => void createNote()}
+                      disabled={isArchived || !newNoteGate.allowed}
+                    >
+                      {newNoteGate.allowed ? <FilePlus /> : <Lock />} {t("new_note")}
+                    </Button>
+                  </GateTooltip>
                 </div>
               }
             />
@@ -1111,6 +1160,9 @@ function NotebookRow({
   const router = useRouter();
   const { t, language } = useTranslation();
   const { adapter, livePages, notebooks } = useWorkspace();
+  const gates = usePlanGates();
+  const duplicateGate = gates.duplicateNotebook(notebook.id);
+  const canWrite = gates.write.allowed;
   const {
     attributes,
     listeners,
@@ -1132,8 +1184,8 @@ function NotebookRow({
       const copy = await adapter.duplicateNotebook(notebook.id);
       toast.success(t("notebook_duplicated"));
       router.push(`/home/n/${copy.id}`);
-    } catch {
-      toast.error(t("could_not_duplicate"));
+    } catch (error) {
+      if (!notifyPlanError(error)) toast.error(t("could_not_duplicate"));
     }
   };
 
@@ -1195,10 +1247,11 @@ function NotebookRow({
       <button
         type="button"
         ref={setActivatorNodeRef}
-        {...attributes}
-        {...listeners}
+        {...(canWrite ? { ...attributes, ...listeners } : {})}
+        disabled={!canWrite}
+        title={canWrite ? undefined : (gates.write.reason ?? undefined)}
         aria-label={`${t("dnd_drag_reorder_or_move")}: ${notebook.name}`}
-        className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-faint opacity-40 transition hover:bg-[var(--surface-hover)] hover:text-ink hover:opacity-100 active:cursor-grabbing group-hover:opacity-80"
+        className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-faint opacity-40 transition hover:bg-[var(--surface-hover)] hover:text-ink hover:opacity-100 active:cursor-grabbing group-hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-25"
         onClick={(e) => e.stopPropagation()}
       >
         <GripVertical className="size-4" />
@@ -1222,17 +1275,18 @@ function NotebookRow({
           {formatRelative(notebook.updatedAt, language)}
         </span>
       </Link>
-      <Tooltip label={t("duplicate_notebook")}>
+      <GateTooltip gate={duplicateGate} label={t("duplicate_notebook")}>
         <Button
           variant="ghost"
           size="icon-sm"
           aria-label={t("duplicate_notebook")}
+          disabled={!duplicateGate.allowed}
           className="shrink-0 text-faint opacity-70 hover:text-ink group-hover:opacity-100"
           onClick={(event) => void duplicate(event)}
         >
-          <Copy />
+          {duplicateGate.allowed ? <Copy /> : <Lock />}
         </Button>
-      </Tooltip>
+      </GateTooltip>
       <Tooltip label={t("delete_notebook")}>
         <Button
           variant="ghost"
@@ -1269,6 +1323,9 @@ function NoteRow({
   const locale = useLocale();
   const { t, language } = useTranslation();
   const { adapter, livePages } = useWorkspace();
+  const gates = usePlanGates();
+  const duplicateGate = gates.duplicatePage(page.id);
+  const canWrite = gates.write.allowed;
   const {
     attributes,
     listeners,
@@ -1287,8 +1344,8 @@ function NoteRow({
       toast.success(t("note_duplicated"));
       useUiStore.getState().closeMenu();
       router.push(`/home/p/${copy.id}`);
-    } catch {
-      toast.error(t("could_not_duplicate"));
+    } catch (error) {
+      if (!notifyPlanError(error)) toast.error(t("could_not_duplicate"));
     }
   };
 
@@ -1362,10 +1419,11 @@ function NoteRow({
       <button
         type="button"
         ref={setActivatorNodeRef}
-        {...attributes}
-        {...listeners}
+        {...(canWrite ? { ...attributes, ...listeners } : {})}
+        disabled={!canWrite}
+        title={canWrite ? undefined : (gates.write.reason ?? undefined)}
         aria-label={`${t("dnd_drag_reorder")}: ${page.title || t("untitled")}`}
-        className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-faint opacity-40 transition hover:bg-[var(--surface-hover)] hover:text-ink hover:opacity-100 active:cursor-grabbing group-hover:opacity-80"
+        className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-faint opacity-40 transition hover:bg-[var(--surface-hover)] hover:text-ink hover:opacity-100 active:cursor-grabbing group-hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-25"
         onClick={(e) => e.stopPropagation()}
       >
         <GripVertical className="size-4" />
@@ -1391,17 +1449,18 @@ function NoteRow({
           {formatRelative(page.updatedAt, language)}
         </span>
       </Link>
-      <Tooltip label={t("duplicate_note")}>
+      <GateTooltip gate={duplicateGate} label={t("duplicate_note")}>
         <Button
           variant="ghost"
           size="icon-sm"
           aria-label={t("duplicate_note")}
+          disabled={!duplicateGate.allowed}
           className="shrink-0 text-faint opacity-70 hover:text-ink group-hover:opacity-100"
           onClick={(event) => void duplicate(event)}
         >
-          <Copy />
+          {duplicateGate.allowed ? <Copy /> : <Lock />}
         </Button>
-      </Tooltip>
+      </GateTooltip>
       <Tooltip label={t("delete_page")}>
         <Button
           variant="ghost"
@@ -1414,5 +1473,23 @@ function NoteRow({
         </Button>
       </Tooltip>
     </div>
+  );
+}
+
+function NotebookDuplicateItem({
+  notebookId,
+  label,
+  onDuplicate,
+}: {
+  notebookId: string;
+  label: string;
+  onDuplicate: () => Promise<void>;
+}) {
+  const gate = usePlanGates().duplicateNotebook(notebookId);
+  return (
+    <MenuItem disabled={!gate.allowed} onSelect={() => void onDuplicate()}>
+      <Copy /> {label}
+      <PlanLockBadge gate={gate} />
+    </MenuItem>
   );
 }

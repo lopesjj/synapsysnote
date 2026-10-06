@@ -49,6 +49,7 @@ import {
 import { NOTION_REIMPORT_LABEL } from "@/lib/data/version-labels";
 import { GrowthTracker, hasStructuralLimits } from "@/lib/plans/usage";
 import { entitlementsFor, loadWorkspaceUsageState } from "@/lib/plans/server";
+import { isVideoMedia } from "@/lib/plans/definitions";
 
 const LEASE_MS = 120_000;
 const MAX_PAGE_BYTES = 900_000;
@@ -425,6 +426,7 @@ interface ImportArgs {
   roles: Map<string, ImportRole>;
   progress: ProgressReporter;
   quota: GrowthTracker | null;
+  skipVideo: boolean;
   cachedTopLevel?: NotionBlock[];
 }
 
@@ -485,7 +487,7 @@ async function importNotebook(args: ImportArgs): Promise<string> {
 }
 
 async function importPage(args: ImportArgs): Promise<string> {
-  const { notion, workspaceId, jobId, node, parents, idMap, roles, progress, cachedTopLevel, quota } = args;
+  const { notion, workspaceId, jobId, node, parents, idMap, roles, progress, cachedTopLevel, quota, skipVideo } = args;
 
   let fallbackNotebookId = progress.targetNotebookId;
   if (fallbackNotebookId) {
@@ -513,11 +515,17 @@ async function importPage(args: ImportArgs): Promise<string> {
 
   let blocks: AppBlock[];
   let converted = true;
+  let skippedVideos = 0;
   const rehosted: string[] = [];
   try {
     blocks = await notionBlocksToAppBlocks(topLevel, {
       fetchChildren: (blockId) => fetchAllChildren(notion, blockId),
       resolvePageLink: (notionPageId) => idMap.get(notionPageId),
+      skipVideo,
+      onSkippedVideo: async ({ hosted }) => {
+        skippedVideos += 1;
+        if (hosted) await progress.fileDone(0);
+      },
       rehostMedia: progress.options.downloadMedia
         ? async ({ url, suggestedName }) => {
             const result = await rehostNotionFile({ workspaceId, jobId, url, suggestedName });
@@ -546,6 +554,15 @@ async function importPage(args: ImportArgs): Promise<string> {
       itemTitle: node.title,
       stage: "convert",
       message: (error as Error).message,
+    });
+  }
+
+  if (skippedVideos) {
+    await progress.addError({
+      itemId: node.id,
+      itemTitle: node.title,
+      stage: "media",
+      message: "PLAN_FEATURE:video",
     });
   }
 
@@ -677,6 +694,7 @@ function rowFilePaths(values: Record<string, unknown> | undefined): string[] {
 
 async function importDatabase(args: ImportArgs): Promise<string> {
   const { notion, workspaceId, jobId, node, parents, idMap, roles, progress } = args;
+  let skippedVideos = 0;
 
   const schema = await throttled(() => notion.databases.retrieve({ database_id: node.id }));
   const properties = mapDatabaseSchema(
@@ -771,6 +789,18 @@ async function importDatabase(args: ImportArgs): Promise<string> {
         properties
       );
 
+      if (args.skipVideo) {
+        for (const [propertyId, value] of Object.entries(values)) {
+          if (!Array.isArray(value)) continue;
+          const files = value as { name?: unknown; url?: unknown }[];
+          if (!files.length || typeof files[0]?.url !== "string") continue;
+          const kept = files.filter((file) => !isVideoMedia({ name: typeof file.name === "string" ? file.name : null }));
+          if (kept.length === files.length) continue;
+          skippedVideos += files.length - kept.length;
+          values[propertyId] = kept;
+        }
+      }
+
       if (progress.options.downloadMedia) {
         for (const [propertyId, value] of Object.entries(values)) {
           if (!Array.isArray(value)) continue;
@@ -828,6 +858,14 @@ async function importDatabase(args: ImportArgs): Promise<string> {
   } while (cursor);
 
   if (replacedFiles.length) await discardUnusedPaths(adminDb(), storage(), workspaceId, replacedFiles);
+  if (skippedVideos) {
+    await progress.addError({
+      itemId: node.id,
+      itemTitle: node.title,
+      stage: "media",
+      message: "PLAN_FEATURE:video",
+    });
+  }
 
   idMap.set(node.id, ref.id);
   return ref.id;
@@ -1279,7 +1317,18 @@ async function runLeasedImportStep(
         hasRoleUpdates = true;
       }
 
-      const shared = { notion, workspaceId, jobId, node, parents, idMap, roles, progress, quota };
+      const shared = {
+        notion,
+        workspaceId,
+        jobId,
+        node,
+        parents,
+        idMap,
+        roles,
+        progress,
+        quota,
+        skipVideo: entitlements ? !entitlements.features.video : false,
+      };
       const appId =
         role === "notebook"
           ? await importNotebook(shared)

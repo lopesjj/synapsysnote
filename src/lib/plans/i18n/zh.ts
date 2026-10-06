@@ -147,4 +147,10 @@ export const zh: PlanStrings = {
   admin_source_owner_env: "OWNER_EMAILS",
   admin_source_system: "系统",
   admin_never: "—",
+  lock_limit: "方案上限",
+  compare_trial_days: "{days} 天",
+  compare_choose: "选择",
+  upgrade_mail_body: "你好！我想更改我账户的方案。\n\n账户：{email}\n想要的方案：{plan}",
+  banner_plan_ending: "你的{plan}方案将在 {days} 天后到期。",
+  banner_plan_last_day: "你的{plan}方案今天到期。",
 };

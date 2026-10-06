@@ -147,4 +147,10 @@ export const ja: PlanStrings = {
   admin_source_owner_env: "OWNER_EMAILS",
   admin_source_system: "システム",
   admin_never: "—",
+  lock_limit: "プランの上限",
+  compare_trial_days: "{days}日間",
+  compare_choose: "選択",
+  upgrade_mail_body: "こんにちは。アカウントのプランを変更したいです。\n\nアカウント: {email}\n希望するプラン: {plan}",
+  banner_plan_ending: "{plan}プランは残り{days}日で期限切れになります。",
+  banner_plan_last_day: "{plan}プランは本日で期限切れになります。",
 };

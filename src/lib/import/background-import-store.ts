@@ -1,6 +1,11 @@
 "use client";
 
 import { create } from "zustand";
+import { toast } from "sonner";
+import { translate } from "@/lib/i18n/translations";
+import { useUiStore } from "@/lib/store/ui-store";
+import { openPlanDialog } from "@/lib/plans/client";
+import { planTranslate } from "@/lib/plans/i18n";
 import type { ImportedNoteResult } from "./run-import";
 import type { ImportProvider } from "./parse-file";
 
@@ -47,6 +52,16 @@ export const GOOGLE_DOCS_IMPORT_KEY = "google-docs";
 
 export function fileImportKey(provider: ImportProvider): string {
   return `file:${provider}`;
+}
+
+function announceSkippedVideos(results: ImportedNoteResult[]) {
+  if (!results.some((result) => result.warnings.includes("plan_video"))) return;
+  const language = useUiStore.getState().language || "pt";
+  toast.warning(translate(language, "fimp_warning_plan_video"), {
+    id: "import-plan-video",
+    duration: 9000,
+    action: { label: planTranslate(language, "view_plans"), onClick: openPlanDialog },
+  });
 }
 
 export const useBackgroundImportStore = create<BackgroundImportStore>((set) => ({
@@ -99,7 +114,7 @@ export const useBackgroundImportStore = create<BackgroundImportStore>((set) => (
       };
     }),
 
-  finish: (key, results) =>
+  finish: (key, results) => {
     set((state) => {
       const current = state.runs[key];
       if (!current) return state;
@@ -114,7 +129,9 @@ export const useBackgroundImportStore = create<BackgroundImportStore>((set) => (
           },
         },
       };
-    }),
+    });
+    announceSkippedVideos(results);
+  },
 
   cancel: (key) =>
     set((state) => {

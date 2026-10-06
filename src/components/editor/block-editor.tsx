@@ -59,6 +59,10 @@ import { PreservedBlock } from "./extensions/preserved-block";
 import { indexMedia, isRicherMedia, mediaIdentity } from "@/lib/data/media-enrichment";
 import { cn } from "@/lib/utils";
 import { useTranslation, localizeErrorMessage } from "@/lib/i18n/translations";
+import { currentEntitlements, notifyPlanError } from "@/lib/plans/client";
+import { featureCheck } from "@/lib/plans/checks";
+import { PlanError } from "@/lib/plans/errors";
+import { sliceHasVideo, sliceWithoutVideo } from "./video-paste";
 
 export interface BlockEditorProps {
   page: Page;
@@ -358,7 +362,7 @@ export function BlockEditor({
       const instance = editorRef.current;
       if (!instance || !editable) return;
 
-      const supportedFiles = files.filter((f) => {
+      let supportedFiles = files.filter((f) => {
         return (
           isAudioFile(f) ||
           isVideoFile(f) ||
@@ -368,6 +372,13 @@ export function BlockEditor({
           f.type.startsWith("video/")
         );
       });
+
+      const isVideoUpload = (f: File) => !isAudioFile(f) && (isVideoFile(f) || f.type.startsWith("video/"));
+      const videoBlocked = featureCheck(currentEntitlements(), "video");
+      if (videoBlocked && supportedFiles.some(isVideoUpload)) {
+        notifyPlanError(new PlanError(videoBlocked));
+        supportedFiles = supportedFiles.filter((f) => !isVideoUpload(f));
+      }
 
       if (!supportedFiles.length) return;
 
@@ -512,10 +523,12 @@ export function BlockEditor({
               instance.view.dispatch(tr);
               emitBlocks(instance);
             }
-            toast.error(
-              localizeErrorMessage(error instanceof Error ? error.message : null, tRef.current) ||
-                tRef.current("file_attach_error")
-            );
+            if (!notifyPlanError(error)) {
+              toast.error(
+                localizeErrorMessage(error instanceof Error ? error.message : null, tRef.current) ||
+                  tRef.current("file_attach_error")
+              );
+            }
           } finally {
             useMediaProgressStore.getState().clearProgress(tempId);
             if (uploadSuccess) {
@@ -642,10 +655,12 @@ export function BlockEditor({
             instance.view.dispatch(tr);
             emitBlocks(instance);
           }
-          toast.error(
-            localizeErrorMessage(error instanceof Error ? error.message : null, tRef.current) ||
-              tRef.current("audio_save_error")
-          );
+          if (!notifyPlanError(error)) {
+            toast.error(
+              localizeErrorMessage(error instanceof Error ? error.message : null, tRef.current) ||
+                tRef.current("audio_save_error")
+            );
+          }
         } finally {
           if (uploadSuccess) {
             setTimeout(() => {
@@ -773,12 +788,24 @@ export function BlockEditor({
         handleDOMEvents: {
           click: (_view, event) => openMentionRef.current(event),
         },
-        handlePaste: (_view, event) => {
+        handlePaste: (view, event, slice) => {
           if (!editable) return false;
           const files = filesFromDataTransfer(event.clipboardData);
           if (files.length) {
             event.preventDefault();
             void insertFilesIntoEditor(files);
+            return true;
+          }
+          const videoBlocked = featureCheck(currentEntitlements(), "video");
+          if (videoBlocked && sliceHasVideo(slice)) {
+            event.preventDefault();
+            notifyPlanError(new PlanError(videoBlocked));
+            const allowed = sliceWithoutVideo(slice);
+            if (allowed.content.size) {
+              try {
+                view.dispatch(view.state.tr.replaceSelection(allowed).scrollIntoView());
+              } catch {}
+            }
             return true;
           }
           return false;

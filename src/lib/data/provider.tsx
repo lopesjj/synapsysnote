@@ -45,6 +45,7 @@ interface WorkspaceContextValue {
   mode: "firestore" | "local";
   /** Cadernos ativos. Os que estao na lixeira ficam em `trashedNotebooks`. */
   notebooks: Notebook[];
+  allNotebooks: Notebook[];
   trashedNotebooks: Notebook[];
   archivedNotebooks: Notebook[];
   pages: Page[];
@@ -372,6 +373,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       ready,
       mode: adapter.mode,
       notebooks: liveNotebooks,
+      allNotebooks: notebooks,
       trashedNotebooks,
       archivedNotebooks,
       pages,

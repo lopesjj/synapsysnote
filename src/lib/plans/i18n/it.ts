@@ -147,4 +147,10 @@ export const it: PlanStrings = {
   admin_source_owner_env: "OWNER_EMAILS",
   admin_source_system: "Sistema",
   admin_never: "—",
+  lock_limit: "Limite del piano",
+  compare_trial_days: "{days} giorni",
+  compare_choose: "Scegli",
+  upgrade_mail_body: "Ciao! Vorrei cambiare il piano del mio account.\n\nAccount: {email}\nPiano desiderato: {plan}",
+  banner_plan_ending: "Il tuo piano {plan} scade tra {days} {days|giorno|giorni}.",
+  banner_plan_last_day: "Il tuo piano {plan} scade oggi.",
 };

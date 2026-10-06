@@ -2,24 +2,28 @@
 
 import type { DataAdapter, DuplicateOptions, PlanOperation } from "@/lib/data/adapter";
 import type { AppDatabase, Notebook, Page } from "@/types/models";
-import { blocksContainVideo, isVideoMedia, type FeatureKey } from "./definitions";
+import { isVideoMedia, type FeatureKey } from "./definitions";
 import type { Entitlements } from "./entitlements";
-import { PlanError } from "./errors";
+import { PlanError, type PlanErrorDetail } from "./errors";
 import { currentEntitlements, planFailure, usePlanStore, waitForPlan } from "./client";
 import {
-  firstGrowthViolation,
-  withArchivePlan,
-  withDuplicatedNotebook,
-  withDuplicatedPage,
+  archivePlanCheck,
+  duplicateNotebookCheck,
+  duplicatePageCheck,
+  featureCheck,
+  growthCheck,
+  restoreDatabaseCheck,
+  restoreNotebookCheck,
+  restorePageCheck,
+  writeCheck,
+} from "./checks";
+import {
   withMovedNotebook,
   withMovedPage,
   withNewNotebook,
   withNewPage,
   withNotebookPatch,
   withPagePatch,
-  withRestoredNotebook,
-  withRestoredNotebookChain,
-  withRestoredPage,
   type WorkspaceState,
 } from "./usage";
 
@@ -44,39 +48,8 @@ function onlyKeys(patch: object, allowed: Set<string>): boolean {
   return Object.keys(patch).every((key) => allowed.has(key));
 }
 
-function parentIdOf(notebook: Pick<Notebook, "parentId">): string | null {
-  return notebook.parentId && notebook.parentId !== "null" ? notebook.parentId : null;
-}
-
-function pageTreeIds(pages: Page[], rootIds: string[]): Set<string> {
-  const ids = new Set(rootIds);
-  const stack = [...rootIds];
-  while (stack.length) {
-    const current = stack.pop()!;
-    for (const page of pages) {
-      if (page.parentPageId === current && !ids.has(page.id)) {
-        ids.add(page.id);
-        stack.push(page.id);
-      }
-    }
-  }
-  return ids;
-}
-
-function notebookTreeIds(notebooks: Notebook[], rootId: string): Set<string> {
-  const ids = new Set([rootId]);
-  let added = true;
-  while (added) {
-    added = false;
-    for (const notebook of notebooks) {
-      const parentId = parentIdOf(notebook);
-      if (parentId && ids.has(parentId) && !ids.has(notebook.id)) {
-        ids.add(notebook.id);
-        added = true;
-      }
-    }
-  }
-  return ids;
+function enforce(detail: PlanErrorDetail | null) {
+  if (detail) throw planFailure(new PlanError(detail));
 }
 
 export function createPlanGuard(base: DataAdapter, snapshot: () => GuardSnapshot): DataAdapter {
@@ -98,24 +71,12 @@ export function createPlanGuard(base: DataAdapter, snapshot: () => GuardSnapshot
     }
   };
 
-  const writable = (entitlements: Entitlements) => {
-    if (entitlements.readOnly) throw planFailure(PlanError.readOnly());
-  };
+  const writable = (entitlements: Entitlements) => enforce(writeCheck(entitlements));
 
-  const feature = (entitlements: Entitlements, key: FeatureKey) => {
-    if (!entitlements.features[key]) {
-      throw planFailure(entitlements.readOnly ? PlanError.readOnly() : PlanError.feature(key));
-    }
-  };
+  const feature = (entitlements: Entitlements, key: FeatureKey) => enforce(featureCheck(entitlements, key));
 
-  const growth = (entitlements: Entitlements, next: (current: WorkspaceState) => WorkspaceState) => {
-    const before = state();
-    const violation = firstGrowthViolation(before, next(before), entitlements.limits);
-    if (violation) throw planFailure(PlanError.limit(violation));
-  };
-
-  const videoInPages = (pageIds: Set<string>) =>
-    snapshot().pages.some((page) => pageIds.has(page.id) && !page.deletedAt && blocksContainVideo(page.blocks));
+  const growth = (entitlements: Entitlements, next: (current: WorkspaceState) => WorkspaceState) =>
+    enforce(growthCheck(entitlements, state(), next));
 
   const uploadCheck = (file: { name?: string; type?: string }) => (entitlements: Entitlements) => {
     writable(entitlements);
@@ -130,12 +91,7 @@ export function createPlanGuard(base: DataAdapter, snapshot: () => GuardSnapshot
   const overrides: Partial<DataAdapter> = {
     assertPlan(operation: PlanOperation) {
       return guarded(
-        (entitlements) => {
-          feature(entitlements, "archive");
-          if (operation.plan.intent === "unarchive" && !entitlements.readOnly) {
-            growth(entitlements, (current) => withArchivePlan(current, operation.plan));
-          }
-        },
+        (entitlements) => enforce(archivePlanCheck(entitlements, state(), operation.plan)),
         async () => undefined
       );
     },
@@ -163,12 +119,7 @@ export function createPlanGuard(base: DataAdapter, snapshot: () => GuardSnapshot
       let resolved: DuplicateOptions = options ?? {};
       return guarded(
         (entitlements) => {
-          writable(entitlements);
-          const pages = snapshot().pages.filter((page) => !page.deletedAt);
-          if (!entitlements.features.video && videoInPages(pageTreeIds(pages, [id]))) {
-            feature(entitlements, "video");
-          }
-          growth(entitlements, (current) => withDuplicatedPage(current, id));
+          enforce(duplicatePageCheck(entitlements, snapshot(), id));
           resolved = duplicateOptions(entitlements, options);
         },
         () => base.duplicatePage(id, resolved)
@@ -178,18 +129,7 @@ export function createPlanGuard(base: DataAdapter, snapshot: () => GuardSnapshot
       let resolved: DuplicateOptions = options ?? {};
       return guarded(
         (entitlements) => {
-          writable(entitlements);
-          if (!entitlements.features.video) {
-            const current = snapshot();
-            const notebookIds = notebookTreeIds(
-              current.notebooks.filter((notebook) => !notebook.deletedAt),
-              id
-            );
-            const pages = current.pages.filter((page) => !page.deletedAt);
-            const roots = pages.filter((page) => page.notebookId && notebookIds.has(page.notebookId)).map((page) => page.id);
-            if (videoInPages(pageTreeIds(pages, roots))) feature(entitlements, "video");
-          }
-          growth(entitlements, (current) => withDuplicatedNotebook(current, id));
+          enforce(duplicateNotebookCheck(entitlements, snapshot(), id));
           resolved = duplicateOptions(entitlements, options);
         },
         () => base.duplicateNotebook(id, resolved)
@@ -258,17 +198,13 @@ export function createPlanGuard(base: DataAdapter, snapshot: () => GuardSnapshot
     },
     restorePage(id) {
       return guarded(
-        (entitlements) => {
-          if (!entitlements.readOnly) growth(entitlements, (current) => withRestoredPage(current, id));
-        },
+        (entitlements) => enforce(restorePageCheck(entitlements, state(), id)),
         () => base.restorePage(id)
       );
     },
     restoreNotebook(id) {
       return guarded(
-        (entitlements) => {
-          if (!entitlements.readOnly) growth(entitlements, (current) => withRestoredNotebook(current, id));
-        },
+        (entitlements) => enforce(restoreNotebookCheck(entitlements, state(), id)),
         () => base.restoreNotebook(id)
       );
     },
@@ -276,9 +212,7 @@ export function createPlanGuard(base: DataAdapter, snapshot: () => GuardSnapshot
       return guarded(
         (entitlements) => {
           const database = snapshot().databases.find((entry) => entry.id === id);
-          if (!entitlements.readOnly && database) {
-            growth(entitlements, (current) => withRestoredNotebookChain(current, database.notebookId));
-          }
+          if (database) enforce(restoreDatabaseCheck(entitlements, state(), database.notebookId));
         },
         () => base.restoreDatabase(id)
       );

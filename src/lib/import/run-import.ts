@@ -2,6 +2,7 @@ import type { AppBlock } from "@/types/models";
 import type { DataAdapter } from "@/lib/data/adapter";
 import { bytesToBlob, mimeFromName } from "./binary";
 import { assetIdFromUrl, isAssetUrl, type ImportedAsset, type ImportedNote, type ImportWarningCode } from "./types";
+import { isVideoBlock, isVideoMedia, withoutVideoBlocks } from "@/lib/plans/definitions";
 
 export interface ImportedNoteResult {
   sourceId: string;
@@ -24,6 +25,7 @@ export interface RunImportOptions {
   fallbackTitle: string;
   provider?: string;
   recordJob?: boolean;
+  allowVideo?: boolean;
   isCanceled?: () => boolean;
   onNoteStart?: (index: number, note: ImportedNote) => void;
   onNoteFinish?: (result: ImportedNoteResult, index: number) => void;
@@ -169,8 +171,21 @@ export interface PersistNoteOptions {
   parentPageId?: string | null;
   uploadMedia: boolean;
   keepTags: boolean;
+  allowVideo?: boolean;
   isCanceled?: () => boolean;
   onFileUploaded?: () => void;
+}
+
+function importableBlocks(note: ImportedNote, allowVideo: boolean): { blocks: AppBlock[]; removed: number } {
+  if (allowVideo) return { blocks: note.blocks, removed: 0 };
+  const assets = new Map(note.assets.map((asset) => [asset.id, asset]));
+  return withoutVideoBlocks(note.blocks, (block) => {
+    if (isVideoBlock(block)) return true;
+    const url = block.media?.url;
+    if (!url || !isAssetUrl(url)) return false;
+    const asset = assets.get(assetIdFromUrl(url));
+    return Boolean(asset && isVideoMedia({ name: asset.name, type: asset.mimeType }));
+  });
 }
 
 export async function persistImportedNote(
@@ -189,8 +204,11 @@ export async function persistImportedNote(
     uploadedFiles: 0,
   };
 
+  const source = importableBlocks(note, options.allowVideo ?? true);
+  if (source.removed && !result.warnings.includes("plan_video")) result.warnings.push("plan_video");
+
   try {
-    const initialBlocks = stripPendingMedia(note.blocks);
+    const initialBlocks = stripPendingMedia(source.blocks);
     const page = await adapter.createPage({
       title: (note.title || fallbackTitle).slice(0, 200),
       notebookId: options.notebookId,
@@ -202,7 +220,7 @@ export async function persistImportedNote(
     result.pageId = page.id;
 
     const referenced = new Set<string>();
-    walkBlocks(note.blocks, (block) => {
+    walkBlocks(source.blocks, (block) => {
       if (block.media?.url && isAssetUrl(block.media.url)) referenced.add(assetIdFromUrl(block.media.url));
     });
 
@@ -224,7 +242,7 @@ export async function persistImportedNote(
       if (!result.warnings.includes("missing_asset")) result.warnings.push("missing_asset");
     }
 
-    let finalBlocks = applyResolvedAssets(note.blocks, resolved);
+    let finalBlocks = applyResolvedAssets(source.blocks, resolved);
     if (uploadMedia) finalBlocks = await rehostRemoteMedia(adapter, page.id, finalBlocks);
 
     if (finalBlocks.length) await adapter.updatePage(page.id, { blocks: finalBlocks });
@@ -254,6 +272,7 @@ export async function runFileImport(options: RunImportOptions): Promise<Imported
       notebookId: targetNotebookId,
       uploadMedia,
       keepTags,
+      allowVideo: options.allowVideo,
       isCanceled: options.isCanceled,
       onFileUploaded: () => {
         uploadedFiles += 1;

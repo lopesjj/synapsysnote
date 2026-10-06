@@ -147,4 +147,10 @@ export const ar: PlanStrings = {
   admin_source_owner_env: "OWNER_EMAILS",
   admin_source_system: "النظام",
   admin_never: "—",
+  lock_limit: "حد الخطة",
+  compare_trial_days: "{days} {days|يوم|أيام|يومًا}",
+  compare_choose: "اختيار",
+  upgrade_mail_body: "مرحبًا! أريد تغيير خطة حسابي.\n\nالحساب: {email}\nالخطة المطلوبة: {plan}",
+  banner_plan_ending: "تنتهي خطة {plan} الخاصة بك بعد {days} {days|يوم|أيام|يومًا}.",
+  banner_plan_last_day: "تنتهي خطة {plan} الخاصة بك اليوم.",
 };

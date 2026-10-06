@@ -57,7 +57,18 @@ function bump(map: Map<string, number>, key: string) {
   map.set(key, (map.get(key) ?? 0) + 1);
 }
 
+export interface UsageIndex extends Usage {
+  notebookKey(notebook: UsageNotebook): string;
+  pageTop(page: UsagePage): string;
+  liveNotebook(id: string): UsageNotebook | undefined;
+  livePage(id: string): UsagePage | undefined;
+}
+
 export function measureUsage(state: WorkspaceState): Usage {
+  return indexUsage(state);
+}
+
+export function indexUsage(state: WorkspaceState): UsageIndex {
   const { liveNotebooks, livePages } = partitionWorkspace(state.notebooks, state.pages);
   const notebookById = new Map(liveNotebooks.map((notebook) => [notebook.id, notebook]));
   const pageKeyCache = new Map<string, string>();
@@ -136,7 +147,51 @@ export function measureUsage(state: WorkspaceState): Usage {
     else bump(subnotesByNote, top);
   }
 
-  return { pages, notebooksByPage, notesByNotebook, subnotesByNote };
+  return {
+    pages,
+    notebooksByPage,
+    notesByNotebook,
+    subnotesByNote,
+    notebookKey: pageKeyOf,
+    pageTop: topOf,
+    liveNotebook: (id) => notebookById.get(id),
+    livePage: (id) => pageById.get(id),
+  };
+}
+
+function exceeds(count: number, limit: number | null): boolean {
+  return limit !== null && count + 1 > limit;
+}
+
+export function newNotebookViolation(index: UsageIndex, limits: PlanLimits, parentId: string | null): LimitViolation | null {
+  if (!parentId) {
+    return exceeds(index.pages, limits.pages) ? { key: "pages", limit: limits.pages!, count: index.pages + 1 } : null;
+  }
+  const parent = index.liveNotebook(parentId);
+  const key = parent ? index.notebookKey(parent) : UNFILED;
+  const count = index.notebooksByPage.get(key) ?? 0;
+  return exceeds(count, limits.notebooksPerPage)
+    ? { key: "notebooksPerPage", limit: limits.notebooksPerPage!, count: count + 1 }
+    : null;
+}
+
+export function newPageViolation(
+  index: UsageIndex,
+  limits: PlanLimits,
+  target: { notebookId?: string | null; parentPageId?: string | null }
+): LimitViolation | null {
+  const parent = target.parentPageId ? index.livePage(target.parentPageId) : undefined;
+  if (parent) {
+    const top = index.pageTop(parent);
+    const count = index.subnotesByNote.get(top) ?? 0;
+    return exceeds(count, limits.subnotesPerNote)
+      ? { key: "subnotesPerNote", limit: limits.subnotesPerNote!, count: count + 1 }
+      : null;
+  }
+  const count = index.notesByNotebook.get(target.notebookId ?? UNFILED) ?? 0;
+  return exceeds(count, limits.notesPerNotebook)
+    ? { key: "notesPerNotebook", limit: limits.notesPerNotebook!, count: count + 1 }
+    : null;
 }
 
 function maxOf(map: Map<string, number>): number {
@@ -171,13 +226,29 @@ export function growthViolations(before: Usage, after: Usage, limits: PlanLimits
   return violations;
 }
 
+const indexCache = new WeakMap<object, WeakMap<object, UsageIndex>>();
+
+export function usageIndexOf(state: WorkspaceState): UsageIndex {
+  let byPages = indexCache.get(state.notebooks);
+  if (!byPages) {
+    byPages = new WeakMap();
+    indexCache.set(state.notebooks, byPages);
+  }
+  let index = byPages.get(state.pages);
+  if (!index) {
+    index = indexUsage(state);
+    byPages.set(state.pages, index);
+  }
+  return index;
+}
+
 export function firstGrowthViolation(
   before: WorkspaceState,
   after: WorkspaceState,
   limits: PlanLimits
 ): LimitViolation | null {
   if (!hasStructuralLimits(limits)) return null;
-  return growthViolations(measureUsage(before), measureUsage(after), limits)[0] ?? null;
+  return growthViolations(usageIndexOf(before), measureUsage(after), limits)[0] ?? null;
 }
 
 export function goalGrowthViolation(

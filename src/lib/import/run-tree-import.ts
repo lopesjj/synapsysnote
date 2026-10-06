@@ -19,6 +19,7 @@ export interface TreeImportOptions {
   keepTags: boolean;
   fallbackTitle: string;
   provider: string;
+  allowVideo?: boolean;
   containerEmoji?: string;
   existingNotebooks?: Notebook[];
   fetchNote: (node: ImportTreeNode) => Promise<ImportedNoteTree | null>;
@@ -185,6 +186,7 @@ export async function runTreeImport(options: TreeImportOptions): Promise<Importe
       parentPageId,
       uploadMedia,
       keepTags,
+      allowVideo: options.allowVideo,
       isCanceled: options.isCanceled,
       onFileUploaded: options.onFileUploaded,
     });

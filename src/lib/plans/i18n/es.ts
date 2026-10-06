@@ -147,4 +147,10 @@ export const es: PlanStrings = {
   admin_source_owner_env: "OWNER_EMAILS",
   admin_source_system: "Sistema",
   admin_never: "—",
+  lock_limit: "Límite del plan",
+  compare_trial_days: "{days} días",
+  compare_choose: "Elegir",
+  upgrade_mail_body: "¡Hola! Quiero cambiar el plan de mi cuenta.\n\nCuenta: {email}\nPlan deseado: {plan}",
+  banner_plan_ending: "Tu plan {plan} vence en {days} {days|día|días}.",
+  banner_plan_last_day: "Tu plan {plan} vence hoy.",
 };

@@ -147,4 +147,10 @@ export const fr: PlanStrings = {
   admin_source_owner_env: "OWNER_EMAILS",
   admin_source_system: "Système",
   admin_never: "—",
+  lock_limit: "Limite de la formule",
+  compare_trial_days: "{days} jours",
+  compare_choose: "Choisir",
+  upgrade_mail_body: "Bonjour ! Je souhaite changer la formule de mon compte.\n\nCompte : {email}\nFormule souhaitée : {plan}",
+  banner_plan_ending: "Votre formule {plan} expire dans {days} {days|jour|jours}.",
+  banner_plan_last_day: "Votre formule {plan} expire aujourd'hui.",
 };

@@ -153,20 +153,45 @@ export function isVideoMedia(input: { name?: string | null; type?: string | null
 
 const MAX_BLOCK_DEPTH = 64;
 
+export function isVideoBlock(block: unknown): boolean {
+  if (!block || typeof block !== "object") return false;
+  const entry = block as { type?: unknown; media?: unknown };
+  if (entry.type === "video") return true;
+  if (!entry.media || typeof entry.media !== "object") return false;
+  const media = entry.media as { name?: unknown; mimeType?: unknown };
+  return isVideoMedia({
+    name: typeof media.name === "string" ? media.name : null,
+    type: typeof media.mimeType === "string" ? media.mimeType : null,
+  });
+}
+
 export function blocksContainVideo(blocks: unknown, depth = 0): boolean {
   if (!Array.isArray(blocks) || depth > MAX_BLOCK_DEPTH) return false;
-  return blocks.some((block) => {
-    if (!block || typeof block !== "object") return false;
-    const entry = block as { type?: unknown; media?: unknown; children?: unknown };
-    if (entry.type === "video") return true;
-    if (entry.media && typeof entry.media === "object") {
-      const media = entry.media as { name?: unknown; mimeType?: unknown };
-      const name = typeof media.name === "string" ? media.name : null;
-      const type = typeof media.mimeType === "string" ? media.mimeType : null;
-      if (isVideoMedia({ name, type })) return true;
+  return blocks.some(
+    (block) =>
+      isVideoBlock(block) ||
+      (Boolean(block) && typeof block === "object" && blocksContainVideo((block as { children?: unknown }).children, depth + 1))
+  );
+}
+
+export function withoutVideoBlocks<T extends { children?: T[] }>(
+  blocks: T[],
+  isVideo: (block: T) => boolean = isVideoBlock
+): { blocks: T[]; removed: number } {
+  let removed = 0;
+  const strip = (list: T[]): T[] => {
+    const out: T[] = [];
+    for (const block of list) {
+      if (isVideo(block)) {
+        removed += 1;
+        continue;
+      }
+      out.push(block.children?.length ? { ...block, children: strip(block.children) } : block);
     }
-    return blocksContainVideo(entry.children, depth + 1);
-  });
+    return out;
+  };
+  const result = strip(blocks);
+  return { blocks: removed ? result : blocks, removed };
 }
 
 export function pageContainsVideo(page: { blocks?: unknown; blocksJson?: unknown }): boolean {

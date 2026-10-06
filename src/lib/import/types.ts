@@ -9,7 +9,8 @@ export type ImportWarningCode =
   | "missing_asset"
   | "remote_asset"
   | "nested_table"
-  | "unsupported_content";
+  | "unsupported_content"
+  | "plan_video";
 
 export interface ImportedAsset {
   id: string;

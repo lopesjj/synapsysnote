@@ -12,6 +12,7 @@ import {
   useBackgroundImportStore,
 } from "@/lib/import/background-import-store";
 import { useImportTree } from "./use-import-tree";
+import { currentEntitlements } from "@/lib/plans/client";
 
 export interface GoogleDocsImportProgress {
   processed: number;
@@ -162,6 +163,7 @@ export function useGoogleDocsImport(options?: { active?: boolean }) {
           keepTags: true,
           fallbackTitle: "Google Doc",
           provider: "google_docs",
+          allowVideo: currentEntitlements().features.video,
           containerEmoji: "📁",
           existingNotebooks: notebooks,
           fetchNote,

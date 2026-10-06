@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
   Cookie,
+  Crown,
   KeyRound,
   LogOut,
   Minimize2,
   Moon,
   Plug,
   Settings,
+  ShieldCheck,
   Sun,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,6 +27,9 @@ import { useTranslation } from "@/lib/i18n/translations";
 import { isCustomAvatar } from "@/lib/data/user-avatar";
 import { useLegalStore } from "@/lib/legal/store";
 import { COOKIE_PREFERENCES_SECTION } from "@/components/legal/legal-article";
+import { PlanBadge, usePlanBadge } from "@/components/plans/plan-badge";
+import { openPlanDialog, useEntitlements, usePlanStore } from "@/lib/plans/client";
+import { usePlanT } from "@/lib/plans/i18n";
 
 const AVATAR_CLASS =
   "flex size-9 shrink-0 items-center justify-center rounded-full bg-[#ea580c] text-[14px] font-semibold text-white";
@@ -40,7 +45,10 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   const router = useRouter();
   const { t } = useTranslation();
   const { theme, toggle } = useTheme();
-  const { user, signOut, mode } = useAuth();
+  const { user, signOut } = useAuth();
+  const { tp } = usePlanT();
+  const planBadge = usePlanBadge();
+  const isOwner = useEntitlements().status === "owner";
   const { profile } = useUserProfile();
   const [imageError, setImageError] = useState(false);
 
@@ -56,7 +64,6 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
 
   const photoURL = imageError ? null : rawPhotoURL;
   const initial = displayName.trim().charAt(0).toUpperCase() || "?";
-  const planLabel = mode === "demo" || user?.uid === "demo-user" ? t("guest") : t("plan_free");
 
   const avatar = (
     <span className={cn(AVATAR_CLASS, "relative overflow-hidden")}>
@@ -100,9 +107,10 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
               <span className="block max-w-full truncate text-[13px] font-semibold leading-tight text-ink">
                 {displayName}
               </span>
-              <span className="-ml-1.5 mt-0.5 inline-flex items-center rounded-full bg-[var(--accent-soft)] px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.05em] text-[var(--accent)]">
-                {planLabel}
-              </span>
+              <PlanBadge
+                info={planBadge}
+                className="-ml-1.5 mt-0.5 px-1.5 py-0.5 text-[9.5px] tracking-[0.05em]"
+              />
             </div>
             <Settings className="size-4 shrink-0 text-ink" strokeWidth={1.75} />
           </button>
@@ -138,9 +146,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
               {email ? (
                 <p className="mt-0.5 truncate text-[11.5px] text-muted">{email}</p>
               ) : null}
-              <span className="mt-1.5 inline-flex items-center rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--accent)]">
-                {planLabel}
-              </span>
+              <PlanBadge info={planBadge} className="mt-1.5 px-2 py-0.5 text-[10px] tracking-[0.06em]" />
             </div>
           </div>
         </div>
@@ -148,6 +154,19 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
         <MenuSeparator />
 
         <div className="p-1">
+          <MenuItem onSelect={openPlanDialog}>
+            <Crown className="size-4" /> {tp("menu_my_plan")}
+          </MenuItem>
+          {isOwner ? (
+            <MenuItem
+              onSelect={() => {
+                useUiStore.getState().setMobileSidebarOpen(false);
+                usePlanStore.getState().setAdminOpen(true);
+              }}
+            >
+              <ShieldCheck className="size-4" /> {tp("manage_accounts")}
+            </MenuItem>
+          ) : null}
           <MenuItem
             onSelect={() => {
               useUiStore.getState().setMobileSidebarOpen(false);

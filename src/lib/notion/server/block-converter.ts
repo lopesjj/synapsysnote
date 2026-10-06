@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { AppBlock, BlockMedia, BlockType, RichTextSpan } from "@/types/models";
 import { fromTableRows, toTableRows } from "@/lib/data/table-rows";
+import { isVideoMedia } from "@/lib/plans/definitions";
 
 
 interface NotionRichText {
@@ -49,6 +50,8 @@ export interface ConvertContext {
     blockId: string;
   }) => Promise<BlockMedia>;
   resolvePageLink?: (notionPageId: string) => string | undefined;
+  skipVideo?: boolean;
+  onSkippedVideo?: (input: { hosted: boolean }) => Promise<void> | void;
   maxDepth?: number;
 }
 
@@ -351,6 +354,11 @@ export async function notionBlockToAppBlock(
       if (!url) break;
       const caption = notionRichTextToSpans(file.caption, ctx);
       const suggestedName = file.name ?? guessName(url, `${block.type}-${block.id}`);
+
+      if (ctx.skipVideo && (block.type === "video" || isVideoMedia({ name: suggestedName }))) {
+        await ctx.onSkippedVideo?.({ hosted: Boolean(ctx.rehostMedia) && file.type === "file" });
+        return null;
+      }
 
       if (ctx.rehostMedia && file.type === "file") {
         appBlock.media = {

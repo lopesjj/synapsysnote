@@ -8,6 +8,7 @@ import {
   Columns2,
   LayoutGrid,
   List,
+  Lock,
   Notebook as NotebookIcon,
   Plus,
   Search,
@@ -27,6 +28,8 @@ import { useTranslation } from "@/lib/i18n/translations";
 import { IMPORT_ORIGIN_SHORT_KEY, pageImportOrigin } from "@/lib/import/source-label";
 import type { Page } from "@/types/models";
 import { expandContainerInSession } from "@/lib/data/page-tree";
+import { usePlanGates } from "@/lib/plans/gates";
+import { GateTooltip } from "@/components/plans/plan-lock";
 
 export interface NotesScope {
   notebookId?: string | null;
@@ -46,6 +49,7 @@ export function NotesExplorer({
   const router = useRouter();
   const { t, language } = useTranslation();
   const { livePages, notebooks, adapter } = useWorkspace();
+  const gates = usePlanGates();
 
   const layout = useUiStore((state) => state.notesLayout);
   const sort = useUiStore((state) => state.notesSort);
@@ -110,9 +114,14 @@ export function NotesExplorer({
     [livePages, notebooks, selectedId, selected?.notebookId, notebookFilter]
   );
 
+  const noteTarget = gates.noteTarget({
+    notebookId: selected?.notebookId ?? notebookFilter ?? null,
+    parentPageId: selected?.parentPageId ?? null,
+  });
+  const newNoteGate = gates.newPage(noteTarget);
+
   const createNote = async () => {
-    const notebookId = selected?.notebookId ?? notebookFilter ?? null;
-    const parentPageId = selected?.parentPageId ?? null;
+    const { notebookId, parentPageId } = noteTarget;
     const page = await adapter.createPage({
       notebookId,
       parentPageId,
@@ -137,9 +146,11 @@ export function NotesExplorer({
                 }`}
             </p>
           </div>
-          <Button variant="primary" onClick={() => void createNote()}>
-            <Plus /> {t("new_note")}
-          </Button>
+          <GateTooltip gate={newNoteGate}>
+            <Button variant="primary" onClick={() => void createNote()} disabled={!newNoteGate.allowed}>
+              {newNoteGate.allowed ? <Plus /> : <Lock />} {t("new_note")}
+            </Button>
+          </GateTooltip>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -251,9 +262,11 @@ export function NotesExplorer({
                 : t("create_first_note_prompt")
             }
             action={
-              <Button variant="secondary" onClick={() => void createNote()}>
-                <Plus /> {t("new_note")}
-              </Button>
+              <GateTooltip gate={newNoteGate}>
+                <Button variant="secondary" onClick={() => void createNote()} disabled={!newNoteGate.allowed}>
+                  {newNoteGate.allowed ? <Plus /> : <Lock />} {t("new_note")}
+                </Button>
+              </GateTooltip>
             }
           />
         </div>

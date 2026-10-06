@@ -147,4 +147,10 @@ export const ru: PlanStrings = {
   admin_source_owner_env: "OWNER_EMAILS",
   admin_source_system: "Система",
   admin_never: "—",
+  lock_limit: "Лимит тарифа",
+  compare_trial_days: "{days} {days|день|дня|дней}",
+  compare_choose: "Выбрать",
+  upgrade_mail_body: "Здравствуйте! Хочу сменить тариф своего аккаунта.\n\nАккаунт: {email}\nЖелаемый тариф: {plan}",
+  banner_plan_ending: "Ваш тариф {plan} истекает через {days} {days|день|дня|дней}.",
+  banner_plan_last_day: "Ваш тариф {plan} истекает сегодня.",
 };

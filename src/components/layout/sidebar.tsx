@@ -67,6 +67,9 @@ import {
   archivePageTree,
 } from "@/lib/data/archive";
 import { MoveItemDialog, type MoveItemTarget } from "./move-dialog";
+import { OPEN_GATE, usePlanGates, type PlanGates } from "@/lib/plans/gates";
+import { notifyPlanError } from "@/lib/plans/client";
+import { GateTooltip, PlanLockBadge } from "@/components/plans/plan-lock";
 import {
   ModuleSwitch,
   RailModuleToggle,
@@ -146,9 +149,12 @@ export function SidebarRail() {
   const { adapter, pages, databases } = useWorkspace();
   const { t } = useTranslation();
   const railModule = useActiveModule();
+  const gates = usePlanGates();
+  const noteTarget = gates.noteTarget(resolveNoteCreationTarget(pathname, pages, databases));
+  const newNoteGate = gates.newPage(noteTarget);
 
   const createPage = async () => {
-    const target = resolveNoteCreationTarget(pathname, pages, databases);
+    const target = noteTarget;
     const page = await adapter.createPage({
       notebookId: target.notebookId,
       parentPageId: target.parentPageId,
@@ -208,11 +214,17 @@ export function SidebarRail() {
           <StudyRailItems />
         ) : (
           <>
-        <Tooltip label={t("new_note")} shortcut={isMac() ? "⌥N" : "Alt N"} side="right">
-          <Button variant="ghost" size="icon" onClick={() => void createPage()} aria-label={t("new_note")}>
+        <GateTooltip gate={newNoteGate} label={t("new_note")} shortcut={isMac() ? "⌥N" : "Alt N"} side="right">
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={!newNoteGate.allowed}
+            onClick={() => void createPage()}
+            aria-label={t("new_note")}
+          >
             <Plus />
           </Button>
-        </Tooltip>
+        </GateTooltip>
         <Tooltip label={t("all_notes")} side="right">
           <Button
             variant="ghost"
@@ -309,6 +321,8 @@ export function Sidebar({
     archivedPages,
   } = useWorkspace();
   const activeModule = useActiveModule();
+  const gates = usePlanGates();
+  const newRootGate = gates.newNotebook(null);
   const trashedCount = trashedPages.length + trashedDatabases.length + trashedNotebooks.length;
 
   const notebooksSort = useUiStore((state) => state.notebooksSort);
@@ -608,8 +622,8 @@ export function Sidebar({
       if (plan.kind === "reorder-pages") {
         toast.success(t("notes_order_updated"));
       }
-    } catch {
-      toast.error(t("notes_order_failed"));
+    } catch (error) {
+      if (!notifyPlanError(error)) toast.error(t("notes_order_failed"));
     }
   };
 
@@ -643,6 +657,7 @@ export function Sidebar({
         return (
           <NotebookRow
             key={notebook.id}
+            gates={gates}
             notebook={notebook}
             open={open}
             active={active}
@@ -667,8 +682,8 @@ export function Sidebar({
                   presentsAsNotebook(notebook) ? t("notebook_duplicated") : t("page_duplicated")
                 );
                 router.push(`/home/n/${copy.id}`);
-              } catch {
-                toast.error(t("could_not_duplicate"));
+              } catch (error) {
+                if (!notifyPlanError(error)) toast.error(t("could_not_duplicate"));
               }
             }}
             onRename={(name) => adapter.updateNotebook(notebook.id, { name })}
@@ -753,6 +768,7 @@ export function Sidebar({
       return (
         <div key={node.page.id}>
           <SortablePageRow
+            gates={gates}
             node={node}
             active={active}
             isOpen={isOpen}
@@ -785,8 +801,8 @@ export function Sidebar({
                 toast.success(t("note_duplicated"));
                 useUiStore.getState().closeMenu();
                 router.push(`/home/p/${copy.id}`);
-              } catch {
-                toast.error(t("could_not_duplicate"));
+              } catch (error) {
+                if (!notifyPlanError(error)) toast.error(t("could_not_duplicate"));
               }
             }}
             onTrash={async () => {
@@ -1003,15 +1019,16 @@ export function Sidebar({
           <Section
             title={t("pages")}
             action={
-              <Tooltip label={t("new_page")} shortcut={isMac() ? "⌥⇧N" : "Alt ⇧ N"}>
+              <GateTooltip gate={newRootGate} label={t("new_page")} shortcut={isMac() ? "⌥⇧N" : "Alt ⇧ N"}>
                 <button
                   onClick={() => void createNotebook(null)}
-                  className={ROW_ICON_BUTTON}
+                  disabled={!newRootGate.allowed}
+                  className={cn(ROW_ICON_BUTTON, "disabled:opacity-40")}
                   aria-label={t("new_page")}
                 >
                   <FolderPlus className="size-3.5" />
                 </button>
-              </Tooltip>
+              </GateTooltip>
             }
           >
             {renderNotebooks(sortedRootNotebooks, 0)}
@@ -1155,6 +1172,7 @@ function NavLink({
 }
 
 function NotebookRow({
+  gates,
   notebook,
   open,
   active,
@@ -1172,6 +1190,7 @@ function NotebookRow({
   draggingKind,
   children,
 }: {
+  gates: PlanGates;
   notebook: Notebook;
   open: boolean;
   active: boolean;
@@ -1201,6 +1220,11 @@ function NotebookRow({
   const [renaming, setRenaming] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [draft, setDraft] = useState(notebook.name);
+  const newNotebookGate = gates.newNotebook(notebook.id);
+  const newNoteGate = gates.newPage({ notebookId: notebook.id, parentPageId: null });
+  const duplicateGate = menuOpen ? gates.duplicateNotebook(notebook.id) : OPEN_GATE;
+  const archiveGate = gates.archive(null);
+  const canWrite = gates.write.allowed;
 
   return (
     <div
@@ -1298,24 +1322,26 @@ function NotebookRow({
           )}
         >
           <div className="flex min-w-0 items-center overflow-hidden">
-        <Tooltip label={t("new_notebook")}>
+        <GateTooltip gate={newNotebookGate} label={t("new_notebook")}>
           <button
             onClick={onCreateSubnotebook}
-            className={cn(ROW_ICON_BUTTON, ROW_HOVER_ONLY)}
+            disabled={!newNotebookGate.allowed}
+            className={cn(ROW_ICON_BUTTON, ROW_HOVER_ONLY, "disabled:opacity-40")}
             aria-label={t("new_notebook")}
           >
             <FolderPlus className="size-3.5" />
           </button>
-        </Tooltip>
-        <Tooltip label={t("new_note")}>
+        </GateTooltip>
+        <GateTooltip gate={newNoteGate} label={t("new_note")}>
           <button
             onClick={onCreatePage}
-            className={cn(ROW_ICON_BUTTON, ROW_HOVER_ONLY)}
+            disabled={!newNoteGate.allowed}
+            className={cn(ROW_ICON_BUTTON, ROW_HOVER_ONLY, "disabled:opacity-40")}
             aria-label={t("new_note")}
           >
             <Plus className="size-3.5" />
           </button>
-        </Tooltip>
+        </GateTooltip>
         <Menu open={menuOpen} onOpenChange={setMenuOpen}>
           <MenuTrigger asChild>
             <button
@@ -1332,26 +1358,32 @@ function NotebookRow({
             <MenuItem onSelect={() => { closeMenuBar(); router.push(`/home/notes?notebook=${notebook.id}`); }}>
               <FileStack /> {t("all_notes")}
             </MenuItem>
-            <MenuItem onSelect={() => setRenaming(true)}>
+            <MenuItem disabled={!canWrite} onSelect={() => setRenaming(true)}>
               <Pencil className="size-4" /> {t("rename")}
+              <PlanLockBadge gate={gates.write} />
             </MenuItem>
             {presentsAsNotebook(notebook) && onMove ? (
-              <MenuItem onSelect={onMove}>
+              <MenuItem disabled={!canWrite} onSelect={onMove}>
                 <FolderInput className="size-4" /> {t("move_to")}
+                <PlanLockBadge gate={gates.write} />
               </MenuItem>
             ) : null}
-            <MenuItem onSelect={onCreateSubnotebook}>
+            <MenuItem disabled={!newNotebookGate.allowed} onSelect={onCreateSubnotebook}>
               <FolderPlus /> {t("new_notebook")}
+              <PlanLockBadge gate={newNotebookGate} />
             </MenuItem>
-            <MenuItem onSelect={onCreatePage}>
+            <MenuItem disabled={!newNoteGate.allowed} onSelect={onCreatePage}>
               <Plus /> {t("new_note")}
+              <PlanLockBadge gate={newNoteGate} />
             </MenuItem>
-            <MenuItem onSelect={() => void onDuplicate()}>
+            <MenuItem disabled={!duplicateGate.allowed} onSelect={() => void onDuplicate()}>
               <Copy /> {presentsAsNotebook(notebook) ? t("duplicate_notebook") : t("duplicate_page")}
+              <PlanLockBadge gate={duplicateGate} />
             </MenuItem>
             {onArchive ? (
-              <MenuItem onSelect={() => void onArchive()}>
+              <MenuItem disabled={!archiveGate.allowed} onSelect={() => void onArchive()}>
                 <Archive className="size-4" /> {t("archive")}
+                <PlanLockBadge gate={archiveGate} />
               </MenuItem>
             ) : null}
             <MenuSeparator />
@@ -1362,9 +1394,10 @@ function NotebookRow({
         </Menu>
             <button
               ref={setActivatorNodeRef}
-              {...attributes}
-              {...listeners}
-              className={GRIP_CLASS}
+              {...(canWrite ? { ...attributes, ...listeners } : {})}
+              disabled={!canWrite}
+              title={canWrite ? undefined : (gates.write.reason ?? undefined)}
+              className={cn(GRIP_CLASS, "disabled:cursor-not-allowed disabled:opacity-40")}
               aria-label={`${t("reorder")}: ${notebook.name}`}
             >
               <GripVertical className="size-3.5" />
@@ -1390,6 +1423,7 @@ function NotebookRow({
 }
 
 function SortablePageRow({
+  gates,
   node,
   active,
   isOpen,
@@ -1402,6 +1436,7 @@ function SortablePageRow({
   onTrash,
   onArchive,
 }: {
+  gates: PlanGates;
   node: PageTreeNode;
   active: boolean;
   isOpen: boolean;
@@ -1420,6 +1455,10 @@ function SortablePageRow({
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useSortable({
     id: encodeId("page", node.page.id),
   });
+  const subnoteGate = gates.newPage({ notebookId: node.page.notebookId ?? null, parentPageId: node.page.id });
+  const duplicateGate = menuOpen ? gates.duplicatePage(node.page.id) : OPEN_GATE;
+  const archiveGate = gates.archive(null);
+  const canWrite = gates.write.allowed;
 
   return (
     <div
@@ -1493,16 +1532,17 @@ function SortablePageRow({
         )}
       >
         <div className="flex min-w-0 items-center overflow-hidden">
-          <Tooltip label={t("new_subpage")}>
+          <GateTooltip gate={subnoteGate} label={t("new_subpage")}>
             <button
               type="button"
               onClick={() => void onCreateChild()}
-              className={cn(ROW_ICON_BUTTON, ROW_HOVER_ONLY)}
+              disabled={!subnoteGate.allowed}
+              className={cn(ROW_ICON_BUTTON, ROW_HOVER_ONLY, "disabled:opacity-40")}
               aria-label={t("new_subpage")}
             >
               <Plus className="size-3.5" />
             </button>
-          </Tooltip>
+          </GateTooltip>
           <Menu open={menuOpen} onOpenChange={setMenuOpen}>
             <MenuTrigger asChild>
               <button
@@ -1514,23 +1554,28 @@ function SortablePageRow({
               </button>
             </MenuTrigger>
             <MenuContent align="start">
-              <MenuItem onSelect={() => void onCreateChild()}>
+              <MenuItem disabled={!subnoteGate.allowed} onSelect={() => void onCreateChild()}>
                 <Plus /> {t("new_subpage")}
+                <PlanLockBadge gate={subnoteGate} />
               </MenuItem>
               {onMove ? (
-                <MenuItem onSelect={onMove}>
+                <MenuItem disabled={!canWrite} onSelect={onMove}>
                   <FolderInput className="size-4" /> {t("move_to")}
+                  <PlanLockBadge gate={gates.write} />
                 </MenuItem>
               ) : null}
-              <MenuItem onSelect={onToggleFavorite}>
+              <MenuItem disabled={!canWrite} onSelect={onToggleFavorite}>
                 <Star /> {node.page.favorite ? t("unfavorite") : t("favorite")}
+                <PlanLockBadge gate={gates.write} />
               </MenuItem>
-              <MenuItem onSelect={() => void onDuplicate()}>
+              <MenuItem disabled={!duplicateGate.allowed} onSelect={() => void onDuplicate()}>
                 <Copy /> {t("duplicate_note")}
+                <PlanLockBadge gate={duplicateGate} />
               </MenuItem>
               {onArchive ? (
-                <MenuItem onSelect={() => void onArchive()}>
+                <MenuItem disabled={!archiveGate.allowed} onSelect={() => void onArchive()}>
                   <Archive className="size-4" /> {t("archive")}
+                  <PlanLockBadge gate={archiveGate} />
                 </MenuItem>
               ) : null}
               <MenuSeparator />
@@ -1541,9 +1586,10 @@ function SortablePageRow({
           </Menu>
           <button
             ref={setActivatorNodeRef}
-            {...attributes}
-            {...listeners}
-            className={GRIP_CLASS}
+            {...(canWrite ? { ...attributes, ...listeners } : {})}
+            disabled={!canWrite}
+            title={canWrite ? undefined : (gates.write.reason ?? undefined)}
+            className={cn(GRIP_CLASS, "disabled:cursor-not-allowed disabled:opacity-40")}
             aria-label={`Reordenar ${node.page.title || "página"}`}
           >
             <GripVertical className="size-3.5" />

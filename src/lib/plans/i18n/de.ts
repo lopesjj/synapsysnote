@@ -147,4 +147,10 @@ export const de: PlanStrings = {
   admin_source_owner_env: "OWNER_EMAILS",
   admin_source_system: "System",
   admin_never: "—",
+  lock_limit: "Tariflimit",
+  compare_trial_days: "{days} Tage",
+  compare_choose: "Auswählen",
+  upgrade_mail_body: "Hallo! Ich möchte den Tarif meines Kontos ändern.\n\nKonto: {email}\nGewünschter Tarif: {plan}",
+  banner_plan_ending: "Dein Tarif {plan} läuft in {days} {days|Tag|Tagen} ab.",
+  banner_plan_last_day: "Dein Tarif {plan} läuft heute ab.",
 };

@@ -82,6 +82,12 @@ export function useEntitlements(): Entitlements {
   );
 }
 
+export function usePlanNow(): number {
+  const clockOffset = usePlanStore((state) => state.clockOffset);
+  const tick = usePlanStore((state) => state.tick);
+  return tick + clockOffset;
+}
+
 export function usePlanLoaded(): boolean {
   return usePlanStore((state) => state.loaded);
 }

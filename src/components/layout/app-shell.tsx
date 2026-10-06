@@ -43,6 +43,10 @@ import { useStudyT } from "@/lib/study/i18n";
 import { openBlankTimer } from "@/lib/study/ui-store";
 import { useActiveModule, useSwitchModule } from "@/components/study/study-sidebar";
 import { FocusPill, useFocusPillVisible } from "@/components/study/focus-timer";
+import { PlanDialog } from "@/components/plans/plan-dialog";
+import { PlanAdminDialog } from "@/components/plans/plan-admin-dialog";
+import { PlanBanner } from "@/components/plans/plan-banner";
+import { planNoteTarget, usePlanGates } from "@/lib/plans/gates";
 
 const EvernoteImportWizard = dynamic(
   () => import("@/components/import/evernote-import-wizard").then((mod) => mod.EvernoteImportWizard),
@@ -293,7 +297,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           router.push(`/home/n/${notebook.id}`);
           return;
         }
-        const target = resolveNoteCreationTarget(pathname, pages, databases);
+        const target = planNoteTarget(resolveNoteCreationTarget(pathname, pages, databases));
         const page = await adapter.createPage({
           notebookId: target.notebookId,
           parentPageId: target.parentPageId,
@@ -400,6 +404,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
 
         {mode === "local" && !chromeHidden ? <DemoBanner /> : null}
+        {chromeHidden ? null : <PlanBanner />}
 
         {/* Com o relógio do rodapé na tela, o fim da página rola para cima dele em vez de ficar coberto. */}
         <div
@@ -521,6 +526,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         open={workspaceRestoreOpen}
         onOpenChange={(open) => useUiStore.getState().setWorkspaceRestoreOpen(open)}
       />
+      <PlanDialog />
+      <PlanAdminDialog />
       <ScreenReaderLiveRegion />
       <LibrasPlayer />
     </div>
@@ -674,9 +681,12 @@ function BottomNav({ inert = false }: { inert?: boolean }) {
   const { adapter, pages, databases } = useWorkspace();
   const activeModule = useActiveModule();
   const switchModule = useSwitchModule();
+  const gates = usePlanGates();
+  const noteTarget = gates.noteTarget(resolveNoteCreationTarget(pathname, pages, databases));
+  const newNoteGate = gates.newPage(noteTarget);
 
   const createNote = async () => {
-    const target = resolveNoteCreationTarget(pathname, pages, databases);
+    const target = noteTarget;
     const page = await adapter.createPage({
       notebookId: target.notebookId,
       parentPageId: target.parentPageId,
@@ -717,6 +727,7 @@ function BottomNav({ inert = false }: { inert?: boolean }) {
           icon={<FilePlus className="size-[18px]" />}
           label={t("new_note")}
           active={false}
+          disabledReason={newNoteGate.allowed ? null : newNoteGate.reason}
           onClick={() => void createNote()}
         />
       )}
@@ -738,22 +749,26 @@ function MobileNavItem({
   icon,
   label,
   active,
+  disabledReason,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   active?: boolean;
+  disabledReason?: string | null;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={Boolean(disabledReason)}
+      title={disabledReason ?? undefined}
       className={cn(
-        "flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 text-center text-[10px] font-medium leading-tight transition-colors",
+        "flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 text-center text-[10px] font-medium leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-40",
         active ? "text-[var(--accent)]" : "text-muted hover:text-ink"
       )}
-      aria-label={label}
+      aria-label={disabledReason ? `${label}: ${disabledReason}` : label}
     >
       <span
         className={cn(
