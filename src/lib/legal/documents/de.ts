@@ -58,8 +58,8 @@ const de: LegalBundle = {
         id: "content",
         title: "Deine Inhalte bleiben deine",
         blocks: [
-          "Alles, was du erstellst, hochlädst oder importierst — Notizen, Dateien, Aufnahmen, Lernkarten — gehört dir. Wir erheben keinen Eigentumsanspruch darauf.",
-          "Damit der Dienst funktioniert, räumst du uns eine beschränkte, nicht ausschließliche, unentgeltliche, weltweite Lizenz ein, deine Inhalte zu speichern, zu kopieren, zu verarbeiten und anzuzeigen, **ausschließlich zur Bereitstellung des Dienstes für dich** — zum Beispiel zum Speichern von Notizen, Erstellen von Backups oder Transkribieren von Audio auf deine Anfrage. Diese Lizenz endet, wenn du den Inhalt oder dein Konto löschst, vorbehaltlich der in der [Datenschutzerklärung](doc:privacy#retention) genannten Fristen.",
+          "Alles, was du erstellst, hochlädst oder importierst - Notizen, Dateien, Aufnahmen, Lernkarten - gehört dir. Wir erheben keinen Eigentumsanspruch darauf.",
+          "Damit der Dienst funktioniert, räumst du uns eine beschränkte, nicht ausschließliche, unentgeltliche, weltweite Lizenz ein, deine Inhalte zu speichern, zu kopieren, zu verarbeiten und anzuzeigen, **ausschließlich zur Bereitstellung des Dienstes für dich** - zum Beispiel zum Speichern von Notizen, Erstellen von Backups oder Transkribieren von Audio auf deine Anfrage. Diese Lizenz endet, wenn du den Inhalt oder dein Konto löschst, vorbehaltlich der in der [Datenschutzerklärung](doc:privacy#retention) genannten Fristen.",
           "Du bestätigst, dass du die erforderlichen Rechte an dem hast, was du hochlädst. Wir veröffentlichen deine Inhalte nicht, verkaufen sie nicht und verwenden sie nicht zum Training von KI-Modellen.",
         ],
       },
@@ -87,7 +87,7 @@ const de: LegalBundle = {
         blocks: [
           "Einige Funktionen nutzen künstliche Intelligenz: Audio- und Videotranskription, Erstellung von Lernkarten, Erkennung doppelter Karten, Übersetzung und das Gliedern eines von dir eingefügten Stoffplans in Fächer und Themen. Sie verarbeiten nur die Inhalte, die du auswählst, und nur dann, wenn du die Funktion aktivierst. Der tägliche Lernspruch stammt aus einem externen Bestand. Wenn die Sprache der Website nicht Englisch ist, übersetzen wir nur diesen öffentlichen Spruch, nicht deine Notizen oder Lerneinträge.",
           {
-            note: "KI-generierte Ergebnisse können Fehler, Auslassungen oder Ungenauigkeiten enthalten. Überprüfe Transkripte und Lernkarten, bevor du damit lernst, und gleiche sie immer mit der offiziellen Quelle ab — dem Gesetzestext, der Prüfungsausschreibung oder der empfohlenen Literatur.",
+            note: "KI-generierte Ergebnisse können Fehler, Auslassungen oder Ungenauigkeiten enthalten. Überprüfe Transkripte und Lernkarten, bevor du damit lernst, und gleiche sie immer mit der offiziellen Quelle ab - dem Gesetzestext, der Prüfungsausschreibung oder der empfohlenen Literatur.",
           },
           "Was die KI aus deinen Inhalten generiert, gehört dir, zu denselben Bedingungen wie der Rest deiner Inhalte. Wir können Nutzungslimits anwenden, um diese Funktionen für alle verfügbar zu halten.",
         ],
@@ -126,7 +126,7 @@ const de: LegalBundle = {
           },
           "Endet der Test, ohne dass ein Tarif gebucht wurde, oder läuft ein gebuchter Tarif ohne Verlängerung ab, wechselt das Konto in den Nur-Lesen-Modus: Alles, was du erstellt hast, bleibt einsehbar, und du kannst weiterhin archivieren, aus dem Archiv zurückholen, in den Papierkorb verschieben, wiederherstellen und löschen, aber keine Inhalte erstellen oder bearbeiten, bis du einen Tarif wählst.",
           "Ein Tarifwechsel löscht niemals deine Inhalte. Hat der neue Tarif niedrigere Grenzen, bleibt alles Vorhandene gespeichert und verfügbar, du kannst aber keine neuen Elemente eines Typs erstellen, solange die Gesamtzahl über der Grenze liegt. Funktionen, die dein Tarif nicht enthält, bleiben sichtbar, aber deaktiviert.",
-          "Buchung und Wechsel eines Tarifs erfolgen über unseren Support unter {contactEmail}. Preis, Zahlungsmethode, Laufzeit und Kündigungsbedingungen werden vor jeder Berechnung klar dargestellt — es wird nichts ohne deine ausdrückliche Zustimmung berechnet.",
+          "Buchung und Wechsel eines Tarifs erfolgen über unseren Support unter {contactEmail}. Preis, Zahlungsmethode, Laufzeit und Kündigungsbedingungen werden vor jeder Berechnung klar dargestellt - es wird nichts ohne deine ausdrückliche Zustimmung berechnet.",
         ],
       },
       {
@@ -142,7 +142,7 @@ const de: LegalBundle = {
         title: "Verfügbarkeit und Backups",
         blocks: [
           "Wir bemühen uns, den Dienst verfügbar und deine Daten sicher zu halten. Dennoch kann es zu Unterbrechungen wegen Wartungsarbeiten, Updates oder aus Gründen außerhalb unserer Kontrolle kommen.",
-          "Wir empfehlen, Kopien von allem aufzubewahren, was für dich unverzichtbar ist — zum Beispiel durch den Export von Notizen als PDF.",
+          "Wir empfehlen, Kopien von allem aufzubewahren, was für dich unverzichtbar ist - zum Beispiel durch den Export von Notizen als PDF.",
           "{brand} ist ein Hilfsmittel zum Lernen und garantiert nicht, dass du Auswahlprüfungen für den öffentlichen Dienst, Hochschulaufnahmeprüfungen oder andere Prüfungen bestehst. Statistiken, Vorschläge und Lernpläne im Lernmodul sind Schätzungen, die aus deinen Einträgen berechnet werden.",
         ],
       },
@@ -283,7 +283,7 @@ const de: LegalBundle = {
               ],
             },
           },
-          "Wir können Daten außerdem weitergeben, wenn dies gesetzlich, durch gerichtliche Anordnung oder von einer zuständigen Behörde verlangt wird — stets beschränkt auf das Angeforderte — oder im Rahmen einer Unternehmensumstrukturierung, wobei die Garantien dieser Datenschutzerklärung erhalten bleiben.",
+          "Wir können Daten außerdem weitergeben, wenn dies gesetzlich, durch gerichtliche Anordnung oder von einer zuständigen Behörde verlangt wird - stets beschränkt auf das Angeforderte - oder im Rahmen einer Unternehmensumstrukturierung, wobei die Garantien dieser Datenschutzerklärung erhalten bleiben.",
         ],
       },
       {
@@ -402,9 +402,9 @@ const de: LegalBundle = {
         blocks: [
           {
             list: [
-              "**Notwendig** — erforderlich für Anmeldung, Sicherheit und grundlegenden Betrieb. Sie können nicht deaktiviert werden, da der Dienst ohne sie nicht funktionieren würde.",
-              "**Funktional** — machen die Nutzung schneller, z. B. indem sie sich deine Region merken, um die Sprache auszuwählen. Sie werden nur mit deiner Einwilligung verwendet.",
-              "**Analyse und Werbung** — verwenden wir nicht.",
+              "**Notwendig** - erforderlich für Anmeldung, Sicherheit und grundlegenden Betrieb. Sie können nicht deaktiviert werden, da der Dienst ohne sie nicht funktionieren würde.",
+              "**Funktional** - machen die Nutzung schneller, z. B. indem sie sich deine Region merken, um die Sprache auszuwählen. Sie werden nur mit deiner Einwilligung verwendet.",
+              "**Analyse und Werbung** - verwenden wir nicht.",
             ],
           },
         ],
@@ -449,14 +449,14 @@ const de: LegalBundle = {
         id: "third-party",
         title: "Drittanbieter-Cookies",
         blocks: [
-          "Wenn reCAPTCHA erscheint — nach erfolglosen Anmeldeversuchen oder bei der Passwortzurücksetzung — kann Google eigene Cookies setzen, um Menschen und Bots zu unterscheiden. Wenn du dich mit Google anmeldest, folgt das Anmeldefenster ebenfalls Googles Richtlinien. Diese Cookies werden von Google kontrolliert, gemäß der [Datenschutzerklärung von Google](https://policies.google.com/privacy).",
+          "Wenn reCAPTCHA erscheint - nach erfolglosen Anmeldeversuchen oder bei der Passwortzurücksetzung - kann Google eigene Cookies setzen, um Menschen und Bots zu unterscheiden. Wenn du dich mit Google anmeldest, folgt das Anmeldefenster ebenfalls Googles Richtlinien. Diese Cookies werden von Google kontrolliert, gemäß der [Datenschutzerklärung von Google](https://policies.google.com/privacy).",
         ],
       },
       {
         id: "control",
         title: "So verwaltest du deine Auswahl",
         blocks: [
-          "Du kannst deine Einstellungen jederzeit im Bereich oben oder über den Link \"Cookie-Einstellungen\" in der Fußzeile der Anmeldeseite ändern. Du kannst Cookies auch in deinen Browser-Einstellungen blockieren oder löschen — ohne die notwendigen Cookies kannst du dich jedoch nicht bei deinem Konto anmelden.",
+          "Du kannst deine Einstellungen jederzeit im Bereich oben oder über den Link \"Cookie-Einstellungen\" in der Fußzeile der Anmeldeseite ändern. Du kannst Cookies auch in deinen Browser-Einstellungen blockieren oder löschen - ohne die notwendigen Cookies kannst du dich jedoch nicht bei deinem Konto anmelden.",
           "Deine Auswahl wird {consentMonths} Monate lang gespeichert. Danach fragen wir dich erneut.",
         ],
       },

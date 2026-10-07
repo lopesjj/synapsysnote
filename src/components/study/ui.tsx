@@ -26,10 +26,11 @@ import { cn } from "@/lib/utils";
 import { useStudy, type StudyActions } from "@/lib/study/provider";
 import { useStudyT, type StudyKey } from "@/lib/study/i18n";
 import { useStudyUi } from "@/lib/study/ui-store";
-import { useLiveNote, useMaterialNote } from "@/lib/study/hooks";
+import { useLiveNote, useMaterialNote, useReviewMaterial } from "@/lib/study/hooks";
+import { currentTerm, isPastTerm, seriesIdOf } from "@/lib/study/series";
 import { splitDuration } from "@/lib/study/format";
 import { BUILT_IN_CATEGORIES, SUBJECT_COLORS, subjectTone } from "@/lib/study/defaults";
-import type { PerformanceBand, StudyCategory, StudyPlan } from "@/types/study";
+import type { PerformanceBand, StudyCategory, StudyPlan, StudyReview } from "@/types/study";
 import { useGoalGates, usePlanGates } from "@/lib/plans/gates";
 import { GateTooltip, PlanLockBadge } from "@/components/plans/plan-lock";
 
@@ -162,29 +163,47 @@ export function chooseStudyPlan(plan: StudyPlan, setActive: (id: string) => Prom
 
 export function ArchivedPlanBanner({ className }: { className?: string }) {
   const { st } = useStudyT();
-  const { focusPlan, planArchived, actions } = useStudy();
+  const router = useRouter();
+  const { focusPlan, planArchived, plans, actions } = useStudy();
   const unarchiveGate = useGoalGates().unarchive;
   if (!planArchived || !focusPlan) return null;
   const name = focusPlan.name || st("untitled_goal");
+  // Edital anterior não se "reativa": isso abriria dois editais com o mesmo
+  // nome. O caminho daqui é voltar para o edital de agora.
+  const current = isPastTerm(plans, focusPlan) ? currentTerm(plans, seriesIdOf(focusPlan)) : null;
   return (
     <div className={cn("mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3", className)}>
       <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-muted">
         <span className="font-medium text-ink">{name}</span>
         {" · "}
-        {st("goal_archived_notice")} {st("goal_readonly_banner")}
+        {current ? st("goal_past_term_notice") : st("goal_archived_notice")} {st("goal_readonly_banner")}
       </p>
-      <GateTooltip gate={unarchiveGate}>
+      {current ? (
         <Button
           variant="secondary"
           size="sm"
           className="shrink-0"
-          disabled={!unarchiveGate.allowed}
-          onClick={() => void reactivatePlan(focusPlan.id, actions).then(() => toast.success(st("goal_unarchived")))}
+          onClick={() => {
+            useStudyUi.getState().setBrowsePlanId(null);
+            router.push(`/home/study/goals/${current.id}`);
+          }}
         >
-          {unarchiveGate.allowed ? null : <Lock />}
-          {st("goals_unarchive")}
+          {st("goal_open_current_term")}
         </Button>
-      </GateTooltip>
+      ) : (
+        <GateTooltip gate={unarchiveGate}>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
+            disabled={!unarchiveGate.allowed}
+            onClick={() => void reactivatePlan(focusPlan.id, actions).then(() => toast.success(st("goal_unarchived")))}
+          >
+            {unarchiveGate.allowed ? null : <Lock />}
+            {st("goals_unarchive")}
+          </Button>
+        </GateTooltip>
+      )}
     </div>
   );
 }
@@ -408,11 +427,12 @@ export function PanelLink({ href, children }: { href: string; children: ReactNod
   );
 }
 
+/** Barra da disciplina: a altura acompanha a caixa alta do texto ao lado, para alinhar com o nome. */
 export function SubjectDot({ color, className }: { color?: string | null; className?: string }) {
   return (
     <span
       aria-hidden
-      className={cn("inline-block h-3.5 w-[4px] shrink-0 rounded-full", className)}
+      className={cn("inline-block h-2.5 w-[4px] shrink-0 rounded-full", className)}
       style={{ backgroundColor: color ? subjectTone(color) : "var(--text-faint)" }}
     />
   );
@@ -820,6 +840,18 @@ export function FocusButton({
   );
 }
 
+/** Material de uma revisão, no mesmo formato do Diário: a nota ligada vira atalho. */
+export function ReviewMaterial({ review, className }: { review: StudyReview; className?: string }) {
+  const reviewMaterial = useReviewMaterial();
+  const found = reviewMaterial(review);
+  if (!found) return null;
+  return (
+    <span className={cn("flex min-w-0 text-[11.5px] leading-4 text-faint", className)}>
+      <MaterialLink material={found.material} pageId={found.pageId} className="min-w-0" />
+    </span>
+  );
+}
+
 export function MaterialLink({
   material,
   pageId,
@@ -944,7 +976,7 @@ export function StudySelect<T extends string | number = string>({
             className
           )}
         >
-          <span className="truncate">{current?.label ?? placeholder ?? "—"}</span>
+          <span className="truncate">{current?.label ?? placeholder ?? "-"}</span>
           <ChevronDown className="size-3.5 shrink-0 text-muted opacity-70 transition-transform duration-200 group-data-[state=open]:rotate-180" />
         </button>
       </MenuTrigger>

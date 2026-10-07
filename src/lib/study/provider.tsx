@@ -71,6 +71,7 @@ import {
   undoLastCompletion,
   type CycleTally,
 } from "./cycle";
+import { intervalsBefore, reviewsDroppedBy } from "./series";
 import { PlanningProvider } from "./planning";
 import { assertPlanFeature, assertPlanWritable, currentEntitlements, planFailure, useEntitlements } from "@/lib/plans/client";
 import { goalGrowthViolation } from "@/lib/plans/usage";
@@ -126,11 +127,29 @@ export interface CycleConfigInput {
   items?: CycleItem[];
 }
 
+/**
+ * Marcar a próxima prova. `same` continua no edital de agora (muda a data e o
+ * dia em que a contagem recomeça); `term` abre outro edital na mesma série,
+ * guardando o anterior inteiro como histórico.
+ */
+export interface NewExamInput {
+  planId: string;
+  mode: "same" | "term";
+  examDate: DayKey | null;
+  startDay: DayKey;
+  termLabel?: string;
+  /** Nome do edital que está saindo, quando ele ainda não tinha um. */
+  currentLabel?: string;
+  copySubjects?: boolean;
+}
+
 export type ExamInput = Omit<MockExam, "id" | "createdAt" | "updatedAt"> & { id?: string };
 export type ReminderInput = Omit<StudyReminder, "id" | "createdAt" | "updatedAt"> & { id?: string };
 
 export interface StudyActions {
   savePlan(input: PlanInput): Promise<string>;
+  startNewExam(input: NewExamInput): Promise<string>;
+  renameTerm(planId: string, label: string): Promise<void>;
   createPlanWithSubjects(input: PlanInput, subjects: SubjectDraft[]): Promise<string>;
   setActivePlan(id: string | null): Promise<void>;
   archivePlan(id: string, archived: boolean): Promise<void>;
@@ -212,6 +231,15 @@ const EMPTY_STATE: StudyState = {
   stickies: [],
   settings: DEFAULT_STUDY_SETTINGS,
 };
+
+/**
+ * O bloco de notas é o único lugar que lê os adesivos. Ouvir essa coleção na
+ * entrada custa leituras em toda sessão sem nada mostrar, então ela só é
+ * assinada quando o bloco é aberto pela primeira vez.
+ */
+const LAZY_COLLECTIONS: StudyCollection[] = ["study_stickies"];
+
+const EAGER_COLLECTIONS: StudyCollection[] = STUDY_COLLECTIONS.filter((name) => !LAZY_COLLECTIONS.includes(name));
 
 const REQUIRED_FOR_READY: StudyCollection[] = [
   "study_plans",
@@ -312,46 +340,57 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   }
   const state = stored.key === backend.key ? stored.data : EMPTY_STATE;
   const [clock, setClock] = useState(() => Date.now());
+  const padOpen = useStudyUi((ui) => ui.padOpen);
+  const [padUsed, setPadUsed] = useState(false);
+  if (padOpen && !padUsed) setPadUsed(true);
   const stateRef = useRef<StudyState>(state);
 
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const unsubs: Array<() => void> = [];
-    const markLoaded = (name: StudyCollection) => {
-      setLoaded((previous) => {
-        if (previous.key === backend.key && previous.collections.has(name)) return previous;
-        const collections = new Set(previous.key === backend.key ? previous.collections : []);
-        collections.add(name);
-        return { key: backend.key, collections };
-      });
-    };
-    const handle = (name: StudyCollection, docs: StudyDoc[]) => {
-      if (cancelled) return;
-      rememberStudyCollection(backend.key, name, docs);
-      setStored((current) => ({
-        key: backend.key,
-        data: applyCollection(current.key === backend.key ? current.data : EMPTY_STATE, name, docs),
-      }));
-      markLoaded(name);
-    };
-    for (const name of STUDY_COLLECTIONS) {
-      unsubs.push(
-        backend.subscribe(
-          name,
-          (docs) => handle(name, docs),
-          () => markLoaded(name)
-        )
-      );
-    }
-    return () => {
-      cancelled = true;
-      unsubs.forEach((unsub) => unsub());
-    };
-  }, [backend]);
+  // As assinaturas ficam em dois efeitos: as de sempre não podem ser derrubadas
+  // quando uma coleção preguiçosa entra, senão tudo seria lido de novo.
+  const listen = useCallback(
+    (names: readonly StudyCollection[]) => {
+      let cancelled = false;
+      const unsubs: Array<() => void> = [];
+      const markLoaded = (name: StudyCollection) => {
+        setLoaded((previous) => {
+          if (previous.key === backend.key && previous.collections.has(name)) return previous;
+          const collections = new Set(previous.key === backend.key ? previous.collections : []);
+          collections.add(name);
+          return { key: backend.key, collections };
+        });
+      };
+      const handle = (name: StudyCollection, docs: StudyDoc[]) => {
+        if (cancelled) return;
+        rememberStudyCollection(backend.key, name, docs);
+        setStored((current) => ({
+          key: backend.key,
+          data: applyCollection(current.key === backend.key ? current.data : EMPTY_STATE, name, docs),
+        }));
+        markLoaded(name);
+      };
+      for (const name of names) {
+        unsubs.push(
+          backend.subscribe(
+            name,
+            (docs) => handle(name, docs),
+            () => markLoaded(name)
+          )
+        );
+      }
+      return () => {
+        cancelled = true;
+        unsubs.forEach((unsub) => unsub());
+      };
+    },
+    [backend]
+  );
+
+  useEffect(() => listen(EAGER_COLLECTIONS), [listen]);
+  useEffect(() => (padUsed ? listen(LAZY_COLLECTIONS) : undefined), [listen, padUsed]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 60_000);
@@ -379,7 +418,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     );
     if (!orphans.length) return;
     void commit(orphans.map((review) => ({ kind: "delete" as const, collection: "study_reviews" as const, id: review.id })));
-  }, [relationsLoaded, state.sessions, state.reviews, commit]);
+  }, [relationsLoaded, state.plans, state.sessions, state.reviews, commit]);
 
   const actions = useMemo<StudyActions>(() => {
     const now = () => Date.now();
@@ -436,6 +475,9 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         weeklyGoalMinutes: 0,
         weeklyGoalQuestions: 0,
         order: Math.max(0, ...current().plans.map((plan) => plan.order + 1)),
+        seriesId: id,
+        termLabel: "",
+        startDay: null,
         createdAt: now(),
       };
       return {
@@ -445,6 +487,8 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         institution: trimName(input.institution ?? existing?.institution),
         role: trimName(input.role ?? existing?.role),
         notes: (input.notes ?? existing?.notes ?? "").slice(0, 4000),
+        seriesId: input.seriesId ?? existing?.seriesId ?? id,
+        termLabel: trimName(input.termLabel ?? existing?.termLabel),
         id,
         updatedAt: now(),
       };
@@ -494,8 +538,14 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       updatedAt: now(),
     });
 
-    const reviewSets = (input: SessionInput, sessionId: string, intervals: number[]): PlainWrite[] =>
-      intervals.map((interval) => ({
+    /** A prova fecha a agenda: nada é marcado para o dia dela em diante. */
+    const examCutoff = (planId: string): DayKey | null =>
+      current().plans.find((plan) => plan.id === planId)?.examDate ?? null;
+
+    const reviewSets = (input: SessionInput, sessionId: string, intervals: number[]): PlainWrite[] => {
+      const cutoff = examCutoff(input.planId);
+      return intervalsBefore(intervals, input.day, cutoff)
+        .map((interval) => ({
         kind: "set",
         collection: "study_reviews",
         id: backend.newId(),
@@ -513,6 +563,14 @@ export function StudyProvider({ children }: { children: ReactNode }) {
           updatedAt: now(),
         },
       }));
+    };
+
+    /** Revisões pendentes marcadas para o dia da prova em diante saem da agenda. */
+    const dropReviewsFrom = (planId: string, cutoff: DayKey | null): StudyWrite[] =>
+      reviewsDroppedBy(
+        current().reviews.filter((review) => review.planId === planId),
+        cutoff
+      ).map((review) => ({ kind: "delete" as const, collection: "study_reviews" as const, id: review.id }));
 
     const releaseTopic = (subjectId: string, topicId: string): StudyWrite => ({
       kind: "transform",
@@ -620,13 +678,114 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         if (existing) writable();
         else goalCapacity();
         const id = existing?.id ?? backend.newId();
-        const writes: StudyWrite[] = [{ kind: "set", collection: "study_plans", id, data: planDoc(input, id, existing) }];
+        const doc = planDoc(input, id, existing);
+        const writes: StudyWrite[] = [{ kind: "set", collection: "study_plans", id, data: doc }];
+        if (existing && input.examDate !== undefined) writes.push(...dropReviewsFrom(id, doc.examDate as DayKey | null));
         const settings = current().settings;
         const activeValid = current().plans.some((plan) => plan.id === settings.activePlanId && !plan.archived);
         if (!existing && !activeValid) writes.push(settingsWrite({ activePlanId: id }));
         await commit(writes);
         const nextIcon = input.icon === undefined ? existing?.icon : input.icon;
         if (existing?.icon && existing.icon !== nextIcon) await releaseIcons([existing.icon], id);
+        return id;
+      },
+      /** Nome do edital. Vale também no edital anterior, que fica arquivado. */
+      async renameTerm(planId, label) {
+        writable();
+        if (!current().plans.some((plan) => plan.id === planId)) return;
+        await commit([
+          { kind: "merge", collection: "study_plans", id: planId, data: { termLabel: trimName(label), updatedAt: now() } },
+        ]);
+      },
+      async startNewExam(input) {
+        const previous = current().plans.find((plan) => plan.id === input.planId);
+        if (!previous) throw new Error("missing-plan");
+        assertOpen(previous.id);
+        const startDay = input.startDay;
+        if (input.mode === "same") {
+          writable();
+          const writes: StudyWrite[] = [
+            {
+              kind: "merge",
+              collection: "study_plans",
+              id: previous.id,
+              data: { examDate: input.examDate, startDay, updatedAt: now() },
+            },
+            ...dropReviewsFrom(previous.id, input.examDate),
+          ];
+          await commit(writes);
+          return previous.id;
+        }
+        // O edital anterior é arquivado no mesmo envio, então a conta de objetivos ativos não sobe.
+        goalCapacity(previous.id);
+        const id = backend.newId();
+        const series = previous.seriesId || previous.id;
+        const writes: StudyWrite[] = [
+          {
+            kind: "set",
+            collection: "study_plans",
+            id,
+            data: {
+              name: previous.name,
+              institution: previous.institution,
+              role: previous.role,
+              icon: previous.icon,
+              notes: "",
+              archived: false,
+              weeklyGoalMinutes: previous.weeklyGoalMinutes,
+              weeklyGoalQuestions: previous.weeklyGoalQuestions,
+              order: Math.max(0, ...current().plans.map((plan) => plan.order + 1)),
+              seriesId: series,
+              termLabel: trimName(input.termLabel),
+              startDay,
+              examDate: input.examDate,
+              id,
+              createdAt: now(),
+              updatedAt: now(),
+            },
+          },
+          {
+            kind: "merge",
+            collection: "study_plans",
+            id: previous.id,
+            data: {
+              archived: true,
+              ...(input.currentLabel ? { termLabel: trimName(input.currentLabel) } : null),
+              updatedAt: now(),
+            },
+          },
+          settingsWrite({ activePlanId: id }),
+        ];
+        // As disciplinas vêm zeradas: mesmos nomes e tópicos, nenhum deles concluído.
+        if (input.copySubjects) {
+          const sources = current().subjects.filter((subject) => subject.planId === previous.id);
+          for (const subject of sources) {
+            const subjectId = backend.newId();
+            writes.push({
+              kind: "set",
+              collection: "study_subjects",
+              id: subjectId,
+              data: {
+                planId: id,
+                name: subject.name,
+                color: subject.color,
+                topics: subject.topics.map((topic) => ({
+                  id: backend.newId(),
+                  name: topic.name,
+                  done: false,
+                  doneAt: null,
+                  pageId: topic.pageId,
+                  url: topic.url,
+                })),
+                notebookId: subject.notebookId,
+                order: subject.order,
+                createdAt: now(),
+                updatedAt: now(),
+              },
+            });
+          }
+        }
+        await commit(writes);
         return id;
       },
       async createPlanWithSubjects(input, drafts) {
@@ -1019,11 +1178,18 @@ export function StudyProvider({ children }: { children: ReactNode }) {
           writes.push(...reviewSets(input, id, snapshot.settings.reviewIntervals));
         } else {
           const shift = diffDays(previous.day, input.day);
+          const cutoff = examCutoff(input.planId);
           for (const review of own) {
+            const dueDay = shift !== 0 && review.status === "pending" ? addDays(review.dueDay, shift) : review.dueDay;
+            // Mudar o dia da sessão pode empurrar a revisão para depois da prova: ali ela sai da agenda.
+            if (review.status === "pending" && cutoff && dueDay >= cutoff) {
+              writes.push({ kind: "delete", collection: "study_reviews", id: review.id });
+              continue;
+            }
             const data: Record<string, unknown> = {};
             if (review.subjectId !== input.subjectId) data.subjectId = input.subjectId;
             if (review.topicId !== input.topicId) data.topicId = input.topicId;
-            if (shift !== 0 && review.status === "pending") data.dueDay = addDays(review.dueDay, shift);
+            if (dueDay !== review.dueDay) data.dueDay = dueDay;
             if (Object.keys(data).length) writes.push({ kind: "merge", collection: "study_reviews", id: review.id, data: { ...data, updatedAt: now() } });
           }
         }
@@ -1099,12 +1265,17 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         writable();
         const review = current().reviews.find((entry) => entry.id === id);
         if (review) assertOpen(review.planId);
+        // A prova fecha a agenda: adiar não pode criar uma revisão que o
+        // próprio corte apagaria em seguida.
+        const cutoff = review ? examCutoff(review.planId) : null;
+        const dueDay = cutoff && day >= cutoff ? addDays(cutoff, -1) : day;
+        if (cutoff && dueDay >= cutoff) return;
         await commit([
           {
             kind: "merge",
             collection: "study_reviews",
             id,
-            data: { dueDay: day, status: "pending", resolvedAt: null, resolvedSessionId: null, updatedAt: now() },
+            data: { dueDay, status: "pending", resolvedAt: null, resolvedSessionId: null, updatedAt: now() },
           },
         ]);
       },

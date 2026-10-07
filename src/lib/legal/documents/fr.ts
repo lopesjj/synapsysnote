@@ -58,8 +58,8 @@ const fr: LegalBundle = {
         id: "content",
         title: "Votre contenu reste le vôtre",
         blocks: [
-          "Tout ce que vous créez, envoyez ou importez — notes, fichiers, enregistrements, flashcards — vous appartient. Nous ne revendiquons aucun droit de propriété sur ce contenu.",
-          "Pour que le service fonctionne, vous nous accordez une licence limitée, non exclusive, gratuite et mondiale pour stocker, copier, traiter et afficher votre contenu **uniquement pour vous fournir le service** — par exemple, enregistrer vos notes, effectuer des sauvegardes ou transcrire un fichier audio lorsque vous le demandez. Cette licence prend fin lorsque vous supprimez le contenu ou votre compte, sous réserve des délais prévus dans la [Politique de confidentialité](doc:privacy#retention).",
+          "Tout ce que vous créez, envoyez ou importez - notes, fichiers, enregistrements, flashcards - vous appartient. Nous ne revendiquons aucun droit de propriété sur ce contenu.",
+          "Pour que le service fonctionne, vous nous accordez une licence limitée, non exclusive, gratuite et mondiale pour stocker, copier, traiter et afficher votre contenu **uniquement pour vous fournir le service** - par exemple, enregistrer vos notes, effectuer des sauvegardes ou transcrire un fichier audio lorsque vous le demandez. Cette licence prend fin lorsque vous supprimez le contenu ou votre compte, sous réserve des délais prévus dans la [Politique de confidentialité](doc:privacy#retention).",
           "Vous déclarez détenir les droits nécessaires sur ce que vous envoyez. Nous ne publions pas votre contenu, ne le vendons pas et ne l'utilisons pas pour entraîner des modèles d'intelligence artificielle.",
         ],
       },
@@ -87,7 +87,7 @@ const fr: LegalBundle = {
         blocks: [
           "Certaines fonctionnalités utilisent l'intelligence artificielle : transcription audio et vidéo, génération de flashcards, détection de flashcards en double, traduction et organisation en matières et en thèmes d'un programme que vous collez. Elles ne traitent que le contenu que vous choisissez, au moment où vous activez la fonctionnalité. La phrase quotidienne des études provient d'un fonds externe. Lorsque la langue du site n'est pas l'anglais, seule cette phrase publique est traduite, sans utiliser vos notes ni vos enregistrements d'étude.",
           {
-            note: "Les résultats générés par l'IA peuvent contenir des erreurs, des omissions ou des inexactitudes. Relisez les transcriptions et les flashcards avant de les utiliser pour étudier, et vérifiez toujours auprès de la source officielle — texte de loi, avis de concours ou bibliographie recommandée.",
+            note: "Les résultats générés par l'IA peuvent contenir des erreurs, des omissions ou des inexactitudes. Relisez les transcriptions et les flashcards avant de les utiliser pour étudier, et vérifiez toujours auprès de la source officielle - texte de loi, avis de concours ou bibliographie recommandée.",
           },
           "Ce que l'IA génère à partir de votre contenu vous appartient, aux mêmes conditions que le reste de votre contenu. Nous pouvons appliquer des limites d'utilisation pour que ces fonctionnalités restent disponibles pour tous.",
         ],
@@ -126,7 +126,7 @@ const fr: LegalBundle = {
           },
           "Lorsque l'essai se termine sans qu'une formule soit souscrite, ou lorsqu'une formule souscrite expire sans être renouvelée, le compte passe en mode lecture seule : tout ce que vous avez créé reste consultable, et vous pouvez toujours archiver, désarchiver, mettre à la corbeille, restaurer et supprimer, mais vous ne pouvez ni créer ni modifier de contenu tant que vous n'avez pas choisi de formule.",
           "Changer de formule ne supprime jamais votre contenu. Si la nouvelle formule a des limites plus basses, ce qui existe déjà reste enregistré et accessible, mais vous ne pourrez pas créer de nouveaux éléments d'un type tant que le total dépasse la limite. Les fonctionnalités que votre formule n'inclut pas restent visibles, mais désactivées.",
-          "La souscription et le changement de formule se font auprès de notre service client, à l'adresse {contactEmail}. Le prix, le mode de paiement, la durée et les conditions d'annulation seront clairement présentés avant tout débit — rien ne sera facturé sans votre accord exprès.",
+          "La souscription et le changement de formule se font auprès de notre service client, à l'adresse {contactEmail}. Le prix, le mode de paiement, la durée et les conditions d'annulation seront clairement présentés avant tout débit - rien ne sera facturé sans votre accord exprès.",
         ],
       },
       {
@@ -142,7 +142,7 @@ const fr: LegalBundle = {
         title: "Disponibilité et sauvegardes",
         blocks: [
           "Nous nous efforçons de maintenir le service disponible et vos données en sécurité. Malgré cela, des interruptions peuvent survenir pour maintenance, mises à jour ou pour des raisons indépendantes de notre volonté.",
-          "Nous vous recommandons de conserver des copies de tout ce qui vous est essentiel — par exemple en exportant des notes en PDF.",
+          "Nous vous recommandons de conserver des copies de tout ce qui vous est essentiel - par exemple en exportant des notes en PDF.",
           "{brand} est un outil d'aide à l'étude et ne garantit pas la réussite aux concours, aux examens d'entrée à l'université ou aux évaluations. Les statistiques, suggestions et plannings du module d'étude sont des estimations calculées à partir des données que vous enregistrez.",
         ],
       },
@@ -283,7 +283,7 @@ const fr: LegalBundle = {
               ],
             },
           },
-          "Nous pouvons également partager des données lorsque la loi, une décision de justice ou une autorité compétente l'exige — toujours dans la limite de ce qui est demandé — ou dans le cadre d'une réorganisation de la société, les garanties de la présente politique étant maintenues.",
+          "Nous pouvons également partager des données lorsque la loi, une décision de justice ou une autorité compétente l'exige - toujours dans la limite de ce qui est demandé - ou dans le cadre d'une réorganisation de la société, les garanties de la présente politique étant maintenues.",
         ],
       },
       {
@@ -402,9 +402,9 @@ const fr: LegalBundle = {
         blocks: [
           {
             list: [
-              "**Essentiels** — requis pour la connexion, la sécurité et le fonctionnement de base. Ils ne peuvent pas être désactivés, car le service ne fonctionnerait pas sans eux.",
-              "**Fonctionnels** — rendent l'expérience plus rapide, par exemple en mémorisant votre région pour choisir la langue. Ils ne sont utilisés qu'avec votre consentement.",
-              "**Analyse et publicité** — nous n'en utilisons pas.",
+              "**Essentiels** - requis pour la connexion, la sécurité et le fonctionnement de base. Ils ne peuvent pas être désactivés, car le service ne fonctionnerait pas sans eux.",
+              "**Fonctionnels** - rendent l'expérience plus rapide, par exemple en mémorisant votre région pour choisir la langue. Ils ne sont utilisés qu'avec votre consentement.",
+              "**Analyse et publicité** - nous n'en utilisons pas.",
             ],
           },
         ],
@@ -449,14 +449,14 @@ const fr: LegalBundle = {
         id: "third-party",
         title: "Cookies tiers",
         blocks: [
-          "Lorsque reCAPTCHA apparaît — après des tentatives de connexion infructueuses ou lors d'une réinitialisation de mot de passe — Google peut déposer ses propres cookies pour distinguer les personnes des robots. Lorsque vous vous connectez avec Google, la fenêtre de connexion suit également les politiques de Google. Ces cookies sont contrôlés par Google, conformément à la [Politique de confidentialité de Google](https://policies.google.com/privacy).",
+          "Lorsque reCAPTCHA apparaît - après des tentatives de connexion infructueuses ou lors d'une réinitialisation de mot de passe - Google peut déposer ses propres cookies pour distinguer les personnes des robots. Lorsque vous vous connectez avec Google, la fenêtre de connexion suit également les politiques de Google. Ces cookies sont contrôlés par Google, conformément à la [Politique de confidentialité de Google](https://policies.google.com/privacy).",
         ],
       },
       {
         id: "control",
         title: "Comment gérer vos choix",
         blocks: [
-          "Vous pouvez modifier vos préférences à tout moment dans le panneau ci-dessus ou via le lien « Préférences de cookies » dans le pied de page de la page de connexion. Vous pouvez également bloquer ou supprimer des cookies dans les paramètres de votre navigateur — mais sans les cookies essentiels, vous ne pourrez pas vous connecter à votre compte.",
+          "Vous pouvez modifier vos préférences à tout moment dans le panneau ci-dessus ou via le lien « Préférences de cookies » dans le pied de page de la page de connexion. Vous pouvez également bloquer ou supprimer des cookies dans les paramètres de votre navigateur - mais sans les cookies essentiels, vous ne pourrez pas vous connecter à votre compte.",
           "Vos choix sont enregistrés pendant {consentMonths} mois. Passé ce délai, nous vous reposerons la question.",
         ],
       },

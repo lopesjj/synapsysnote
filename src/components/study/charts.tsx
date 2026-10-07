@@ -598,11 +598,17 @@ export function Donut({
               })
             : null}
         </svg>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+        {/* O miolo do anel é o limite do texto: o nome quebra em duas linhas em vez de encostar no traço. */}
+        <div
+          className="pointer-events-none absolute flex flex-col items-center justify-center text-center"
+          style={{ inset: thickness + 8 }}
+        >
           {hover ? (
             <>
-              <span className="text-[15px] font-semibold text-ink">{segments.find((segment) => segment.id === hover)?.valueLabel}</span>
-              <span className="max-w-[80%] truncate text-[11px] text-muted">{segments.find((segment) => segment.id === hover)?.label}</span>
+              <span className="text-[15px] font-semibold leading-tight text-ink">{segments.find((segment) => segment.id === hover)?.valueLabel}</span>
+              <span className="mt-0.5 line-clamp-2 text-[11px] leading-[1.3] text-muted [overflow-wrap:anywhere]">
+                {segments.find((segment) => segment.id === hover)?.label}
+              </span>
             </>
           ) : (
             center

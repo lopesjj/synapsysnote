@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
@@ -10,7 +10,17 @@ import { subjectTone } from "@/lib/study/defaults";
 import type { DayKey, StudyPlan } from "@/types/study";
 
 /** Contagem regressiva da prova com a barra do caminho já percorrido desde o início do objetivo. */
-export function ExamCountdown({ plan, startDay, onSetDate }: { plan: StudyPlan; startDay: DayKey; onSetDate?: () => void }) {
+export function ExamCountdown({
+  plan,
+  startDay,
+  onSetDate,
+  onNewExam,
+}: {
+  plan: StudyPlan;
+  startDay: DayKey;
+  onSetDate?: () => void;
+  onNewExam?: () => void;
+}) {
   const { st, locale } = useStudyT();
   const { today } = useStudy();
   if (!plan.examDate) {
@@ -29,7 +39,20 @@ export function ExamCountdown({ plan, startDay, onSetDate }: { plan: StudyPlan; 
   const days = diffDays(today, plan.examDate);
   const long = formatDay(plan.examDate, locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   if (days < 0) {
-    return <p className="text-[14px] text-muted">{st("goal_exam_was", { date: formatDay(plan.examDate, locale, { day: "numeric", month: "short", year: "numeric" }) })}</p>;
+    // Prova passada: a data vira histórico e o caminho daqui é marcar a próxima.
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[14px] text-muted">
+          {st("goal_exam_was", { date: formatDay(plan.examDate, locale, { day: "numeric", month: "short", year: "numeric" }) })}
+        </p>
+        {onNewExam ? (
+          <Button variant="secondary" size="sm" onClick={onNewExam} className="relative z-10">
+            <Flag />
+            {st("countdown_new_exam")}
+          </Button>
+        ) : null}
+      </div>
+    );
   }
   const span = Math.max(1, diffDays(startDay, plan.examDate));
   const elapsed = Math.min(span, Math.max(0, diffDays(startDay, today)));

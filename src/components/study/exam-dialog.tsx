@@ -11,6 +11,7 @@ import { DateField } from "@/components/ui/pickers";
 import { cn } from "@/lib/utils";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
+import { useStudyUi, type ExamPrefill } from "@/lib/study/ui-store";
 import { clockLabel, parseDurationInput } from "@/lib/study/format";
 import { examTotals, percentLabel } from "@/lib/study/metrics";
 import type { MockExam, MockExamRow, MockExamStyle } from "@/types/study";
@@ -49,22 +50,51 @@ function toRow(draft: RowDraft, style: MockExamStyle): MockExamRow {
   };
 }
 
-export function ExamDialog({ open, onOpenChange, exam }: { open: boolean; onOpenChange: (open: boolean) => void; exam?: MockExam | null }) {
+export function ExamDialog({
+  open,
+  onOpenChange,
+  exam,
+  prefill,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  exam?: MockExam | null;
+  prefill?: ExamPrefill | null;
+}) {
   return (
     <DialogShell open={open} onOpenChange={onOpenChange} className="max-w-3xl">
-      {open ? <ExamForm exam={exam ?? null} onClose={() => onOpenChange(false)} /> : null}
+      {open ? <ExamForm exam={exam ?? null} prefill={prefill ?? null} onClose={() => onOpenChange(false)} /> : null}
     </DialogShell>
   );
 }
 
-function ExamForm({ exam, onClose }: { exam: MockExam | null; onClose: () => void }) {
+/** Simulado cronometrado: ao parar o relógio esta janela abre com o tempo e o dia prontos. */
+export function TimerExamDialog() {
+  const open = useStudyUi((state) => state.examOpen);
+  const prefill = useStudyUi((state) => state.examPrefill);
+  return (
+    <ExamDialog
+      key={prefill?.durationSec ?? "exam"}
+      open={open}
+      prefill={prefill}
+      onOpenChange={(next) => {
+        if (!next) useStudyUi.getState().closeExam();
+      }}
+    />
+  );
+}
+
+function ExamForm({ exam, prefill, onClose }: { exam: MockExam | null; prefill: ExamPrefill | null; onClose: () => void }) {
   const { st, textDir } = useStudyT();
   const { focusPlan, planReadOnly, planSubjects, actions, today, subjectById } = useStudy();
-  const [day, setDay] = useState(exam?.day ?? today);
+  const [day, setDay] = useState(exam?.day ?? prefill?.day ?? today);
   const [name, setName] = useState(exam?.name ?? "");
   const [style, setStyle] = useState<MockExamStyle>(exam?.style ?? "multiple");
   const [board, setBoard] = useState(exam?.board ?? "");
-  const [durationText, setDurationText] = useState(exam?.durationSec ? clockLabel(exam.durationSec, true) : "");
+  const [durationText, setDurationText] = useState(() => {
+    const seconds = exam?.durationSec ?? prefill?.durationSec ?? 0;
+    return seconds ? clockLabel(seconds, true) : "";
+  });
   const [comment, setComment] = useState(exam?.comment ?? "");
   const [rows, setRows] = useState<RowDraft[]>(() =>
     exam

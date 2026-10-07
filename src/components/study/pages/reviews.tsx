@@ -391,6 +391,7 @@ function RescheduleDialog({
   subjectName,
   topicName,
   today,
+  maxDay,
   locale,
   onSave,
 }: {
@@ -399,6 +400,8 @@ function RescheduleDialog({
   subjectName: string;
   topicName?: string | null;
   today: string;
+  /** Último dia permitido: a véspera da prova, quando há uma marcada. */
+  maxDay?: string | null;
   locale: string;
   onSave: (date: string) => Promise<void>;
 }) {
@@ -412,12 +415,14 @@ function RescheduleDialog({
     }
   }, [open, today]);
 
+  // A prova fecha a agenda: nada de adiar para o dia dela em diante.
+  const lastDay = maxDay ?? null;
   const quickOptions = [
     { label: "+1 dia", days: 1 },
     { label: "+3 dias", days: 3 },
     { label: "+7 dias", days: 7 },
     { label: "+15 dias", days: 15 },
-  ];
+  ].filter((option) => !lastDay || addDays(today, option.days) <= lastDay);
 
   return (
     <DialogShell open={open} onOpenChange={onOpenChange} className="max-w-md p-6">
@@ -433,6 +438,7 @@ function RescheduleDialog({
           </p>
         </div>
 
+        {quickOptions.length ? (
         <div>
           <span className="text-[11px] font-semibold uppercase tracking-wider text-faint">
             {st("agenda_day")}
@@ -462,13 +468,14 @@ function RescheduleDialog({
             })}
           </div>
         </div>
+        ) : null}
 
         <div>
           <span className="text-[11px] font-semibold uppercase tracking-wider text-faint">
             {st("agenda_more_options")}
           </span>
           <div className="mt-1.5">
-            <DateField value={targetDay} min={today} onChange={(next) => next && setTargetDay(next)} />
+            <DateField value={targetDay} min={today} max={lastDay ?? undefined} onChange={(next) => next && setTargetDay(next)} />
           </div>
         </div>
 
@@ -513,8 +520,9 @@ function ReviewRow({
   onSelect: (value: boolean) => void;
 }) {
   const { st, locale } = useStudyT();
-  const { subjectById, topicById, actions, today, planReadOnly, planArchived } = useStudy();
+  const { subjectById, topicById, actions, today, planReadOnly, planArchived, plans } = useStudy();
   const writeGate = usePlanGates().write;
+  const examDate = plans.find((plan) => plan.id === review.planId)?.examDate ?? null;
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const subject = subjectById(review.subjectId);
   const topic = topicById(review.subjectId, review.topicId);
@@ -673,6 +681,7 @@ function ReviewRow({
           subjectName={name}
           topicName={topic?.name}
           today={today}
+          maxDay={examDate ? addDays(examDate, -1) : null}
           locale={locale}
           onSave={async (targetDate) => {
             await actions.rescheduleReview(review.id, targetDate);

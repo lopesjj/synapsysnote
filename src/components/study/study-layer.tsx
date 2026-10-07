@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect } from "react";
 import { usePathname } from "@/lib/i18n/navigation";
 import { hydrateStudyUiSync, isStudyPath, useStudyUi } from "@/lib/study/ui-store";
 import { FocusEngine, FocusOverlay, TimerTitle } from "./focus-timer";
+import { TimerExamDialog } from "./exam-dialog";
 import { LogSessionDialog } from "./log-session-dialog";
 import { Scratchpad } from "./scratchpad";
 
@@ -37,6 +38,7 @@ export function StudyLayer() {
       <TimerTitle />
       <FocusOverlay />
       <LogSessionDialog />
+      <TimerExamDialog />
       <Scratchpad />
     </>
   );

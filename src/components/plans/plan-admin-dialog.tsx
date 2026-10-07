@@ -95,7 +95,7 @@ function normalizeRow(raw: unknown): AccountRow | null {
 }
 
 function planLabel(tp: PlanT, plan: PlanId | null | undefined): string {
-  return plan ? tp(planNameKey(plan)) : "—";
+  return plan ? tp(planNameKey(plan)) : "-";
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {

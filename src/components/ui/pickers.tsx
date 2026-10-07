@@ -122,7 +122,7 @@ function DateCalendar({
         <button
           type="button"
           onClick={() => setView((current) => (current === "days" ? "months" : "days"))}
-          className="min-w-0 flex-1 truncate rounded-[8px] px-2 py-1 text-[13px] font-semibold capitalize tracking-[-0.01em] text-ink transition hover:bg-[var(--surface-hover)]"
+          className="min-w-0 flex-1 truncate rounded-[8px] px-2 py-1 text-[13px] font-semibold tracking-[-0.01em] text-ink transition hover:bg-[var(--surface-hover)]"
         >
           {capitalize(view === "months" ? cursor.slice(0, 4) : monthLabel(cursor, locale), locale)}
         </button>
@@ -147,7 +147,7 @@ function DateCalendar({
                   setView("days");
                 }}
                 className={cn(
-                  "h-9 rounded-[8px] text-[12.5px] capitalize transition",
+                  "h-9 rounded-[8px] text-[12.5px] transition",
                   active ? "bg-[var(--accent)] font-medium text-[var(--accent-contrast)]" : "text-ink hover:bg-[var(--surface-hover)]"
                 )}
               >
@@ -324,7 +324,7 @@ export function DateField({
           className
         )}
       >
-        <span className={cn("min-w-0 truncate tabular-nums", !label && "text-faint")}>{label || placeholder || "—"}</span>
+        <span className={cn("min-w-0 truncate tabular-nums", !label && "text-faint")}>{label || placeholder || "-"}</span>
         <CalendarDays className="size-3.5 shrink-0 text-faint" />
       </button>
     </DatePopover>

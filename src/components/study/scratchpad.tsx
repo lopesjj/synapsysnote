@@ -28,6 +28,7 @@ import { notifyPlanError } from "@/lib/plans/client";
 import { useStudy } from "@/lib/study/provider";
 import { useStudyT, type StudyKey } from "@/lib/study/i18n";
 import { useStudyUi } from "@/lib/study/ui-store";
+import { dismissPriority, useDismissLayer } from "@/lib/dismiss-layer";
 import { STICKY_COLORS } from "@/lib/study/defaults";
 import { formatDay } from "@/lib/study/dates";
 import { parseMarkup } from "@/lib/import/dom";
@@ -123,6 +124,9 @@ export function Scratchpad() {
   const { st, locale } = useStudyT();
   const router = useRouter();
   const open = useStudyUi((state) => state.padOpen);
+  useDismissLayer(open, dismissPriority.scratchpad, () => {
+    useStudyUi.getState().setPadOpen(false);
+  });
   const { stickies, actions, today } = useStudy();
   const { adapter } = useWorkspace();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -144,18 +148,6 @@ export function Scratchpad() {
       editor.off("transaction", update);
     };
   }, [editor]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        useStudyUi.getState().setPadOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [open]);
 
   const create = async () => {
     const color = STICKY_COLORS[stickies.length % STICKY_COLORS.length];

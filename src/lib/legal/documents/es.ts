@@ -58,8 +58,8 @@ const es: LegalBundle = {
         id: "content",
         title: "Tu contenido sigue siendo tuyo",
         blocks: [
-          "Todo lo que creas, subes o importas —notas, archivos, grabaciones, flashcards— te pertenece. No reclamamos ningún derecho de propiedad sobre ello.",
-          "Para que el servicio funcione, nos concedes una licencia limitada, no exclusiva, gratuita y mundial para almacenar, copiar, procesar y mostrar tu contenido **únicamente para prestarte el servicio** —por ejemplo, guardar tus notas, hacer copias de seguridad o transcribir un audio cuando lo pidas—. La licencia termina cuando eliminas el contenido o la cuenta, respetando los plazos de la [Política de Privacidad](doc:privacy#retention).",
+          "Todo lo que creas, subes o importas -notas, archivos, grabaciones, flashcards- te pertenece. No reclamamos ningún derecho de propiedad sobre ello.",
+          "Para que el servicio funcione, nos concedes una licencia limitada, no exclusiva, gratuita y mundial para almacenar, copiar, procesar y mostrar tu contenido **únicamente para prestarte el servicio** -por ejemplo, guardar tus notas, hacer copias de seguridad o transcribir un audio cuando lo pidas-. La licencia termina cuando eliminas el contenido o la cuenta, respetando los plazos de la [Política de Privacidad](doc:privacy#retention).",
           "Declaras tener los derechos necesarios sobre lo que subes. No publicamos tu contenido, no lo vendemos ni lo usamos para entrenar modelos de inteligencia artificial.",
         ],
       },
@@ -283,7 +283,7 @@ const es: LegalBundle = {
               ],
             },
           },
-          "También podemos compartir datos cuando lo exija la ley, una orden judicial o una autoridad competente —siempre dentro de lo requerido— o en una reorganización societaria, manteniendo las garantías de esta política.",
+          "También podemos compartir datos cuando lo exija la ley, una orden judicial o una autoridad competente -siempre dentro de lo requerido- o en una reorganización societaria, manteniendo las garantías de esta política.",
         ],
       },
       {
@@ -449,7 +449,7 @@ const es: LegalBundle = {
         id: "third-party",
         title: "Cookies de terceros",
         blocks: [
-          "Cuando aparece el reCAPTCHA —tras intentos fallidos de inicio de sesión o al restablecer la contraseña—, Google puede instalar sus propias cookies para distinguir personas de bots. Al entrar con Google, la ventana de inicio de sesión también se rige por las políticas de Google. Estas cookies las controla Google, según la [Política de Privacidad de Google](https://policies.google.com/privacy).",
+          "Cuando aparece el reCAPTCHA -tras intentos fallidos de inicio de sesión o al restablecer la contraseña-, Google puede instalar sus propias cookies para distinguir personas de bots. Al entrar con Google, la ventana de inicio de sesión también se rige por las políticas de Google. Estas cookies las controla Google, según la [Política de Privacidad de Google](https://policies.google.com/privacy).",
         ],
       },
       {

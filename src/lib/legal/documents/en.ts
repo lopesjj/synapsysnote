@@ -58,8 +58,8 @@ const en: LegalBundle = {
         id: "content",
         title: "Your content remains yours",
         blocks: [
-          "Everything you create, upload or import — notes, files, recordings, flashcards — belongs to you. We do not claim any ownership rights over that content.",
-          "For the service to work, you grant us a limited, non-exclusive, royalty-free, worldwide license to store, copy, process and display your content **solely to provide the service to you** — for example, to save your notes, make backups or transcribe audio when you ask us to. The license ends when you delete the content or your account, subject to the periods set out in the [Privacy Policy](doc:privacy#retention).",
+          "Everything you create, upload or import - notes, files, recordings, flashcards - belongs to you. We do not claim any ownership rights over that content.",
+          "For the service to work, you grant us a limited, non-exclusive, royalty-free, worldwide license to store, copy, process and display your content **solely to provide the service to you** - for example, to save your notes, make backups or transcribe audio when you ask us to. The license ends when you delete the content or your account, subject to the periods set out in the [Privacy Policy](doc:privacy#retention).",
           "You represent that you hold the necessary rights to what you upload. We do not publish your content, sell it or use it to train artificial intelligence models.",
         ],
       },
@@ -87,7 +87,7 @@ const en: LegalBundle = {
         blocks: [
           "Some features use artificial intelligence: audio and video transcription, flashcard generation, duplicate-card detection, translation, and organizing a syllabus you paste into subjects and topics. They process only the content you choose, at the moment you trigger the feature. The daily study phrase comes from an external collection. When the site language is not English, only that public phrase is translated, not your notes or study records.",
           {
-            note: "AI-generated output may contain errors, omissions or inaccuracies. Review transcripts and flashcards before studying with them, and always check them against the official source — the text of the law, the exam notice or the recommended reading list.",
+            note: "AI-generated output may contain errors, omissions or inaccuracies. Review transcripts and flashcards before studying with them, and always check them against the official source - the text of the law, the exam notice or the recommended reading list.",
           },
           "What the AI generates from your content is yours, on the same terms as the rest of your content. We may apply usage limits to keep these features available to everyone.",
         ],
@@ -126,7 +126,7 @@ const en: LegalBundle = {
           },
           "When the trial ends without a plan being purchased, or when a purchased plan expires without renewal, the account switches to read-only mode: everything you created remains available to view, and you can still archive, unarchive, move to the trash, restore and delete, but you cannot create or edit content until you choose a plan.",
           "Changing plans never deletes your content. If the new plan has lower limits, everything that already exists stays stored and available, but you will not be able to create new items of a given type while the total is above the limit. Features your plan does not include remain visible but disabled.",
-          "Plans are purchased and changed through our support team at {contactEmail}. The price, payment method, term and cancellation conditions will be clearly presented before any charge is made — you will not be charged anything without your express acceptance.",
+          "Plans are purchased and changed through our support team at {contactEmail}. The price, payment method, term and cancellation conditions will be clearly presented before any charge is made - you will not be charged anything without your express acceptance.",
         ],
       },
       {
@@ -142,7 +142,7 @@ const en: LegalBundle = {
         title: "Availability and backups",
         blocks: [
           "We work to keep the service available and your data safe. Even so, interruptions may occur for maintenance, updates or reasons beyond our control.",
-          "We recommend keeping copies of anything essential to you — for example, by exporting notes as PDF.",
+          "We recommend keeping copies of anything essential to you - for example, by exporting notes as PDF.",
           "{brand} is a tool to support your studies and does not guarantee that you will pass civil service exams, university entrance exams or any other assessment. Statistics, suggestions and schedules in the study module are estimates calculated from the records you enter.",
         ],
       },
@@ -283,7 +283,7 @@ const en: LegalBundle = {
               ],
             },
           },
-          "We may also share data when required by law, court order or a competent authority — always limited to what is requested — or in a corporate reorganization, provided the safeguards of this policy are maintained.",
+          "We may also share data when required by law, court order or a competent authority - always limited to what is requested - or in a corporate reorganization, provided the safeguards of this policy are maintained.",
         ],
       },
       {
@@ -402,9 +402,9 @@ const en: LegalBundle = {
         blocks: [
           {
             list: [
-              "**Essential** — required for sign-in, security and basic operation. They cannot be turned off, because the service would not work without them.",
-              "**Functional** — make the experience faster, for example by remembering your region to choose the language. They are used only with your consent.",
-              "**Analytics and advertising** — we do not use them.",
+              "**Essential** - required for sign-in, security and basic operation. They cannot be turned off, because the service would not work without them.",
+              "**Functional** - make the experience faster, for example by remembering your region to choose the language. They are used only with your consent.",
+              "**Analytics and advertising** - we do not use them.",
             ],
           },
         ],
@@ -449,14 +449,14 @@ const en: LegalBundle = {
         id: "third-party",
         title: "Third-party cookies",
         blocks: [
-          "When reCAPTCHA appears — after unsuccessful sign-in attempts or during a password reset — Google may set its own cookies to tell people and bots apart. When you sign in with Google, the sign-in window also follows Google's policies. These cookies are controlled by Google, in accordance with the [Google Privacy Policy](https://policies.google.com/privacy).",
+          "When reCAPTCHA appears - after unsuccessful sign-in attempts or during a password reset - Google may set its own cookies to tell people and bots apart. When you sign in with Google, the sign-in window also follows Google's policies. These cookies are controlled by Google, in accordance with the [Google Privacy Policy](https://policies.google.com/privacy).",
         ],
       },
       {
         id: "control",
         title: "Managing your choices",
         blocks: [
-          "You can change your preferences at any time in the panel above or through the \"Cookie preferences\" link in the footer of the sign-in page. You can also block or delete cookies in your browser settings — but without the essential ones, you will not be able to sign in to your account.",
+          "You can change your preferences at any time in the panel above or through the \"Cookie preferences\" link in the footer of the sign-in page. You can also block or delete cookies in your browser settings - but without the essential ones, you will not be able to sign in to your account.",
           "Your choices are saved for {consentMonths} months. After that, we will ask you again.",
         ],
       },

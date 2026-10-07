@@ -20,8 +20,21 @@ import {
   streakInfo,
   studiedDays,
 } from "../src/lib/study/metrics";
+import { streakRuns } from "../src/lib/study/awards";
+import {
+  currentTerm,
+  intervalsBefore,
+  isPastTerm,
+  reviewsDroppedBy,
+  seriesIdOf,
+  studyWindow,
+  termsOf,
+  windowCovers,
+} from "../src/lib/study/series";
 import {
   advanceCycle,
+  canCountSession,
+  countSession,
   generateCycleItems,
   lapStates,
   pendingAgendaEntry,
@@ -50,7 +63,7 @@ import { normalizeSettings } from "../src/lib/study/defaults";
 import { cleanForStorage, studyBackendFor } from "../src/lib/study/backend";
 import { buildNoteDirectory, materialNoteId, searchNotes } from "../src/lib/study/material";
 import { bucketReviews, reviewForecast, reviewPunctuality, reviewStages } from "../src/lib/study/review-queue";
-import type { StudyCycle, StudyReview, StudySession } from "../src/types/study";
+import type { DayKey, StudyCycle, StudyPlan, StudyReview, StudySession } from "../src/types/study";
 
 const sample = [
   "CONHECIMENTOS GERAIS",
@@ -596,6 +609,32 @@ assert.equal(lastItem.history[0].skipped, true);
 const withHistory = projectSchedule({ ...cycle, ...advanced }, monday, monday, monday);
 assert.equal((withHistory.get(monday) ?? [])[0].status, "done");
 
+// Disciplina que já ficou para trás do ponteiro continua contando no planejamento:
+// o tempo fecha a volta dela e a próxima da vez segue sendo a mesma.
+const aheadIndex = items.length - 1;
+const behindIndex = items.findIndex((item) => item.subjectId !== items[aheadIndex].subjectId);
+const behindSubject = items[behindIndex].subjectId;
+const movedOn = { ...cycle, pointer: aheadIndex };
+assert.equal(canCountSession(movedOn, behindSubject, monday, false), false);
+assert.equal(canCountSession(movedOn, behindSubject, monday, true), true);
+const behindCount = countSession(
+  { ...movedOn, progress: {} },
+  { subjectId: behindSubject, day: monday, durationSec: items[behindIndex].minutes * 60 },
+  "s-behind",
+  3,
+  { outOfTurn: true }
+);
+assert.ok(behindCount);
+assert.equal(behindCount.cycleItemId, items[behindIndex].id);
+assert.equal(behindCount.cycle.pointer, aheadIndex, "contar atrás da vez não puxa o ponteiro de volta");
+assert.equal(behindCount.cycle.history.at(-1)?.itemId, items[behindIndex].id);
+assert.equal(lapStates(behindCount.cycle)[behindIndex], "done");
+assert.equal(lapStates(behindCount.cycle)[aheadIndex], "current");
+const behindUndone = undoLastCompletion(behindCount.cycle);
+assert.ok(behindUndone);
+assert.equal(behindUndone.pointer, aheadIndex, "desfazer esse registro também não mexe no ponteiro");
+assert.equal(behindUndone.history.length, behindCount.cycle.history.length - 1);
+
 const mark = (index: number, round: number, skipped: boolean) => ({
   itemId: items[index].id,
   subjectId: items[index].subjectId,
@@ -776,6 +815,215 @@ console.log("verify-study: ok");
 }
 
 console.log("verify-study: day status ok");
+
+// --- Editais: janela de contagem, corte das revisoes na prova e soma da serie ---
+
+const termPlan = (id: string, over: Record<string, unknown> = {}) =>
+  ({
+    id,
+    name: "Objetivo",
+    institution: "",
+    role: "",
+    examDate: null,
+    icon: null,
+    notes: "",
+    archived: false,
+    weeklyGoalMinutes: 0,
+    weeklyGoalQuestions: 0,
+    order: 0,
+    seriesId: id,
+    termLabel: "",
+    startDay: null,
+    createdAt: 1,
+    updatedAt: 1,
+    ...over,
+  }) as StudyPlan;
+
+const everyWeekday = [0, 1, 2, 3, 4, 5, 6];
+// Sem prova marcada, tudo entra na contagem.
+const openWindow = studyWindow([{ startDay: null, examDate: null }], new Set<DayKey>());
+assert.equal(windowCovers(openWindow, "2026-01-01"), true);
+
+// Antes do inicio do edital nada conta.
+const startedWindow = studyWindow([{ startDay: "2026-03-10", examDate: "2026-04-03" }], new Set<DayKey>());
+assert.equal(windowCovers(startedWindow, "2026-03-09"), false);
+assert.equal(windowCovers(startedWindow, "2026-03-10"), true);
+assert.equal(windowCovers(startedWindow, "2026-04-03"), true);
+// Passada a prova, sem registro novo, os dias nao viram falha.
+assert.equal(windowCovers(startedWindow, "2026-04-04"), false);
+assert.equal(windowCovers(startedWindow, "2026-12-31"), false);
+assert.equal(startedWindow.pauses[0]?.until, null);
+
+// Com um registro depois da prova, a contagem recomeca nesse dia.
+const resumed = studyWindow([{ startDay: "2026-03-10", examDate: "2026-04-03" }], new Set<DayKey>(["2026-03-11", "2026-05-02", "2026-05-20"]));
+assert.equal(resumed.pauses[0]?.until, "2026-05-02");
+assert.equal(windowCovers(resumed, "2026-04-20"), false, "o intervalo entre a prova e a volta fica neutro");
+assert.equal(windowCovers(resumed, "2026-05-02"), true);
+assert.equal(windowCovers(resumed, "2026-05-10"), true);
+
+// Voltar no dia seguinte a prova nao deixa trecho neutro nenhum: sem prova nova
+// marcada, o dia perdido volta a valer normalmente.
+const noGap = studyWindow([{ startDay: null, examDate: "2026-04-03" }], new Set<DayKey>(["2026-04-04"]));
+assert.deepEqual(noGap.pauses, []);
+assert.equal(windowCovers(noGap, "2026-04-04"), true);
+assert.equal(windowCovers(noGap, "2026-04-05"), true, "parou de novo, mas sem prova nova o X continua");
+
+// Serie de dois editais: o calendario cobre os dois, e a pausa entre eles fecha
+// no dia em que o edital novo comeca.
+const twoTerms = studyWindow(
+  [
+    { startDay: "2026-01-05", examDate: "2026-04-03" },
+    { startDay: "2026-06-01", examDate: "2026-10-26" },
+  ],
+  new Set<DayKey>(["2026-01-06", "2026-03-02"])
+);
+assert.equal(twoTerms.startDay, "2026-01-05");
+assert.equal(windowCovers(twoTerms, "2026-01-04"), false, "antes do primeiro edital");
+assert.equal(windowCovers(twoTerms, "2026-02-10"), true, "dentro do primeiro edital");
+assert.equal(windowCovers(twoTerms, "2026-04-20"), false, "entre a prova e o edital seguinte");
+assert.equal(windowCovers(twoTerms, "2026-06-01"), true, "o edital novo retoma a contagem");
+assert.equal(windowCovers(twoTerms, "2026-09-15"), true);
+assert.equal(windowCovers(twoTerms, "2026-10-27"), false, "depois da prova do edital novo");
+
+// Edital antigo sem dia de inicio nao pode ser apagado pelo inicio do edital novo:
+// a serie fica sem piso e os dias perdidos de antes continuam contando.
+const legacySeries = studyWindow(
+  [
+    { startDay: null, examDate: "2026-06-28" },
+    { startDay: "2026-10-07", examDate: "2026-10-25" },
+  ],
+  new Set<DayKey>(["2026-04-27", "2026-05-18"])
+);
+assert.equal(legacySeries.startDay, null, "um edital sem startDay tira o piso da serie");
+assert.equal(windowCovers(legacySeries, "2026-04-29"), true, "dia perdido do edital antigo ainda conta");
+assert.equal(dayStatus("2026-04-29", new Set<DayKey>(["2026-04-27"]), "2026-04-27", "2026-10-07", everyWeekday, legacySeries), "missed");
+assert.equal(windowCovers(legacySeries, "2026-08-01"), false, "entre a prova antiga e o edital novo segue neutro");
+
+// Estudou depois da prova e nenhuma prova nova foi marcada: o X volta normal e
+// segue valendo, inclusive anos depois.
+const resumedDays = new Set<DayKey>(["2022-05-16", "2022-06-04", "2022-06-05", "2022-06-07"]);
+const quiet = studyWindow([{ startDay: null, examDate: "2022-05-22" }], resumedDays);
+assert.equal(windowCovers(quiet, "2022-05-16"), true, "antes da prova conta normalmente");
+assert.equal(windowCovers(quiet, "2022-05-30"), false, "entre a prova e a volta fica neutro");
+assert.equal(windowCovers(quiet, "2022-06-06"), true, "falha no meio da volta e dia perdido");
+assert.equal(windowCovers(quiet, "2022-06-08"), true, "sem prova nova, o X continua depois do ultimo registro");
+assert.equal(windowCovers(quiet, "2026-09-15"), true);
+assert.equal(dayStatus("2022-06-06", new Set<DayKey>(), "2022-05-16", "2026-10-07", everyWeekday, quiet), "missed");
+
+// Marcando uma prova nova, o trecho entre o ultimo registro e o inicio do novo
+// edital e limpo — e so ele.
+const restarted = studyWindow(
+  [
+    { startDay: null, examDate: "2022-05-22" },
+    { startDay: "2026-10-07", examDate: "2026-12-01" },
+  ],
+  resumedDays
+);
+assert.equal(windowCovers(restarted, "2022-06-06"), true, "a falha dentro da volta continua sendo X");
+assert.equal(windowCovers(restarted, "2022-06-08"), false, "do ultimo registro ate o inicio novo fica limpo");
+assert.equal(windowCovers(restarted, "2026-09-15"), false);
+assert.equal(dayStatus("2026-09-15", new Set<DayKey>(), null, "2026-10-20", everyWeekday, restarted), "paused");
+assert.equal(windowCovers(restarted, "2026-10-07"), true, "do inicio do edital novo em diante conta de novo");
+assert.equal(dayStatus("2026-10-08", new Set<DayKey>(), "2022-05-16", "2026-10-20", everyWeekday, restarted), "missed");
+
+// Sem registro nenhum depois da prova, nada e cobrado dali em diante.
+const neverBack = studyWindow([{ startDay: null, examDate: "2022-05-22" }], new Set<DayKey>(["2022-05-16"]));
+assert.equal(windowCovers(neverBack, "2022-05-23"), false);
+assert.equal(windowCovers(neverBack, "2026-09-15"), false);
+
+assert.equal(dayStatus("2026-04-20", new Set<DayKey>(), "2026-03-10", "2026-06-01", everyWeekday, startedWindow), "paused");
+assert.equal(dayStatus("2026-03-20", new Set<DayKey>(), "2026-03-10", "2026-06-01", everyWeekday, startedWindow), "missed");
+assert.equal(dayStatus("2026-05-10", new Set<DayKey>(), "2026-03-10", "2026-06-01", everyWeekday, resumed), "missed", "depois da volta o X volta");
+assert.equal(dayStatus("2026-04-20", new Set<DayKey>(), "2026-03-10", "2026-06-01", everyWeekday, resumed), "paused");
+
+// A pausa nao quebra a sequencia: estudou antes da prova e voltou depois.
+const pausedDays = new Set<DayKey>(["2026-04-01", "2026-04-02", "2026-04-03", "2026-05-02"]);
+const pausedWindow = studyWindow([{ startDay: "2026-03-10", examDate: "2026-04-03" }], pausedDays);
+assert.equal(streakInfo(pausedDays, "2026-05-02", everyWeekday, pausedWindow).current, 4);
+assert.equal(streakInfo(pausedDays, "2026-05-02", everyWeekday).current, 1, "sem a janela, o intervalo zera a sequencia");
+
+// Nada e marcado para o dia da prova em diante.
+assert.deepEqual(intervalsBefore([1, 7, 30], "2026-04-01", "2026-04-03"), [1]);
+assert.deepEqual(intervalsBefore([1, 7, 30], "2026-04-01", null), [1, 7, 30]);
+assert.deepEqual(intervalsBefore([1, 7, 30], "2026-04-02", "2026-04-03"), [], "um dia antes da prova ja nao cabe nada");
+
+const pendingReviews = [
+  { id: "a", status: "pending", dueDay: "2026-04-02" },
+  { id: "b", status: "pending", dueDay: "2026-04-03" },
+  { id: "c", status: "pending", dueDay: "2026-05-01" },
+  { id: "d", status: "done", dueDay: "2026-05-01" },
+];
+assert.deepEqual(reviewsDroppedBy(pendingReviews, "2026-04-03").map((entry) => entry.id), ["b", "c"]);
+assert.deepEqual(reviewsDroppedBy(pendingReviews, null), []);
+
+// Serie de editais: o antigo fica arquivado e o atual e o mais novo em aberto.
+const first = termPlan("p1", { examDate: "2026-04-03", archived: true, createdAt: 10 });
+const second = termPlan("p2", { seriesId: "p1", termLabel: "Edital 2027", examDate: "2026-10-26", createdAt: 20 });
+const other = termPlan("p9", { createdAt: 5 });
+const everyPlan = [second, other, first];
+assert.equal(seriesIdOf(first), "p1");
+assert.equal(seriesIdOf(second), "p1");
+assert.deepEqual(termsOf(everyPlan, "p1").map((plan) => plan.id), ["p1", "p2"]);
+assert.equal(currentTerm(everyPlan, "p1")?.id, "p2");
+assert.equal(currentTerm(everyPlan, "p9")?.id, "p9");
+// Serie inteira arquivada ainda tem um edital corrente para a tela mostrar.
+assert.equal(currentTerm([termPlan("solo", { archived: true })], "solo")?.id, "solo");
+
+// Edital anterior e historico da serie, nao objetivo arquivado pelo usuario.
+assert.equal(isPastTerm(everyPlan, first), true);
+assert.equal(isPastTerm(everyPlan, second), false);
+assert.equal(isPastTerm(everyPlan, other), false, "objetivo de serie propria nunca e edital anterior");
+// Serie inteira arquivada volta a ser arquivo comum: a lista precisa mostrar algo.
+const bothArchived = [first, { ...second, archived: true }];
+assert.equal(isPastTerm(bothArchived, first), false);
+
+// Os selos de sequencia contam a corrida com a mesma janela: nunca pode faltar
+// menos que zero para o proximo selo.
+const sealDays = new Set<DayKey>(["2026-04-01", "2026-04-02", "2026-04-03", "2026-05-02", "2026-05-03"]);
+const sealWindow = studyWindow([{ startDay: "2026-03-10", examDate: "2026-04-03" }], sealDays);
+const openRuns = streakRuns(sealDays, "2026-05-03", everyWeekday);
+const pausedRuns = streakRuns(sealDays, "2026-05-03", everyWeekday, sealWindow);
+assert.equal(Math.max(...openRuns.map((run) => run.length)), 3, "sem a janela a pausa corta a corrida");
+assert.equal(Math.max(...pausedRuns.map((run) => run.length)), 5, "com a janela a corrida atravessa a pausa");
+assert.equal(streakInfo(sealDays, "2026-05-03", everyWeekday, sealWindow).current, 5);
+
+// Adiantar meia hora numa disciplina mais a frente nao pode pular as anteriores:
+// so fechar o bloco move o ponteiro, e desfazer devolve a volta ao lugar.
+const aheadCycle = {
+  items: [
+    { id: "x0", subjectId: "a", minutes: 60 },
+    { id: "x1", subjectId: "b", minutes: 60 },
+    { id: "x2", subjectId: "c", minutes: 60 },
+  ],
+  agenda: [],
+  pointer: 0,
+  round: 0,
+  history: [],
+  progress: {},
+};
+const partial = countSession(aheadCycle, { subjectId: "c", day: monday, durationSec: 1800 }, "sp", 1, { outOfTurn: true });
+assert.ok(partial);
+assert.equal(partial.cycle.pointer, 0, "meia sessao fora da vez nao move o ponteiro");
+assert.equal(partial.cycle.progress["x2:0"], 30);
+
+const whole = countSession(aheadCycle, { subjectId: "c", day: monday, durationSec: 3600 }, "sw", 2, { outOfTurn: true });
+assert.ok(whole);
+assert.equal(whole.cycle.pointer, 0, "fechar o ultimo bloco vira a volta");
+assert.equal(whole.cycle.round, 1);
+assert.equal(whole.cycle.history.at(-1)?.from, 0, "o registro guarda de onde o ponteiro saiu");
+const undoneAhead = undoLastCompletion(whole.cycle);
+assert.ok(undoneAhead);
+assert.equal(undoneAhead.pointer, 0, "desfazer devolve o ponteiro para a disciplina da vez");
+assert.equal(undoneAhead.round, 0);
+
+const midAhead = countSession(aheadCycle, { subjectId: "b", day: monday, durationSec: 3600 }, "sm", 3, { outOfTurn: true });
+assert.ok(midAhead);
+assert.equal(midAhead.cycle.pointer, 2, "fechar fora da vez segue para a proxima");
+const undoneMid = undoLastCompletion(midAhead.cycle);
+assert.equal(undoneMid?.pointer, 0, "desfazer volta para onde estava, nao para a disciplina contada");
+
+console.log("verify-study: terms ok");
+
 
 {
   const today = "2026-09-30";

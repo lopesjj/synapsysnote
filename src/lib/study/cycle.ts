@@ -4,6 +4,25 @@ import { addDays, compareDay, weekdayOf } from "./dates";
 
 export const CYCLE_HISTORY_LIMIT = 800;
 
+/**
+ * Teto para o progresso parcial dos dias fixos. A chave é `entrada:dia`, e um
+ * dia só estudado pela metade nunca fecha — sem o teto, um dia fixo diário
+ * deixaria uma chave por dia no documento do ciclo, para sempre. As chaves da
+ * rotação (`item:volta`) somem ao fechar o bloco, então ficam todas.
+ */
+export const CYCLE_PROGRESS_DAYS = 120;
+
+const DATE_KEY = /:\d{4}-\d{2}-\d{2}$/;
+
+function prunedProgress(progress: Record<string, number>): Record<string, number> {
+  const dated = Object.keys(progress).filter((key) => DATE_KEY.test(key));
+  if (dated.length <= CYCLE_PROGRESS_DAYS) return progress;
+  const drop = new Set(dated.sort().slice(0, dated.length - CYCLE_PROGRESS_DAYS));
+  const next: Record<string, number> = {};
+  for (const [key, value] of Object.entries(progress)) if (!drop.has(key)) next[key] = value;
+  return next;
+}
+
 function roundTo5(value: number): number {
   return Math.max(5, Math.round(value / 5) * 5);
 }
@@ -274,13 +293,13 @@ export function remapPointer(
   return { pointer: 0, round: previous.round + 1 };
 }
 
-export function advanceCycle(
-  cycle: Pick<StudyCycle, "items" | "pointer" | "round" | "history">,
+/** Fecha uma disciplina na volta atual sem mexer no ponteiro. */
+export function recordCycleItem(
+  cycle: Pick<StudyCycle, "round" | "history">,
+  item: CycleItem,
   day: DayKey,
-  options: { sessionId?: string | null; skipped?: boolean; at: number }
-): Pick<StudyCycle, "pointer" | "round" | "history"> | null {
-  if (!cycle.items.length) return null;
-  const item = cycle.items[cycle.pointer % cycle.items.length];
+  options: { sessionId?: string | null; skipped?: boolean; at: number; from?: number }
+): Pick<StudyCycle, "history"> {
   const completion: CycleCompletion = {
     itemId: item.id,
     subjectId: item.subjectId,
@@ -290,13 +309,24 @@ export function advanceCycle(
     sessionId: options.sessionId ?? null,
     skipped: Boolean(options.skipped),
     at: options.at,
+    ...(options.from === undefined ? null : { from: options.from }),
   };
+  return { history: [...cycle.history, completion].slice(-CYCLE_HISTORY_LIMIT) };
+}
+
+export function advanceCycle(
+  cycle: Pick<StudyCycle, "items" | "pointer" | "round" | "history">,
+  day: DayKey,
+  options: { sessionId?: string | null; skipped?: boolean; at: number; from?: number }
+): Pick<StudyCycle, "pointer" | "round" | "history"> | null {
+  if (!cycle.items.length) return null;
+  const item = cycle.items[cycle.pointer % cycle.items.length];
   const nextPointer = cycle.pointer + 1;
   const wrapped = nextPointer >= cycle.items.length;
   return {
     pointer: wrapped ? 0 : nextPointer,
     round: wrapped ? cycle.round + 1 : cycle.round,
-    history: [...cycle.history, completion].slice(-CYCLE_HISTORY_LIMIT),
+    ...recordCycleItem(cycle, item, day, options),
   };
 }
 
@@ -305,13 +335,21 @@ export function undoLastCompletion(
 ): Pick<StudyCycle, "pointer" | "round" | "history"> | null {
   const last = cycle.history[cycle.history.length - 1];
   if (!last) return null;
+  const history = cycle.history.slice(0, -1);
   const index = cycle.items.findIndex((item) => item.id === last.itemId);
-  if (index < 0) return { pointer: cycle.pointer, round: cycle.round, history: cycle.history.slice(0, -1) };
-  return {
-    pointer: index,
-    round: last.round,
-    history: cycle.history.slice(0, -1),
-  };
+  const stay = { pointer: cycle.pointer, round: cycle.round, history };
+  if (index < 0) return stay;
+  // Registro novo guarda de onde o ponteiro saiu: desfazer devolve a volta ao
+  // lugar exato, inclusive quando a disciplina foi contada fora da vez.
+  if (last.from !== undefined) {
+    return { pointer: Math.min(last.from, Math.max(0, cycle.items.length - 1)), round: last.round, history };
+  }
+  // Registro antigo, sem origem: o ponteiro só volta se foi ele que o moveu.
+  const moved =
+    index + 1 >= cycle.items.length
+      ? cycle.pointer === 0 && cycle.round === last.round + 1
+      : cycle.pointer === index + 1 && cycle.round === last.round;
+  return moved ? { pointer: index, round: last.round, history } : stay;
 }
 
 /**
@@ -384,12 +422,20 @@ export function sessionMinutes(durationSec: number): number {
   return Math.max(1, Math.round(durationSec / 60));
 }
 
+/**
+ * Posição da disciplina na volta: a da vez, ou — fora da vez — a próxima adiante.
+ * Se ela só aparece atrás do ponteiro, vale essa mesmo assim: o tempo entra na
+ * volta sem puxar o ponteiro para trás.
+ */
 function turnFor(cycle: Pick<StudyCycle, "items" | "pointer">, subjectId: string, outOfTurn: boolean): number | null {
   const total = cycle.items.length;
   const pointer = cycle.pointer % total;
   if (cycle.items[pointer].subjectId === subjectId) return pointer;
   if (!outOfTurn) return null;
   for (let index = pointer + 1; index < total; index += 1) {
+    if (cycle.items[index].subjectId === subjectId) return index;
+  }
+  for (let index = 0; index < pointer; index += 1) {
     if (cycle.items[index].subjectId === subjectId) return index;
   }
   return null;
@@ -424,23 +470,32 @@ export function countSession(
       return { cycle: { ...cycle, history: marked?.history ?? cycle.history, progress }, cycleItemId: fixed.id };
     }
     progress[key] = total;
-    return { cycle: { ...cycle, progress }, cycleItemId: fixed.id };
+    return { cycle: { ...cycle, progress: prunedProgress(progress) }, cycleItemId: fixed.id };
   }
   if (!cycle.items.length) return null;
   const turn = turnFor(cycle, input.subjectId, Boolean(options.outOfTurn));
   if (turn === null) return null;
-  cycle = { ...cycle, pointer: turn };
+  const from = cycle.pointer % cycle.items.length;
+  const behind = turn < from;
   const item = cycle.items[turn];
   const key = `${item.id}:${cycle.round}`;
   const total = (cycle.progress[key] ?? 0) + minutes;
   const progress = { ...cycle.progress };
-  if (total >= item.minutes) {
-    const advanced = advanceCycle(cycle, input.day, { sessionId, at });
-    delete progress[key];
-    return { cycle: { ...cycle, ...(advanced ?? {}), progress }, cycleItemId: item.id };
+  // Enquanto o bloco não fecha, só o progresso muda: adiantar meia hora numa
+  // disciplina mais à frente não pode pular as que vêm antes dela.
+  if (total < item.minutes) {
+    progress[key] = total;
+    return { cycle: { ...cycle, progress: prunedProgress(progress) }, cycleItemId: item.id };
   }
-  progress[key] = total;
-  return { cycle: { ...cycle, progress }, cycleItemId: item.id };
+  delete progress[key];
+  // Atrás da vez, a disciplina fecha na volta e a próxima continua sendo a mesma.
+  if (behind) {
+    const recorded = recordCycleItem(cycle, item, input.day, { sessionId, at, from });
+    return { cycle: { ...cycle, ...recorded, progress }, cycleItemId: item.id };
+  }
+  const moved = { ...cycle, pointer: turn };
+  const advanced = advanceCycle(moved, input.day, { sessionId, at, from });
+  return { cycle: { ...moved, ...(advanced ?? {}), progress }, cycleItemId: item.id };
 }
 
 export function uncountSession(cycle: CycleTally, session: TallySession, others: readonly TallySession[]): CycleTally | null {

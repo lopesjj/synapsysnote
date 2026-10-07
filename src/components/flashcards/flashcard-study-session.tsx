@@ -24,6 +24,7 @@ import {
   ReplayIcon,
 } from "@/lib/icons/flashcard-icon";
 import { notifyPlanError } from "@/lib/plans/client";
+import { dismissPriority, useDismissLayer } from "@/lib/dismiss-layer";
 
 interface FlashcardStudySessionProps {
   cards: Flashcard[];
@@ -123,6 +124,16 @@ export function FlashcardStudySession({
   const [answers, setAnswers] = useState<FlashcardRating[]>([]);
   const [completed, setCompleted] = useState(cards.length === 0);
   const lightboxOpen = useImageLightboxStore((state) => state.isOpen);
+  useDismissLayer(true, dismissPriority.modal, () => {
+    if (useImageLightboxStore.getState().isOpen) return false;
+    if (editing) {
+      setEditing(false);
+      return;
+    }
+    const target = document.activeElement;
+    if (target instanceof Element && target.closest("[data-study-edit]")) return false;
+    onClose();
+  });
   const [elapsed, setElapsed] = useState(0);
 
   // Abre so a imagem da face atual: listar as duas deixaria a resposta a um
@@ -277,22 +288,11 @@ export function FlashcardStudySession({
       // zoom e de fechar.
       if (lightboxOpen) return;
       if (event.defaultPrevented) return;
-      if (editing) {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          setEditing(false);
-        }
-        return;
-      }
+      if (editing) return;
       if (
         event.target instanceof Element &&
         event.target.closest("[data-study-edit]")
       ) {
-        return;
-      }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
         return;
       }
       if (completed) return;
@@ -313,7 +313,7 @@ export function FlashcardStudySession({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [completed, editing, flipped, handleRate, lightboxOpen, onClose]);
+  }, [completed, editing, flipped, handleRate, lightboxOpen]);
 
   const counts = useMemo(() => {
     const base: Record<FlashcardRating, number> = { again: 0, hard: 0, good: 0, easy: 0 };

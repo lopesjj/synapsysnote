@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Minus, Plus, RotateCcw, X } from "lucide-react";
 import { useImageLightboxStore } from "@/lib/store/image-lightbox-store";
+import { dismissPriority, useDismissLayer } from "@/lib/dismiss-layer";
 import { cn } from "@/lib/utils";
 
 const MIN_ZOOM = 0.25;
@@ -13,6 +14,7 @@ const ZOOM_STEP = 0.25;
 export function ImageLightbox() {
   const { isOpen, images, currentIndex, closeLightbox, nextImage, prevImage } =
     useImageLightboxStore();
+  useDismissLayer(isOpen, dismissPriority.lightbox, () => closeLightbox());
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -80,11 +82,6 @@ export function ImageLightbox() {
     document.body.style.overflow = "hidden";
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeLightbox();
-        return;
-      }
       if (event.key === "ArrowRight") {
         event.preventDefault();
         nextImage();
@@ -121,7 +118,7 @@ export function ImageLightbox() {
       document.body.style.overflow = originalOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen, applyPan, applyZoom, closeLightbox, nextImage, prevImage, resetTransform]);
+  }, [isOpen, applyPan, applyZoom, nextImage, prevImage, resetTransform]);
 
   useEffect(() => {
     if (!isOpen) return;

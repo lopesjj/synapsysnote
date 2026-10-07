@@ -1,5 +1,11 @@
 export type DayKey = string;
 
+/**
+ * Objetivo. Cada prova nova pode continuar no mesmo edital ou abrir outro: os
+ * editais de um mesmo objetivo compartilham `seriesId`, e só o tempo total de
+ * estudo soma todos eles. `startDay` é o dia em que a contagem de dias estudados
+ * recomeça — antes dele nada conta como falha.
+ */
 export interface StudyPlan {
   id: string;
   name: string;
@@ -12,6 +18,12 @@ export interface StudyPlan {
   weeklyGoalMinutes: number;
   weeklyGoalQuestions: number;
   order: number;
+  /** Agrupa os editais do mesmo objetivo. Sem valor, o próprio id é a série. */
+  seriesId: string;
+  /** Nome do edital/semestre dentro da série. Vazio no primeiro. */
+  termLabel: string;
+  /** Primeiro dia cobrado neste edital. */
+  startDay: DayKey | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -143,6 +155,8 @@ export interface CycleCompletion {
   sessionId: string | null;
   skipped: boolean;
   at: number;
+  /** Índice de onde o ponteiro saiu, para desfazer devolver a volta ao lugar. */
+  from?: number;
 }
 
 export interface CycleSubjectConfig {

@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/lib/store/ui-store";
+import { dismissPriority, useDismissLayer } from "@/lib/dismiss-layer";
 
 export function DialogShell({
   open,
@@ -24,18 +25,7 @@ export function DialogShell({
   closeAriaLabel?: string;
 }) {
   const reducedMotion = useUiStore((state) => state.reducedMotion);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
-      e.preventDefault();
-      onOpenChange(false);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, onOpenChange]);
+  useDismissLayer(open, dismissPriority.modal, () => onOpenChange(false));
 
   useEffect(() => {
     if (!open) return;

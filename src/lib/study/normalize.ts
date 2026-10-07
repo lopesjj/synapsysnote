@@ -58,6 +58,9 @@ export function toPlan(raw: StudyDoc): StudyPlan {
     weeklyGoalMinutes: nonNegative(raw.weeklyGoalMinutes, 7 * 24 * 60),
     weeklyGoalQuestions: nonNegative(raw.weeklyGoalQuestions, 100_000),
     order: num(raw.order),
+    seriesId: str(raw.seriesId) || raw.id,
+    termLabel: str(raw.termLabel),
+    startDay: isDayKey(raw.startDay) ? raw.startDay : null,
     createdAt: num(raw.createdAt),
     updatedAt: num(raw.updatedAt),
   };
@@ -279,6 +282,7 @@ function toCompletion(raw: unknown): CycleCompletion | null {
     sessionId: nullableStr(entry.sessionId),
     skipped: Boolean(entry.skipped),
     at: num(entry.at),
+    ...(typeof entry.from === "number" && Number.isFinite(entry.from) ? { from: Math.max(0, Math.round(entry.from)) } : null),
   };
 }
 

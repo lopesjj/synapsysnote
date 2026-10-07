@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Lock, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Flag, Lock, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,13 +11,14 @@ import { cn } from "@/lib/utils";
 import { useStudy } from "@/lib/study/provider";
 import { studyTranslateParts, useStudyT, type StudyKey, type StudyT } from "@/lib/study/i18n";
 import { useAwardBook, usePlanMetrics } from "@/lib/study/hooks";
-import { addDays, capitalizeFirst, compareDay, diffDays, dayKeyOf, formatDay, orderedWeekdays, startOfWeek, weekDays, weekdayLabel, weekdayOf } from "@/lib/study/dates";
+import { addDays, capitalizeFirst, compareDay, dayRangeLabel, diffDays, dayKeyOf, formatDay, orderedWeekdays, startOfWeek, weekDays, weekdayLabel, weekdayOf } from "@/lib/study/dates";
 import { absorbExamQuestions, aggregate, dayStatus, examTotals, isPlannedDay, performanceBand, percentLabel, type DayStatus } from "@/lib/study/metrics";
 import { formatHoursTick, formatNumber } from "@/lib/study/format";
 import type { DayKey, MockExam, StudyReminder, StudyReview, StudySession } from "@/types/study";
 import { subjectTone } from "@/lib/study/defaults";
 import { ColumnChart, Donut, Meter } from "./charts";
 import { PaceDialog, ReminderDialog, GoalDialog } from "./dialogs";
+import { NewExamDialog } from "./new-exam-dialog";
 import { StreakSeal } from "./awards";
 import {
   AccuracyTag,
@@ -28,6 +29,7 @@ import {
   FocusButton,
   Panel,
   PanelLink,
+  ReviewMaterial,
   RhythmMark,
   Segmented,
   SubjectBar,
@@ -84,10 +86,17 @@ export function KpiBand({ className, pace = false }: { className?: string; pace?
       <KpiCell
         center={pace}
         label={st("kpi_time")}
-        hint={metrics.avgPerDay ? st("kpi_time_hint", { avg: duration(metrics.avgPerDay) }) : undefined}
+        hint={
+          metrics.seriesTotal
+            ? st("kpi_time_terms", { count: metrics.seriesTotal.terms, time: duration(metrics.seconds) })
+            : metrics.avgPerDay
+              ? st("kpi_time_hint", { avg: duration(metrics.avgPerDay) })
+              : undefined
+        }
       >
         <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
-          <DurationFigure seconds={metrics.seconds} className="tabular-nums" />
+          {/* O tempo total soma os editais anteriores; abaixo dele fica o deste edital. */}
+          <DurationFigure seconds={metrics.seriesTotal?.seconds ?? metrics.seconds} className="tabular-nums" />
           <KpiSpark values={Array.from({ length: 14 }, (_, index) => metrics.byDay.get(addDays(today, index - 13)) ?? 0)} />
         </div>
       </KpiCell>
@@ -185,7 +194,7 @@ export function ConsistencyPanel() {
       const first = addDays(start, row * 7);
       const days = weekDays(first).map((day) => {
         const seconds = metrics.byDay.get(day) ?? 0;
-        const status = dayStatus(day, metrics.days, firstDay, today, settings.studyWeekdays);
+        const status = dayStatus(day, metrics.days, firstDay, today, settings.studyWeekdays, metrics.window);
         const detail =
           status === "studied"
             ? duration(seconds)
@@ -197,7 +206,9 @@ export function ConsistencyPanel() {
                   ? st("heatmap_today_pending")
                   : status === "future"
                     ? ""
-                    : st("heatmap_before");
+                    : status === "paused"
+                      ? st("heatmap_paused")
+                      : st("heatmap_before");
         const dateLabel = capitalizeFirst(formatDay(day, locale, { weekday: "long", day: "numeric", month: "long" }));
         return { key: day, status, date: Number(day.slice(8)), title: detail ? `${dateLabel} · ${detail}` : dateLabel, linked: false };
       });
@@ -221,7 +232,7 @@ export function ConsistencyPanel() {
       if (hasBefore && hasAfter) flat[index].linked = true;
     }
     return built;
-  }, [duration, firstDay, locale, metrics.byDay, metrics.days, settings.studyWeekdays, st, start, today]);
+  }, [duration, firstDay, locale, metrics.byDay, metrics.days, metrics.window, settings.studyWeekdays, st, start, today]);
 
   const strong = (value: number, unit: string) => (
     <strong className="font-semibold text-ink">
@@ -240,7 +251,7 @@ export function ConsistencyPanel() {
   return (
     <Panel
       title={st("heatmap_title")}
-      description={st("pace_range", { start: formatDay(start, locale), end: formatDay(end, locale) })}
+      description={st("pace_range", dayRangeLabel(start, end, locale))}
       action={
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon-sm" aria-label={st("prev_period")} onClick={() => setLastWeek(addDays(lastWeek, -CHAIN_WEEKS * 7))}>
@@ -304,7 +315,7 @@ export function ConsistencyPanel() {
                     day.status === "rest" && "bg-[var(--surface-2)] text-faint",
                     day.status === "pending" && "border-[1.5px] border-dashed border-[var(--accent)] font-semibold text-ink",
                     day.status === "future" && "text-muted",
-                    day.status === "before" && "text-faint"
+                    (day.status === "before" || day.status === "paused") && "text-faint"
                   )}
                 >
                   {day.status === "studied" ? (
@@ -381,6 +392,7 @@ export function CountdownPanel() {
   const { focusPlan, planReadOnly, planArchived, today } = useStudy();
   const writeGate = usePlanGates().write;
   const [editing, setEditing] = useState(false);
+  const [newExam, setNewExam] = useState(false);
   if (!focusPlan) return null;
   const exam = focusPlan.examDate;
   const left = exam ? diffDays(today, exam) : null;
@@ -404,14 +416,34 @@ export function CountdownPanel() {
             </p>
             <ExamPath spent={spent} startLabel={st("countdown_span_start")} examLabel={st("countdown_span_exam")} />
           </div>
-        ) : (
+        ) : left === 0 ? (
           <div>
-            <p className="text-[17px] font-medium leading-snug text-pretty text-ink">
-              {left === 0
-                ? st("countdown_today")
-                : st("countdown_past", { date: formatDay(exam, locale, { day: "numeric", month: "long", year: "numeric" }) })}
+            <p className="flex items-center gap-2 text-[17px] font-semibold leading-snug text-pretty text-[var(--accent)]">
+              <Flag className="size-4 shrink-0" aria-hidden />
+              {st("countdown_today")}
             </p>
-            {left === 0 ? <ExamPath spent={1} startLabel={st("countdown_span_start")} examLabel={st("countdown_span_exam")} /> : null}
+            <ExamPath spent={1} startLabel={st("countdown_span_start")} examLabel={st("countdown_span_exam")} />
+          </div>
+        ) : (
+          // Prova passada: a data vira o destaque e a trilha fecha cheia, no lugar da frase solta.
+          <div>
+            <p className={cn("flex items-center gap-1.5 text-[11px] font-semibold text-muted", tracked && "uppercase tracking-[0.18em]")}>
+              <Flag className="size-3.5 shrink-0 text-[var(--accent)]" aria-hidden />
+              {st("countdown_done_label")}
+            </p>
+            <p className="mt-3.5 text-[13px] text-muted">{capitalizeFirst(formatDay(exam, locale, { weekday: "long" }))}</p>
+            <p className="mt-0.5 text-[26px] font-semibold leading-tight tracking-[-0.03em] text-ink sm:text-[30px]">
+              {formatDay(exam, locale, { day: "numeric", month: "long", year: "numeric" })}
+            </p>
+            <ExamPath spent={1} startLabel={st("countdown_span_start")} examLabel={st("countdown_span_exam")} />
+            {planArchived ? null : (
+              <GateTooltip gate={writeGate}>
+                <Button className="mt-4" variant="primary" size="sm" disabled={!writeGate.allowed} onClick={() => setNewExam(true)}>
+                  {writeGate.allowed ? <Flag /> : <Lock />}
+                  {st("countdown_new_exam")}
+                </Button>
+              </GateTooltip>
+            )}
           </div>
         )
       ) : (
@@ -427,7 +459,12 @@ export function CountdownPanel() {
           )}
         </div>
       )}
-      {planReadOnly ? null : <GoalDialog open={editing} onOpenChange={setEditing} plan={focusPlan} />}
+      {planReadOnly ? null : (
+        <>
+          <GoalDialog open={editing} onOpenChange={setEditing} plan={focusPlan} />
+          <NewExamDialog open={newExam} onOpenChange={setNewExam} />
+        </>
+      )}
     </Panel>
   );
 }
@@ -695,9 +732,10 @@ export function WeekChartPanel() {
     const value = metric === "time" ? seconds / 3600 : agg.questions;
     return {
       key: day,
-      label: weekdayLabel(weekdayOf(day), locale, "short").replace(".", ""),
+      // Mesma caixa alta da faixa da semana e do Planejamento.
+      label: weekdayLabel(weekdayOf(day), locale, "short").replace(".", "").toLocaleUpperCase(locale),
       value,
-      emphasis: day === today,
+      emphasis: day === today ? true : undefined,
       tooltip: (
         <span className="block">
           <span className="block font-medium">{formatDay(day, locale, { weekday: "long", day: "numeric", month: "short" })}</span>
@@ -745,6 +783,7 @@ export function WeekChartPanel() {
         ariaLabel={st("week_chart_title")}
         integer={metric === "questions"}
         variant="refined"
+        vivid
         formatTick={(value) =>
           metric === "time" ? formatHoursTick(value, language, { h: st("unit_h"), min: st("unit_min") }) : formatNumber(value, language)
         }
@@ -836,6 +875,7 @@ export function ReviewRow({ review, compact = false }: { review: StudyReview; co
             {late ? ` · ${st("review_late_by", { count: late })}` : compact ? "" : ` · ${formatDay(review.dueDay, locale)}`}
           </span>
         </p>
+        <ReviewMaterial review={review} className="mt-0.5" />
       </div>
       {planArchived ? null : (
         <>

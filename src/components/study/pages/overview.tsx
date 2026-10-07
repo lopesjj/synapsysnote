@@ -436,10 +436,10 @@ function WeekDots() {
       <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--cover-faint)]">{st("hero_week_label")}</p>
       <ol className="mt-3 grid grid-cols-7 gap-1.5">
         {days.map((day) => {
-          const status = dayStatus(day, metrics.days, metrics.consistency.firstDay, today, settings.studyWeekdays);
+          const status = dayStatus(day, metrics.days, metrics.consistency.firstDay, today, settings.studyWeekdays, metrics.window);
           const seconds = metrics.byDay.get(day) ?? 0;
           const title = `${capitalizeFirst(formatDay(day, locale, { weekday: "long", day: "numeric", month: "long" }))}${
-            status === "studied" ? ` · ${duration(seconds)}` : status === "missed" ? ` · ${st("heatmap_missed_tooltip")}` : status === "pending" ? ` · ${st("heatmap_today_pending")}` : status === "rest" ? ` · ${st("heatmap_rest")}` : ""
+            status === "studied" ? ` · ${duration(seconds)}` : status === "missed" ? ` · ${st("heatmap_missed_tooltip")}` : status === "pending" ? ` · ${st("heatmap_today_pending")}` : status === "rest" ? ` · ${st("heatmap_rest")}` : status === "paused" ? ` · ${st("heatmap_paused")}` : ""
           }`;
           return (
             <li key={day} className="flex flex-col items-center gap-1.5" title={title}>
@@ -451,7 +451,8 @@ function WeekDots() {
                   status === "pending" && "border-[1.5px] border-dashed border-[var(--cover-accent)]",
                   status === "rest" && "border-[1.5px] border-[color-mix(in_oklab,var(--cover-fg)_22%,transparent)] text-[var(--cover-faint)]",
                   status === "future" && "border-[1.5px] border-[color-mix(in_oklab,var(--cover-fg)_26%,transparent)] bg-[color-mix(in_oklab,var(--cover-fg)_6%,transparent)]",
-                  status === "before" && "border-[1.5px] border-[color-mix(in_oklab,var(--cover-fg)_16%,transparent)] bg-[color-mix(in_oklab,var(--cover-fg)_3%,transparent)]"
+                  (status === "before" || status === "paused") &&
+                    "border-[1.5px] border-[color-mix(in_oklab,var(--cover-fg)_16%,transparent)] bg-[color-mix(in_oklab,var(--cover-fg)_3%,transparent)]"
                 )}
               >
                 {status === "studied" ? (

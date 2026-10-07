@@ -13,6 +13,7 @@ import { useStudyUi } from "@/lib/study/ui-store";
 import { compareDay, diffDays, formatDay } from "@/lib/study/dates";
 import { formatNumber } from "@/lib/study/format";
 import { goalSummary, goalTimeline, recentWeeks, type GoalSummary, type GoalTimeline } from "@/lib/study/goal-summary";
+import { isPastTerm, seriesIdOf, termsOf } from "@/lib/study/series";
 import type { DayKey, StudyPlan } from "@/types/study";
 import { GoalDialog, type GoalField } from "../dialogs";
 import { ExamCountdown, ProgressBar, SyllabusSummary, WeekBars, WeekMeter } from "../goal-visuals";
@@ -66,8 +67,13 @@ export function GoalsPage() {
   const facts = useGoalFacts();
   const [dialog, setDialog] = useState<{ plan: StudyPlan | null; focus: GoalField }>({ plan: null, focus: "name" });
 
+  // Uma linha por série: o edital de agora. Os anteriores ficam dentro do
+  // objetivo, na seção Editais, e não no gaveteiro de arquivados.
   const live = useMemo(() => plans.filter((plan) => !plan.archived).sort(examOrder(today, activePlan?.id ?? null)), [activePlan?.id, plans, today]);
-  const archived = useMemo(() => plans.filter((plan) => plan.archived).sort((a, b) => b.updatedAt - a.updatedAt), [plans]);
+  const archived = useMemo(
+    () => plans.filter((plan) => plan.archived && !isPastTerm(plans, plan)).sort((a, b) => b.updatedAt - a.updatedAt),
+    [plans]
+  );
   const featured = live.find((plan) => plan.id === activePlan?.id) ?? null;
   const others = live.filter((plan) => plan !== featured);
 
@@ -304,11 +310,15 @@ function ExamCell({ plan, onSetDate, align = "start" }: { plan: StudyPlan; onSet
 
 function GoalRow({ plan, fact, onEdit }: { plan: StudyPlan; fact: GoalFacts; onEdit: (plan: StudyPlan, focus?: GoalField) => void }) {
   const { st, textDir, duration } = useStudyT();
-  const { activePlan, today, settings } = useStudy();
+  const { activePlan, plans, today, settings } = useStudy();
   const { summary, timeline } = fact;
   const active = activePlan?.id === plan.id;
   const name = plan.name || st("untitled_goal");
-  const subtitle = [plan.institution, plan.role].filter(Boolean).join(" · ");
+  // Objetivo com mais de um edital mostra em qual deles esta linha está.
+  const terms = termsOf(plans, seriesIdOf(plan));
+  const termIndex = terms.length > 1 ? terms.findIndex((entry) => entry.id === plan.id) : -1;
+  const term = termIndex >= 0 ? plan.termLabel || st("term_label_fallback", { n: termIndex + 1 }) : "";
+  const subtitle = [term, plan.institution, plan.role].filter(Boolean).join(" · ");
   const weeks = useMemo(() => recentWeeks(timeline, today, settings.weekStartsOn), [settings.weekStartsOn, timeline, today]);
   const coverage = summary.coverage;
   const percent = Math.round(coverage.ratio * 100);
@@ -524,10 +534,12 @@ export function GoalActionsMenu({
 }) {
   const { st } = useStudyT();
   const router = useRouter();
-  const { actions, activePlan } = useStudy();
+  const { actions, activePlan, plans } = useStudy();
   const goalGates = useGoalGates();
   const writeGate = usePlanGates().write;
   const archiveGate = plan.archived ? goalGates.unarchive : goalGates.archive;
+  // Reativar um edital anterior deixaria dois abertos com o mesmo nome.
+  const pastTerm = isPastTerm(plans, plan);
   const isActive = activePlan?.id === plan.id;
   return (
     <Menu>
@@ -555,16 +567,18 @@ export function GoalActionsMenu({
             <Check /> {st("goals_set_active")}
           </MenuItem>
         ) : null}
-        <MenuItem
-          disabled={!archiveGate.allowed}
-          onSelect={async () => {
-            await actions.archivePlan(plan.id, !plan.archived);
-            toast.success(plan.archived ? st("goal_unarchived") : st("goal_archived"));
-          }}
-        >
-          {plan.archived ? <ArchiveRestore /> : <Archive />} {plan.archived ? st("goals_unarchive") : st("goals_archive")}
-          <PlanLockBadge gate={archiveGate} />
-        </MenuItem>
+        {pastTerm ? null : (
+          <MenuItem
+            disabled={!archiveGate.allowed}
+            onSelect={async () => {
+              await actions.archivePlan(plan.id, !plan.archived);
+              toast.success(plan.archived ? st("goal_unarchived") : st("goal_archived"));
+            }}
+          >
+            {plan.archived ? <ArchiveRestore /> : <Archive />} {plan.archived ? st("goals_unarchive") : st("goals_archive")}
+            <PlanLockBadge gate={archiveGate} />
+          </MenuItem>
+        )}
         <MenuSeparator />
         <MenuItem
           destructive

@@ -69,8 +69,14 @@ function ExamsBody() {
       key: exam.id,
       label: formatDay(exam.day, locale, { day: "numeric", month: "short" }).replace(".", ""),
       value: metric === "percent" ? (totals.percent === null ? null : totals.percent * 100) : totals.score,
-      pointLabel: metric === "percent" && totals.percent !== null ? percentLabel(totals.percent) : undefined,
-      pointTone: metric === "percent" && totals.percent !== null ? tone : undefined,
+      // Cada ponto traz o número no alto; o gráfico esconde os que se encavalam.
+      pointLabel:
+        metric === "percent"
+          ? totals.percent === null
+            ? undefined
+            : percentLabel(totals.percent)
+          : formatNumber(totals.score, language, 1),
+      pointTone: totals.percent === null ? undefined : tone,
       tooltip: (
         <span className="flex items-center gap-3">
           <span className="min-w-0">
@@ -193,13 +199,11 @@ function ExamsBody() {
                         {clockLabel(exam.durationSec, true)}
                       </span>
                       <span
-                        className="grid grid-cols-[1fr_0.65rem_1fr_0.65rem_1fr] items-baseline text-[12.5px] tabular-nums"
+                        className="grid grid-cols-3 items-baseline gap-x-3 text-[12.5px] tabular-nums"
                         title={`${st("correct_label")} · ${st("blank_label")} · ${st("wrong_label")}`}
                       >
                         <span className="text-end text-[var(--band-high)]">{totals.correct}</span>
-                        <span className="text-center text-faint">·</span>
                         <span className="text-end text-faint">{totals.blank}</span>
-                        <span className="text-center text-faint">·</span>
                         <span className="text-end text-[var(--band-low)]">{totals.wrong}</span>
                       </span>
                       <AccuracyTag accuracy={totals.percent} band={performanceBand(totals.percent, settings)} className="justify-end font-medium" />

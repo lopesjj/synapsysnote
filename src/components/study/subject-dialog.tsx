@@ -60,7 +60,7 @@ function notebookOptions(notebooks: Notebook[]): { id: string; label: string }[]
   const walk = (parentId: string | null, depth: number) => {
     const list = [...childrenOf(notebooks, parentId)].sort((a, b) => a.order - b.order || compareNatural(a.name, b.name));
     for (const notebook of list) {
-      out.push({ id: notebook.id, label: `${String.fromCharCode(0x2003).repeat(depth)}${notebook.name || "—"}` });
+      out.push({ id: notebook.id, label: `${String.fromCharCode(0x2003).repeat(depth)}${notebook.name || "-"}` });
       walk(notebook.id, depth + 1);
     }
   };

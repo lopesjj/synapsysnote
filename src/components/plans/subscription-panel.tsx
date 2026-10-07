@@ -63,7 +63,7 @@ const NEAR_LIMIT = 0.8;
 
 function mailtoHref(tp: PlanT, plan: string, email: string): string {
   const subject = tp("upgrade_mail_subject", { plan });
-  const body = tp("upgrade_mail_body", { plan, email: email || "—" });
+  const body = tp("upgrade_mail_body", { plan, email: email || "-" });
   return `mailto:${LEGAL_ENTITY.contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
@@ -75,13 +75,13 @@ function statusText(entitlements: Entitlements, tp: PlanT, date: (timestamp: num
     case "owner":
       return tp("status_owner");
     case "trial":
-      return tp("status_trial", { date: entitlements.trialEndsAt ? date(entitlements.trialEndsAt) : "—" });
+      return tp("status_trial", { date: entitlements.trialEndsAt ? date(entitlements.trialEndsAt) : "-" });
     case "trial_ended":
-      return tp("status_trial_ended", { date: entitlements.trialEndsAt ? date(entitlements.trialEndsAt) : "—" });
+      return tp("status_trial_ended", { date: entitlements.trialEndsAt ? date(entitlements.trialEndsAt) : "-" });
     case "expired":
       return tp("status_expired", {
         plan: entitlements.plan === "guest" ? tp("plan_guest") : tp(planNameKey(entitlements.plan)),
-        date: entitlements.expiresAt ? date(entitlements.expiresAt) : "—",
+        date: entitlements.expiresAt ? date(entitlements.expiresAt) : "-",
       });
     default:
       return entitlements.expiresAt

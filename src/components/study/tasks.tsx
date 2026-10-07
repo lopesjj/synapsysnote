@@ -288,7 +288,7 @@ export function TaskLine({
         )}
         title={task.title}
       >
-        {task.title || "—"}
+        {task.title || "-"}
       </button>
       {meta ? <span className="shrink-0 text-[10.5px] tabular-nums text-faint">{meta}</span> : null}
       {onDelete ? (

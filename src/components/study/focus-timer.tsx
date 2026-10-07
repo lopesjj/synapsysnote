@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, FileText, Maximize2, Minimize2, Minus, Pause, Play, Plus, RotateCcw, Square, Volume2, X } from "lucide-react";
+import { Check, ChevronDown, ClipboardCheck, FileText, Maximize2, Minimize2, Minus, Pause, Play, Plus, RotateCcw, Square, Volume2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
@@ -20,6 +20,7 @@ import {
   type TimerMode,
   type TimerState,
 } from "@/lib/study/ui-store";
+import { dismissPriority, useDismissLayer } from "@/lib/dismiss-layer";
 import { clockLabel, maskClock, parseDurationInput, splitDuration } from "@/lib/study/format";
 import { dayKeyOf, minuteOfDay } from "@/lib/study/dates";
 import { holdTimerAudio, playTimerSound, releaseTimerAudio, resumeTimerAudio, unlockTimerAudio } from "@/lib/study/sound";
@@ -27,6 +28,10 @@ import { setTitlePrefix } from "@/lib/document-title";
 import { TIMER_SOUNDS } from "@/lib/study/defaults";
 import type { StudySettings } from "@/types/study";
 import { SubjectDot } from "./ui";
+
+function ExamMark() {
+  return <ClipboardCheck aria-hidden className="size-3.5 shrink-0 text-[var(--accent)]" />;
+}
 
 const PHASE_KEY: Record<PomodoroPhase, StudyKey> = {
   focus: "timer_phase_focus",
@@ -88,6 +93,11 @@ export function finishFocus(settings: StudySettings, message: string) {
   store.setTimerOpen(false);
   if (seconds < 60) {
     toast.info(message);
+    return;
+  }
+  // Simulado não vira sessão: o tempo medido abre direto o novo simulado.
+  if (timer.examMode) {
+    store.openExam({ durationSec: seconds, day: dayKeyOf(started, settings.timeZone) });
     return;
   }
   store.openLog({
@@ -446,6 +456,9 @@ export function FocusOverlay() {
   const { st } = useStudyT();
   const open = useStudyUi((state) => state.timerOpen);
   const timer = useStudyUi((state) => state.timer);
+  useDismissLayer(open, dismissPriority.timer, () => {
+    useStudyUi.getState().setTimerOpen(false);
+  });
   const { settings, planSubjects, subjectById, actions, planReadOnly } = useStudy();
   const liveNote = useLiveNote();
   const router = useRouter();
@@ -458,11 +471,7 @@ export function FocusOverlay() {
       if (document.querySelector("[role=menu]")) return;
       const target = event.target as HTMLElement | null;
       const typing = target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        useStudyUi.getState().setTimerOpen(false);
-      } else if (event.code === "Space" && !typing) {
+      if (event.code === "Space" && !typing) {
         event.preventDefault();
         const current = useStudyUi.getState().timer;
         if (current.status === "running") pauseTimer();
@@ -596,10 +605,10 @@ export function FocusOverlay() {
           <div className="flex flex-1 flex-col items-center justify-center px-5 pb-8 pt-4">
             {planReadOnly ? (
               <span className="flex max-w-[min(32rem,90vw)] items-center gap-2 px-3 py-1.5 text-[13px]">
-                {subject ? <SubjectDot color={subject.color} /> : null}
-                <span className={cn("truncate", subject ? "font-medium text-ink" : "text-muted")}>
-                  {subject ? subject.name : st("timer_no_subject")}
-                  {topic ? <span className="font-normal text-muted"> · {topic.name}</span> : null}
+                {timer.examMode ? <ExamMark /> : subject ? <SubjectDot color={subject.color} /> : null}
+                <span className={cn("truncate", timer.examMode || subject ? "font-medium text-ink" : "text-muted")}>
+                  {timer.examMode ? st("timer_exam") : subject ? subject.name : st("timer_no_subject")}
+                  {!timer.examMode && topic ? <span className="font-normal text-muted"> · {topic.name}</span> : null}
                 </span>
               </span>
             ) : (
@@ -609,18 +618,23 @@ export function FocusOverlay() {
                   type="button"
                   className="group flex max-w-[min(32rem,90vw)] items-center gap-2 rounded-full px-3 py-1.5 text-[13px] transition hover:bg-[var(--surface-hover)]"
                 >
-                  {subject ? <SubjectDot color={subject.color} /> : null}
-                  <span className={cn("truncate", subject ? "font-medium text-ink" : "text-muted")}>
-                    {subject ? subject.name : st("timer_pick_subject")}
-                    {topic ? <span className="font-normal text-muted"> · {topic.name}</span> : null}
+                  {timer.examMode ? <ExamMark /> : subject ? <SubjectDot color={subject.color} /> : null}
+                  <span className={cn("truncate", timer.examMode || subject ? "font-medium text-ink" : "text-muted")}>
+                    {timer.examMode ? st("timer_exam") : subject ? subject.name : st("timer_pick_subject")}
+                    {!timer.examMode && topic ? <span className="font-normal text-muted"> · {topic.name}</span> : null}
                   </span>
                   <ChevronDown className="size-3.5 shrink-0 text-faint transition group-data-[state=open]:rotate-180" />
                 </button>
               </MenuTrigger>
               <MenuContent align="center" collisionPadding={16} className="max-h-[min(20rem,70dvh)] w-[min(18rem,calc(100vw-2rem))] overflow-y-auto">
-                <MenuItem onSelect={() => useStudyUi.getState().setTimer({ subjectId: null, topicId: null, pageId: null })}>
+                <MenuItem onSelect={() => useStudyUi.getState().setTimer({ subjectId: null, topicId: null, pageId: null, examMode: false })}>
                   <span className="size-2 rounded-full border border-[var(--border-strong)]" />
                   {st("timer_no_subject")}
+                </MenuItem>
+                <MenuItem onSelect={() => useStudyUi.getState().setTimer({ subjectId: null, topicId: null, pageId: null, reviewId: null, examMode: true })}>
+                  <ExamMark />
+                  <span className="min-w-0 flex-1 truncate">{st("timer_exam")}</span>
+                  {timer.examMode ? <Check className="!text-[var(--accent)]" /> : null}
                 </MenuItem>
                 {planSubjects.length ? <MenuSeparator /> : null}
                 {planSubjects.map((entry) => (
@@ -628,10 +642,10 @@ export function FocusOverlay() {
                     key={entry.id}
                     className="min-h-11 sm:min-h-0"
                     onSelect={(event) => {
-                      if (entry.id === timer.subjectId) return;
+                      if (entry.id === timer.subjectId && !timer.examMode) return;
                       event.preventDefault();
                       scrollTopicsRef.current = true;
-                      useStudyUi.getState().setTimer({ subjectId: entry.id, topicId: null, pageId: null });
+                      useStudyUi.getState().setTimer({ subjectId: entry.id, topicId: null, pageId: null, examMode: false });
                     }}
                   >
                     <SubjectDot color={entry.color} />
@@ -865,10 +879,10 @@ export function FocusPill() {
             <span className={cn("min-w-0 truncate text-[12px] font-medium", armed ? "text-[var(--accent)]" : "text-faint")}>{status}</span>
           </span>
           <span className="flex w-full min-w-0 items-center gap-1.5 text-[12px] leading-4 text-muted">
-            {subject ? <SubjectDot color={subject.color} /> : null}
+            {timer.examMode ? <ExamMark /> : subject ? <SubjectDot color={subject.color} /> : null}
             <span className="truncate">
-              {subject ? subject.name : st("timer_no_subject")}
-              {topic ? <span className="text-faint"> · {topic.name}</span> : null}
+              {timer.examMode ? st("timer_exam") : subject ? subject.name : st("timer_no_subject")}
+              {!timer.examMode && topic ? <span className="text-faint"> · {topic.name}</span> : null}
             </span>
           </span>
         </button>

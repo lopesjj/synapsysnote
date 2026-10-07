@@ -23,6 +23,8 @@ export interface TimerState {
   topicId: string | null;
   reviewId: string | null;
   pageId: string | null;
+  /** Relógio marcando um simulado: sem disciplina, e ao parar abre o novo simulado. */
+  examMode: boolean;
   finished: boolean;
 }
 
@@ -36,6 +38,11 @@ export interface LogPrefill {
   startMinute?: number | null;
   pageId?: string | null;
   source?: "manual" | "timer";
+}
+
+export interface ExamPrefill {
+  durationSec?: number;
+  day?: string;
 }
 
 export type GoalSubjectSort = "syllabus" | "coverage" | "accuracy" | "reviews";
@@ -60,6 +67,7 @@ const IDLE_TIMER: TimerState = {
   topicId: null,
   reviewId: null,
   pageId: null,
+  examMode: false,
   finished: false,
 };
 
@@ -70,6 +78,8 @@ interface StudyUiState {
   logOpen: boolean;
   logPrefill: LogPrefill | null;
   logEditId: string | null;
+  examOpen: boolean;
+  examPrefill: ExamPrefill | null;
   padOpen: boolean;
   scheduleView: "week" | "month";
   scheduleLayers: ScheduleLayers;
@@ -88,6 +98,8 @@ interface StudyUiState {
   setTimerOpen: (open: boolean) => void;
   openLog: (prefill?: LogPrefill | null, editId?: string | null) => void;
   closeLog: () => void;
+  openExam: (prefill?: ExamPrefill | null) => void;
+  closeExam: () => void;
   setPadOpen: (open: boolean) => void;
   setScheduleView: (view: "week" | "month") => void;
   setScheduleLayer: (layer: keyof ScheduleLayers, value: boolean) => void;
@@ -107,6 +119,8 @@ export const useStudyUi = create<StudyUiState>()(
       logOpen: false,
       logPrefill: null,
       logEditId: null,
+      examOpen: false,
+      examPrefill: null,
       padOpen: false,
       scheduleView: "week",
       scheduleLayers: { plan: true, reviews: true, tasks: true },
@@ -126,6 +140,7 @@ export const useStudyUi = create<StudyUiState>()(
             countdownMs: get().timer.countdownMs,
             subjectId: get().timer.subjectId,
             topicId: get().timer.topicId,
+            examMode: get().timer.examMode,
             ...keep,
           },
         }),
@@ -133,6 +148,8 @@ export const useStudyUi = create<StudyUiState>()(
       openLog: (prefill, editId) =>
         set({ logOpen: true, logPrefill: prefill ?? null, logEditId: editId ?? null }),
       closeLog: () => set({ logOpen: false, logPrefill: null, logEditId: null }),
+      openExam: (prefill) => set({ examOpen: true, examPrefill: prefill ?? null }),
+      closeExam: () => set({ examOpen: false, examPrefill: null }),
       setPadOpen: (open) => set({ padOpen: open }),
       setScheduleView: (view) => set({ scheduleView: view }),
       setScheduleLayer: (layer, value) => set({ scheduleLayers: { ...get().scheduleLayers, [layer]: value } }),
@@ -144,7 +161,7 @@ export const useStudyUi = create<StudyUiState>()(
     }),
     {
       name: "synapsys.study.ui.v1",
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
       migrate: (persisted, version) => {
@@ -155,6 +172,7 @@ export const useStudyUi = create<StudyUiState>()(
           state.scheduleLayers = { plan, reviews, tasks };
         }
         if (!Array.isArray(state.celebrated)) state.celebrated = [];
+        if (state.timer && typeof state.timer.examMode !== "boolean") state.timer = { ...state.timer, examMode: false };
         delete state.lastNotesRoute;
         delete state.lastStudyRoute;
         return state as StudyUiState;
@@ -215,7 +233,7 @@ export function isTimerArmed(timer: TimerState): boolean {
  */
 export function openBlankTimer() {
   const store = useStudyUi.getState();
-  if (store.timer.status === "idle" && !isTimerArmed(store.timer)) store.resetTimer({ subjectId: null, topicId: null });
+  if (store.timer.status === "idle" && !isTimerArmed(store.timer)) store.resetTimer({ subjectId: null, topicId: null, examMode: false });
   store.setTimerOpen(true);
 }
 
@@ -249,6 +267,8 @@ if (typeof window !== "undefined") {
       logOpen: false,
       logPrefill: null,
       logEditId: null,
+      examOpen: false,
+      examPrefill: null,
       padOpen: false,
     });
     try {

@@ -22,6 +22,7 @@ import type { Notebook } from "@/types/models";
 import { OPEN_GATE, useGoalGates, usePlanGates } from "@/lib/plans/gates";
 import { notifyPlanError } from "@/lib/plans/client";
 import { PlanLockBadge } from "@/components/plans/plan-lock";
+import { dismissPriority, useDismissLayer } from "@/lib/dismiss-layer";
 
 export function CommandPalette({
   open,
@@ -41,19 +42,7 @@ export function CommandPalette({
     : null;
   const { theme, toggle } = useTheme();
   const [query, setQuery] = useState("");
-
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        onOpenChange(false);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [open, onOpenChange]);
+  useDismissLayer(open, dismissPriority.palette, () => onOpenChange(false));
 
   const { st } = useStudyT();
   const { focusPlan, planReadOnly } = useStudy();
@@ -176,13 +165,6 @@ export function CommandPalette({
             <Command
               loop
               shouldFilter={false}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onOpenChange(false);
-                }
-              }}
               className="overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-float)]"
             >
               <div className="flex items-center gap-2.5 border-b border-[var(--border)] px-4">
@@ -190,13 +172,6 @@ export function CommandPalette({
                   autoFocus
                   value={query}
                   onValueChange={setQuery}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onOpenChange(false);
-                    }
-                  }}
                   placeholder={t("search_placeholder")}
                   className="h-12 w-full bg-transparent text-[13.5px] text-ink outline-none placeholder:text-faint"
                 />

@@ -362,10 +362,10 @@ export function NewGoalPage() {
                       ariaLabel={st("notebook_pick")}
                       value={rootId}
                       onChange={(val) => importNotebook(String(val))}
-                      placeholder="—"
+                      placeholder="-"
                       options={[
-                        { value: "", label: "—" },
-                        ...sortedRoots.map((notebook) => ({ value: notebook.id, label: notebook.name || "—" })),
+                        { value: "", label: "-" },
+                        ...sortedRoots.map((notebook) => ({ value: notebook.id, label: notebook.name || "-" })),
                       ]}
                     />
                   </div>

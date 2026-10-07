@@ -13,7 +13,7 @@ export function canonMotto(value: string): string {
     .replace(/&#039;|&apos;|&#39;/g, "'")
     .replace(/&amp;/g, "&")
     .replace(/&ldquo;|&#8220;|&rdquo;|&#8221;/g, '"')
-    .replace(/&mdash;|&#8212;/g, "—")
+    .replace(/&mdash;|&#8212;|—/g, "-")
     .replace(/<[^>]*>/g, "")
     .replace(/[’‘]/g, "'")
     .replace(/\s+/g, " ")

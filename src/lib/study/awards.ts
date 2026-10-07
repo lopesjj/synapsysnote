@@ -1,6 +1,7 @@
 import type { DayKey, StudyPlan, StudySubject } from "@/types/study";
 import { compareDay, dayKeyOf, dayRange, diffDays, keyToUtc } from "./dates";
 import { isPlannedDay } from "./metrics";
+import { windowCovers, type StudyWindow } from "./series";
 
 export const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100, 200, 365] as const;
 
@@ -13,7 +14,12 @@ export interface StreakRun {
   days: DayKey[];
 }
 
-export function streakRuns(days: ReadonlySet<DayKey>, today: DayKey, weekdays: readonly number[]): StreakRun[] {
+export function streakRuns(
+  days: ReadonlySet<DayKey>,
+  today: DayKey,
+  weekdays: readonly number[],
+  window?: StudyWindow | null
+): StreakRun[] {
   const sorted = [...days].sort(compareDay);
   if (!sorted.length) return [];
   const first = sorted[0];
@@ -23,7 +29,8 @@ export function streakRuns(days: ReadonlySet<DayKey>, today: DayKey, weekdays: r
   for (const day of dayRange(first, last)) {
     if (days.has(day)) {
       current.push(day);
-    } else if (isPlannedDay(day, weekdays) && day !== today) {
+      // Faltar fora da janela do edital não quebra a corrida, igual à sequência.
+    } else if (isPlannedDay(day, weekdays) && day !== today && (!window || windowCovers(window, day))) {
       if (current.length) runs.push(current);
       current = [];
     }
@@ -108,6 +115,7 @@ export function buildAwardBook({
   timeZone,
   currentStreak,
   claims,
+  window,
 }: {
   plan: StudyPlan;
   subjects: readonly StudySubject[];
@@ -117,6 +125,8 @@ export function buildAwardBook({
   timeZone?: string | null;
   currentStreak: number;
   claims: Readonly<Record<string, number>>;
+  /** Mesma janela da sequência: os selos precisam contar a corrida do mesmo jeito. */
+  window?: StudyWindow | null;
 }): AwardBook {
   const subjectAwards: SubjectAward[] = subjects
     .filter((subject) => subject.topics.length > 0)
@@ -155,7 +165,7 @@ export function buildAwardBook({
       }
     : null;
 
-  const runs = streakRuns(studied, today, weekdays);
+  const runs = streakRuns(studied, today, weekdays, window);
   const streaks: StreakAward[] = STREAK_MILESTONES.map((threshold, tier) => {
     let earnedDay: DayKey | null = null;
     for (const run of runs) {

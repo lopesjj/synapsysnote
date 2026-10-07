@@ -137,6 +137,18 @@ export function formatDay(
   return new Intl.DateTimeFormat(locale, { ...options, timeZone: "UTC" }).format(new Date(keyToUtc(key)));
 }
 
+/**
+ * Intervalo de datas com o ano no fim — e também no começo quando o trecho
+ * atravessa a virada do ano.
+ */
+export function dayRangeLabel(from: DayKey, to: DayKey, locale: string): { start: string; end: string } {
+  const sameYear = from.slice(0, 4) === to.slice(0, 4);
+  return {
+    start: formatDay(from, locale, sameYear ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" }),
+    end: formatDay(to, locale, { day: "numeric", month: "short", year: "numeric" }),
+  };
+}
+
 export function weekdayLabel(weekday: number, locale: string, width: "narrow" | "short" | "long" = "short"): string {
   const reference = Date.UTC(2023, 0, 1 + weekday);
   return new Intl.DateTimeFormat(locale, { weekday: width, timeZone: "UTC" }).format(new Date(reference));

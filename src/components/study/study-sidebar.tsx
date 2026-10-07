@@ -136,11 +136,13 @@ function FocusDock() {
         <button type="button" onClick={() => useStudyUi.getState().setTimerOpen(true)} className="min-w-0 flex-1 text-left">
           <span className="block font-mono text-[13px] font-semibold tabular-nums text-ink">{clockLabel(displaySeconds(timer, settings, now), true)}</span>
           <span className={cn("flex items-center gap-1.5 truncate text-[11px]", armed ? "font-medium text-[var(--accent)]" : "text-muted")}>
-            {subject && !armed ? <SubjectDot color={subject.color} /> : null}
+            {timer.examMode && !armed ? <ClipboardCheck className="size-3.5 shrink-0" /> : subject && !armed ? <SubjectDot color={subject.color} /> : null}
             <span className="truncate">
               {armed
                 ? st("timer_armed_hint")
-                : (subject?.name ?? (timer.status === "paused" ? st("sidebar_focus_paused") : st("timer_no_subject")))}
+                : timer.examMode
+                  ? st("timer_exam")
+                  : (subject?.name ?? (timer.status === "paused" ? st("sidebar_focus_paused") : st("timer_no_subject")))}
             </span>
           </span>
         </button>

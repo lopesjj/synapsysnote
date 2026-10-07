@@ -12,7 +12,8 @@ import { useStudy, type SessionInput } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
 import { useStudyUi, type LogPrefill } from "@/lib/study/ui-store";
 import { addDays, minuteLabel, parseMinuteLabel } from "@/lib/study/dates";
-import { canCountSession, pendingAgendaEntry } from "@/lib/study/cycle";
+import { canCountSession } from "@/lib/study/cycle";
+import { intervalsBefore } from "@/lib/study/series";
 import { clockLabel, parseDurationInput } from "@/lib/study/format";
 import { accuracyOf } from "@/lib/study/metrics";
 import { useLiveNote } from "@/lib/study/hooks";
@@ -177,14 +178,10 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
     const rawCat = editing?.categoryId ?? prefill?.categoryId ?? (review ? "review" : settings.categories[0]?.id ?? "theory");
     return rawCat === "reading" || rawCat === "video" || rawCat === "summary" ? "theory" : rawCat;
   });
-  const [subject, setSubject] = useState<Choice>(() => {
-    const id = editing?.subjectId ?? prefill?.subjectId ?? review?.subjectId ?? null;
-    return id ? { kind: "existing", id } : null;
-  });
-  const [topic, setTopic] = useState<Choice>(() => {
-    const id = editing?.topicId ?? prefill?.topicId ?? review?.topicId ?? null;
-    return id ? { kind: "existing", id } : null;
-  });
+  const initialSubjectId = editing?.subjectId ?? prefill?.subjectId ?? review?.subjectId ?? null;
+  const initialTopicId = editing?.topicId ?? prefill?.topicId ?? review?.topicId ?? null;
+  const [subject, setSubject] = useState<Choice>(() => (initialSubjectId ? { kind: "existing", id: initialSubjectId } : null));
+  const [topic, setTopic] = useState<Choice>(() => (initialTopicId ? { kind: "existing", id: initialTopicId } : null));
   const [duration, setDuration] = useState(() => {
     const seconds = editing?.durationSec ?? prefill?.durationSec ?? 0;
     return seconds ? clockLabel(seconds, true) : "";
@@ -197,7 +194,12 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
   const [wrong, setWrong] = useState(editing ? String(editing.wrong || "") : "");
   const [pageId, setPageId] = useState<string | null>(editing?.pageId ?? prefill?.pageId ?? null);
   const ownReviews = editing ? reviews.filter((entry) => entry.sessionId === editing.id) : [];
-  const [completeTopic, setCompleteTopic] = useState(Boolean(editing?.completedTopic));
+  // Tópico já encerrado abre marcado: registrar mais estudo nele não reabre a teoria.
+  const [completeTopic, setCompleteTopic] = useState(() =>
+    editing
+      ? Boolean(editing.completedTopic)
+      : Boolean(subjectById(initialSubjectId)?.topics.find((entry) => entry.id === initialTopicId)?.done)
+  );
   const [scheduleReviews, setScheduleReviews] = useState(editing ? ownReviews.length > 0 : !review && settings.autoReviews);
   const [countCycle, setCountCycle] = useState(editing ? Boolean(editing.cycleItemId) : true);
   const [saveAnother, setSaveAnother] = useState(false);
@@ -229,14 +231,23 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
     topic?.kind === "existing" ? selectedSubject?.topics.find((entry) => entry.id === topic.id) : undefined;
 
 
-  const fixedMatch = planCycle && subject?.kind === "existing" ? pendingAgendaEntry(planCycle, subject.id, day) : null;
   const cycleMatches = Boolean(
     (planCycle && subject?.kind === "existing" && canCountSession(planCycle, subject.id, day, true)) ||
       (editing?.cycleItemId && subject?.kind === "existing" && subject.id === editing.subjectId && day === editing.day)
   );
   const ownsTopicDone = Boolean(editing?.completedTopic && topic?.kind === "existing" && topic.id === editing.topicId);
   const topicAlreadyDone = Boolean(selectedTopic?.done) && !ownsTopicDone;
-  const canReview = settings.reviewIntervals.length > 0 || ownReviews.length > 0;
+  // A prova fecha a agenda: só valem os intervalos que caem antes dela. Sem
+  // nenhum, a caixa não pode prometer revisões que não serão criadas.
+  const fitIntervals = useMemo(
+    () => intervalsBefore(settings.reviewIntervals, day, plan?.examDate ?? null),
+    [day, plan?.examDate, settings.reviewIntervals]
+  );
+  const examClosed = settings.reviewIntervals.length > 0 && fitIntervals.length === 0;
+  const canReview = fitIntervals.length > 0 || ownReviews.length > 0;
+  // Sessão de revisão não abre outra série de revisões; ao editar, as que já existem ficam.
+  const showReviews = categoryId !== "review";
+  const willScheduleReviews = showReviews ? scheduleReviews && canReview : Boolean(editing && ownReviews.length);
 
   const correctN = numeric(correct);
   const wrongN = numeric(wrong);
@@ -321,7 +332,7 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
           input,
           {
             completeTopic,
-            scheduleReviews: scheduleReviews && canReview,
+            scheduleReviews: willScheduleReviews,
             countCycle: countCycle && cycleMatches,
             reopenTopic: topicAlreadyDone && !completeTopic,
           },
@@ -334,7 +345,7 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
           input,
           {
             completeTopic,
-            scheduleReviews: scheduleReviews && canReview,
+            scheduleReviews: willScheduleReviews,
             countCycle: countCycle && cycleMatches,
             reopenTopic: topicAlreadyDone && !completeTopic,
           },
@@ -360,7 +371,7 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
     }
   };
 
-  const intervals = settings.reviewIntervals;
+  const intervals = fitIntervals;
   const intervalsText = new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(intervals.map(String));
 
   if (locked) return null;
@@ -514,34 +525,37 @@ function LogSessionForm({ prefill, editId }: { prefill: LogPrefill | null; editI
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-x-5 gap-y-2.5 rounded-[var(--radius-md)] bg-[var(--surface-2)]/60 px-3.5 py-3 sm:grid-cols-3">
-          <Toggle
-            checked={completeTopic}
-            disabled={!topic}
-            onChange={setCompleteTopic}
-            label={st("logform_topic_done")}
-            hint={st(topicAlreadyDone ? "logform_topic_reopen" : "logform_topic_done_hint")}
-          />
+        <div
+          className={cn(
+            "grid grid-cols-1 gap-x-5 gap-y-2.5 rounded-[var(--radius-md)] bg-[var(--surface-2)]/60 px-3.5 py-3",
+            showReviews ? "sm:grid-cols-3" : "sm:grid-cols-2"
+          )}
+        >
+          <Toggle checked={completeTopic} disabled={!topic} onChange={setCompleteTopic} label={st("logform_topic_done")} />
           <Toggle
             checked={countCycle && cycleMatches}
             disabled={!cycleMatches}
             onChange={setCountCycle}
             label={st("logform_cycle")}
-            hint={st(fixedMatch ? "logform_cycle_hint_fixed" : "logform_cycle_hint")}
+            title={cycleMatches ? undefined : st("logform_cycle_locked")}
           />
-          <Toggle
-            checked={scheduleReviews && canReview}
-            disabled={!canReview}
-            onChange={setScheduleReviews}
-            label={st("logform_reviews")}
-            hint={
-              editing && ownReviews.length
-                ? st("logform_reviews_existing", { count: ownReviews.length })
-                : intervals.length
-                  ? st("logform_reviews_hint", { intervals: intervalsText, count: intervals[intervals.length - 1] })
-                  : st("logform_reviews_none")
-            }
-          />
+          {showReviews ? (
+            <Toggle
+              checked={scheduleReviews && canReview}
+              disabled={!canReview}
+              onChange={setScheduleReviews}
+              label={st("logform_reviews")}
+              hint={
+                editing && ownReviews.length
+                  ? st("logform_reviews_existing", { count: ownReviews.length })
+                  : intervals.length
+                    ? st("logform_reviews_hint", { intervals: intervalsText, count: intervals[intervals.length - 1] })
+                    : examClosed
+                      ? st("logform_reviews_after_exam")
+                      : st("logform_reviews_none")
+              }
+            />
+          ) : null}
         </div>
         <Group
           title={st("logform_questions")}
@@ -603,15 +617,18 @@ function Toggle({
   onChange,
   label,
   hint,
+  title,
 }: {
   checked: boolean;
   disabled?: boolean;
   onChange: (value: boolean) => void;
   label: string;
-  hint: string;
+  hint?: string;
+  /** Motivo de estar fora de alcance, só no hover: a linha abaixo fica limpa. */
+  title?: string;
 }) {
   return (
-    <label className={cn("flex cursor-pointer items-start gap-2.5", disabled && "cursor-not-allowed opacity-50")}>
+    <label title={title} className={cn("flex cursor-pointer items-start gap-2.5", disabled && "cursor-not-allowed opacity-50")}>
       <Checkbox
         checked={checked}
         disabled={disabled}
@@ -620,7 +637,7 @@ function Toggle({
       />
       <span className="min-w-0">
         <span className="block text-[12.5px] font-medium text-ink">{label}</span>
-        <span className="block text-[11px] leading-snug text-faint">{hint}</span>
+        {hint ? <span className="block text-[11px] leading-snug text-faint">{hint}</span> : null}
       </span>
     </label>
   );

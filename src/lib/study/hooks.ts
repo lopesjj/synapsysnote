@@ -15,6 +15,8 @@ import {
   studiedDays,
 } from "./metrics";
 import { addDays, startOfWeek } from "./dates";
+import { seriesIdOf, studyWindow, termsOf } from "./series";
+import type { StudyReview } from "@/types/study";
 import { buildAwardBook, type AwardBook } from "./awards";
 
 export function useLiveNote() {
@@ -38,13 +40,56 @@ export function useMaterialNote() {
   );
 }
 
+/**
+ * Material da revisão: o que a sessão de origem anotou e a nota ligada a ela —
+ * a mesma nota que "Revisar agora" abre. Nada é copiado para a revisão.
+ */
+export function useReviewMaterial() {
+  const { sessions } = useStudy();
+  const materialNote = useMaterialNote();
+  return useCallback(
+    (review: Pick<StudyReview, "id" | "sessionId" | "subjectId" | "topicId">): { material: string; pageId: string | null } | null => {
+      const origin = sessions.find((session) => session.id === review.sessionId);
+      const pageId = materialNote({ reviewId: review.id, subjectId: review.subjectId, topicId: review.topicId });
+      const material = origin?.material.trim() ?? "";
+      return material || pageId ? { material, pageId } : null;
+    },
+    [materialNote, sessions]
+  );
+}
+
 export function usePlanMetrics() {
-  const { planSessions, planExams, planSubjects, planReviews, settings, today } = useStudy();
+  const { focusPlan, plans, sessions, exams, planSessions, planExams, planSubjects, planReviews, settings, today } = useStudy();
+  const series = focusPlan ? seriesIdOf(focusPlan) : null;
+  // A série atravessa a medida do tempo e a dos dias: o calendário de check-ins
+  // e o foco continuam de um edital para o outro. Disciplina, cobertura e
+  // questões seguem sendo do edital atual.
+  const terms = useMemo(() => (series ? termsOf(plans, series) : []), [plans, series]);
+  const termIds = useMemo(() => new Set(terms.map((plan) => plan.id)), [terms]);
+  const seriesSessions = useMemo(
+    () => (terms.length > 1 ? sessions.filter((entry) => termIds.has(entry.planId)) : planSessions),
+    [planSessions, sessions, termIds, terms.length]
+  );
+  const seriesExams = useMemo(
+    () => (terms.length > 1 ? exams.filter((entry) => termIds.has(entry.planId)) : planExams),
+    [exams, planExams, termIds, terms.length]
+  );
+  const seriesTotal = useMemo(() => {
+    if (terms.length < 2) return null;
+    let seconds = 0;
+    for (const session of seriesSessions) seconds += session.durationSec;
+    for (const exam of seriesExams) seconds += exam.durationSec;
+    return { seconds, terms: terms.length };
+  }, [seriesExams, seriesSessions, terms.length]);
   return useMemo(() => {
     const total = absorbExamQuestions(aggregate(planSessions), planExams, planSubjects);
     const examSeconds = planExams.reduce((sum, exam) => sum + exam.durationSec, 0);
-    const days = studiedDays(planSessions, planExams);
+    // Dias de check-in de toda a série, para o calendário não zerar no edital novo.
+    const days = studiedDays(seriesSessions, seriesExams);
+    // Cada prova abre uma pausa; ela só fecha no registro seguinte ou no edital novo.
+    const window = studyWindow(terms.length ? terms : [focusPlan], days);
     const seconds = total.seconds + examSeconds;
+    const seriesSeconds = seriesTotal?.seconds ?? seconds;
     const pendingReviews = planReviews.filter((review) => review.status === "pending");
     const dueReviews = pendingReviews.filter((review) => review.dueDay <= today);
     const weekStart = startOfWeek(today, settings.weekStartsOn);
@@ -63,12 +108,16 @@ export function usePlanMetrics() {
       seconds,
       examSeconds,
       days,
-      avgPerDay: days.size ? seconds / days.size : 0,
-      streak: streakInfo(days, today, settings.studyWeekdays),
-      consistency: consistencyInfo(days, today, settings.studyWeekdays),
+      avgPerDay: days.size ? seriesSeconds / days.size : 0,
+      window,
+      terms,
+      /** Soma de todos os editais da série, ou `null` quando só existe um. */
+      seriesTotal,
+      streak: streakInfo(days, today, settings.studyWeekdays, window),
+      consistency: consistencyInfo(days, today, settings.studyWeekdays, window.startDay, window),
       coverage: coverageOf(planSubjects),
       bySubject: groupWithExams(planSessions, planExams, planSubjects),
-      byDay: secondsByDay(planSessions, planExams),
+      byDay: secondsByDay(seriesSessions, seriesExams),
       dueReviews,
       overdueReviews: dueReviews.filter((review) => review.dueDay < today),
       pendingReviews,
@@ -78,7 +127,7 @@ export function usePlanMetrics() {
       weekQuestions: week.questions,
       todaySeconds: planSessions.filter((session) => session.day === today).reduce((sum, session) => sum + session.durationSec, 0),
     };
-  }, [planExams, planReviews, planSessions, planSubjects, settings.studyWeekdays, settings.weekStartsOn, today]);
+  }, [focusPlan, planExams, planReviews, planSessions, planSubjects, seriesExams, seriesSessions, seriesTotal, settings.studyWeekdays, settings.weekStartsOn, terms, today]);
 }
 
 export function useAwardBook(): AwardBook | null {
@@ -96,9 +145,10 @@ export function useAwardBook(): AwardBook | null {
             timeZone: settings.timeZone,
             currentStreak: metrics.streak.current,
             claims: settings.claimedAwards,
+            window: metrics.window,
           })
         : null,
-    [focusPlan, metrics.days, metrics.streak, planSubjects, settings.claimedAwards, settings.studyWeekdays, settings.timeZone, today]
+    [focusPlan, metrics.days, metrics.streak, metrics.window, planSubjects, settings.claimedAwards, settings.studyWeekdays, settings.timeZone, today]
   );
 }
 

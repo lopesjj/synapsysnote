@@ -2,9 +2,9 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
-import { Archive, CalendarDays, Check, ChevronDown, ChevronRight, Circle, CircleDot, ClipboardPaste, Clock, ListChecks, Plus } from "lucide-react";
+import { Archive, CalendarDays, Check, ChevronDown, ChevronRight, Circle, CircleDot, ClipboardPaste, Clock, ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Link } from "@/lib/i18n/navigation";
+import { Link, useRouter } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { DialogShell } from "@/components/ui/dialog";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
@@ -13,20 +13,22 @@ import { useStudy, type SubjectDraft } from "@/lib/study/provider";
 import { studyTranslateParts, useStudyT } from "@/lib/study/i18n";
 import { useStudyUi, type GoalSubjectSort } from "@/lib/study/ui-store";
 import { performanceBand, streakInfo } from "@/lib/study/metrics";
-import { diffDays, formatDay } from "@/lib/study/dates";
+import { compareDay, diffDays, formatDay } from "@/lib/study/dates";
 import { formatNumber } from "@/lib/study/format";
 import { roundProgress } from "@/lib/study/cycle";
 import { projectSyllabus, recentWeeks, type SubjectSummary } from "@/lib/study/goal-summary";
+import { seriesIdOf, termsOf } from "@/lib/study/series";
 import type { PerformanceBand, StudyPlan, StudySubject } from "@/types/study";
 import { GoalDialog, type GoalField } from "../dialogs";
 import { SubjectDialog } from "../subject-dialog";
 import { ExamDialog } from "../exam-dialog";
+import { NewExamDialog } from "../new-exam-dialog";
 import { DraftEditor, PasteImporter, useDraftMerge } from "../syllabus-import";
 import { CoveragePie, ExamCountdown, ProgressBar, SyllabusSummary, WeekBars, WeekMeter } from "../goal-visuals";
 import { GoalMark, StudyEmpty, StudyLoading, StudyPage, reactivatePlan } from "../ui";
 import { CycleWheel } from "./schedule";
 import { GoalActionsMenu, PANEL, useGoalFacts, type GoalFacts } from "./goals";
-import { useGoalGates } from "@/lib/plans/gates";
+import { useGoalGates, usePlanGates } from "@/lib/plans/gates";
 
 const SORTS: { id: GoalSubjectSort; key: "goal_sort_syllabus" | "goal_sort_coverage" | "goal_sort_accuracy" | "goal_sort_reviews" }[] = [
   { id: "syllabus", key: "goal_sort_syllabus" },
@@ -414,6 +416,181 @@ function OverviewSection({ title, action, children }: { title: string; action?: 
   );
 }
 
+/**
+ * Editais da série. Cada linha é um edital com o próprio tempo; o rodapé traz a
+ * soma de todos, que é a única medida que atravessa os editais.
+ */
+function TermRow({
+  term,
+  index,
+  seconds,
+  isCurrent,
+  canWrite,
+  onOpen,
+}: {
+  term: StudyPlan;
+  index: number;
+  seconds: number;
+  isCurrent: boolean;
+  canWrite: boolean;
+  onOpen: () => void;
+}) {
+  const { st, duration, locale, textDir } = useStudyT();
+  const router = useRouter();
+  const { actions, today } = useStudy();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  // Enter fecha o campo, e fechar dispara o blur: sem isto, grava duas vezes.
+  const committed = useRef(false);
+  const name = term.termLabel || st("term_label_fallback", { n: index + 1 });
+  const when = term.examDate
+    ? st(compareDay(term.examDate, today) <= 0 ? "term_exam_done" : "term_exam_next", {
+        date: formatDay(term.examDate, locale, { day: "numeric", month: "short", year: "numeric" }),
+      })
+    : st("goal_no_exam");
+
+  const commit = async () => {
+    if (committed.current) return;
+    committed.current = true;
+    setEditing(false);
+    if (draft.trim() === term.termLabel) return;
+    try {
+      await actions.renameTerm(term.id, draft);
+      toast.success(st("term_renamed"));
+    } catch {
+      toast.error(st("error_generic"));
+    }
+  };
+
+  const remove = async () => {
+    if (!window.confirm(st("term_delete_confirm", { name }))) return;
+    try {
+      await actions.deletePlan(term.id);
+      toast.success(st("term_deleted"));
+      // Apagou o edital que estava aberto: não há mais página para ficar.
+      if (isCurrent) router.push("/home/study/goals");
+    } catch {
+      toast.error(st("error_generic"));
+    }
+  };
+
+  return (
+    <li className="group/term relative flex items-center gap-3 rounded-[var(--radius-sm)] px-1 py-1.5 transition hover:bg-[var(--surface-hover)]">
+      <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", isCurrent ? "bg-[var(--accent)]" : "bg-[var(--border-strong)]")} />
+      {editing ? (
+        <input
+          autoFocus
+          dir={textDir}
+          value={draft}
+          maxLength={80}
+          aria-label={st("term_rename_label")}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => void commit()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void commit();
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              committed.current = true;
+              setEditing(false);
+            }
+          }}
+          className="h-7 min-w-0 flex-1 rounded-[var(--radius-xs)] border border-[var(--accent)] bg-[var(--surface)] px-2 text-[13px] text-ink outline-none"
+        />
+      ) : (
+        <span className="min-w-0 flex-1">
+          {isCurrent ? (
+            <span className="block truncate text-[13px] font-medium text-ink">{name}</span>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpen}
+              className="block max-w-full truncate text-start text-[13px] text-muted outline-none after:absolute after:inset-0 focus-visible:underline"
+            >
+              {name}
+            </button>
+          )}
+          <span className="block truncate text-[11.5px] text-faint">{when}</span>
+        </span>
+      )}
+      <span className="shrink-0 text-[12.5px] tabular-nums text-muted">{seconds ? duration(seconds) : "–"}</span>
+      {canWrite && !editing ? (
+        <span className="relative z-10 flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/term:opacity-100 group-focus-within/term:opacity-100 [@media(hover:none)]:opacity-100">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={st("term_rename")}
+            title={st("term_rename")}
+            onClick={() => {
+              setDraft(term.termLabel);
+              committed.current = false;
+              setEditing(true);
+            }}
+          >
+            <Pencil />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={st("term_delete")}
+            title={st("term_delete")}
+            className="hover:text-[var(--danger)]"
+            onClick={() => void remove()}
+          >
+            <Trash2 />
+          </Button>
+        </span>
+      ) : null}
+    </li>
+  );
+}
+
+/**
+ * Editais da série. Cada linha é um edital com o próprio tempo; o rodapé traz a
+ * soma de todos, que é a única medida que atravessa os editais.
+ */
+function TermsSection({ plan }: { plan: StudyPlan }) {
+  const { st, duration } = useStudyT();
+  const router = useRouter();
+  const { plans, sessions, exams } = useStudy();
+  const writeGate = usePlanGates().write;
+  const rows = useMemo(() => {
+    const terms = termsOf(plans, seriesIdOf(plan));
+    if (terms.length < 2) return null;
+    return terms.map((term) => {
+      let seconds = 0;
+      for (const session of sessions) if (session.planId === term.id) seconds += session.durationSec;
+      for (const exam of exams) if (exam.planId === term.id) seconds += exam.durationSec;
+      return { term, seconds };
+    });
+  }, [exams, plan, plans, sessions]);
+  if (!rows) return null;
+  const total = rows.reduce((sum, row) => sum + row.seconds, 0);
+
+  return (
+    <OverviewSection title={st("goal_terms_title")}>
+      <ul className="-mx-1">
+        {rows.map(({ term, seconds }, index) => (
+          <TermRow
+            key={term.id}
+            term={term}
+            index={index}
+            seconds={seconds}
+            isCurrent={term.id === plan.id}
+            canWrite={writeGate.allowed}
+            onOpen={() => router.push(`/home/study/goals/${term.id}`)}
+          />
+        ))}
+      </ul>
+      <p className="mt-2 flex items-baseline justify-between gap-3 border-t border-[var(--border)] pt-2 text-[12.5px]">
+        <span className="text-muted">{st("goal_terms_total")}</span>
+        <span className="font-medium tabular-nums text-ink">{duration(total)}</span>
+      </p>
+    </OverviewSection>
+  );
+}
+
 function Overview({ plan, fact, onEdit }: { plan: StudyPlan; fact: GoalFacts; onEdit: (focus: GoalField) => void }) {
   const { st, duration, language } = useStudyT();
   const { activePlan, cycles, subjectById, settings, today } = useStudy();
@@ -428,6 +605,7 @@ function Overview({ plan, fact, onEdit }: { plan: StudyPlan; fact: GoalFacts; on
   const current = cycle && cycle.items.length ? cycle.items[cycle.pointer % cycle.items.length] : null;
   const currentSubject = current ? subjectById(current.subjectId) : undefined;
   const nextTopic = currentSubject?.topics.find((topic) => !topic.done) ?? null;
+  const [newExam, setNewExam] = useState(false);
   const weakest = summary.subjects
     .filter((entry) => (entry.agg?.questions ?? 0) >= 20 && entry.agg?.accuracy !== null && entry.agg?.accuracy !== undefined)
     .sort((a, b) => (a.agg!.accuracy ?? 0) - (b.agg!.accuracy ?? 0))[0];
@@ -440,8 +618,16 @@ function Overview({ plan, fact, onEdit }: { plan: StudyPlan; fact: GoalFacts; on
   return (
     <div className={PANEL}>
       <OverviewSection title={st("goal_prop_exam")}>
-        <ExamCountdown plan={plan} startDay={timeline.goalStart} onSetDate={plan.archived ? undefined : () => onEdit("examDate")} />
+        <ExamCountdown
+          plan={plan}
+          startDay={plan.startDay ?? timeline.goalStart}
+          onSetDate={plan.archived ? undefined : () => onEdit("examDate")}
+          onNewExam={plan.archived ? undefined : () => setNewExam(true)}
+        />
+        {plan.archived ? null : <NewExamDialog open={newExam} onOpenChange={setNewExam} plan={plan} />}
       </OverviewSection>
+
+      <TermsSection plan={plan} />
 
       <OverviewSection title={st("goal_col_syllabus")}>
         <SyllabusSummary done={coverage.done} studied={studied} total={coverage.total} />

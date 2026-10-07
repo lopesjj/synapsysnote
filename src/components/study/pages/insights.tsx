@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { ArrowDown, ArrowUp, BarChart3, Search, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { useStudy } from "@/lib/study/provider";
+import { seriesIdOf, termsOf } from "@/lib/study/series";
 import { useStudyT } from "@/lib/study/i18n";
 import {
   addDays,
@@ -87,8 +88,41 @@ export function InsightsPage() {
 function InsightsBody() {
   const { st, locale, duration, language } = useStudyT();
   const categoryLabel = useCategoryLabel();
-  const { planSessions, planExams, planSubjects, settings, today, subjectById } = useStudy();
-  const [period, setPeriod] = useState<Period>("90");
+  const study = useStudy();
+  const { focusPlan, plans, sessions: allSessions, exams: allExams, subjects: allSubjects, settings, today } = study;
+  // Com mais de um edital, a tela pode ler a série inteira; o padrão é a série,
+  // para o histórico não sumir ao abrir um edital novo.
+  const terms = useMemo(() => (focusPlan ? termsOf(plans, seriesIdOf(focusPlan)) : []), [focusPlan, plans]);
+  const [scope, setScope] = useState<"term" | "series">("series");
+  const seriesScope = terms.length > 1 && scope === "series";
+  const termIds = useMemo(() => new Set(terms.map((plan) => plan.id)), [terms]);
+  const inScope = useCallback(
+    (planId: string) => (seriesScope ? termIds.has(planId) : planId === focusPlan?.id),
+    [focusPlan?.id, seriesScope, termIds]
+  );
+  const planSessions = useMemo(() => allSessions.filter((entry) => inScope(entry.planId)), [allSessions, inScope]);
+  const planExams = useMemo(() => allExams.filter((entry) => inScope(entry.planId)), [allExams, inScope]);
+  const termNameOf = useCallback(
+    (planId: string) => {
+      const index = terms.findIndex((plan) => plan.id === planId);
+      if (index < 0) return "";
+      return terms[index].termLabel || st("term_label_fallback", { n: index + 1 });
+    },
+    [st, terms]
+  );
+  // Cada edital tem as suas disciplinas: na série elas não se misturam, só ganham o nome do edital.
+  const planSubjects = useMemo(
+    () =>
+      allSubjects
+        .filter((entry) => inScope(entry.planId))
+        .map((entry) => (seriesScope ? { ...entry, name: `${entry.name} · ${termNameOf(entry.planId)}` } : entry)),
+    [allSubjects, inScope, seriesScope, termNameOf]
+  );
+  const subjectById = useCallback(
+    (id: string | null | undefined) => (id ? planSubjects.find((subject) => subject.id === id) : undefined),
+    [planSubjects]
+  );
+  const [period, setPeriod] = useState<Period>("all");
   const [subjectId, setSubjectId] = useState("");
   const [tableView, setTableView] = useState(false);
   const [sort, setSort] = useState<{ key: TopicSort; dir: 1 | -1 }>({ key: "questions", dir: -1 });
@@ -104,34 +138,52 @@ function InsightsBody() {
     return days[0] ?? today;
   }, [planExams, planSessions, today]);
 
+  const lastStudiedDay = useMemo(() => {
+    let last: DayKey | null = null;
+    const consider = (day: DayKey) => {
+      if (compareDay(day, today) > 0) return;
+      if (!last || compareDay(day, last) > 0) last = day;
+    };
+    for (const session of planSessions) {
+      if (subjectId && session.subjectId !== subjectId) continue;
+      consider(session.day);
+    }
+    for (const exam of planExams) {
+      if (subjectId && !exam.rows.some((row) => resolveExamSubjectId(row, planSubjects) === subjectId && row.correct + row.wrong > 0)) continue;
+      consider(exam.day);
+    }
+    return last ?? today;
+  }, [planExams, planSessions, planSubjects, subjectId, today]);
+
   const from = period === "all" ? firstDay : addDays(today, -(Number(period) - 1));
+  const until = period === "all" ? lastStudiedDay : today;
   const sessions = useMemo(
-    () => planSessions.filter((session) => session.day >= from && session.day <= today && (!subjectId || session.subjectId === subjectId)),
-    [from, planSessions, subjectId, today]
+    () => planSessions.filter((session) => session.day >= from && session.day <= until && (!subjectId || session.subjectId === subjectId)),
+    [from, planSessions, subjectId, until]
   );
   const exams = useMemo(
-    () => (subjectId ? [] : planExams.filter((exam) => exam.day >= from && exam.day <= today)),
-    [from, planExams, subjectId, today]
+    () => (subjectId ? [] : planExams.filter((exam) => exam.day >= from && exam.day <= until)),
+    [from, planExams, subjectId, until]
   );
   const questionExams = useMemo(
     () =>
       planExams
-        .filter((exam) => exam.day >= from && exam.day <= today)
+        .filter((exam) => exam.day >= from && exam.day <= until)
         .map((exam) =>
           subjectId
             ? { ...exam, rows: exam.rows.filter((row) => resolveExamSubjectId(row, planSubjects) === subjectId) }
             : exam
         )
         .filter((exam) => exam.rows.some((row) => row.correct + row.wrong > 0)),
-    [from, planExams, planSubjects, subjectId, today]
+    [from, planExams, planSubjects, subjectId, until]
   );
 
   const totals = useMemo(() => absorbExamQuestions(aggregate(sessions), questionExams, planSubjects), [planSubjects, questionExams, sessions]);
   const examSeconds = exams.reduce((sum, exam) => sum + exam.durationSec, 0);
   const days = useMemo(() => studiedDays(sessions, exams), [exams, sessions]);
-  const consistency = useMemo(() => consistencyInfo(days, today, settings.studyWeekdays, from), [days, from, settings.studyWeekdays, today]);
+  const consistency = useMemo(() => consistencyInfo(days, until, settings.studyWeekdays, from), [days, from, settings.studyWeekdays, until]);
   const totalSeconds = totals.seconds + examSeconds;
-  const spanDays = Math.max(1, dayRange(from, today).length);
+  const spanDays = Math.max(1, dayRange(from, until).length);
 
   const evolution = useMemo(() => {
     const weekly = spanDays > 45;
@@ -139,7 +191,7 @@ function InsightsBody() {
     const keyOf = (day: DayKey) => (weekly ? startOfWeek(day, settings.weekStartsOn) : day);
     const start = keyOf(from);
     const keys: DayKey[] = [];
-    for (let cursor = start; cursor <= today; cursor = addDays(cursor, weekly ? 7 : 1)) {
+    for (let cursor = start; cursor <= until; cursor = addDays(cursor, weekly ? 7 : 1)) {
       keys.push(cursor);
       buckets.set(cursor, { seconds: 0, correct: 0, wrong: 0 });
     }
@@ -214,7 +266,7 @@ function InsightsBody() {
         };
       }),
     };
-  }, [duration, exams, from, locale, questionExams, sessions, settings, spanDays, st, today]);
+  }, [duration, exams, from, locale, questionExams, sessions, settings, spanDays, st, until]);
 
   const bySubject = useMemo(() => groupWithExams(sessions, questionExams, planSubjects), [planSubjects, questionExams, sessions]);
   const byCategory = useMemo(() => groupSessions(sessions, (session) => session.categoryId), [sessions]);
@@ -284,7 +336,8 @@ function InsightsBody() {
     }
     return orderedWeekdays(settings.weekStartsOn).map((weekday) => ({
       key: String(weekday),
-      label: weekdayLabel(weekday, locale, "short").replace(".", ""),
+      // Mesma caixa alta da faixa da semana e do Planejamento.
+      label: weekdayLabel(weekday, locale, "short").replace(".", "").toLocaleUpperCase(locale),
       value: (seconds.get(weekday) ?? 0) / 3600,
       tooltip: (
         <span className="block">
@@ -385,6 +438,22 @@ function InsightsBody() {
           onChange={setSubjectId}
           options={[{ value: "", label: st("filter_all_subjects") }, ...planSubjects.map((subject) => ({ value: subject.id, label: subject.name || st("untitled_subject") }))]}
         />
+        {terms.length > 1 ? (
+          <Segmented<"term" | "series">
+            size="md"
+            value={scope}
+            onChange={(next) => {
+              setScope(next);
+              setSubjectId("");
+              setTopicSubjectId("");
+            }}
+            ariaLabel={st("goal_terms_title")}
+            options={[
+              { value: "series", label: st("insights_scope_series") },
+              { value: "term", label: st("insights_scope_term") },
+            ]}
+          />
+        ) : null}
       </div>
 
       {!sessions.length && !exams.length ? (

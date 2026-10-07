@@ -58,8 +58,8 @@ const pt: LegalBundle = {
         id: "content",
         title: "Seu conteúdo continua sendo seu",
         blocks: [
-          "Tudo o que você cria, envia ou importa — notas, arquivos, gravações, flashcards — pertence a você. Não reivindicamos nenhum direito de propriedade sobre esse conteúdo.",
-          "Para o serviço funcionar, você nos concede uma licença limitada, não exclusiva, gratuita e mundial para armazenar, copiar, processar e exibir seu conteúdo **exclusivamente para prestar o serviço a você** — por exemplo, salvar suas notas, fazer backups ou transcrever um áudio quando você pedir. A licença termina quando você exclui o conteúdo ou a conta, respeitados os prazos da [Política de Privacidade](doc:privacy#retention).",
+          "Tudo o que você cria, envia ou importa - notas, arquivos, gravações, flashcards - pertence a você. Não reivindicamos nenhum direito de propriedade sobre esse conteúdo.",
+          "Para o serviço funcionar, você nos concede uma licença limitada, não exclusiva, gratuita e mundial para armazenar, copiar, processar e exibir seu conteúdo **exclusivamente para prestar o serviço a você** - por exemplo, salvar suas notas, fazer backups ou transcrever um áudio quando você pedir. A licença termina quando você exclui o conteúdo ou a conta, respeitados os prazos da [Política de Privacidade](doc:privacy#retention).",
           "Você declara ter os direitos necessários sobre o que envia. Não publicamos seu conteúdo, não o vendemos e não o usamos para treinar modelos de inteligência artificial.",
         ],
       },
@@ -87,7 +87,7 @@ const pt: LegalBundle = {
         blocks: [
           "Alguns recursos usam inteligência artificial: transcrição de áudio e vídeo, geração de flashcards, identificação de cards repetidos, tradução e a organização em disciplinas e tópicos de um conteúdo programático que você colar. Eles processam apenas o conteúdo que você escolhe, no momento em que você aciona o recurso. A frase diária dos estudos vem de um acervo externo. Quando o idioma do site não é o inglês, traduzimos somente essa frase pública, sem usar suas notas nem seus registros de estudo.",
           {
-            note: "Resultados gerados por IA podem conter erros, omissões ou imprecisões. Revise transcrições e flashcards antes de estudar com eles e confira sempre com a fonte oficial — lei seca, edital ou bibliografia indicada.",
+            note: "Resultados gerados por IA podem conter erros, omissões ou imprecisões. Revise transcrições e flashcards antes de estudar com eles e confira sempre com a fonte oficial - lei seca, edital ou bibliografia indicada.",
           },
           "O que a IA gera a partir do seu conteúdo é seu, nas mesmas condições do restante do seu conteúdo. Podemos aplicar limites de uso para manter os recursos disponíveis para todos.",
         ],
@@ -126,7 +126,7 @@ const pt: LegalBundle = {
           },
           "Quando o período de teste termina sem a contratação de um plano, ou quando um plano contratado vence sem renovação, a conta passa ao modo somente leitura: tudo o que você criou continua disponível para consulta, e você ainda pode arquivar, desarquivar, mover para a lixeira, restaurar e excluir, mas não pode criar nem editar conteúdo até escolher um plano.",
           "Mudar de plano nunca apaga o seu conteúdo. Se o novo plano tiver limites menores, o que já existe continua guardado e disponível, mas não será possível criar novos itens de um tipo enquanto o total estiver acima do limite. Recursos que o seu plano não inclui continuam visíveis, porém desativados.",
-          "A contratação e a mudança de plano são feitas pelo nosso atendimento, em {contactEmail}. Preço, forma de pagamento, vigência e condições de cancelamento serão apresentados com clareza antes de qualquer cobrança — nada será cobrado sem a sua aceitação expressa.",
+          "A contratação e a mudança de plano são feitas pelo nosso atendimento, em {contactEmail}. Preço, forma de pagamento, vigência e condições de cancelamento serão apresentados com clareza antes de qualquer cobrança - nada será cobrado sem a sua aceitação expressa.",
         ],
       },
       {
@@ -142,7 +142,7 @@ const pt: LegalBundle = {
         title: "Disponibilidade e backups",
         blocks: [
           "Trabalhamos para manter o serviço disponível e seus dados seguros. Ainda assim, podem ocorrer interrupções para manutenção, atualizações ou por motivos fora do nosso controle.",
-          "Recomendamos manter cópias do que for essencial para você — por exemplo, exportando notas em PDF.",
+          "Recomendamos manter cópias do que for essencial para você - por exemplo, exportando notas em PDF.",
           "O {brand} é uma ferramenta de apoio aos estudos e não garante aprovação em concursos, vestibulares ou avaliações. Estatísticas, sugestões e cronogramas do módulo de estudos são estimativas calculadas a partir dos registros que você faz.",
         ],
       },
@@ -283,7 +283,7 @@ const pt: LegalBundle = {
               ],
             },
           },
-          "Também podemos compartilhar dados quando exigido por lei, ordem judicial ou autoridade competente — sempre no limite do que for requisitado — ou em uma reorganização societária, mantidas as garantias desta política.",
+          "Também podemos compartilhar dados quando exigido por lei, ordem judicial ou autoridade competente - sempre no limite do que for requisitado - ou em uma reorganização societária, mantidas as garantias desta política.",
         ],
       },
       {
@@ -402,9 +402,9 @@ const pt: LegalBundle = {
         blocks: [
           {
             list: [
-              "**Essenciais** — necessários para login, segurança e funcionamento básico. Não podem ser desativados, porque o serviço não funcionaria sem eles.",
-              "**Funcionais** — identificam sua região pelo IP e a lembram para escolher o idioma. Só são usados com o seu consentimento.",
-              "**Análise e publicidade** — não utilizamos.",
+              "**Essenciais** - necessários para login, segurança e funcionamento básico. Não podem ser desativados, porque o serviço não funcionaria sem eles.",
+              "**Funcionais** - identificam sua região pelo IP e a lembram para escolher o idioma. Só são usados com o seu consentimento.",
+              "**Análise e publicidade** - não utilizamos.",
             ],
           },
         ],
@@ -449,14 +449,14 @@ const pt: LegalBundle = {
         id: "third-party",
         title: "Cookies de terceiros",
         blocks: [
-          "Quando o reCAPTCHA aparece — após tentativas de login sem sucesso ou na redefinição de senha — o Google pode definir cookies próprios para diferenciar pessoas de robôs. Ao entrar com Google ou conectar o Google Docs, as janelas de login do Google também seguem as políticas do Google. Esses cookies são controlados pelo Google, conforme a [Política de Privacidade do Google](https://policies.google.com/privacy).",
+          "Quando o reCAPTCHA aparece - após tentativas de login sem sucesso ou na redefinição de senha - o Google pode definir cookies próprios para diferenciar pessoas de robôs. Ao entrar com Google ou conectar o Google Docs, as janelas de login do Google também seguem as políticas do Google. Esses cookies são controlados pelo Google, conforme a [Política de Privacidade do Google](https://policies.google.com/privacy).",
         ],
       },
       {
         id: "control",
         title: "Como gerenciar suas escolhas",
         blocks: [
-          "Você pode mudar suas preferências a qualquer momento no painel acima ou pelo item \"Preferências de cookies\" no rodapé da página de login ou no menu da sua conta. Também é possível bloquear ou apagar cookies nas configurações do navegador — mas, sem os essenciais, não será possível entrar na sua conta.",
+          "Você pode mudar suas preferências a qualquer momento no painel acima ou pelo item \"Preferências de cookies\" no rodapé da página de login ou no menu da sua conta. Também é possível bloquear ou apagar cookies nas configurações do navegador - mas, sem os essenciais, não será possível entrar na sua conta.",
           "Suas escolhas ficam salvas por {consentMonths} meses. Depois disso, perguntaremos de novo.",
         ],
       },

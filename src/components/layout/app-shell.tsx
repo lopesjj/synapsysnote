@@ -46,6 +46,7 @@ import { FocusPill, useFocusPillVisible } from "@/components/study/focus-timer";
 import { PlanAdminDialog } from "@/components/plans/plan-admin-dialog";
 import { PlanBanner } from "@/components/plans/plan-banner";
 import { notifyPlanError } from "@/lib/plans/client";
+import { dismissPriority, hasOpenDismissLayer, isTransientEscapeTarget, useDismissLayer } from "@/lib/dismiss-layer";
 import { planNoteTarget, usePlanGates } from "@/lib/plans/gates";
 
 const EvernoteImportWizard = dynamic(
@@ -265,20 +266,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       const store = useUiStore.getState();
 
       if (event.key === "Escape") {
-        if (store.paletteOpen) {
-          event.preventDefault();
-          store.setPaletteOpen(false);
-          return;
-        }
-        if (store.preferencesOpen) {
-          event.preventDefault();
-          store.setPreferencesOpen(false);
-          return;
-        }
+        if (isTransientEscapeTarget() || hasOpenDismissLayer()) return;
         if (store.zenMode) {
           event.preventDefault();
           store.setZenMode(false);
-          return;
         }
       }
       const key = event.key.toLowerCase();
@@ -623,24 +614,18 @@ function MobileSidebar() {
   const reducedMotion = useUiStore((state) => state.reducedMotion);
   const sidebarWidth = useUiStore((state) => state.sidebarWidth);
   const panelRef = useRef<HTMLDivElement>(null);
+  useDismissLayer(open, dismissPriority.sidebar, () => {
+    if (isEditingText(document.activeElement)) return false;
+    useUiStore.getState().setMobileSidebarOpen(false);
+  });
 
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const frame = requestAnimationFrame(() => panelRef.current?.focus());
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      const target = event.target;
-      if (target instanceof Element && target.closest("[role='menu']")) return;
-      if (isEditingText(event.target)) return;
-      event.preventDefault();
-      useUiStore.getState().setMobileSidebarOpen(false);
-    };
-    window.addEventListener("keydown", onKey, true);
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKey, true);
       cancelAnimationFrame(frame);
     };
   }, [open]);

@@ -8,6 +8,7 @@ import type {
   StudySubject,
 } from "@/types/study";
 import { addDays, compareDay, dayRange, weekdayOf } from "./dates";
+import { windowCovers, type StudyWindow } from "./series";
 
 export function emptyAggregate(): StudyAggregate {
   return {
@@ -197,7 +198,18 @@ export interface StreakInfo {
   studiedToday: boolean;
 }
 
-export function streakInfo(days: ReadonlySet<DayKey>, today: DayKey, weekdays: readonly number[]): StreakInfo {
+/** Dia em que faltar quebra a sequência: planejado e dentro da janela do edital. */
+function breaksRun(day: DayKey, weekdays: readonly number[], window?: StudyWindow | null): boolean {
+  if (window && !windowCovers(window, day)) return false;
+  return isPlannedDay(day, weekdays);
+}
+
+export function streakInfo(
+  days: ReadonlySet<DayKey>,
+  today: DayKey,
+  weekdays: readonly number[],
+  window?: StudyWindow | null
+): StreakInfo {
   const studiedToday = days.has(today);
   if (!days.size) return { current: 0, best: 0, studiedToday };
   const first = [...days].sort(compareDay)[0];
@@ -205,7 +217,7 @@ export function streakInfo(days: ReadonlySet<DayKey>, today: DayKey, weekdays: r
   let cursor = studiedToday ? today : addDays(today, -1);
   while (compareDay(cursor, first) >= 0) {
     if (days.has(cursor)) current += 1;
-    else if (isPlannedDay(cursor, weekdays)) break;
+    else if (breaksRun(cursor, weekdays, window)) break;
     cursor = addDays(cursor, -1);
   }
   let best = 0;
@@ -215,7 +227,7 @@ export function streakInfo(days: ReadonlySet<DayKey>, today: DayKey, weekdays: r
     if (days.has(day)) {
       run += 1;
       best = Math.max(best, run);
-    } else if (isPlannedDay(day, weekdays) && day !== today) {
+    } else if (day !== today && breaksRun(day, weekdays, window)) {
       run = 0;
     }
   }
@@ -234,7 +246,8 @@ export function consistencyInfo(
   days: ReadonlySet<DayKey>,
   today: DayKey,
   weekdays: readonly number[],
-  from?: DayKey | null
+  from?: DayKey | null,
+  window?: StudyWindow | null
 ): ConsistencyInfo {
   const sorted = [...days].sort(compareDay);
   const firstStudied = sorted[0] ?? null;
@@ -244,7 +257,7 @@ export function consistencyInfo(
   let planned = 0;
   for (const day of dayRange(start, today)) {
     const has = days.has(day);
-    const expected = isPlannedDay(day, weekdays);
+    const expected = isPlannedDay(day, weekdays) && (!window || windowCovers(window, day));
     if (day === today && !has) continue;
     if (has || expected) planned += 1;
     if (has) studied += 1;
@@ -316,16 +329,19 @@ export function percentLabel(value: number | null, fractionDigits = 0): string {
   return `${(value * 100).toFixed(fractionDigits)}%`;
 }
 
-export type DayStatus = "studied" | "missed" | "rest" | "pending" | "before" | "future";
+/** `paused`: fora da janela do edital — depois da prova, até a pessoa voltar a estudar. */
+export type DayStatus = "studied" | "missed" | "rest" | "pending" | "before" | "future" | "paused";
 
 export function dayStatus(
   day: DayKey,
   studied: ReadonlySet<DayKey>,
   firstDay: DayKey | null,
   today: DayKey,
-  weekdays: readonly number[]
+  weekdays: readonly number[],
+  window?: StudyWindow | null
 ): DayStatus {
   if (studied.has(day)) return "studied";
+  if (window && !windowCovers(window, day)) return "paused";
   if (!isPlannedDay(day, weekdays)) return "rest";
   if (compareDay(day, today) > 0) return "future";
   if (day === today) return "pending";

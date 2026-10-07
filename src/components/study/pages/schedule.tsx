@@ -72,6 +72,7 @@ import {
   weekdayOf,
 } from "@/lib/study/dates";
 import { projectSchedule, roundProgress, type LapState, type PlannedBlock, type RoundProgress } from "@/lib/study/cycle";
+import { resolvedDayOf } from "@/lib/study/review-queue";
 import { subjectTone } from "@/lib/study/defaults";
 import {
   deleteAgendaEntry,
@@ -89,7 +90,7 @@ import type { AgendaEntry, CycleItem, DayKey, StudyCycle, StudyReminder, StudyRe
 import { AgendaDialog, AgendaScopeDialog, useAgendaLabels, type AgendaDialogState, type AgendaScope } from "../agenda-dialog";
 import { CycleWizard } from "../cycle-wizard";
 import { ReminderDialog } from "../dialogs";
-import { FocusButton, Segmented, StudyHeader, StudyLoading, StudyPage, useStartFocus } from "../ui";
+import { FocusButton, ReviewMaterial, Segmented, StudyHeader, StudyLoading, StudyPage, useStartFocus } from "../ui";
 import { TaskDialog, TaskLine, TasksPanel, type TaskDialogState } from "../tasks";
 import { useGoalGates, usePlanGates } from "@/lib/plans/gates";
 import { GateTooltip, PlanLockBadge } from "@/components/plans/plan-lock";
@@ -233,9 +234,12 @@ function ScheduleBody() {
     // Revisão atrasada vai para hoje quando hoje está na tela: é lá que ela precisa ser feita.
     const showsToday = today >= from && today <= to;
     for (const review of planReviews) {
-      if (review.status !== "pending") continue;
-      const late = review.dueDay < today;
-      map.get(late && showsToday ? today : review.dueDay)?.reviews.push({ review, late });
+      if (review.status === "pending") {
+        const late = review.dueDay < today;
+        map.get(late && showsToday ? today : review.dueDay)?.reviews.push({ review, late });
+      } else if (review.status === "done") {
+        map.get(resolvedDayOf(review, settings.timeZone))?.reviews.push({ review, late: false });
+      }
     }
     for (const task of tasks) if (task.day) map.get(task.day)?.tasks.push(task);
     for (const reminder of reminders) {
@@ -247,10 +251,15 @@ function ScheduleBody() {
       if (entry) entry.exam = true;
     }
     for (const entry of map.values()) {
-      entry.reviews.sort((a, b) => Number(b.late) - Number(a.late) || (a.review.dueDay < b.review.dueDay ? -1 : 1));
+      entry.reviews.sort((a, b) => {
+        const doneA = a.review.status === "done" ? 1 : 0;
+        const doneB = b.review.status === "done" ? 1 : 0;
+        if (doneA !== doneB) return doneA - doneB;
+        return Number(b.late) - Number(a.late) || (a.review.dueDay < b.review.dueDay ? -1 : 1);
+      });
     }
     return map;
-  }, [focusPlan, days, from, planCycle, planReviews, reminders, subjectById, tasks, to, today]);
+  }, [focusPlan, days, from, planCycle, planReviews, reminders, settings.timeZone, subjectById, tasks, to, today]);
 
   const week = useMemo<WeekTotals>(() => {
     if (!planCycle) return { done: 0, planned: 0, available: 0 };
@@ -863,7 +872,6 @@ function DayColumn({
   const tasks = layers.tasks ? (data?.tasks ?? []) : [];
   const reminders = layers.tasks ? (data?.reminders ?? []) : [];
   const empty = !data?.exam && !blocks.length && !reviews.length && !tasks.length && !reminders.length;
-  const weekday = capitalizeFirst(weekdayLabel(weekdayOf(day), locale, "short").replace(".", ""));
 
   return (
     <section
@@ -875,7 +883,7 @@ function DayColumn({
     >
       <header className="min-w-0 @3xl:px-3 @3xl:pb-2.5 @3xl:pt-3">
         <p className="flex flex-col items-start @3xl:flex-row @3xl:items-center @3xl:gap-1.5">
-          <span className={cn("text-[11.5px] font-medium", isToday ? "text-[var(--accent)]" : past ? "text-faint" : "text-muted")}>{weekday}</span>
+          <span className={cn("text-[11.5px] font-medium uppercase", isToday ? "text-[var(--accent)]" : past ? "text-faint" : "text-muted")}>{weekdayLabel(weekdayOf(day), locale, "short").replace(".", "")}</span>
           <span
             className={cn(
               "text-[19px] font-semibold leading-tight tracking-[-0.02em] tabular-nums @3xl:text-[15px] @3xl:leading-6",
@@ -1415,11 +1423,13 @@ function ReviewItem({ review, late }: { review: StudyReview; late: boolean }) {
   const subject = subjectById(review.subjectId);
   const topic = topicById(review.subjectId, review.topicId);
   const name = subject?.name ?? st("untitled_subject");
+  const done = review.status === "done";
 
-  const resolve = async (status: "done" | "ignored") => {
+  const resolve = async (status: "done" | "ignored" | "pending") => {
     try {
       await actions.resolveReviews([review.id], status);
-      toast.success(st(status === "done" ? "review_done_toast" : "review_ignored_toast", { count: 1 }));
+      if (status === "pending") toast.success(st("review_restored_toast"));
+      else toast.success(st(status === "done" ? "review_done_toast" : "review_ignored_toast", { count: 1 }));
     } catch {
       toast.error(st("error_generic"));
     }
@@ -1434,25 +1444,33 @@ function ReviewItem({ review, late }: { review: StudyReview; late: boolean }) {
             title={topic ? `${name} · ${topic.name}` : name}
             className="flex w-full min-w-0 items-center gap-2 rounded-[7px] px-1.5 py-1 text-left text-[11.5px] transition hover:bg-[var(--surface-hover)] data-[state=open]:bg-[var(--surface-hover)]"
           >
-            <span aria-hidden className="size-[9px] shrink-0 rounded-full border-2" style={{ borderColor: subject?.color ? subjectTone(subject.color) : "var(--text-faint)" }} />
-            <span className={cn("min-w-0 flex-1 truncate", late ? "text-[var(--band-low)]" : "text-muted")}>{name}</span>
-            <span className="shrink-0 tabular-nums text-faint">+{review.intervalDays}</span>
+            <span aria-hidden className="size-[9px] shrink-0 rounded-full border-2" style={{ borderColor: subject?.color ? subjectTone(subject.color) : "var(--text-faint)", opacity: done ? 0.45 : 1 }} />
+            <span className={cn("min-w-0 flex-1 truncate", done ? "text-faint line-through decoration-[1.5px] decoration-[color-mix(in_oklab,currentColor_70%,transparent)]" : late ? "text-[var(--band-low)]" : "text-muted")}>{name}</span>
+            {done ? <Check className="size-3 shrink-0 text-[var(--accent)]" strokeWidth={2.5} aria-label={st("subject_complete_mark")} /> : null}
+            <span className={cn("shrink-0 tabular-nums text-faint", done && "line-through decoration-[1.5px]")}>+{review.intervalDays}</span>
           </button>
         </MenuTrigger>
         <MenuContent align="start" className="w-64">
           <div className="px-2 pb-2 pt-1.5">
-            <p className="line-clamp-2 text-[12.5px] font-medium leading-snug text-ink">{topic?.name ?? name}</p>
+            <p className={cn("line-clamp-2 text-[12.5px] font-medium leading-snug text-ink", done && "text-faint line-through decoration-[1.5px]")}>{topic?.name ?? name}</p>
             <p className="mt-0.5 text-[11.5px] text-muted">
               {topic ? `${name} · ` : ""}
-              {st("review_interval", { count: review.intervalDays })}
+              {done ? st("subject_complete_mark") : st("review_interval", { count: review.intervalDays })}
               {late ? (
                 <span className="text-[var(--band-low)]"> · {st("review_late_by", { count: diffDays(review.dueDay, today) })}</span>
               ) : null}
             </p>
+            <ReviewMaterial review={review} className="mt-1" />
           </div>
           {planReadOnly ? null : (
             <>
           <MenuSeparator />
+          {done ? (
+            <MenuItem onSelect={() => void resolve("pending")}>
+              <Undo2 /> {st("review_restore")}
+            </MenuItem>
+          ) : (
+            <>
           <MenuItem onSelect={() => startFocus({ subjectId: review.subjectId, topicId: review.topicId, reviewId: review.id })}>
             <Timer /> {st("review_start")}
           </MenuItem>
@@ -1462,6 +1480,8 @@ function ReviewItem({ review, late }: { review: StudyReview; late: boolean }) {
           <MenuItem onSelect={() => void resolve("ignored")}>
             <EyeOff /> {st("review_ignore")}
           </MenuItem>
+            </>
+          )}
           <MenuSeparator />
             </>
           )}
@@ -1524,7 +1544,7 @@ function MonthView({
       <div className="grid grid-cols-7 border-b border-[var(--border)]">
         {orderedWeekdays(settings.weekStartsOn).map((weekday) => (
           <span key={weekday} className="truncate px-1 py-2 text-center text-[10.5px] font-medium text-faint sm:px-2 sm:text-[11.5px]">
-            {capitalizeFirst(weekdayLabel(weekday, locale, "short").replace(".", ""))}
+            {weekdayLabel(weekday, locale, "short").replace(".", "").toLocaleUpperCase(locale)}
           </span>
         ))}
       </div>

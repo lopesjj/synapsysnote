@@ -58,8 +58,8 @@ const it: LegalBundle = {
         id: "content",
         title: "Il tuo contenuto rimane tuo",
         blocks: [
-          "Tutto ciò che crei, carichi o importi — note, file, registrazioni, flashcard — appartiene a te. Non rivendichiamo alcun diritto di proprietà su tali contenuti.",
-          "Affinché il servizio funzioni, ci concedi una licenza limitata, non esclusiva, gratuita e mondiale per archiviare, copiare, elaborare e mostrare i tuoi contenuti **esclusivamente per fornirti il servizio** — ad esempio salvare le tue note, creare backup o trascrivere audio su tua richiesta. Questa licenza termina quando elimini il contenuto o il tuo account, fatti salvi i periodi indicati nell'[Informativa sulla privacy](doc:privacy#retention).",
+          "Tutto ciò che crei, carichi o importi - note, file, registrazioni, flashcard - appartiene a te. Non rivendichiamo alcun diritto di proprietà su tali contenuti.",
+          "Affinché il servizio funzioni, ci concedi una licenza limitata, non esclusiva, gratuita e mondiale per archiviare, copiare, elaborare e mostrare i tuoi contenuti **esclusivamente per fornirti il servizio** - ad esempio salvare le tue note, creare backup o trascrivere audio su tua richiesta. Questa licenza termina quando elimini il contenuto o il tuo account, fatti salvi i periodi indicati nell'[Informativa sulla privacy](doc:privacy#retention).",
           "Dichiari di detenere i diritti necessari su ciò che carichi. Non pubblichiamo i tuoi contenuti, non li vendiamo e non li utilizziamo per addestrare modelli di intelligenza artificiale.",
         ],
       },
@@ -87,7 +87,7 @@ const it: LegalBundle = {
         blocks: [
           "Alcune funzionalità utilizzano l'intelligenza artificiale: trascrizione audio e video, generazione di flashcard, rilevamento di card duplicate, traduzione e organizzazione in materie e argomenti di un programma che incolli. Elaborano solo il contenuto che scegli, nel momento in cui attivi la funzionalità. La frase quotidiana degli studi proviene da un archivio esterno. Quando la lingua del sito non è l'inglese, traduciamo solo quella frase pubblica, senza usare le tue note né i tuoi dati di studio.",
           {
-            note: "I risultati generati dall'AI possono contenere errori, omissioni o imprecisioni. Rivedi trascrizioni e flashcard prima di usarle per studiare e verifica sempre con la fonte ufficiale — il testo di legge, il bando o la bibliografia consigliata.",
+            note: "I risultati generati dall'AI possono contenere errori, omissioni o imprecisioni. Rivedi trascrizioni e flashcard prima di usarle per studiare e verifica sempre con la fonte ufficiale - il testo di legge, il bando o la bibliografia consigliata.",
           },
           "Ciò che l'AI genera dal tuo contenuto è tuo, alle stesse condizioni del resto dei tuoi contenuti. Possiamo applicare limiti di utilizzo per mantenere queste funzionalità disponibili per tutti.",
         ],
@@ -126,7 +126,7 @@ const it: LegalBundle = {
           },
           "Quando la prova termina senza che sia stato sottoscritto un piano, o quando un piano sottoscritto scade senza rinnovo, l'account passa alla modalità di sola lettura: tutto ciò che hai creato resta consultabile e puoi ancora archiviare, ripristinare dall'archivio, spostare nel cestino, ripristinare dal cestino ed eliminare, ma non puoi creare né modificare contenuti finché non scegli un piano.",
           "Cambiare piano non elimina mai i tuoi contenuti. Se il nuovo piano ha limiti più bassi, ciò che esiste già resta salvato e disponibile, ma non potrai creare nuovi elementi di un tipo finché il totale supera il limite. Le funzionalità non incluse nel tuo piano restano visibili, ma disattivate.",
-          "La sottoscrizione e il cambio di piano avvengono tramite il nostro servizio clienti, all'indirizzo {contactEmail}. Il prezzo, il metodo di pagamento, la durata e le condizioni di disdetta saranno presentati in modo chiaro prima di qualsiasi addebito — nulla ti verrà addebitato senza la tua accettazione espressa.",
+          "La sottoscrizione e il cambio di piano avvengono tramite il nostro servizio clienti, all'indirizzo {contactEmail}. Il prezzo, il metodo di pagamento, la durata e le condizioni di disdetta saranno presentati in modo chiaro prima di qualsiasi addebito - nulla ti verrà addebitato senza la tua accettazione espressa.",
         ],
       },
       {
@@ -142,7 +142,7 @@ const it: LegalBundle = {
         title: "Disponibilità e backup",
         blocks: [
           "Lavoriamo per mantenere il servizio disponibile e i tuoi dati al sicuro. Ciononostante, possono verificarsi interruzioni per manutenzione, aggiornamenti o ragioni al di fuori del nostro controllo.",
-          "Ti consigliamo di conservare copie di tutto ciò che è essenziale per te — ad esempio esportando le note in PDF.",
+          "Ti consigliamo di conservare copie di tutto ciò che è essenziale per te - ad esempio esportando le note in PDF.",
           "{brand} è uno strumento di supporto allo studio e non garantisce il superamento di concorsi, esami di ammissione o altre valutazioni. Statistiche, suggerimenti e calendari del modulo di studio sono stime calcolate a partire dai dati che registri.",
         ],
       },
@@ -283,7 +283,7 @@ const it: LegalBundle = {
               ],
             },
           },
-          "Possiamo inoltre condividere dati quando richiesto dalla legge, da un provvedimento giudiziario o da un'autorità competente — sempre nei limiti di quanto richiesto — o nell'ambito di una riorganizzazione societaria, ferme restando le garanzie di questa informativa.",
+          "Possiamo inoltre condividere dati quando richiesto dalla legge, da un provvedimento giudiziario o da un'autorità competente - sempre nei limiti di quanto richiesto - o nell'ambito di una riorganizzazione societaria, ferme restando le garanzie di questa informativa.",
         ],
       },
       {
@@ -402,9 +402,9 @@ const it: LegalBundle = {
         blocks: [
           {
             list: [
-              "**Essenziali** — necessari per il login, la sicurezza e il funzionamento di base. Non possono essere disattivati, perché il servizio non funzionerebbe senza di essi.",
-              "**Funzionali** — rendono l'esperienza più rapida, ad esempio ricordando la tua regione per scegliere la lingua. Sono utilizzati solo con il tuo consenso.",
-              "**Analisi e pubblicità** — non ne utilizziamo.",
+              "**Essenziali** - necessari per il login, la sicurezza e il funzionamento di base. Non possono essere disattivati, perché il servizio non funzionerebbe senza di essi.",
+              "**Funzionali** - rendono l'esperienza più rapida, ad esempio ricordando la tua regione per scegliere la lingua. Sono utilizzati solo con il tuo consenso.",
+              "**Analisi e pubblicità** - non ne utilizziamo.",
             ],
           },
         ],
@@ -449,14 +449,14 @@ const it: LegalBundle = {
         id: "third-party",
         title: "Cookie di terze parti",
         blocks: [
-          "Quando appare reCAPTCHA — dopo tentativi di accesso falliti o durante il reset della password — Google può impostare cookie propri per distinguere le persone dai bot. Quando accedi con Google, anche la finestra di accesso segue le norme di Google. Questi cookie sono controllati da Google, secondo le [Norme sulla privacy di Google](https://policies.google.com/privacy).",
+          "Quando appare reCAPTCHA - dopo tentativi di accesso falliti o durante il reset della password - Google può impostare cookie propri per distinguere le persone dai bot. Quando accedi con Google, anche la finestra di accesso segue le norme di Google. Questi cookie sono controllati da Google, secondo le [Norme sulla privacy di Google](https://policies.google.com/privacy).",
         ],
       },
       {
         id: "control",
         title: "Come gestire le tue scelte",
         blocks: [
-          "Puoi modificare le tue preferenze in qualsiasi momento nel pannello qui sopra o tramite il link \"Preferenze cookie\" in fondo alla pagina di accesso. Puoi anche bloccare o eliminare i cookie nelle impostazioni del browser — ma senza quelli essenziali non potrai accedere al tuo account.",
+          "Puoi modificare le tue preferenze in qualsiasi momento nel pannello qui sopra o tramite il link \"Preferenze cookie\" in fondo alla pagina di accesso. Puoi anche bloccare o eliminare i cookie nelle impostazioni del browser - ma senza quelli essenziali non potrai accedere al tuo account.",
           "Le tue scelte vengono salvate per {consentMonths} mesi. Trascorso tale periodo, te lo chiederemo di nuovo.",
         ],
       },
