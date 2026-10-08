@@ -184,9 +184,9 @@ function LogBody() {
             const dayTotal = rows.reduce((sum, row) => sum + (row.kind === "session" ? row.session.durationSec : row.exam.durationSec), 0);
             return (
               <section key={day} className="@container/log">
-                <div className="mb-2 grid grid-cols-[3px_minmax(0,1fr)_auto] items-baseline gap-x-3 px-4 @min-[720px]/log:grid-cols-[3px_minmax(0,1fr)_3rem_8rem_8.5rem_3.5rem_minmax(0,0.7fr)_6rem]">
+                <div className="mb-2 grid grid-cols-[3px_minmax(0,1fr)_auto] items-baseline gap-x-3 px-4 @min-[720px]/log:grid-cols-[3px_minmax(0,1fr)_3.5rem_5rem_5rem_3rem_minmax(0,0.55fr)_6rem]">
                   <span className="col-start-1" aria-hidden />
-                  <h2 className="col-start-2 min-w-0 text-[13px] font-semibold text-ink">
+                  <h2 className="col-start-2 min-w-0 text-[13px] font-semibold text-ink @min-[720px]/log:col-span-2 @min-[720px]/log:truncate">
                     {day === today || day === addDays(today, -1) ? (
                       <>
                         {relativeDay(day, today, locale, st)}
@@ -266,11 +266,13 @@ function SessionLogRow({
       onRemove={onRemove}
       meta={
         <>
-          <CategoryChip id={session.categoryId} />
+          <CategoryChip id={session.categoryId} className="shrink-0" />
           {session.material || session.pageId ? (
-            <MaterialLink material={session.material} pageId={session.pageId} className="max-w-[12rem] text-[11.5px] text-faint" />
+            <MaterialLink material={session.material} pageId={session.pageId} className="min-w-0 shrink text-[11.5px] text-faint" />
           ) : null}
-          {session.pages ? <span className="text-[11.5px] text-faint">{st("pages_count", { count: session.pages })}</span> : null}
+          {session.pages ? (
+            <span className="shrink-0 whitespace-nowrap text-[11.5px] text-faint">{st("pages_count", { count: session.pages })}</span>
+          ) : null}
         </>
       }
     />
@@ -314,7 +316,7 @@ function ExamLogRow({
       editLock={editLock}
       onRemove={onRemove}
       meta={
-        <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-muted">
+        <span className="inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-muted">
           <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
           <span className="truncate">{st("cat_exam")}</span>
         </span>
@@ -354,7 +356,7 @@ function LogEntryRow({
 }) {
   const { st } = useStudyT();
   return (
-    <li className="group grid grid-cols-[3px_minmax(0,1fr)_6rem] items-start gap-x-3 gap-y-1.5 px-4 py-3 @min-[720px]/log:grid-cols-[3px_minmax(0,1fr)_3rem_8rem_8.5rem_3.5rem_minmax(0,0.7fr)_6rem] @min-[720px]/log:items-center @min-[720px]/log:gap-y-0">
+    <li className="group grid grid-cols-[3px_minmax(0,1fr)_6rem] items-start gap-x-3 gap-y-1.5 px-4 py-3 @min-[720px]/log:grid-cols-[3px_minmax(0,1fr)_3.5rem_5rem_5rem_3rem_minmax(0,0.55fr)_6rem] @min-[720px]/log:items-center @min-[720px]/log:gap-y-0">
       <span className="col-start-1 row-start-1 mt-1 block h-8 w-[3px] justify-self-center rounded-full @min-[720px]/log:mt-0" style={{ backgroundColor: color }} />
       <div className="col-start-2 row-start-1 min-w-0">
         <p className="truncate text-[13px] font-medium text-ink">{title}</p>
@@ -364,17 +366,19 @@ function LogEntryRow({
         <span className="hidden text-end text-[12px] tabular-nums text-faint @min-[720px]/log:col-start-3 @min-[720px]/log:row-start-1 @min-[720px]/log:block">{time}</span>
         <span className="text-end text-[12.5px] tabular-nums whitespace-nowrap text-ink @min-[720px]/log:col-start-4 @min-[720px]/log:row-start-1">{durationLabel}</span>
         {correct !== null && wrong !== null ? (
-          <span className="grid min-w-0 grid-cols-[minmax(0,1fr)_0.7rem_minmax(0,1fr)] items-baseline text-[12px] tabular-nums @min-[720px]/log:col-start-5 @min-[720px]/log:row-start-1">
+          // Colunas estreitas e fixas: a barra fica no mesmo lugar em todas as
+          // linhas e os dois numeros continuam colados nela, como um so dado.
+          <span className="grid grid-cols-[2rem_0.75rem_2rem] items-baseline justify-self-end text-[12px] tabular-nums @min-[720px]/log:col-start-5 @min-[720px]/log:row-start-1">
             <span className="text-end text-[var(--band-high)]">{correct}</span>
             <span className="text-center text-faint">/</span>
-            <span className="text-end text-[var(--band-low)]">{wrong}</span>
+            <span className="text-start text-[var(--band-low)]">{wrong}</span>
           </span>
         ) : (
           <span className="@min-[720px]/log:col-start-5 @min-[720px]/log:row-start-1" />
         )}
         <span className="text-end text-[12px] tabular-nums whitespace-nowrap text-faint @min-[720px]/log:col-start-6 @min-[720px]/log:row-start-1">{percent ?? "–"}</span>
       </div>
-      <div className="col-span-3 row-start-3 flex min-w-0 flex-wrap items-center gap-1.5 pl-[calc(3px+0.75rem)] @min-[720px]/log:col-span-1 @min-[720px]/log:col-start-7 @min-[720px]/log:row-start-1 @min-[720px]/log:pl-0">
+      <div className="col-span-3 row-start-3 flex min-w-0 flex-wrap items-center gap-1.5 pl-[calc(3px+0.75rem)] @min-[720px]/log:col-span-1 @min-[720px]/log:col-start-7 @min-[720px]/log:row-start-1 @min-[720px]/log:flex-nowrap @min-[720px]/log:justify-end @min-[720px]/log:overflow-hidden @min-[720px]/log:pl-0">
         {meta}
       </div>
       <div className="col-start-3 row-start-1 flex w-full items-center justify-end @min-[720px]/log:col-start-8">

@@ -17,7 +17,7 @@ import { compareDay, diffDays, formatDay } from "@/lib/study/dates";
 import { formatNumber } from "@/lib/study/format";
 import { roundProgress } from "@/lib/study/cycle";
 import { projectSyllabus, recentWeeks, type SubjectSummary } from "@/lib/study/goal-summary";
-import { seriesIdOf, termsOf } from "@/lib/study/series";
+import { isPastTerm, seriesIdOf, termsOf } from "@/lib/study/series";
 import type { PerformanceBand, StudyPlan, StudySubject } from "@/types/study";
 import { GoalDialog, type GoalField } from "../dialogs";
 import { SubjectDialog } from "../subject-dialog";
@@ -79,12 +79,15 @@ function GoalDocument({
   setBulkOpen: (open: boolean) => void;
 }) {
   const { st, textDir } = useStudyT();
-  const { activePlan, actions } = useStudy();
+  const { activePlan, actions, plans } = useStudy();
   const [dialog, setDialog] = useState<{ open: boolean; focus: GoalField }>({ open: false, focus: "name" });
   const [subjectDialog, setSubjectDialog] = useState<{ open: boolean; subject: StudySubject | null }>({ open: false, subject: null });
   const [examOpen, setExamOpen] = useState(false);
   const isActive = activePlan?.id === plan.id;
   const locked = plan.archived;
+  // Edital anterior da série não se reativa: haveria dois editais abertos com o
+  // mesmo nome. A saída dele é a tarja acima, que leva ao edital de agora.
+  const pastTerm = isPastTerm(plans, plan);
   const edit = (focus: GoalField = "name") => {
     if (locked) return;
     setDialog({ open: true, focus });
@@ -92,8 +95,11 @@ function GoalDocument({
   const name = plan.name || st("untitled_goal");
   const subtitle = [plan.institution, plan.role].filter(Boolean).join(" · ");
 
+  // Abrir um edital arquivado liga o modo histórico; abrir um edital vivo o
+  // desliga. Sem o desligar, voltar para o edital de agora mantinha a tarja de
+  // arquivado e o módulo inteiro em leitura.
   useEffect(() => {
-    if (plan.archived) useStudyUi.getState().setBrowsePlanId(plan.id);
+    useStudyUi.getState().setBrowsePlanId(plan.archived ? plan.id : null);
   }, [plan.archived, plan.id]);
 
   useEffect(() => {
@@ -124,9 +130,11 @@ function GoalDocument({
           </nav>
           <div className="flex shrink-0 items-center gap-1.5">
             {plan.archived ? (
-              <Button variant="secondary" size="sm" onClick={() => void reactivate()}>
-                {st("goals_unarchive")}
-              </Button>
+              pastTerm ? null : (
+                <Button variant="secondary" size="sm" onClick={() => void reactivate()}>
+                  {st("goals_unarchive")}
+                </Button>
+              )
             ) : !isActive ? (
               <Button variant="secondary" size="sm" onClick={() => void activate()}>
                 <Check />

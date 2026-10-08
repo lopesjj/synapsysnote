@@ -10,7 +10,7 @@ export const ar: PlanStrings = {
 
   badge_trial: "تجربة · {days} {days|يوم|أيام|يومًا}",
   badge_trial_last_day: "تجربة · اليوم الأخير",
-  badge_read_only: "قراءة فقط",
+  badge_read_only: "منتهية",
 
   status_trial: "تجربة مجانية بكل ميزات خطة ألترا حتى {date}.",
   status_trial_ended: "انتهت تجربتك المجانية في {date}.",

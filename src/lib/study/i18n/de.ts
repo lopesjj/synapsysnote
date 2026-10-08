@@ -105,7 +105,7 @@ export const de: StudyStrings = {
   kpi_coverage: "Fortschritt",
   kpi_streak: "Fokus",
   kpi_time_hint: "{avg} pro Lerntag",
-  kpi_time_terms: "Über {count} Ausschreibungen · {time} in dieser",
+  kpi_time_terms: "{time} in dieser Ausschreibung · {count} Ausschreibungen gesamt",
   term_current: "Aktuelle Ausschreibung",
   term_history: "Frühere Ausschreibungen",
   term_label_fallback: "Ausschreibung {n}",

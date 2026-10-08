@@ -600,7 +600,10 @@ export function NoteFlashcardsModal({ page, onClose }: NoteFlashcardsModalProps)
           toast.error(t("ai_no_cards_generated"));
         }
       } else {
-        if (requested !== null && list.length < requested) {
+        // O servidor só marca isso depois de insistir e não vir mais nada. Sem
+        // esse flag, uma primeira resposta curta já acusava falta de conteúdo
+        // numa nota que o modo "máximo" cobre com dezenas de cards.
+        if (requested !== null && list.length < requested && data?.meta?.insufficientContent) {
           toast.info(t("ai_insufficient_content_partial", { count: list.length, requested }));
         } else if (skippedExisting > 0 && noteCards.length > 0) {
           toast.info(t("ai_duplicates_skipped", { count: skippedExisting }));

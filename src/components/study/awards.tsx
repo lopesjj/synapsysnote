@@ -28,6 +28,7 @@ import { formatDay } from "@/lib/study/dates";
 import { CLAIM_WINDOW_DAYS, arrangeAwards, sortAwards, type Award, type StreakAward } from "@/lib/study/awards";
 import { GoalMark, Panel } from "./ui";
 import { useGoalGates } from "@/lib/plans/gates";
+import { useEntitlements } from "@/lib/plans/client";
 import { PlanNotice } from "@/components/plans/plan-lock";
 import { usePlanT } from "@/lib/plans/i18n";
 
@@ -606,8 +607,12 @@ function celebrationCopy(award: Award, st: StudyT, goalName: string): { headline
 
 export function CelebrationBanner() {
   const { st } = useStudyT();
-  const { focusPlan, planReadOnly, actions } = useStudy();
+  const { focusPlan, planReadOnly, ready, actions } = useStudy();
   const awardsAllowed = useGoalGates().awards.allowed;
+  // Enquanto o plano da conta nao foi confirmado, `readOnly` vale false por
+  // padrao. Trocar de idioma remonta o modulo e essa suposicao fazia a tarja
+  // aparecer por alguns segundos em contas que nao podem guardar nada.
+  const planSettled = !useEntitlements().provisional;
   const celebrated = useStudyUi((state) => state.celebrated);
   const [settled, setSettled] = useState<string | null>(null);
   const [hidden, setHidden] = useState<string | null>(null);
@@ -627,7 +632,7 @@ export function CelebrationBanner() {
     const keys = pendingKey.split(",").filter((key) => seen.has(key.slice(key.indexOf("~") + 1)));
     if (keys.length) void actions.claimAwards(keys);
   }, [actions, celebrated, pendingKey, planReadOnly]);
-  if (planReadOnly || !awardsAllowed || !lead || !focusPlan || hidden === pendingKey) return null;
+  if (!ready || !planSettled || planReadOnly || !awardsAllowed || !lead || !focusPlan || hidden === pendingKey) return null;
   const confetti = settled !== lead.id;
   const { headline, body } = celebrationCopy(lead, st, focusPlan.name || st("untitled_goal"));
   const accent = lead.kind === "subject" ? lead.color : lead.kind === "streak" ? sealTone(lead.tier) : "var(--laurel)";

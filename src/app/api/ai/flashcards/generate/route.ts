@@ -6,6 +6,14 @@ import {
   type CardSignature,
 } from "@/lib/flashcards/duplicate-cards";
 import { filterSemanticDuplicates } from "@/lib/flashcards/semantic-duplicates";
+import {
+  buildExistingCardsBlock,
+  buildModeInstruction,
+  buildSweepInstruction,
+  buildSystemPrompt,
+  buildTopUpInstruction,
+  type ExistingCard,
+} from "@/lib/flashcards/generation-prompts";
 import { appRequestUser, rateLimitKey } from "@/lib/api/app-session";
 import { assertPlanAllows } from "@/lib/plans/server";
 import { planErrorBody, toPlanError } from "@/lib/plans/errors";
@@ -31,13 +39,27 @@ const LANGUAGE_NAMES: Record<string, string> = {
 
 const SEGMENT_CHAR_BUDGET = 14_000;
 const MAX_SEGMENTS = 12;
+/**
+ * No modo "máximo" o material é fatiado bem mais fino. Um trecho curto cabe
+ * inteiro na atenção do modelo, e é isso que faz a varredura descer ao detalhe
+ * em vez de devolver um resumo da nota.
+ */
+const MAX_MODE_SEGMENT_CHARS = 3_000;
+const MAX_MODE_SEGMENTS = 56;
+/** Segmentos pedidos ao mesmo tempo: mais varredura dentro do mesmo tempo. */
+const MAX_MODE_CONCURRENCY = 5;
+/** Rodadas que voltam ao material atrás do que a varredura deixou para trás. */
+const MAX_MODE_SWEEP_ROUNDS = 3;
+/** Tempo mínimo que precisa sobrar para valer a pena abrir uma rodada dessas. */
+const SWEEP_MIN_BUDGET_MS = 35_000;
+/** Rodadas de reforço para fechar a contagem pedida. */
+const MAX_TOP_UP_ROUNDS = 3;
+const TOP_UP_MIN_BUDGET_MS = 25_000;
 const MAX_TOTAL_CARDS = 400;
 const MAX_INLINE_IMAGES = 16;
 const MAX_INLINE_PDFS = 8;
 const TIME_BUDGET_MS = 230_000;
 const MAX_EXISTING_CARDS = 2_000;
-const MAX_EXISTING_CARDS_IN_PROMPT = 220;
-const EXISTING_CARDS_CHAR_BUDGET = 9_000;
 const SEMANTIC_PASS_MIN_BUDGET_MS = 15_000;
 const SEMANTIC_PASS_MAX_BUDGET_MS = 45_000;
 
@@ -56,14 +78,17 @@ interface TranscriptInput {
   text?: string;
 }
 
-interface ExistingCard {
-  front: string;
-  back: string;
-}
 
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
+  propertyOrdering: ["units", "flashcards"],
   properties: {
+    units: {
+      type: "ARRAY",
+      description:
+        "Inventory of the teachable units found in the material, in the order they appear. Fill it only when the task asks for it, and always before the flashcards.",
+      items: { type: "STRING" },
+    },
     flashcards: {
       type: "ARRAY",
       items: {
@@ -116,38 +141,6 @@ function asExistingCards(value: unknown): ExistingCard[] {
   return cards;
 }
 
-function buildExistingCardsBlock(cards: ExistingCard[]): string {
-  if (cards.length === 0) return "";
-
-  const lines: string[] = [];
-  let used = 0;
-  for (const card of cards.slice(0, MAX_EXISTING_CARDS_IN_PROMPT)) {
-    const front = card.front.replace(/\s+/g, " ").slice(0, 200);
-    const back = card.back.replace(/\s+/g, " ").slice(0, 140);
-    const line = `- Q: ${front}${back ? ` | A: ${back}` : ""}`;
-    if (used + line.length > EXISTING_CARDS_CHAR_BUDGET) break;
-    lines.push(line);
-    used += line.length + 1;
-  }
-  if (lines.length === 0) return "";
-
-  const omitted = cards.length - lines.length;
-  const tail =
-    omitted > 0
-      ? `\n- (+${omitted} further existing cards are not listed here; stay conservative around every topic above.)`
-      : "";
-
-  return [
-    "CARDS THAT ALREADY EXIST FOR THIS NOTE — NEVER REPEAT THEM",
-    "The learner already owns the flashcards listed below for this exact note. Treat every one of them as ground already covered.",
-    "- NEVER produce a card that asks a similar question or induces almost the same or similar answer as one of them, even if rephrased, inverted, generalized, narrowed, or approached from an adjacent perspective.",
-    "- NEVER produce a card whose answer shares the same core conclusion, fact, or mechanism as any existing card.",
-    "- Mine only what these cards do NOT cover yet. When a point is already covered, skip it and move on to the next uncovered point instead of paraphrasing what exists.",
-    "- Producing fewer cards is correct and expected. If the material is already fully covered, return an empty \"flashcards\" array rather than inventing near-duplicates.",
-    "",
-    lines.join("\n") + tail,
-  ].join("\n");
-}
 
 function labelled(entries: TranscriptInput[], fallbackLabel: string): string {
   return entries
@@ -158,10 +151,10 @@ function labelled(entries: TranscriptInput[], fallbackLabel: string): string {
     .join("\n\n");
 }
 
-function splitIntoSegments(text: string): string[] {
+function splitIntoSegments(text: string, budget = SEGMENT_CHAR_BUDGET, limit = MAX_SEGMENTS): string[] {
   const clean = text.trim();
   if (!clean) return [];
-  if (clean.length <= SEGMENT_CHAR_BUDGET) return [clean];
+  if (clean.length <= budget) return [clean];
 
   const paragraphs = clean.split(/\n{2,}/);
   const segments: string[] = [];
@@ -173,164 +166,26 @@ function splitIntoSegments(text: string): string[] {
   };
 
   for (const paragraph of paragraphs) {
-    if (paragraph.length > SEGMENT_CHAR_BUDGET) {
+    if (paragraph.length > budget) {
       push();
-      for (let i = 0; i < paragraph.length; i += SEGMENT_CHAR_BUDGET) {
-        segments.push(paragraph.slice(i, i + SEGMENT_CHAR_BUDGET));
+      for (let i = 0; i < paragraph.length; i += budget) {
+        segments.push(paragraph.slice(i, i + budget));
       }
       continue;
     }
-    if (current.length + paragraph.length + 2 > SEGMENT_CHAR_BUDGET) {
+    if (current.length + paragraph.length + 2 > budget) {
       push();
     }
     current += (current ? "\n\n" : "") + paragraph;
   }
   push();
 
-  return segments.slice(0, MAX_SEGMENTS);
+  return segments.slice(0, limit);
 }
 
-function buildSystemPrompt(langName: string, focus: string, existingBlock: string): string {
-  return `You are a specialist in the cognitive science of learning, active recall and flashcard engineering, working in the tradition of Anki, SuperMemo and Piotr Wozniak.
 
-OUTPUT LANGUAGE — ABSOLUTE RULE
-Every "front", "back" and "hint" you write MUST be in ${langName}. This holds even when the source material is in a different language: translate the meaning into ${langName}. Never mix languages, never leave source-language fragments in the output, never comment on the translation. Keep proper nouns, legal article numbers, chemical symbols, code identifiers and standardized formulas in their original form.
 
-THE SOURCE MATERIAL
-What follows is the content of a single study note. It may combine several kinds of material, each marked with a header:
-- the note's own written text
-- structured tables
-- text extracted from attached PDF documents
-- verbatim transcripts of audio recordings and of videos
-- OCR text read from images in the note
-- the image and PDF files themselves, delivered to you as binary attachments after this text
 
-Every one of these is first-class study material and must be mined with the same rigour. The binary attachments are not decoration: read the diagrams, flowcharts, graphs, formulas, slides, screenshots, scanned pages, handwriting and tables inside them and convert their content into flashcards exactly as you would with written text. Never skip an attachment. Never produce a card whose answer is merely that an image, a video or a document exists.
-
-HOW TO WRITE EACH CARD
-
-1. ATOMICITY (minimum information principle). One card tests exactly one fact, relation or decision. If an idea has four components, write four cards, not one card listing four items. The only exception is a short enumeration memorised as a unit with a fixed order or a mnemonic.
-
-2. FRONT. A precise, unambiguous active-recall question. Test causes, mechanisms, functions, exact definitions, contrasts between confusable terms, conditions of application, exceptions, numeric values, and applied problem solving. Forbidden: yes/no questions, true/false questions, questions containing their own answer, and vague prompts such as "what is important about X". Every question in the set MUST be distinct: never write two questions that sound similar or address the same premise.
-
-3. BACK. Answer first, in the opening clause, then at most one short sentence of mechanism or justification. No filler ("as we saw in the note", "it is important to remember"). Keep it under roughly 45 words unless a formula, a legal wording or a fixed list requires more. Every answer in the set MUST deliver unique information: never produce cards whose answers converge on the same fact, definition, or conclusion.
-
-4. HINT — read this rule twice; it is the one most often done badly.
-A hint is a retrieval cue: it helps someone who is stuck pull the answer out of their own memory. It is not a summary, not a definition and not a softer version of the answer.
-
-A hint is INVALID and MUST be omitted when it does any of the following:
-- restates, rephrases or defines the question (for "what is the entry point of a program?", the hint "the place where execution begins" is a restatement and is forbidden);
-- is a synonym, a translation or a near-paraphrase of the answer;
-- narrows the category so tightly that only one item can fit;
-- is generic filler: "think about the basics", "remember the definition", "this is an important concept", "relates to the topic studied";
-- merely repeats words already present in the question.
-
-A hint is VALID only when it is one of these:
-- structural cue: shape, signature, number of elements, initials, acronym ("three keywords; the middle one is the return type");
-- mnemonic or wordplay that encodes the answer without stating it;
-- adjacent anchor: a contrasting or neighbouring idea the learner already knows ("the mirror image of the destructor");
-- origin or context cue: who proposed it, when, in what field, under what name it is also known;
-- consequence cue: what visibly breaks or changes if you get it wrong ("omit it and the compiler says there is no entry point").
-
-SELF-TEST, applied to every hint before you keep it: cover the question and read the hint alone. If it reads like a definition or a paraphrase of the question, delete it. If it alone makes the answer guessable, delete it. Keep it only when it sits between those two failures. Maximum 12 words. Never end a hint with the answer.
-
-OMITTING IS CORRECT. When no valid hint exists, leave the "hint" field out of that card entirely. A missing hint is far better than a hollow one, and you are expected to omit it on a substantial share of the cards. Never invent a hint just to fill the field.
-
-5. SELF-CONTAINED. Each card is read months later, alone, with no access to the note. Never write "according to the text", "in the image above", "in the table", "as the professor said", "in this PDF". If a card depends on a visual, describe the relevant part of the visual inside the question.
-
-6. COVERAGE BY TYPE. From tables, turn each meaningful row or relation into its own card. From formulas, test both the formula and the meaning of each term. From processes, test order, trigger and outcome of each step. From classifications, test the criterion that separates the categories. From transcripts, extract the substance the speaker teaches and discard hesitations, greetings and off-topic remarks. From numbers, dates, limits and thresholds, make dedicated cards.
-
-7. STRICT DIVERSITY — NO SIMILAR QUESTIONS OR SIMILAR ANSWERS.
-- FORBIDDEN: SIMILAR QUESTIONS. You must NEVER generate two questions that tackle the same core fact, rephrase the same problem, or explore the same sentence from marginally different angles. Each question must target an entirely independent subject or phenomenon.
-- FORBIDDEN: SIMILAR OR CONVERGENT ANSWERS. You must NEVER generate questions that induce almost the same answer, similar answers, or answers that communicate the same underlying knowledge. If answering Card A already requires knowing the information that constitutes Card B's answer, Card B is strictly redundant and MUST NOT be produced.
-- FORBIDDEN: INVERTED PAIRS. Never create two cards that simply invert question and answer (e.g., asking for the term given the definition on Card 1, and asking for the definition given the term on Card 2; or asking "What does X produce?" on Card 1, and "What produces Y?" on Card 2). Choose ONLY the single most educationally effective direction and discard the other.
-- FORBIDDEN: SUB-QUESTION OVERLAP. If Card 1 tests a process or mechanism, do NOT create Card 2 testing a sub-step or detail that is already part of Card 1's answer or directly deducible from it.
-- ORTHOGONALITY RULE: Before writing any card, check every previously written card. If a human studying Card A would feel that Card B is asking virtually the same thing or testing the same memory, DELETE Card B and move to a completely untouched concept in the source material.
-- STRICT CAPACITY LIMIT: If the note has only 3 distinct, non-overlapping facts, produce ONLY 3 cards, even if the user requested more. Never generate similar questions or similar answers just to inflate the card count.
-
-8. FIDELITY. Use only information present in the material. Never invent, never extrapolate beyond what is stated, never fill gaps with general knowledge. If the material is contradictory, follow the most specific statement.
-
-WORKED EXAMPLES — these illustrate STRUCTURE ONLY and are written in English for clarity. Your own output must be entirely in ${langName}, and must never reuse this example content.
-
-Source sentence: "Mitochondria generate most of the chemical energy needed by the cell (ATP) through cellular respiration."
-REJECTED PAIR (SIMILAR QUESTIONS & CONVERGENT ANSWERS — FORBIDDEN):
-  Card 1: front "Which organelle generates ATP via cellular respiration?" / back "Mitochondria."
-  Card 2: front "What is the primary function of mitochondria in a cell?" / back "To generate ATP through cellular respiration."
-  -> Card 1 and Card 2 ask similar questions that induce almost the same answer. Keep ONLY ONE.
-ACCEPTED:
-  front "Which organelle produces the cell's ATP via cellular respiration?" / back "Mitochondria."
-
-Source sentence: "Newton's First Law states that an object remains at rest or in uniform motion unless acted upon by a net external force (the principle of inertia)."
-REJECTED PAIR (SIMILAR QUESTIONS & CONVERGENT ANSWERS — FORBIDDEN):
-  Card 1: front "What does Newton's First Law state?" / back "An object remains at rest or in uniform straight-line motion unless acted upon by a net external force."
-  Card 2: front "What is the principle of inertia?" / back "An object's tendency to maintain its state of rest or motion unless an external net force acts on it."
-  -> Both cards induce virtually the same answer and test the same concept under different titles.
-ACCEPTED:
-  front "Under what condition does an object's velocity change according to Newton's First Law?" / back "Only when acted upon by a non-zero net external force (principle of inertia)."
-
-Source sentence: "In C#, execution of an application always begins at the static void Main() method, its single entry point."
-REJECTED: front "What is the single entry point for running a C# application?" / back "The static void Main() method." / hint "The place where program execution always begins."
-  -> the hint is a restatement of the question and carries no new retrieval value.
-ACCEPTED: front "Which method signature does the runtime invoke first when a C# application starts?" / back "static void Main(). It is the single entry point of the application." / hint "Three keywords; the last is English for 'principal'."
-
-Source sentence: "Mean arterial pressure equals cardiac output multiplied by systemic vascular resistance."
-REJECTED: hint "A formula related to the heart."
-  -> generic filler.
-ACCEPTED: hint "Same shape as Ohm's law, with flow replacing current."
-
-Source sentence: "The statute of limitations for simple theft is eight years."
-ACCEPTED with no hint at all: a bare number has no honest retrieval cue, so the "hint" field is omitted.${focus
-      ? `
-
-9. USER FOCUS — HIGHEST PRIORITY. The user asked to concentrate on: "${focus}". Prioritise this aspect above all others when selecting and ordering the cards, while still respecting every rule above.`
-      : ""
-    }${existingBlock ? `
-
-${existingBlock}` : ""}`;
-}
-
-function buildModeInstruction(
-  requestedCount: number | null,
-  segmentIndex: number,
-  segmentTotal: number,
-  isAttachmentPass: boolean
-): string {
-  if (isAttachmentPass) {
-    return `TASK — ATTACHMENTS PASS
-The written text of this note was already covered in previous passes. In this pass, work exclusively from the binary attachments delivered with this message (images and PDF files).
-- Read every attachment completely, page by page and region by region.
-- Produce as many cards as the attachments genuinely justify, ordered from the most fundamental concept to the most peripheral detail.
-- Cover diagrams, labelled parts, axes and trends of graphs, formulas, table cells, slide bullet points, scanned or handwritten text.
-- Do not produce cards about material that is only in the written text.
-- If an attachment carries no teachable content, silently skip it.`;
-  }
-
-  if (requestedCount === null) {
-    const scope =
-      segmentTotal > 1
-        ? `This is segment ${segmentIndex} of ${segmentTotal} of the note. Cover THIS SEGMENT exhaustively; other segments are handled separately, so do not try to summarise the whole note here.`
-        : `Cover the whole note exhaustively, from beginning to end.`;
-    return `TASK — EXHAUSTIVE COVERAGE
-${scope}
-- Produce cards to cover each distinct teachable point in the material: every unique rule, definition, formula, numeric value, process, and exception.
-- STRICT DIVERSITY: Exhaustive coverage means covering different topics across the note, NOT generating multiple similar questions about the same topic. Never produce cards that induce similar or overlapping answers.
-- Order the cards from the most fundamental and structuring concept to the most peripheral detail.`;
-  }
-
-  const scope =
-    segmentTotal > 1
-      ? `This is segment ${segmentIndex} of ${segmentTotal}. Produce up to ${requestedCount} cards for THIS SEGMENT.`
-      : `TARGET COUNT: Up to ${requestedCount} flashcards.`;
-
-  return `TASK — PRIORITY SELECTION
-${scope}
-- Map the whole material first, then select only the highest-yield points: what a student must master to understand the subject.
-- Order them strictly from most vital to least: card 1 is the single most indispensable idea, card 2 the second, and so on.
-- ABSOLUTE QUESTION & ANSWER DIVERSITY: Every card MUST test a completely distinct concept. NEVER generate questions that are similar to each other or that induce nearly the same or similar answers.
-- NO OVERLAPPING PAIRS: Avoid inversions (term -> definition vs definition -> term), rephrasings, or cards where one answer gives away or duplicates another.
-- CONTENT EXHAUSTION: If the material does not contain enough distinct concepts to reach ${requestedCount} cards without repetition or similar answers, produce ONLY the genuinely unique cards that the material supports (even if fewer than ${requestedCount}). Do NOT invent similar questions or filler to reach the target count.
-- IF FULLY COVERED: If the material has no uncoverable content or is already fully covered by existing cards, return an empty "flashcards" array: {"flashcards": []}.`;
-}
 
 /** Espera antes de cada rodada pela lista de modelos (a primeira é imediata). */
 const GENERATE_ROUND_DELAYS_MS = [0, 4_000, 12_000];
@@ -412,6 +267,36 @@ async function callGemini(
   }
 
   return { text: "", error: lastError };
+}
+
+/** Inventário devolvido junto com os cards; serve de roteiro para a varredura. */
+function parseUnits(raw: string): string[] {
+  const clean = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  let parsed: { units?: unknown } | null = null;
+  try {
+    parsed = JSON.parse(clean);
+  } catch {
+    const match = clean.match(/"units"\s*:\s*\[[^\]]*\]/);
+    if (!match) return [];
+    try {
+      parsed = JSON.parse(`{${match[0]}}`) as { units?: unknown };
+    } catch {
+      return [];
+    }
+  }
+  if (!parsed || !Array.isArray(parsed.units)) return [];
+  const list: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of parsed.units) {
+    if (typeof entry !== "string") continue;
+    const unit = entry.replace(/\s+/g, " ").trim().slice(0, 300);
+    if (!unit) continue;
+    const key = unit.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    list.push(unit);
+  }
+  return list;
 }
 
 function parseFlashcards(raw: string): FlashcardItem[] {
@@ -717,11 +602,15 @@ async function generateFlashcards(req: NextRequest) {
       )
     );
 
-    const systemPrompt = buildSystemPrompt(langName, focus, buildExistingCardsBlock(existingCards));
+    const systemPrompt = buildSystemPrompt(langName, focus, buildExistingCardsBlock(existingCards, isMax), isMax);
     const existingSignatures = existingCards.map((card) => cardSignature(card.front, card.back));
-    const segments = isMax ? splitIntoSegments(consolidated) : [consolidated];
+    const segments = isMax
+      ? splitIntoSegments(consolidated, MAX_MODE_SEGMENT_CHARS, MAX_MODE_SEGMENTS)
+      : [consolidated];
     const effectiveSegments = segments.length > 0 ? segments : [""];
-    const runAttachmentPass = isMax && inlineParts.length > 0 && effectiveSegments.length > 1;
+    // No modo "máximo" os anexos sempre ganham uma passada só deles: disputar a
+    // atenção com o texto era o que transformava um diagrama inteiro num card.
+    const runAttachmentPass = isMax && inlineParts.length > 0;
 
     const startedAt = Date.now();
     const collected: FlashcardItem[] = [];
@@ -730,7 +619,23 @@ async function generateFlashcards(req: NextRequest) {
     let timedOut = false;
     let skippedExistingLexical = 0;
 
-    const pushCards = (cards: FlashcardItem[]) => {
+    /** Perguntas aceitas e inventário de cada segmento: o roteiro da varredura. */
+    const frontsBySegment: string[][] = effectiveSegments.map(() => []);
+    const unitsBySegment: string[][] = effectiveSegments.map(() => []);
+
+    const rememberUnits = (index: number, units: readonly string[]) => {
+      const bucket = unitsBySegment[index];
+      if (!bucket) return;
+      const seen = new Set(bucket.map((unit) => unit.toLowerCase()));
+      for (const unit of units) {
+        const key = unit.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        bucket.push(unit);
+      }
+    };
+
+    const pushCards = (cards: FlashcardItem[], into?: string[]) => {
       for (const card of cards) {
         if (collected.length >= MAX_TOTAL_CARDS) return;
         const signature = cardSignature(card.front, card.back);
@@ -742,52 +647,88 @@ async function generateFlashcards(req: NextRequest) {
         if (hasDuplicate(acceptedSignatures, signature)) continue;
         acceptedSignatures.push(signature);
         collected.push(card);
+        into?.push(card.front);
       }
     };
 
-    for (let index = 0; index < effectiveSegments.length; index++) {
-      if (collected.length >= MAX_TOTAL_CARDS) break;
-      if (index > 0 && Date.now() - startedAt > TIME_BUDGET_MS) {
-        timedOut = true;
-        break;
-      }
+    const RESPONSE_FORMAT = `RESPONSE FORMAT
+Return only a JSON object shaped as {"flashcards":[{"front":"...","back":"...","hint":"..."}]}. No prose, no markdown fences, nothing outside the JSON.`;
 
-      const perSegmentCount =
-        requestedCount === null
-          ? null
-          : Math.max(1, Math.ceil(requestedCount / effectiveSegments.length));
-
-      const modeInstruction = buildModeInstruction(
-        perSegmentCount,
-        index + 1,
-        effectiveSegments.length,
-        false
-      );
-
+    const askSegment = (index: number, instruction: string, withAttachments: boolean) => {
       const promptText = `${systemPrompt}
 
-${modeInstruction}
+${instruction}
 
-RESPONSE FORMAT
-Return only a JSON object shaped as {"flashcards":[{"front":"...","back":"...","hint":"..."}]}. No prose, no markdown fences, nothing outside the JSON.
+${RESPONSE_FORMAT}
 
 --- MATERIAL ---
 ${effectiveSegments[index]}`;
-
       const parts: unknown[] = [{ text: promptText }];
-      if (!runAttachmentPass && index === 0) {
-        parts.push(...inlineParts);
-      }
-
+      if (withAttachments) parts.push(...inlineParts);
       const maxOutputTokens =
         requestedCount === null
           ? 32_768
           : Math.min(32_768, Math.max(12_288, requestedCount * 400));
-      const { text, error } = await callGemini(apiKey, models, parts, maxOutputTokens);
-      if (error) lastError = error;
-      if (text) pushCards(parseFlashcards(text));
-    }
+      return callGemini(apiKey, models, parts, maxOutputTokens);
+    };
 
+    /**
+     * Uma rodada pede vários segmentos ao mesmo tempo. Com o trecho curto do
+     * modo "máximo" seriam dezenas de chamadas em fila, e o tempo acabava antes
+     * do fim da nota — exatamente o que fazia o fim dela ficar sem card.
+     */
+    const concurrency = isMax ? MAX_MODE_CONCURRENCY : 1;
+
+    const runPass = async (
+      indexes: readonly number[],
+      instructionFor: (index: number) => string,
+      // A varredura é um extra: ficar sem tempo nela não torna a geração parcial.
+      markTimeout = true
+    ): Promise<number> => {
+      let produced = 0;
+      for (let start = 0; start < indexes.length; start += concurrency) {
+        if (collected.length >= MAX_TOTAL_CARDS) break;
+        if (start > 0 && Date.now() - startedAt > TIME_BUDGET_MS) {
+          if (markTimeout) timedOut = true;
+          break;
+        }
+        const round = indexes.slice(start, start + concurrency);
+        const results = await Promise.all(
+          round.map((index) =>
+            askSegment(index, instructionFor(index), !runAttachmentPass && index === 0)
+          )
+        );
+        results.forEach(({ text, error }, offset) => {
+          if (error) lastError = error;
+          if (!text) return;
+          const index = round[offset];
+          const before = collected.length;
+          rememberUnits(index, parseUnits(text));
+          pushCards(parseFlashcards(text), frontsBySegment[index]);
+          produced += collected.length - before;
+        });
+      }
+      return produced;
+    };
+
+    const textSegments = effectiveSegments
+      .map((segment, index) => (segment.trim() ? index : -1))
+      .filter((index) => index >= 0);
+    // Nota só de anexos: no modo "máximo" a passada deles faz o trabalho, então
+    // não há texto a varrer. Nos outros modos essa chamada é o único caminho
+    // das imagens e dos PDFs até o modelo, e precisa acontecer mesmo vazia.
+    const allSegments = textSegments.length || runAttachmentPass ? textSegments : [0];
+    const perSegmentCount =
+      requestedCount === null
+        ? null
+        : Math.max(1, Math.ceil(requestedCount / effectiveSegments.length));
+
+    await runPass(allSegments, (index) =>
+      buildModeInstruction(perSegmentCount, index + 1, effectiveSegments.length, false)
+    );
+
+    // Os anexos vêm antes da varredura: se o tempo acabar, o que se perde é o
+    // repasse do texto, nunca a única leitura das imagens e dos PDFs.
     if (
       runAttachmentPass &&
       !timedOut &&
@@ -798,8 +739,7 @@ ${effectiveSegments[index]}`;
 
 ${buildModeInstruction(null, 1, 1, true)}
 
-RESPONSE FORMAT
-Return only a JSON object shaped as {"flashcards":[{"front":"...","back":"...","hint":"..."}]}. No prose, no markdown fences, nothing outside the JSON.
+${RESPONSE_FORMAT}
 
 --- NOTE TITLE FOR CONTEXT ---
 ${title || "(untitled)"}`;
@@ -812,6 +752,34 @@ ${title || "(untitled)"}`;
       );
       if (error) lastError = error;
       if (text) pushCards(parseFlashcards(text));
+    }
+
+    /**
+     * Varredura: a primeira passada quase sempre cobre bem o começo de cada
+     * trecho e afrouxa no fim. Aqui o modelo volta ao mesmo material sabendo o
+     * que já perguntou, e só então o "máximo" chega ao detalhe da nota inteira.
+     */
+    if (isMax) {
+      for (let round = 0; round < MAX_MODE_SWEEP_ROUNDS; round += 1) {
+        if (timedOut || collected.length >= MAX_TOTAL_CARDS) break;
+        if (Date.now() - startedAt > TIME_BUDGET_MS - SWEEP_MIN_BUDGET_MS) break;
+        const pending = allSegments.filter(
+          (index) => frontsBySegment[index].length > 0 || unitsBySegment[index].length > 0
+        );
+        if (!pending.length) break;
+        const produced = await runPass(
+          pending,
+          (index) =>
+            buildSweepInstruction(
+              unitsBySegment[index],
+              frontsBySegment[index],
+              index + 1,
+              effectiveSegments.length
+            ),
+          false
+        );
+        if (produced === 0) break;
+      }
     }
 
     let skippedSemanticExisting = 0;
@@ -847,48 +815,40 @@ ${title || "(untitled)"}`;
 
     await runSemanticPass();
 
-    const firstPassSingleSegmentExhausted =
-      effectiveSegments.length === 1 &&
-      collected.length > 0 &&
-      requestedCount !== null &&
-      collected.length < requestedCount &&
-      skippedExistingLexical === 0 &&
-      skippedSemanticExisting === 0 &&
-      skippedSemanticInternal === 0;
+    /**
+     * Devolver menos do que foi pedido é o primeiro impulso do modelo, não uma
+     * medida do que a nota tem: a mesma nota que entrega 15 cards aqui entrega
+     * 80 no modo "máximo". Então insiste-se enquanto houver conta a fechar e
+     * cada rodada ainda trouxer card novo; só aí é que faltou conteúdo mesmo.
+     */
+    let toppedUp = false;
+    if (requestedCount !== null && !timedOut) {
+      for (let round = 0; round < MAX_TOP_UP_ROUNDS; round += 1) {
+        if (collected.length >= requestedCount) break;
+        if (Date.now() - startedAt > TIME_BUDGET_MS - TOP_UP_MIN_BUDGET_MS) break;
+        toppedUp = true;
+        const before = collected.length;
+        const instruction = buildTopUpInstruction(
+          requestedCount - collected.length,
+          unitsBySegment.flat(),
+          collected.map((card) => card.front)
+        );
+        const promptText = `${systemPrompt}
 
-    if (
-      requestedCount !== null &&
-      collected.length < requestedCount &&
-      !firstPassSingleSegmentExhausted &&
-      !timedOut &&
-      Date.now() - startedAt <= TIME_BUDGET_MS
-    ) {
-      const remainingNeeded = requestedCount - collected.length;
-      const backfillPrompt = `${systemPrompt}
+${instruction}
 
-TASK — ADDITIONAL CARDS
-You previously produced ${collected.length} flashcards, towards a requested target of ${requestedCount}.
-If the material contains further distinct, high-yield teachable concepts that have NOT yet been covered, generate up to ${remainingNeeded} MORE unique flashcards.
-CRITICAL RULES FOR THIS PASS:
-- Do NOT produce questions similar to, rephrasing, or overlapping with any of the following already-covered questions:
-${collected.map((c, i) => `${i + 1}. ${c.front}`).join("\n")}
-- Do NOT produce questions that elicit the same or similar answers to those already produced above.
-- Do NOT duplicate or overlap with any concept in the existing cards list.
-- Every new card must test an entirely separate, untouched fact or mechanism.
-- If all teachable concepts in the source material have already been exhausted, return an empty "flashcards" array: {"flashcards": []}.
-- Never invent redundant questions or questions with similar answers just to reach the requested count.
-
-RESPONSE FORMAT
-Return only a JSON object shaped as {"flashcards":[{"front":"...","back":"...","hint":"..."}]}. No prose, no markdown fences, nothing outside the JSON.
+${RESPONSE_FORMAT}
 
 --- MATERIAL ---
 ${effectiveSegments[0] || consolidated}`;
-
-      const { text } = await callGemini(apiKey, models, [{ text: backfillPrompt }], 8192);
-      if (text) {
-        const before = collected.length;
-        pushCards(parseFlashcards(text));
-        if (collected.length > before) await runSemanticPass();
+        const { text, error } = await callGemini(apiKey, models, [{ text: promptText }], 12_288);
+        if (error) lastError = error;
+        if (text) {
+          rememberUnits(0, parseUnits(text));
+          pushCards(parseFlashcards(text), frontsBySegment[0]);
+        }
+        if (collected.length === before) break;
+        await runSemanticPass();
       }
     }
 
@@ -941,7 +901,9 @@ ${effectiveSegments[0] || consolidated}`;
         inlinePdfs: inlinePdfCount,
         generated: flashcards.length,
         requested: requestedCount,
-        insufficientContent: requestedCount !== null && flashcards.length < requestedCount,
+        // Só é "faltou conteúdo" depois de insistir e o modelo não trazer mais
+        // nada; antes disso era só a primeira resposta dele vindo curta.
+        insufficientContent: requestedCount !== null && flashcards.length < requestedCount && toppedUp,
         partial: timedOut,
         existingConsidered: existingCards.length,
         skippedExisting: totalSkippedExisting,

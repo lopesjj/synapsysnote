@@ -105,7 +105,7 @@ export const zh: StudyStrings = {
   kpi_coverage: "进度",
   kpi_streak: "专注",
   kpi_time_hint: "每个学习日 {avg}",
-  kpi_time_terms: "合计 {count} 个周期 · 本周期 {time}",
+  kpi_time_terms: "本周期 {time} · 合计 {count} 个周期",
   term_current: "当前周期",
   term_history: "过往周期",
   term_label_fallback: "周期 {n}",

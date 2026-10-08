@@ -227,7 +227,9 @@ export async function extractComprehensiveNoteContent(
     } catch {}
   }
 
-  const textContent = blocksToPlainText(blocks) || page.plainText || "";
+  // Sem os rótulos e nomes de arquivo: o que é mídia chega ao modelo pela
+  // transcrição, pelo OCR ou pelo próprio anexo, nunca como "Arquivo de áudio".
+  const textContent = blocksToPlainText(blocks, undefined, undefined, { skipMedia: true }) || page.plainText || "";
   const ocrText = (page.extractedOCRText || "").trim();
   const tablesContent: string[] = [];
   const audioTranscripts: ExtractedTranscript[] = [];

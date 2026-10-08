@@ -105,7 +105,7 @@ export const ja: StudyStrings = {
   kpi_coverage: "進捗",
   kpi_streak: "集中",
   kpi_time_hint: "学習日あたり{avg}",
-  kpi_time_terms: "要項{count}件の合計 · 今回は{time}",
+  kpi_time_terms: "今回は{time} · 要項{count}件の合計",
   term_current: "現在の要項",
   term_history: "過去の要項",
   term_label_fallback: "要項 {n}",

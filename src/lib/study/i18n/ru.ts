@@ -105,7 +105,7 @@ export const ru: StudyStrings = {
   kpi_coverage: "Прогресс",
   kpi_streak: "Фокус",
   kpi_time_hint: "{avg} за учебный день",
-  kpi_time_terms: "По всем наборам: {count} · в этом {time}",
+  kpi_time_terms: "{time} в этом наборе · всего наборов: {count}",
   term_current: "Текущий набор",
   term_history: "Прошлые наборы",
   term_label_fallback: "Набор {n}",

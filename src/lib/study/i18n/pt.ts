@@ -103,7 +103,7 @@ export const pt = {
   kpi_coverage: "Evolução",
   kpi_streak: "Foco",
   kpi_time_hint: "{avg} por dia estudado",
-  kpi_time_terms: "Somando {count} editais · {time} neste",
+  kpi_time_terms: "{time} neste edital · {count} editais somados",
   term_current: "Edital atual",
   term_history: "Editais anteriores",
   term_label_fallback: "Edital {n}",

@@ -10,7 +10,7 @@ export const ja: PlanStrings = {
 
   badge_trial: "お試し · 残り{days}日",
   badge_trial_last_day: "お試し · 最終日",
-  badge_read_only: "閲覧のみ",
+  badge_read_only: "期限切れ",
 
   status_trial: "{date}まで、ウルトラの全機能を無料でお試しいただけます。",
   status_trial_ended: "無料お試しは{date}に終了しました。",

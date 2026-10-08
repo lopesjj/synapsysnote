@@ -105,7 +105,7 @@ export const es: StudyStrings = {
   kpi_coverage: "Evolución",
   kpi_streak: "Enfoque",
   kpi_time_hint: "{avg} por día estudiado",
-  kpi_time_terms: "Sumando {count} convocatorias · {time} en esta",
+  kpi_time_terms: "{time} en esta convocatoria · {count} convocatorias sumadas",
   term_current: "Convocatoria actual",
   term_history: "Convocatorias anteriores",
   term_label_fallback: "Convocatoria {n}",

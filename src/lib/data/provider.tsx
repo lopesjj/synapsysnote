@@ -91,6 +91,33 @@ function readLocalStore<T>(key: string, fallback: T): T {
   }
 }
 
+/**
+ * O que ja chegou do servidor nesta sessao, por conta. Trocar de idioma remonta
+ * o provedor (o idioma e um segmento da rota) e os initializers voltariam ao
+ * cache do localStorage, que guarda as notas sem corpo — a nota aberta piscava
+ * vazia ate o Firestore responder de novo. Daqui tudo volta inteiro e na hora.
+ */
+interface LiveWorkspace {
+  notebooks: Notebook[];
+  pages: Page[];
+  databases: AppDatabase[];
+  flashcards: Flashcard[];
+}
+
+const liveWorkspaces = new Map<string, Partial<LiveWorkspace>>();
+
+function rememberLive(userKey: string, patch: Partial<LiveWorkspace>) {
+  liveWorkspaces.set(userKey, { ...liveWorkspaces.get(userKey), ...patch });
+}
+
+function liveOr<K extends keyof LiveWorkspace>(
+  userKey: string,
+  field: K,
+  fallback: () => LiveWorkspace[K]
+): LiveWorkspace[K] {
+  return liveWorkspaces.get(userKey)?.[field] ?? fallback();
+}
+
 const pendingLocalWrites = new Map<string, { timer: ReturnType<typeof setTimeout>; value: () => unknown }>();
 export const SIGNED_OUT_EVENT = "synapsys:signed-out";
 
@@ -98,6 +125,7 @@ if (typeof window !== "undefined") {
   window.addEventListener(SIGNED_OUT_EVENT, () => {
     for (const pending of pendingLocalWrites.values()) clearTimeout(pending.timer);
     pendingLocalWrites.clear();
+    liveWorkspaces.clear();
   });
 }
 
@@ -160,16 +188,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const userKey = user?.uid ?? "default";
   const [notebooks, setNotebooks] = useState<Notebook[]>(() =>
-    readLocalStore<Notebook[]>(`synapsys.cache.notebooks.${userKey}`, [])
+    liveOr(userKey, "notebooks", () => readLocalStore<Notebook[]>(`synapsys.cache.notebooks.${userKey}`, []))
   );
   const [pages, setPages] = useState<Page[]>(() =>
-    readLocalStore<Page[]>(`synapsys.cache.pages.${userKey}`, [])
+    liveOr(userKey, "pages", () => readLocalStore<Page[]>(`synapsys.cache.pages.${userKey}`, []))
   );
   const [databases, setDatabases] = useState<AppDatabase[]>(() =>
-    readLocalStore<AppDatabase[]>(`synapsys.cache.databases.${userKey}`, [])
+    liveOr(userKey, "databases", () => readLocalStore<AppDatabase[]>(`synapsys.cache.databases.${userKey}`, []))
   );
   const [flashcards, setFlashcards] = useState<Flashcard[]>(() =>
-    readLocalStore<Flashcard[]>(`synapsys.cache.flashcards.${userKey}`, [])
+    liveOr(userKey, "flashcards", () => readLocalStore<Flashcard[]>(`synapsys.cache.flashcards.${userKey}`, []))
   );
   const [flashcardsAdapter, setFlashcardsAdapter] = useState<DataAdapter | null>(null);
   const [importJobs, setImportJobs] = useState<ImportJob[]>([]);
@@ -199,10 +227,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   if (cachedForKey !== userKey) {
     setCachedForKey(userKey);
     if (user?.uid) {
-      const cachedNbs = readLocalStore<Notebook[]>(`synapsys.cache.notebooks.${user.uid}`, []);
-      const cachedPgs = readLocalStore<Page[]>(`synapsys.cache.pages.${user.uid}`, []);
-      const cachedFcs = readLocalStore<Flashcard[]>(`synapsys.cache.flashcards.${user.uid}`, []);
-      const cachedDbs = readLocalStore<AppDatabase[]>(`synapsys.cache.databases.${user.uid}`, []);
+      const cachedNbs = liveOr(user.uid, "notebooks", () => readLocalStore<Notebook[]>(`synapsys.cache.notebooks.${user.uid}`, []));
+      const cachedPgs = liveOr(user.uid, "pages", () => readLocalStore<Page[]>(`synapsys.cache.pages.${user.uid}`, []));
+      const cachedFcs = liveOr(user.uid, "flashcards", () => readLocalStore<Flashcard[]>(`synapsys.cache.flashcards.${user.uid}`, []));
+      const cachedDbs = liveOr(user.uid, "databases", () => readLocalStore<AppDatabase[]>(`synapsys.cache.databases.${user.uid}`, []));
       // Cache vazio nao apaga o que ja esta em tela.
       if (cachedNbs.length > 0) setNotebooks(cachedNbs);
       if (cachedPgs.length > 0) setPages(cachedPgs);
@@ -240,12 +268,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         adapter.subscribeNotebooks((next) => {
           if (cancelled) return;
           recordGuardSnapshot(baseAdapter, { notebooks: next });
+          rememberLive(userKey, { notebooks: next });
           setNotebooks(next);
           writeLocalStore(`synapsys.cache.notebooks.${userKey}`, () => next);
         }, reportSyncError),
         adapter.subscribePages((next) => {
           if (cancelled) return;
           recordGuardSnapshot(baseAdapter, { pages: next });
+          rememberLive(userKey, { pages: next });
           setPages(next);
           setLoadedAdapter(adapter);
           writeLocalStore(`synapsys.cache.pages.${userKey}`, () => stripHeavyPageFields(next));
@@ -253,11 +283,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         adapter.subscribeDatabases((next) => {
           if (cancelled) return;
           recordGuardSnapshot(baseAdapter, { databases: next });
+          rememberLive(userKey, { databases: next });
           setDatabases(next);
           writeLocalStore(`synapsys.cache.databases.${userKey}`, () => next);
         }),
         adapter.subscribeFlashcards((next) => {
           if (cancelled) return;
+          rememberLive(userKey, { flashcards: next });
           setFlashcards(next);
           setFlashcardsAdapter(adapter);
           writeLocalStore(`synapsys.cache.flashcards.${userKey}`, () => stripHeavyFlashcardFields(next));

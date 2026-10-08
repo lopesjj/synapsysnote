@@ -17,7 +17,7 @@ import { cn, isMac } from "@/lib/utils";
 import { WorkspaceIcon } from "@/lib/icons/workspace-icon";
 import { useTranslation } from "@/lib/i18n/translations";
 import { resolveNoteCreationTarget, expandContainerInSession } from "@/lib/data/page-tree";
-import { isNestedNotebook } from "@/lib/data/notebook-tree";
+import { isNestedNotebook, notebookAncestors } from "@/lib/data/notebook-tree";
 import type { Notebook } from "@/types/models";
 import { OPEN_GATE, useGoalGates, usePlanGates } from "@/lib/plans/gates";
 import { notifyPlanError } from "@/lib/plans/client";
@@ -131,6 +131,29 @@ export function CommandPalette({
     [livePages]
   );
 
+  // Onde o item mora: a trilha de páginas e cadernos acima dele, e para uma
+  // nota também a nota-pai. Mesma leitura do Arquivo e da Lixeira.
+  const placeOf = useMemo(() => {
+    const trail = (notebookId: string | null | undefined): string[] =>
+      notebookId ? notebookAncestors(notebooks, notebookId).map((entry) => entry.name || t("untitled")) : [];
+    return {
+      notebook: (id: string) => trail(id).slice(0, -1).join(" › "),
+      page: (page: { notebookId?: string | null; parentPageId?: string | null }) => {
+        const parentPage = page.parentPageId ? pageMap.get(page.parentPageId) : null;
+        const names = trail(page.notebookId ?? parentPage?.notebookId ?? null);
+        if (parentPage) names.push(parentPage.title || t("untitled"));
+        return names.join(" › ");
+      },
+    };
+  }, [notebooks, pageMap, t]);
+
+  // Reabrir a busca começa do zero: o que foi digitado antes já levou a pessoa
+  // para algum lugar e não serve de ponto de partida para a próxima. Limpar na
+  // abertura, e não no fechamento, evita a lista piscar durante a saída.
+  useEffect(() => {
+    if (open) setQuery("");
+  }, [open]);
+
   const go = (href: string) => {
     onOpenChange(false);
     if (href.startsWith("/home/n/")) {
@@ -140,6 +163,8 @@ export function CommandPalette({
     if (href.startsWith("/home/p/")) {
       useUiStore.getState().closeMenu();
     }
+    // Sair do relógio para a tela escolhida: ele continua marcando, minimizado.
+    useStudyUi.getState().setTimerOpen(false);
     router.push(href);
   };
 
@@ -153,7 +178,7 @@ export function CommandPalette({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.14 }}
             onClick={() => onOpenChange(false)}
-            className="fixed inset-0 z-90 bg-black/50 backdrop-blur-[2px]"
+            className="fixed inset-0 z-[98] bg-black/50 backdrop-blur-[2px]"
           />
           <motion.div
             initial={{ opacity: 0, y: -10, scale: 0.985 }}
@@ -196,7 +221,8 @@ export function CommandPalette({
                       const nb = notebookMap.get(hit.id);
                       const isNested = nb ? isNestedNotebook(nb) : false;
                       const typeLabel = isNested ? t("notebook_count_singular") : t("page_singular");
-                      const subtitle = hit.snippet || typeLabel;
+                      const place = placeOf.notebook(hit.id);
+                      const subtitle = place || hit.snippet || typeLabel;
                       return (
                         <Command.Item
                           key={`hit-notebook-${hit.id}`}
@@ -207,7 +233,7 @@ export function CommandPalette({
                           <WorkspaceIcon icon={hit.icon ?? undefined} fallback={isNested ? "📁" : "📓"} size={14} />
                           <div className="min-w-0 flex-1">
                             <span className="block truncate text-[13px] font-medium text-ink">{hit.title}</span>
-                            <span className="block truncate text-[11.5px] text-muted capitalize">{subtitle}</span>
+                            <span className={cn("block truncate text-[11.5px] text-muted", subtitle === typeLabel && "capitalize")}>{subtitle}</span>
                           </div>
                         </Command.Item>
                       );
@@ -218,8 +244,7 @@ export function CommandPalette({
                 {query && pageHits.length ? (
                   <Command.Group heading={<GroupLabel>{t("notes")}</GroupLabel>}>
                     {pageHits.map((hit) => {
-                      const parentPage = hit.parentPageId ? pageMap.get(hit.parentPageId) : null;
-                      const parentNotebook = (hit.notebookId ? notebookMap.get(hit.notebookId) : null) ?? (parentPage?.notebookId ? notebookMap.get(parentPage.notebookId) : null);
+                      const place = placeOf.page(hit);
                       return (
                         <Command.Item
                           key={`hit-page-${hit.id}`}
@@ -229,28 +254,10 @@ export function CommandPalette({
                         >
                           <WorkspaceIcon icon={hit.icon ?? undefined} fallback="📄" size={14} />
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="truncate text-[13px] text-ink">{hit.title}</span>
-                              {(parentNotebook || parentPage) ? (
-                                <div className="flex shrink-0 items-center gap-1 text-[10px] text-muted">
-                                  {parentNotebook ? (
-                                    <span className="max-w-[120px] truncate rounded bg-[var(--surface-2)] px-1.5 py-0.5">
-                                      {parentNotebook.name}
-                                    </span>
-                                  ) : null}
-                                  {parentNotebook && parentPage ? (
-                                    <span className="text-[9px] text-faint">/</span>
-                                  ) : null}
-                                  {parentPage ? (
-                                    <span className="max-w-[130px] truncate rounded bg-[var(--surface-2)] px-1.5 py-0.5">
-                                      {parentPage.title || t("untitled")}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              ) : null}
-                            </div>
+                            <span className="block truncate text-[13px] text-ink">{hit.title || t("untitled")}</span>
+                            {place ? <span className="block truncate text-[11.5px] text-muted">{place}</span> : null}
                             {hit.snippet ? (
-                              <span className="block truncate text-[11.5px] text-muted">{hit.snippet}</span>
+                              <span className="block truncate text-[11.5px] text-faint">{hit.snippet}</span>
                             ) : null}
                           </div>
                         </Command.Item>
@@ -266,6 +273,7 @@ export function CommandPalette({
                         {recentNotebooks.map((notebook) => {
                           const isNested = isNestedNotebook(notebook);
                           const typeLabel = isNested ? t("notebook_count_singular") : t("page_singular");
+                          const subtitle = placeOf.notebook(notebook.id) || notebook.description || typeLabel;
                           return (
                             <Command.Item
                               key={notebook.id}
@@ -278,8 +286,8 @@ export function CommandPalette({
                                 <span className="block truncate text-[13px] text-ink">
                                   {notebook.name}
                                 </span>
-                                <span className="block truncate text-[11.5px] text-muted capitalize">
-                                  {notebook.description || typeLabel}
+                                <span className={cn("block truncate text-[11.5px] text-muted", subtitle === typeLabel && "capitalize")}>
+                                  {subtitle}
                                 </span>
                               </div>
                             </Command.Item>
@@ -289,17 +297,23 @@ export function CommandPalette({
                     ) : null}
 
                     <Command.Group heading={<GroupLabel>{t("recently_edited_notes")}</GroupLabel>}>
-                      {recents.map((page) => (
-                        <Command.Item
-                          key={page.id}
-                          value={`recent-${page.id}`}
-                          onSelect={() => go(`/home/p/${page.id}`)}
-                          className={itemClass}
-                        >
-                          <WorkspaceIcon icon={page.icon} fallback="📄" size={14} />
-                          <span className="flex-1 truncate text-[13px] text-ink">{page.title || t("untitled")}</span>
-                        </Command.Item>
-                      ))}
+                      {recents.map((page) => {
+                        const place = placeOf.page(page);
+                        return (
+                          <Command.Item
+                            key={page.id}
+                            value={`recent-${page.id}`}
+                            onSelect={() => go(`/home/p/${page.id}`)}
+                            className={itemClass}
+                          >
+                            <WorkspaceIcon icon={page.icon} fallback="📄" size={14} />
+                            <div className="min-w-0 flex-1">
+                              <span className="block truncate text-[13px] text-ink">{page.title || t("untitled")}</span>
+                              {place ? <span className="block truncate text-[11.5px] text-muted">{place}</span> : null}
+                            </div>
+                          </Command.Item>
+                        );
+                      })}
                     </Command.Group>
 
                     <Command.Group heading={<GroupLabel>{t("more_actions")}</GroupLabel>}>

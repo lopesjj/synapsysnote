@@ -105,7 +105,7 @@ export const fr: StudyStrings = {
   kpi_coverage: "Progression",
   kpi_streak: "Concentration",
   kpi_time_hint: "{avg} par jour étudié",
-  kpi_time_terms: "Sur {count} concours · {time} dans celui-ci",
+  kpi_time_terms: "{time} dans ce concours · {count} concours cumulés",
   term_current: "Concours actuel",
   term_history: "Concours précédents",
   term_label_fallback: "Concours {n}",

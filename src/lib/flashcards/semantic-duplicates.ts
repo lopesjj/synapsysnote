@@ -10,6 +10,13 @@ export interface SemanticFilterInput {
   existing: EmbeddableCard[];
   candidates: EmbeddableCard[];
   threshold?: number;
+  /**
+   * Corte usado entre os candidatos da mesma geração. Fica separado do corte
+   * contra os cards que já existem: repetir o que a pessoa tem é sempre erro,
+   * mas dois cards novos da mesma frase podem testar fatos diferentes e ambos
+   * valerem. Sem esse parâmetro vale o mesmo corte dos existentes.
+   */
+  internalThreshold?: number;
   timeBudgetMs?: number;
 }
 
@@ -233,6 +240,7 @@ export async function filterSemanticDuplicates(
   if (existing.length === 0 && candidates.length < 2) return fallback;
 
   const threshold = readThreshold(input.threshold);
+  const internalThreshold = Math.max(threshold, readThreshold(input.internalThreshold));
   const deadline = Date.now() + timeBudget;
 
   const candidateTexts = candidates.map(cardText);
@@ -275,7 +283,7 @@ export async function filterSemanticDuplicates(
     }
 
     for (const reference of keptVectors) {
-      if (cosineSimilarity(vector, reference) >= threshold) {
+      if (cosineSimilarity(vector, reference) >= internalThreshold) {
         keep[index] = false;
         duplicates += 1;
         duplicatesInternal += 1;

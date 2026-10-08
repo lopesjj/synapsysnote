@@ -10,7 +10,7 @@ export const ru: PlanStrings = {
 
   badge_trial: "Пробный · {days} {days|день|дня|дней}",
   badge_trial_last_day: "Пробный · последний день",
-  badge_read_only: "Только чтение",
+  badge_read_only: "Истёк",
 
   status_trial: "Бесплатный пробный период со всеми функциями тарифа Ультра до {date}.",
   status_trial_ended: "Ваш пробный период закончился {date}.",

@@ -8,7 +8,7 @@ export const pt = {
 
   badge_trial: "Teste · {days} {days|dia|dias}",
   badge_trial_last_day: "Teste · último dia",
-  badge_read_only: "Somente leitura",
+  badge_read_only: "Expirado",
 
   status_trial: "Teste gratuito com todos os recursos do Ultra até {date}.",
   status_trial_ended: "Seu teste gratuito terminou em {date}.",

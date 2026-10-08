@@ -105,7 +105,7 @@ export const it: StudyStrings = {
   kpi_coverage: "Progresso",
   kpi_streak: "Focus",
   kpi_time_hint: "{avg} per giorno di studio",
-  kpi_time_terms: "Su {count} bandi · {time} in questo",
+  kpi_time_terms: "{time} in questo bando · {count} bandi sommati",
   term_current: "Bando attuale",
   term_history: "Bandi precedenti",
   term_label_fallback: "Bando {n}",

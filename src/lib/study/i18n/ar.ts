@@ -105,7 +105,7 @@ export const ar: StudyStrings = {
   kpi_coverage: "التقدّم",
   kpi_streak: "التركيز",
   kpi_time_hint: "{avg} لكل يوم دراسة",
-  kpi_time_terms: "إجمالي {count} إعلانات · {time} في هذا",
+  kpi_time_terms: "{time} في هذا · إجمالي {count} إعلانات",
   term_current: "الإعلان الحالي",
   term_history: "الإعلانات السابقة",
   term_label_fallback: "إعلان {n}",

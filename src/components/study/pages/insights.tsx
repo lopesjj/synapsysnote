@@ -90,10 +90,11 @@ function InsightsBody() {
   const categoryLabel = useCategoryLabel();
   const study = useStudy();
   const { focusPlan, plans, sessions: allSessions, exams: allExams, subjects: allSubjects, settings, today } = study;
-  // Com mais de um edital, a tela pode ler a série inteira; o padrão é a série,
-  // para o histórico não sumir ao abrir um edital novo.
+  // A tela é do edital de agora: um edital novo abre zerado, e cada número aqui
+  // responde só pelo que foi feito nele. A série continua disponível no botão
+  // ao lado, para quem quiser olhar o histórico inteiro de propósito.
   const terms = useMemo(() => (focusPlan ? termsOf(plans, seriesIdOf(focusPlan)) : []), [focusPlan, plans]);
-  const [scope, setScope] = useState<"term" | "series">("series");
+  const [scope, setScope] = useState<"term" | "series">("term");
   const seriesScope = terms.length > 1 && scope === "series";
   const termIds = useMemo(() => new Set(terms.map((plan) => plan.id)), [terms]);
   const inScope = useCallback(
@@ -449,8 +450,8 @@ function InsightsBody() {
             }}
             ariaLabel={st("goal_terms_title")}
             options={[
-              { value: "series", label: st("insights_scope_series") },
               { value: "term", label: st("insights_scope_term") },
+              { value: "series", label: st("insights_scope_series") },
             ]}
           />
         ) : null}

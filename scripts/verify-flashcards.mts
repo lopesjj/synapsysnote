@@ -16,7 +16,7 @@ import {
   hasCardImage,
 } from "../src/lib/flashcards/card-images";
 import { buildDeckTree, flattenDecks, flattenNodes } from "../src/lib/flashcards/note-tree";
-import { cardSignature, hasDuplicate, isSameCard } from "../src/lib/flashcards/duplicate-cards";
+import { cardSignature, hasDuplicate, isInvertedPair, isSameCard } from "../src/lib/flashcards/duplicate-cards";
 import {
   cardText,
   cosineSimilarity,
@@ -27,6 +27,13 @@ import {
   extractComprehensiveNoteContent,
   resolveMediaUrl,
 } from "../src/lib/flashcards/extract-note-content";
+import {
+  buildExistingCardsBlock,
+  buildModeInstruction,
+  buildSweepInstruction,
+  buildSystemPrompt,
+  buildTopUpInstruction,
+} from "../src/lib/flashcards/generation-prompts";
 import type { Notebook, Page } from "../src/types/models";
 import type { Flashcard } from "../src/types/models";
 
@@ -224,8 +231,10 @@ async function runTests() {
   checkReminderSlot();
   checkAgreement();
   checkDuplicateCards();
+  checkInvertedPairs();
   await checkSemanticDuplicates();
   await checkExtractComprehensiveMedia();
+  checkGenerationPrompts();
 
   console.log("Flashcards verification passed successfully.");
 }
@@ -807,6 +816,161 @@ async function checkSemanticDuplicates() {
   } finally {
     restoreFailing();
   }
+}
+
+/**
+ * Par invertido: o mesmo fato lido de tras para frente. O modelo erra isso
+ * sozinho, e a varredura so ve as perguntas ja escritas, nunca as respostas —
+ * entao a trava precisa existir tambem fora do prompt.
+ */
+function checkInvertedPairs() {
+  const par = (fa: string, ba: string, fb: string, bb: string) =>
+    isInvertedPair(cardSignature(fa, ba), cardSignature(fb, bb));
+
+  // comando -> efeito e efeito -> comando
+  assert.equal(
+    par(
+      "O que acontece com o cache do resolvedor DNS apos a execucao do comando ipconfig /flushdns?",
+      "O cache e completamente limpo, forcando novas consultas externas.",
+      "Qual e o comando utilizado para limpar o cache DNS no Windows?",
+      "ipconfig /flushdns. Ele limpa o cache do resolvedor local."
+    ),
+    true
+  );
+  // sigla como resposta: "DHCP" tem 4 letras, mas carrega o assunto
+  assert.equal(
+    par("O que o DHCP faz na rede?", "Atribui enderecos IP automaticamente.", "Qual protocolo atribui enderecos IP automaticamente?", "DHCP."),
+    true
+  );
+  // numero -> o que ele mede, nos dois sentidos
+  assert.equal(
+    par("Quantos meses tem o estagio probatorio?", "36 meses.", "O que dura 36 meses no regime estatutario?", "O estagio probatorio."),
+    true
+  );
+
+  // Dois fatos distintos da mesma frase continuam valendo os dois cards: a
+  // trava nao pode comer a granularidade que o modo "maximo" existe para dar.
+  assert.equal(
+    par(
+      "Qual e o prazo para interpor recurso administrativo?",
+      "Dez dias contados da ciencia da decisao.",
+      "Qual efeito o recurso administrativo tem sobre a decisao?",
+      "Suspende os efeitos da decisao recorrida."
+    ),
+    false
+  );
+  // Formula e o significado de um termo dela sao complementares, nao invertidos
+  assert.equal(
+    par("Qual e a formula da pressao arterial media?", "PAM = debito cardiaco x resistencia vascular sistemica.", "O que significa RVS na formula da PAM?", "Resistencia vascular sistemica."),
+    false
+  );
+  // Palavra generica em comum nao pode casar assuntos diferentes
+  assert.equal(
+    par("Quantos dias dura o estagio probatorio?", "730 dias.", "Quantos dias tem o prazo recursal?", "10 dias."),
+    false
+  );
+  // Assuntos sem relacao que dividem um nome proprio
+  assert.equal(
+    par("Qual e a capital da Franca?", "Paris.", "Onde fica a sede da UNESCO?", "Em Paris, na Franca."),
+    false
+  );
+
+  // A trava entra no caminho normal de duplicatas, nao so na funcao isolada
+  assert.equal(
+    hasDuplicate(
+      [cardSignature("O que faz o comando chmod no Linux?", "Altera as permissoes de um arquivo.")],
+      cardSignature("Qual comando altera as permissoes de um arquivo no Linux?", "O comando chmod.")
+    ),
+    true
+  );
+}
+
+/**
+ * O que o modo "maximo" promete ao modelo. O inventario precisa sair na
+ * resposta: passo silencioso nao acontece, e era o que fazia a geracao resumir
+ * a nota em vez de percorre-la. A varredura precisa receber esse inventario de
+ * volta, senao ela so repete "procure o que faltou".
+ */
+function checkGenerationPrompts() {
+  const exhaustive = buildModeInstruction(null, 2, 5, false);
+  assert.match(exhaustive, /A CORRESPONDENCE IS ONE UNIT, NEVER TWO/);
+  assert.match(exhaustive, /never in the inventory: anything about the note/);
+  assert.match(exhaustive, /inversion check/i);
+  assert.match(exhaustive, /TASK — EXHAUSTIVE COVERAGE/);
+  assert.match(exhaustive, /FIELD 1 — "units"/);
+  assert.match(exhaustive, /FIELD 2 — "flashcards": ONE CARD PER UNIT/);
+  assert.match(exhaustive, /segment 2 of 5/);
+  assert.ok(!/TARGET COUNT/.test(exhaustive));
+
+  // A contagem tambem inventaria: so da para escolher os pontos mais
+  // importantes depois de ter listado todos. Sem isso ela devolvia menos do
+  // que o pedido numa nota que o modo "maximo" cobre com 80 cards.
+  const counted = buildModeInstruction(12, 1, 1, false);
+  assert.match(counted, /TARGET COUNT: 12 flashcards/);
+  assert.match(counted, /FIELD 1 — "units"/);
+  assert.match(counted, /RANK FIRST/);
+  assert.match(counted, /SPREAD ACROSS THE MATERIAL/);
+  assert.match(counted, /HIT THE COUNT/);
+  // Uma trava contra encher linguica, e um contrapeso contra parar cedo.
+  assert.match(counted, /Never pad by rephrasing/);
+  assert.match(counted, /Running out of "important enough" points is not a reason/);
+
+  const topUp = buildTopUpInstruction(5, ["prazo de 10 dias", "efeito suspensivo"], ["Qual o prazo?"]);
+  assert.match(topUp, /TASK — COMPLETE THE COUNT/);
+  assert.match(topUp, /short of what was requested/);
+  assert.match(topUp, /INVENTORY OF TEACHABLE UNITS/);
+  assert.match(topUp, /QUESTIONS ALREADY WRITTEN/);
+  assert.match(topUp, /rank lower and write the card/);
+  assert.equal(buildTopUpInstruction(1, [], []).includes("card short"), true);
+
+  const attachments = buildModeInstruction(null, 1, 1, true);
+  assert.match(attachments, /TASK — ATTACHMENTS PASS/);
+  assert.match(attachments, /FIELD 1 — "units"/);
+
+  const sweep = buildSweepInstruction(
+    ["prazo de 10 dias", "efeito suspensivo", "excecao da liminar"],
+    ["Qual o prazo para interpor recurso?"],
+    2,
+    5
+  );
+  assert.match(sweep, /TASK — COVERAGE SWEEP/);
+  assert.match(sweep, /INVENTORY OF TEACHABLE UNITS/);
+  assert.match(sweep, /1\. prazo de 10 dias/);
+  assert.match(sweep, /3\. excecao da liminar/);
+  assert.match(sweep, /QUESTIONS ALREADY WRITTEN/);
+  assert.match(sweep, /1\. Qual o prazo para interpor recurso\?/);
+
+  // Sem inventario (resposta sem o campo) a varredura ainda funciona pelas
+  // perguntas ja feitas, em vez de mandar um bloco vazio.
+  const sweepWithoutUnits = buildSweepInstruction([], ["Qual o prazo?"], 1, 1);
+  assert.ok(!/INVENTORY OF TEACHABLE UNITS/.test(sweepWithoutUnits));
+  assert.match(sweepWithoutUnits, /QUESTIONS ALREADY WRITTEN/);
+
+  // Cards que ja existem: nunca repetir nos dois modos; o que muda e a postura
+  // diante de um ponto ja coberto.
+  const owned = [{ front: "O que e SOAP?", back: "Protocolo em XML." }];
+  const blockCounted = buildExistingCardsBlock(owned, false);
+  const blockExhaustive = buildExistingCardsBlock(owned, true);
+  for (const block of [blockCounted, blockExhaustive]) {
+    assert.match(block, /NEVER REPEAT THEM/);
+    assert.match(block, /O que e SOAP\?/);
+  }
+  assert.match(blockCounted, /go further down your ranking and fill the requested count/);
+  assert.match(blockExhaustive, /a point to SKIP, not a reason to stop/);
+  assert.equal(buildExistingCardsBlock([], true), "");
+
+  // O foco e um filtro do usuario, mas no modo "maximo" ele ordena em vez de
+  // recortar: recortar ali seria deixar o resto da nota sem card.
+  const focusExhaustive = buildSystemPrompt("English", "formulas", "", true);
+  const focusCounted = buildSystemPrompt("English", "formulas", "", false);
+  assert.match(focusExhaustive, /does NOT narrow the coverage/);
+  assert.match(focusCounted, /when selecting and ordering the cards/);
+  assert.ok(!/does NOT narrow the coverage/.test(focusCounted));
+  for (const prompt of [focusExhaustive, focusCounted]) {
+    assert.match(prompt, /NO REDUNDANCY — AND NO LOSS OF DETAIL/);
+    assert.match(prompt, /MUST be in English/);
+  }
+  assert.ok(!/USER FOCUS/.test(buildSystemPrompt("English", "", "", true)));
 }
 
 runTests().catch((err) => {

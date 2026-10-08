@@ -60,6 +60,11 @@ function persist(backendKey: string, collections: Partial<Record<StudyCollection
 
 export function readStudyCache(backendKey: string): Partial<Record<StudyCollection, StudyDoc[]>> | null {
   if (typeof window === "undefined" || !backendKey) return null;
+  // Trocar de idioma remonta o provedor (o idioma é um segmento da rota). O que
+  // já foi carregado nesta sessão volta daqui inteiro e na hora, sem releitura
+  // do localStorage — que guarda uma versão enxuta — nem espera pelo Firestore.
+  const live = memory.get(backendKey);
+  if (live && complete(live)) return { ...live };
   try {
     const raw = window.localStorage.getItem(PREFIX + backendKey);
     if (!raw) return null;

@@ -45,7 +45,13 @@ export function PlanSync() {
       return;
     }
 
-    const cached = readCachedPlan(uid);
+    // Trocar de idioma remonta este componente (o idioma e um segmento da rota),
+    // e o efeito roda de novo com a mesma conta. Zerar o registro aqui abriria
+    // uma janela em que a conta vencida volta a parecer gravavel ate a resposta
+    // chegar — tempo suficiente para tarjas e botoes bloqueados piscarem.
+    const previous = usePlanStore.getState();
+    const kept = previous.uid === uid && !previous.guest ? previous.record : null;
+    const cached = readCachedPlan(uid) ?? kept;
     usePlanStore.setState({ uid, guest: false, record: cached, loaded: Boolean(cached) });
 
     let cancelled = false;

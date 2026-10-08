@@ -105,7 +105,7 @@ export const en: StudyStrings = {
   kpi_coverage: "Progress",
   kpi_streak: "Focus",
   kpi_time_hint: "{avg} per study day",
-  kpi_time_terms: "Across {count} terms · {time} in this one",
+  kpi_time_terms: "{time} in this term · {count} terms combined",
   term_current: "Current term",
   term_history: "Previous terms",
   term_label_fallback: "Term {n}",

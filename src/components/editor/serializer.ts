@@ -584,10 +584,17 @@ export function blocksSignature(blocks: AppBlock[]): string {
   );
 }
 
+/**
+ * `skipMedia` devolve só o que a pessoa escreveu: sem o rótulo do bloco de
+ * mídia, sem o nome do arquivo e sem a transcrição embutida. Quem pede isso é a
+ * geração de flashcards — ali "Arquivo de áudio" não é matéria de estudo (virava
+ * card sobre a nota ter um áudio) e a transcrição já viaja na seção dela.
+ */
 export function blocksToPlainText(
   blocks: AppBlock[],
   audioFileLabel = "Arquivo de Áudio",
-  videoFileLabel = "Arquivo de vídeo"
+  videoFileLabel = "Arquivo de vídeo",
+  { skipMedia = false }: { skipMedia?: boolean } = {}
 ): string {
   const out: string[] = [];
   const walk = (list: AppBlock[]) => {
@@ -600,7 +607,7 @@ export function blocksToPlainText(
 
       if (isVideo) {
         const transcript = block.media?.transcript?.trim();
-        out.push(transcript || videoFileLabel);
+        if (!skipMedia) out.push(transcript || videoFileLabel);
         if (block.children?.length) walk(block.children);
         continue;
       }
@@ -613,7 +620,7 @@ export function blocksToPlainText(
 
       if (isAudio) {
         const transcript = block.media?.transcript?.trim();
-        out.push(transcript || audioFileLabel);
+        if (!skipMedia) out.push(transcript || audioFileLabel);
         if (block.children?.length) walk(block.children);
         continue;
       }
@@ -627,7 +634,7 @@ export function blocksToPlainText(
             .join("\n")
         );
       }
-      if (block.media?.name && block.type !== "image" && block.type !== "video") {
+      if (!skipMedia && block.media?.name && block.type !== "image" && block.type !== "video") {
         out.push(block.media.name);
       }
       if (block.children?.length) walk(block.children);

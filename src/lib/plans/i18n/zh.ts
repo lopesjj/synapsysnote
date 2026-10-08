@@ -10,7 +10,7 @@ export const zh: PlanStrings = {
 
   badge_trial: "试用 · 剩 {days} 天",
   badge_trial_last_day: "试用 · 最后一天",
-  badge_read_only: "只读",
+  badge_read_only: "已到期",
 
   status_trial: "免费试用旗舰版全部功能，至 {date} 止。",
   status_trial_ended: "你的免费试用已于 {date} 结束。",

@@ -88,7 +88,18 @@ export function KpiBand({ className, pace = false }: { className?: string; pace?
         label={st("kpi_time")}
         hint={
           metrics.seriesTotal
-            ? st("kpi_time_terms", { count: metrics.seriesTotal.terms, time: duration(metrics.seconds) })
+            ? // O número grande é a série inteira; o do edital de agora vem logo
+              // abaixo, em tinta cheia, para não se perder no meio da frase.
+              studyTranslateParts(
+                language,
+                "kpi_time_terms",
+                { count: metrics.seriesTotal.terms, time: duration(metrics.seconds) },
+                {
+                  time: (
+                    <span className="font-semibold tabular-nums text-ink">{duration(metrics.seconds)}</span>
+                  ),
+                }
+              )
             : metrics.avgPerDay
               ? st("kpi_time_hint", { avg: duration(metrics.avgPerDay) })
               : undefined
@@ -738,7 +749,15 @@ export function WeekChartPanel() {
       emphasis: day === today ? true : undefined,
       tooltip: (
         <span className="block">
-          <span className="block font-medium">{formatDay(day, locale, { weekday: "long", day: "numeric", month: "short" })}</span>
+          <span className="block font-medium">
+            {formatDay(
+              day,
+              locale,
+              day.slice(0, 4) === today.slice(0, 4)
+                ? { weekday: "long", day: "numeric", month: "short" }
+                : { weekday: "long", day: "numeric", month: "short", year: "numeric" }
+            )}
+          </span>
           <span className="block text-muted">
             {metric === "time"
               ? duration(seconds)
@@ -754,7 +773,7 @@ export function WeekChartPanel() {
       title={st("week_chart_title")}
       description={
         <>
-          <span className="block">{formatDay(start, locale)} – {formatDay(end, locale)}</span>
+          <span className="block">{st("pace_range", dayRangeLabel(start, end, locale))}</span>
           <span className="block">{st("week_chart_total", { value: metric === "time" ? duration(totalValue * 3600) : formatNumber(totalValue, language) })}</span>
         </>
       }

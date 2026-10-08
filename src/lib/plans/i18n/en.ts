@@ -10,7 +10,7 @@ export const en: PlanStrings = {
 
   badge_trial: "Trial · {days} {days|day|days}",
   badge_trial_last_day: "Trial · last day",
-  badge_read_only: "Read-only",
+  badge_read_only: "Expired",
 
   status_trial: "Free trial with every Ultra feature until {date}.",
   status_trial_ended: "Your free trial ended on {date}.",
