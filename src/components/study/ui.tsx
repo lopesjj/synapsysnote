@@ -24,7 +24,7 @@ import { DisciplinesIcon } from "@/lib/icons/study-icons";
 import { WorkspaceIcon, isIconUrl } from "@/lib/icons/workspace-icon";
 import { cn } from "@/lib/utils";
 import { useStudy, type StudyActions } from "@/lib/study/provider";
-import { useStudyT, type StudyKey } from "@/lib/study/i18n";
+import { useStudyDictionaryReady, useStudyT, type StudyKey } from "@/lib/study/i18n";
 import { useStudyUi } from "@/lib/study/ui-store";
 import { useLiveNote, useMaterialNote, useReviewMaterial } from "@/lib/study/hooks";
 import { currentTerm, isPastTerm, seriesIdOf } from "@/lib/study/series";
@@ -749,7 +749,10 @@ export function NoGoalState({ title }: { title: string }) {
 
 export function StudyGate({ title, children }: { title: string; children: ReactNode }) {
   const { ready, focusPlan } = useStudy();
-  if (!ready) return <StudyLoading />;
+  // O dicionário do idioma chega em pedaço próprio. Sem esperar por ele, a
+  // primeira pintura sairia em português para quem usa outro idioma.
+  const wordsReady = useStudyDictionaryReady();
+  if (!ready || !wordsReady) return <StudyLoading />;
   if (!focusPlan) return <NoGoalState title={title} />;
   return <>{children}</>;
 }

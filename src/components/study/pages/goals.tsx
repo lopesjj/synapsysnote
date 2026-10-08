@@ -7,7 +7,7 @@ import { Link, useRouter } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { cn } from "@/lib/utils";
-import { useStudy } from "@/lib/study/provider";
+import { useArchivedPlans, useStudy } from "@/lib/study/provider";
 import { useStudyT } from "@/lib/study/i18n";
 import { useStudyUi } from "@/lib/study/ui-store";
 import { compareDay, diffDays, formatDay } from "@/lib/study/dates";
@@ -457,6 +457,9 @@ function ArchivedGoals({
   const unarchiveGate = useGoalGates().unarchive;
   const open = useStudyUi((state) => state.goalsArchivedOpen);
   const setOpen = useStudyUi((state) => state.setGoalsArchivedOpen);
+  // Os números de cada arquivado saem do histórico dele, que só é lido quando a
+  // gaveta abre — fechada, ela não custa leitura nenhuma.
+  const loadingArchive = useArchivedPlans(useMemo(() => (open ? plans.map((plan) => plan.id) : []), [open, plans]));
   const reactivate = async (plan: StudyPlan) => {
     await actions.archivePlan(plan.id, false);
     toast.success(st("goal_unarchived"));
@@ -480,7 +483,9 @@ function ArchivedGoals({
             const meta = [
               plan.examDate ? formatDay(plan.examDate, locale, { day: "numeric", month: "short", year: "numeric" }) : "",
               summary?.coverage.total ? st("kpi_coverage_hint", { done: summary.coverage.done, total: summary.coverage.total }) : "",
-              summary?.seconds ? st("goal_hours_studied", { value: duration(summary.seconds) }) : "",
+              // Enquanto o histórico não chega, um traço em vez de um número que
+              // ainda não é verdade.
+              summary?.seconds ? st("goal_hours_studied", { value: duration(summary.seconds) }) : loadingArchive ? "–" : "",
             ].filter(Boolean);
             return (
               <li

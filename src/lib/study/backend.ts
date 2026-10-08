@@ -4,10 +4,14 @@ import {
   collection,
   doc,
   getDocFromCache,
+  getDocs,
   onSnapshot,
-  runTransaction,
+  query,
+  where,
   writeBatch,
+  runTransaction,
   type DocumentData,
+  type Query,
 } from "firebase/firestore";
 import { nanoid } from "nanoid";
 import { getDb } from "@/lib/firebase/client";
@@ -28,6 +32,26 @@ export type StudyCollection = (typeof STUDY_COLLECTIONS)[number];
 
 export type StudyDoc = Record<string, unknown> & { id: string };
 
+/**
+ * Coleções grandes o bastante para não serem lidas inteiras: tudo nelas pertence
+ * a um objetivo, então a assinatura cobre só os objetivos abertos. O histórico
+ * dos arquivados entra por `fetch`, quando a pessoa abre o arquivo.
+ */
+export const SCOPED_COLLECTIONS = ["study_sessions", "study_reviews", "study_exams"] as const;
+
+export type ScopedCollection = (typeof SCOPED_COLLECTIONS)[number];
+
+export function isScopedCollection(name: StudyCollection): name is ScopedCollection {
+  return (SCOPED_COLLECTIONS as readonly string[]).includes(name);
+}
+
+/**
+ * Teto do operador `in` do Firestore. Os planos limitam objetivos abertos a 5,
+ * mas a conta do proprietário é ilimitada: acima do teto a assinatura volta a
+ * ser da coleção inteira, que é o comportamento correto, só mais caro.
+ */
+export const MAX_SCOPE_IDS = 30;
+
 export interface TransformResult {
   merge?: Record<string, unknown> | null;
   also?: PlainWrite[];
@@ -44,11 +68,18 @@ export type StudyWrite =
 
 export interface StudyBackend {
   readonly key: string;
+  /**
+   * `planIds` restringe a assinatura aos documentos desses objetivos. `null`
+   * assina a coleção inteira; uma lista vazia não lê nada.
+   */
   subscribe(
     collection: StudyCollection,
     cb: (docs: StudyDoc[]) => void,
-    onError?: (error: Error) => void
+    onError?: (error: Error) => void,
+    planIds?: readonly string[] | null
   ): () => void;
+  /** Leitura única dos documentos de um objetivo, sem deixar assinatura aberta. */
+  fetch(collection: ScopedCollection, planId: string): Promise<StudyDoc[]>;
   commit(writes: StudyWrite[]): Promise<void>;
   newId(): string;
 }
@@ -81,14 +112,43 @@ class FirestoreStudyBackend implements StudyBackend {
     return collection(getDb(), "workspaces", this.workspaceId, name);
   }
 
-  subscribe(name: StudyCollection, cb: (docs: StudyDoc[]) => void, onError?: (error: Error) => void) {
+  /**
+   * `planId in [...]` é filtro de campo único: o índice automático do Firestore
+   * já atende, nenhum índice composto precisa ser criado.
+   */
+  private scoped(name: StudyCollection, planIds: readonly string[] | null | undefined): Query<DocumentData> | null {
+    const base = this.col(name);
+    if (planIds == null) return base;
+    if (!planIds.length) return null;
+    if (planIds.length > MAX_SCOPE_IDS) return base;
+    return query(base, where("planId", "in", [...planIds]));
+  }
+
+  subscribe(
+    name: StudyCollection,
+    cb: (docs: StudyDoc[]) => void,
+    onError?: (error: Error) => void,
+    planIds?: readonly string[] | null
+  ) {
+    const target = this.scoped(name, planIds);
+    if (!target) {
+      // Nenhum objetivo aberto: nada a ler, mas o provedor precisa saber que a
+      // coleção chegou — senão a tela fica presa no carregando.
+      queueMicrotask(() => cb([]));
+      return () => {};
+    }
     return onSnapshot(
-      this.col(name),
+      target,
       (snap) => {
         cb(snap.docs.map((entry) => ({ ...(entry.data() as DocumentData), id: entry.id })));
       },
       (error) => onError?.(error)
     );
+  }
+
+  async fetch(name: ScopedCollection, planId: string): Promise<StudyDoc[]> {
+    const snap = await getDocs(query(this.col(name), where("planId", "==", planId)));
+    return snap.docs.map((entry) => ({ ...(entry.data() as DocumentData), id: entry.id }));
   }
 
   private async batched(writes: PlainWrite[]): Promise<void> {
@@ -166,7 +226,8 @@ class FirestoreStudyBackend implements StudyBackend {
   }
 }
 
-type Listener = (docs: StudyDoc[]) => void;
+/** Cada inscrito recorta o próprio escopo, então o aviso não carrega documentos. */
+type Notify = () => void;
 
 function deepMerge(target: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...target };
@@ -191,7 +252,7 @@ function deepMerge(target: Record<string, unknown>, patch: Record<string, unknow
 class LocalStudyBackend implements StudyBackend {
   readonly key = "local";
   private cache = new Map<StudyCollection, Map<string, StudyDoc>>();
-  private listeners = new Map<StudyCollection, Set<Listener>>();
+  private listeners = new Map<StudyCollection, Set<Notify>>();
 
   private storageKey(name: StudyCollection) {
     return `synapsys.study.local.${name}`;
@@ -220,22 +281,39 @@ class LocalStudyBackend implements StudyBackend {
   }
 
   private emit(name: StudyCollection) {
-    const docs = [...this.load(name).values()].map((entry) => ({ ...entry }));
-    for (const listener of this.listeners.get(name) ?? []) listener(docs);
+    for (const listener of [...(this.listeners.get(name) ?? [])]) listener();
   }
 
-  subscribe(name: StudyCollection, cb: Listener) {
+  private snapshotOf(name: StudyCollection, planIds?: readonly string[] | null): StudyDoc[] {
+    const docs = [...this.load(name).values()].map((entry) => ({ ...entry }));
+    if (planIds == null) return docs;
+    const allowed = new Set(planIds);
+    return docs.filter((entry) => allowed.has(String(entry.planId ?? "")));
+  }
+
+  subscribe(
+    name: StudyCollection,
+    cb: (docs: StudyDoc[]) => void,
+    _onError?: (error: Error) => void,
+    planIds?: readonly string[] | null
+  ) {
+    // O filtro vale também aqui: o modo convidado precisa mostrar exatamente o
+    // mesmo recorte que o Firestore, senão o que se vê muda com o backend.
+    const emitScoped: Notify = () => cb(this.snapshotOf(name, planIds));
     let set = this.listeners.get(name);
     if (!set) {
       set = new Set();
       this.listeners.set(name, set);
     }
-    set.add(cb);
-    const docs = [...this.load(name).values()].map((entry) => ({ ...entry }));
-    queueMicrotask(() => cb(docs));
+    set.add(emitScoped);
+    queueMicrotask(() => cb(this.snapshotOf(name, planIds)));
     return () => {
-      set?.delete(cb);
+      set?.delete(emitScoped);
     };
+  }
+
+  async fetch(name: ScopedCollection, planId: string): Promise<StudyDoc[]> {
+    return this.snapshotOf(name, [planId]);
   }
 
   async commit(writes: StudyWrite[]): Promise<void> {

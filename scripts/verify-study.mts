@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { linesFromText, mergeDrafts, parseSyllabus, subjectsFromCsv, topicListFromText, smartTitle } from "../src/lib/study/syllabus";
 import { pickUnseen, quoteFitsTheme, type RemoteMotto } from "../src/lib/study/mottos";
-import { STUDY_DICTIONARIES } from "../src/lib/study/i18n/dictionaries";
+import { STUDY_DICTIONARIES } from "../src/lib/study/i18n/dictionaries.all";
 import { SUPPORTED_LANGUAGES } from "../src/lib/i18n/languages";
 import { formatTranslation } from "../src/lib/i18n/translations";
 import {
@@ -63,6 +65,8 @@ import { normalizeSettings } from "../src/lib/study/defaults";
 import { cleanForStorage, studyBackendFor } from "../src/lib/study/backend";
 import { buildNoteDirectory, materialNoteId, searchNotes } from "../src/lib/study/material";
 import { bucketReviews, reviewForecast, reviewPunctuality, reviewStages } from "../src/lib/study/review-queue";
+import { archiveTargets, focusPlanOf, mergeArchive, requestedArchiveIds } from "../src/lib/study/archive";
+import { studyBackendFor } from "../src/lib/study/backend";
 import type { DayKey, StudyCycle, StudyPlan, StudyReview, StudySession } from "../src/types/study";
 
 const sample = [
@@ -234,6 +238,35 @@ assert.deepEqual(merged.drafts.map((draft) => [draft.name, draft.topics.map((top
   ["Língua Portuguesa", ["Crase"]],
 ]);
 assert.ok(merged.drafts[1].color && merged.drafts[1].color !== "#111111");
+
+// Só o idioma em uso deve ir para o navegador. `dictionaries.all` junta os dez
+// e existe para esta varredura: se o app importar, os dez voltam para o pacote
+// do layout — ou seja, para toda página, inclusive as de notas.
+{
+  const roots = ["src"];
+  const offenders: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!/\.(ts|tsx)$/.test(entry.name)) continue;
+      const text = readFileSync(full, "utf8");
+      if (/from\s+["'][^"']*dictionaries\.all["']/.test(text)) offenders.push(full);
+      // O carregador tem de ser dinâmico: um `import` estático de outro idioma
+      // em dictionaries.ts anula a divisão.
+      if (full.endsWith(join("study", "i18n", "dictionaries.ts"))) {
+        const statics = [...text.matchAll(/^import\s+\{[^}]*\}\s+from\s+"\.\/([a-z]{2})"/gm)].map((match) => match[1]);
+        for (const code of statics) if (code !== "pt") offenders.push(`${full} (import estático de ${code})`);
+      }
+    }
+  };
+  for (const root of roots) walk(root);
+  assert.deepEqual(offenders, [], `dicionários de estudo carregados por inteiro no app: ${offenders.join(", ")}`);
+}
+console.log("verify-study: dicionários divididos por idioma ok");
 
 const reference = STUDY_DICTIONARIES.pt;
 const simpleParams = (text: string) => new Set([...text.matchAll(/\{([A-Za-z0-9_]+)\}/g)].map((match) => match[1]));
@@ -1098,3 +1131,133 @@ console.log("verify-study: terms ok");
 
 console.log("verify-study: review queue ok");
 
+
+// --- Histórico arquivado fora da assinatura ---------------------------------
+// Registros, revisões e simulados de objetivo arquivado não são assinados: eles
+// são lidos sob demanda e juntados ao que está em memória. Estas checagens
+// fixam quem é buscado, o que entra na junção e o que nunca pode duplicar.
+
+const planOf = (id: string, over: Partial<StudyPlan> = {}): StudyPlan => ({
+  id,
+  name: id,
+  institution: "",
+  role: "",
+  examDate: null,
+  icon: null,
+  notes: "",
+  archived: false,
+  weeklyGoalMinutes: 0,
+  weeklyGoalQuestions: 0,
+  order: 0,
+  seriesId: id,
+  termLabel: "",
+  startDay: null,
+  createdAt: 0,
+  updatedAt: 0,
+  ...over,
+});
+
+{
+  const open = planOf("aberto");
+  const arquivado = planOf("arquivado", { archived: true });
+  const plans = [open, arquivado];
+
+  // Objetivo em foco: o ativo; navegar no arquivo troca o foco para o arquivado.
+  assert.equal(focusPlanOf(plans, "aberto", null)?.id, "aberto");
+  assert.equal(focusPlanOf(plans, "aberto", "arquivado")?.id, "arquivado");
+  // Só objetivo realmente arquivado pode ser navegado como arquivo.
+  assert.equal(focusPlanOf(plans, "aberto", "aberto")?.id, "aberto");
+  // Sem ativo marcado, vale o primeiro aberto — nunca um arquivado.
+  assert.equal(focusPlanOf(plans, null, null)?.id, "aberto");
+  assert.equal(focusPlanOf([arquivado], null, null), null);
+
+  // Objetivo arquivado solto não é buscado sem alguém pedir.
+  assert.deepEqual(archiveTargets(plans, open, null), []);
+  // Navegar nele busca.
+  assert.deepEqual(archiveTargets(plans, arquivado, "arquivado"), ["arquivado"]);
+}
+
+{
+  // Série de editais: o anterior fica arquivado e o tempo total soma os dois,
+  // então o histórico dele precisa vir mesmo sem ninguém abrir o arquivo.
+  const antigo = planOf("edital1", { archived: true, seriesId: "serie" });
+  const atual = planOf("edital2", { seriesId: "serie", createdAt: 10 });
+  const outro = planOf("outro", { archived: true, seriesId: "outro" });
+  const plans = [antigo, atual, outro];
+  assert.deepEqual(archiveTargets(plans, atual, null), ["edital1"]);
+  // O objetivo arquivado de outra série continua de fora.
+  assert.ok(!archiveTargets(plans, atual, null).includes("outro"));
+  // O próprio edital em foco nunca entra na lista de busca.
+  assert.ok(!archiveTargets(plans, antigo, "edital1").includes("edital2"));
+}
+
+{
+  const sessionAt = (id: string, day: DayKey, createdAt = 0): StudySession => ({ ...session({ id, day }), createdAt });
+  const live = {
+    sessions: [sessionAt("viva", "2026-03-02")],
+    reviews: [] as StudyReview[],
+    exams: [] as MockExam[],
+  };
+  const slice = {
+    sessions: [sessionAt("velha", "2021-05-01"), sessionAt("viva", "2026-03-02")],
+    reviews: [] as StudyReview[],
+    exams: [] as MockExam[],
+  };
+
+  // Sem histórico pedido, o estado passa intacto (mesma referência).
+  assert.equal(mergeArchive(live, []), live);
+
+  const merged = mergeArchive(live, [slice]);
+  // O id manda: a sessão que já veio pela assinatura não aparece duas vezes.
+  assert.equal(merged.sessions.filter((entry) => entry.id === "viva").length, 1);
+  assert.equal(merged.sessions.length, 2);
+  // E a ordem do diário (mais recente primeiro) vale para o conjunto todo.
+  assert.deepEqual(merged.sessions.map((entry) => entry.id), ["viva", "velha"]);
+  // A junção não altera o que estava em memória.
+  assert.equal(live.sessions.length, 1);
+}
+console.log("verify-study: histórico arquivado sob demanda ok");
+
+// --- Escopo da assinatura (vale igual no modo convidado) ---------------------
+// O backend local espelha o recorte do Firestore: o que a tela mostra não pode
+// mudar conforme o backend. Lista vazia precisa avisar mesmo assim, senão o
+// módulo fica preso no carregando quando não há objetivo aberto.
+{
+  const backend = studyBackendFor("local", "verify");
+  await backend.commit([
+    { kind: "set", collection: "study_sessions", id: "s1", data: { planId: "A", day: "2026-01-01" } },
+    { kind: "set", collection: "study_sessions", id: "s2", data: { planId: "B", day: "2026-01-02" } },
+  ]);
+  const read = async (planIds: readonly string[] | null) => {
+    const seen: string[][] = [];
+    const stop = backend.subscribe("study_sessions", (docs) => seen.push(docs.map((doc) => doc.id)), undefined, planIds);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    stop();
+    return seen;
+  };
+  assert.deepEqual(await read(["A"]), [["s1"]], "assinatura com escopo traz só o objetivo pedido");
+  // O backend local é um só no processo: outras checagens já gravaram nele, e o
+  // que importa aqui é que sem escopo nada é filtrado.
+  const [unscoped] = await read(null);
+  assert.ok(unscoped.includes("s1") && unscoped.includes("s2"), "sem escopo, a coleção inteira");
+  assert.ok(unscoped.length > 2, "sem escopo, nada é filtrado");
+  assert.deepEqual(await read([]), [[]], "sem objetivo aberto, avisa vazio em vez de nunca avisar");
+  assert.deepEqual((await backend.fetch("study_sessions", "B")).map((doc) => doc.id), ["s2"]);
+  await backend.commit([
+    { kind: "delete", collection: "study_sessions", id: "s1" },
+    { kind: "delete", collection: "study_sessions", id: "s2" },
+  ]);
+}
+console.log("verify-study: escopo das assinaturas ok");
+
+// Pedido de histórico arquivado por tela: sair da tela libera. Sem isso, abrir
+// a gaveta de arquivados uma vez deixaria o histórico inteiro sendo juntado e
+// reordenado a cada snapshot pelo resto da sessão.
+{
+  assert.deepEqual(requestedArchiveIds({}), []);
+  assert.deepEqual(requestedArchiveIds({ gaveta: ["b", "a"], detalhe: ["a", "c"] }), ["a", "b", "c"]);
+  // Tela que saiu apaga o próprio registro e some da união.
+  assert.deepEqual(requestedArchiveIds({ gaveta: [], detalhe: ["a"] }), ["a"]);
+  assert.deepEqual(requestedArchiveIds({ gaveta: [] }), []);
+}
+console.log("verify-study: pedidos de arquivo liberáveis ok");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useWorkspace } from "@/lib/data/provider";
 import { useStudy } from "./provider";
 import { materialNoteId, type MaterialTarget } from "./material";
@@ -58,7 +58,13 @@ export function useReviewMaterial() {
   );
 }
 
-export function usePlanMetrics() {
+/**
+ * Varre o histórico do objetivo inteiro: agregados, dias estudados, sequência,
+ * consistência, cobertura e as somas da semana. É caro — cada passagem percorre
+ * todos os registros — então roda uma vez só, no `StudyMetricsProvider`, e as
+ * telas leem o resultado por `usePlanMetrics`.
+ */
+function usePlanMetricsValue() {
   const { focusPlan, plans, sessions, exams, planSessions, planExams, planSubjects, planReviews, settings, today } = useStudy();
   const series = focusPlan ? seriesIdOf(focusPlan) : null;
   // A série atravessa a medida do tempo e a dos dias: o calendário de check-ins
@@ -130,9 +136,8 @@ export function usePlanMetrics() {
   }, [focusPlan, planExams, planReviews, planSessions, planSubjects, seriesExams, seriesSessions, seriesTotal, settings.studyWeekdays, settings.weekStartsOn, terms, today]);
 }
 
-export function useAwardBook(): AwardBook | null {
+function useAwardBookValue(metrics: PlanMetrics): AwardBook | null {
   const { focusPlan, planSubjects, settings, today } = useStudy();
-  const metrics = usePlanMetrics();
   return useMemo(
     () =>
       focusPlan
@@ -150,6 +155,41 @@ export function useAwardBook(): AwardBook | null {
         : null,
     [focusPlan, metrics.days, metrics.streak, metrics.window, planSubjects, settings.claimedAwards, settings.studyWeekdays, settings.timeZone, today]
   );
+}
+
+export type PlanMetrics = ReturnType<typeof usePlanMetricsValue>;
+
+interface StudyMetricsValue {
+  metrics: PlanMetrics;
+  awards: AwardBook | null;
+}
+
+const StudyMetricsContext = createContext<StudyMetricsValue | null>(null);
+
+/**
+ * Calcula as métricas do objetivo em foco uma vez por mudança nos dados. Antes
+ * disto cada painel do Panorama refazia a conta por conta própria — uma dúzia
+ * de varreduras do histórico inteiro a cada render.
+ */
+export function StudyMetricsProvider({ children }: { children: ReactNode }) {
+  const metrics = usePlanMetricsValue();
+  const awards = useAwardBookValue(metrics);
+  const value = useMemo<StudyMetricsValue>(() => ({ metrics, awards }), [awards, metrics]);
+  return createElement(StudyMetricsContext.Provider, { value }, children);
+}
+
+function useStudyMetrics(): StudyMetricsValue {
+  const value = useContext(StudyMetricsContext);
+  if (!value) throw new Error("usePlanMetrics precisa estar dentro de <StudyMetricsProvider>");
+  return value;
+}
+
+export function usePlanMetrics(): PlanMetrics {
+  return useStudyMetrics().metrics;
+}
+
+export function useAwardBook(): AwardBook | null {
+  return useStudyMetrics().awards;
 }
 
 export function useIconUploads() {

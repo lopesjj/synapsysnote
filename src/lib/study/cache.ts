@@ -45,17 +45,32 @@ function slim(collections: Partial<Record<StudyCollection, StudyDoc[]>>) {
   return next;
 }
 
+/**
+ * Chaves que não couberam nem na versão enxuta. Sem isto, cada snapshot
+ * refazia os dois `JSON.stringify` do conjunto inteiro — megabytes na thread
+ * principal, repetidos, para no fim não gravar nada.
+ */
+const giveUp = new Set<string>();
+
 function persist(backendKey: string, collections: Partial<Record<StudyCollection, StudyDoc[]>>) {
+  if (giveUp.has(backendKey)) return;
   const key = PREFIX + backendKey;
   try {
     window.localStorage.setItem(key, JSON.stringify({ collections } satisfies CacheFile));
     written.add(backendKey);
-  } catch {
-    try {
-      window.localStorage.setItem(key, JSON.stringify({ collections: slim(collections) } satisfies CacheFile));
-      written.add(backendKey);
-    } catch {}
-  }
+    return;
+  } catch {}
+  try {
+    window.localStorage.setItem(key, JSON.stringify({ collections: slim(collections) } satisfies CacheFile));
+    written.add(backendKey);
+    return;
+  } catch {}
+  // Não cabe: o módulo continua funcionando, só perde a partida instantânea.
+  // O cache do próprio Firestore (IndexedDB) segue valendo.
+  giveUp.add(backendKey);
+  try {
+    window.localStorage.removeItem(key);
+  } catch {}
 }
 
 export function readStudyCache(backendKey: string): Partial<Record<StudyCollection, StudyDoc[]>> | null {

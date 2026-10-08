@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { DialogShell } from "@/components/ui/dialog";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
 import { cn } from "@/lib/utils";
-import { useStudy, type SubjectDraft } from "@/lib/study/provider";
+import { useArchivedPlans, useStudy, type SubjectDraft } from "@/lib/study/provider";
 import { studyTranslateParts, useStudyT } from "@/lib/study/i18n";
 import { useStudyUi, type GoalSubjectSort } from "@/lib/study/ui-store";
 import { performanceBand, streakInfo } from "@/lib/study/metrics";
@@ -80,6 +80,10 @@ function GoalDocument({
 }) {
   const { st, textDir } = useStudyT();
   const { activePlan, actions, plans } = useStudy();
+  // O resumo deste objetivo e a soma da série saem dos registros dele. Se o
+  // edital (ou um anterior) está arquivado, o histórico não vem pela
+  // assinatura: é preciso pedir.
+  useArchivedPlans(useMemo(() => termsOf(plans, seriesIdOf(plan)).filter((term) => term.archived).map((term) => term.id), [plan, plans]));
   const [dialog, setDialog] = useState<{ open: boolean; focus: GoalField }>({ open: false, focus: "name" });
   const [subjectDialog, setSubjectDialog] = useState<{ open: boolean; subject: StudySubject | null }>({ open: false, subject: null });
   const [examOpen, setExamOpen] = useState(false);

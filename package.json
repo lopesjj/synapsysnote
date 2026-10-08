@@ -1,6 +1,6 @@
 {
   "name": "synapsys-note",
-  "version": "2.3.7",
+  "version": "2.3.8",
   "private": true,
   "description": "Plataforma de produtividade e gestão de conhecimento (PKM) com editor de blocos, bases de dados flexíveis, notas de voz e importação nativa do Notion sobre Firebase.",
   "scripts": {
@@ -39,6 +39,7 @@
     "verify:legal": "tsx scripts/verify-legal.mts",
     "verify:study": "tsx scripts/verify-study.mts",
     "audit:study": "tsx scripts/audit-study.mts",
+    "audit:reads": "tsx --conditions=react-server scripts/audit-reads.mts",
     "verify:workspace-backup": "tsx scripts/verify-workspace-backup.mts",
     "verify:trash-references": "tsx scripts/verify-trash-references.mts",
     "verify:plans": "tsx scripts/verify-plans.mts",

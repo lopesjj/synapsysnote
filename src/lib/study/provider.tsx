@@ -3,6 +3,7 @@
 import {
   createContext,
   useCallback,
+  useId,
   useContext,
   useEffect,
   useMemo,
@@ -30,8 +31,11 @@ import type {
   StudyTopic,
 } from "@/types/study";
 import {
+  SCOPED_COLLECTIONS,
   STUDY_COLLECTIONS,
+  isScopedCollection,
   studyBackendFor,
+  type ScopedCollection,
   type StudyBackend,
   type StudyCollection,
   type StudyDoc,
@@ -72,6 +76,16 @@ import {
   type CycleTally,
 } from "./cycle";
 import { intervalsBefore, reviewsDroppedBy } from "./series";
+import {
+  archiveTargets,
+  byDueDay,
+  byExamDay,
+  bySessionOrder,
+  focusPlanOf,
+  mergeArchive,
+  requestedArchiveIds,
+  type ArchiveSlice,
+} from "./archive";
 import { PlanningProvider } from "./planning";
 import { assertPlanFeature, assertPlanWritable, currentEntitlements, planFailure, useEntitlements } from "@/lib/plans/client";
 import { goalGrowthViolation } from "@/lib/plans/usage";
@@ -215,6 +229,13 @@ export interface StudyContextValue extends StudyState {
   planCycle: StudyCycle | null;
   subjectById: (id: string | null | undefined) => StudySubject | undefined;
   topicById: (subjectId: string | null | undefined, topicId: string | null | undefined) => StudyTopic | undefined;
+  /**
+   * Objetivo arquivado não é assinado — o histórico dele sai do banco só quando
+   * alguma tela pede. Use `useArchivedPlans`, que já faz o pedido no efeito.
+   */
+  setArchiveRequest: (consumer: string, planIds: readonly string[]) => void;
+  /** Uma leitura de histórico arquivado em andamento. */
+  archiveLoading: boolean;
   actions: StudyActions;
 }
 
@@ -239,7 +260,20 @@ const EMPTY_STATE: StudyState = {
  */
 const LAZY_COLLECTIONS: StudyCollection[] = ["study_stickies"];
 
-const EAGER_COLLECTIONS: StudyCollection[] = STUDY_COLLECTIONS.filter((name) => !LAZY_COLLECTIONS.includes(name));
+/**
+ * Coleções pequenas e de interesse geral: uma linha por objetivo, por
+ * disciplina, por ciclo ou por lembrete. Entram inteiras.
+ */
+const GLOBAL_COLLECTIONS: StudyCollection[] = STUDY_COLLECTIONS.filter(
+  (name) => !LAZY_COLLECTIONS.includes(name) && !isScopedCollection(name)
+);
+
+/**
+ * Registros, revisões e simulados são o grosso do banco e sempre pertencem a um
+ * objetivo. A assinatura cobre só os objetivos abertos; o histórico dos
+ * arquivados é lido uma vez, quando a pessoa abre o arquivo (`archive`).
+ */
+const SCOPED: StudyCollection[] = [...SCOPED_COLLECTIONS];
 
 const REQUIRED_FOR_READY: StudyCollection[] = [
   "study_plans",
@@ -252,6 +286,10 @@ const REQUIRED_FOR_READY: StudyCollection[] = [
   "study_reminders",
 ];
 
+/** Define o escopo das assinaturas: sem ele não dá para saber o que ler. */
+const SCOPE_SOURCES: StudyCollection[] = ["study_plans", "study_meta"];
+
+
 function applyCollection(previous: StudyState, name: StudyCollection, docs: StudyDoc[]): StudyState {
   switch (name) {
     case "study_plans":
@@ -259,16 +297,11 @@ function applyCollection(previous: StudyState, name: StudyCollection, docs: Stud
     case "study_subjects":
       return { ...previous, subjects: docs.map(toSubject).sort(byOrder) };
     case "study_sessions":
-      return {
-        ...previous,
-        sessions: docs
-          .map(toSession)
-          .sort((a, b) => (a.day === b.day ? b.createdAt - a.createdAt : a.day < b.day ? 1 : -1)),
-      };
+      return { ...previous, sessions: docs.map(toSession).sort(bySessionOrder) };
     case "study_reviews":
-      return { ...previous, reviews: docs.map(toReview).sort((a, b) => (a.dueDay < b.dueDay ? -1 : a.dueDay > b.dueDay ? 1 : 0)) };
+      return { ...previous, reviews: docs.map(toReview).sort(byDueDay) };
     case "study_exams":
-      return { ...previous, exams: docs.map(toExam).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : a.createdAt - b.createdAt)) };
+      return { ...previous, exams: docs.map(toExam).sort(byExamDay) };
     case "study_cycles":
       return { ...previous, cycles: docs.map(toCycle) };
     case "study_reminders":
@@ -338,25 +371,32 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       setLoaded({ key: backend.key, collections: new Set() });
     }
   }
-  const state = stored.key === backend.key ? stored.data : EMPTY_STATE;
+  // Coleções que chegaram por snapshot de verdade. Uma assinatura que falhou
+  // entra em `loaded` (para a tela não ficar presa no carregando) mas não aqui,
+  // e é esta a lista que autoriza deduzir ausência de documento.
+  const [live, setLive] = useState<{ key: string; collections: Set<StudyCollection> }>({ key: "", collections: new Set() });
+  const [archive, setArchive] = useState<{ key: string; slices: Record<string, ArchiveSlice | null> }>({ key: "", slices: {} });
+  if (live.key !== backend.key) setLive({ key: backend.key, collections: new Set() });
+  if (archive.key !== backend.key) setArchive({ key: backend.key, slices: {} });
+  const liveState = stored.key === backend.key ? stored.data : EMPTY_STATE;
   const [clock, setClock] = useState(() => Date.now());
   const padOpen = useStudyUi((ui) => ui.padOpen);
   const [padUsed, setPadUsed] = useState(false);
   if (padOpen && !padUsed) setPadUsed(true);
-  const stateRef = useRef<StudyState>(state);
+  const stateRef = useRef<StudyState>(liveState);
 
-  useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
-
-  // As assinaturas ficam em dois efeitos: as de sempre não podem ser derrubadas
-  // quando uma coleção preguiçosa entra, senão tudo seria lido de novo.
+  // As assinaturas ficam em efeitos separados: as de sempre não podem ser
+  // derrubadas quando uma preguiçosa entra nem quando o escopo muda, senão
+  // tudo seria lido de novo.
   const listen = useCallback(
-    (names: readonly StudyCollection[]) => {
+    (names: readonly StudyCollection[], planIds?: readonly string[] | null) => {
       let cancelled = false;
       const unsubs: Array<() => void> = [];
-      const markLoaded = (name: StudyCollection) => {
-        setLoaded((previous) => {
+      const mark = (
+        setter: typeof setLoaded,
+        name: StudyCollection
+      ) => {
+        setter((previous) => {
           if (previous.key === backend.key && previous.collections.has(name)) return previous;
           const collections = new Set(previous.key === backend.key ? previous.collections : []);
           collections.add(name);
@@ -370,14 +410,20 @@ export function StudyProvider({ children }: { children: ReactNode }) {
           key: backend.key,
           data: applyCollection(current.key === backend.key ? current.data : EMPTY_STATE, name, docs),
         }));
-        markLoaded(name);
+        mark(setLoaded, name);
+        mark(setLive, name);
       };
       for (const name of names) {
         unsubs.push(
           backend.subscribe(
             name,
             (docs) => handle(name, docs),
-            () => markLoaded(name)
+            // A assinatura que falha libera a tela, mas não entra em `live`:
+            // sem snapshot não dá para concluir que um documento sumiu.
+            () => {
+              if (!cancelled) mark(setLoaded, name);
+            },
+            planIds
           )
         );
       }
@@ -389,8 +435,151 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     [backend]
   );
 
-  useEffect(() => listen(EAGER_COLLECTIONS), [listen]);
+  useEffect(() => listen(GLOBAL_COLLECTIONS), [listen]);
   useEffect(() => (padUsed ? listen(LAZY_COLLECTIONS) : undefined), [listen, padUsed]);
+
+  // O escopo sai dos objetivos abertos, então só dá para assinar depois que a
+  // lista de objetivos chegou — antes disso "nenhum objetivo" seria lido como
+  // "nada a mostrar" e a tela piscaria vazia.
+  const scopeKnown = loaded.key === backend.key && SCOPE_SOURCES.every((name) => loaded.collections.has(name));
+  const scopeKey = useMemo(
+    () =>
+      liveState.plans
+        .filter((plan) => !plan.archived)
+        .map((plan) => plan.id)
+        .sort()
+        .join("\u0000"),
+    [liveState.plans]
+  );
+  useEffect(() => {
+    if (!scopeKnown) return;
+    return listen(SCOPED, scopeKey ? scopeKey.split("\u0000") : []);
+  }, [listen, scopeKey, scopeKnown]);
+
+  const browsePlanId = useStudyUi((store) => store.browsePlanId);
+  // Telas que mostram objetivo arquivado (a gaveta de Objetivos, o detalhe de
+  // um edital antigo) pedem o histórico por aqui, com `useArchivedPlans`.
+  // Um pedido por tela, liberado quando ela sai. Sem a liberação, fechar a
+  // gaveta de arquivados deixaria o histórico inteiro sendo juntado e
+  // reordenado a cada snapshot pelo resto da sessão.
+  const [requests, setRequests] = useState<{ key: string; byConsumer: Record<string, string[]> }>({ key: "", byConsumer: {} });
+  if (requests.key !== backend.key) setRequests({ key: backend.key, byConsumer: {} });
+  const setArchiveRequest = useCallback(
+    (consumer: string, planIds: readonly string[]) => {
+      setRequests((previous) => {
+        const base = previous.key === backend.key ? previous.byConsumer : {};
+        const next = [...planIds].filter(Boolean).sort();
+        const current = base[consumer];
+        if (!next.length) {
+          if (!current) return previous.key === backend.key ? previous : { key: backend.key, byConsumer: base };
+          const byConsumer = { ...base };
+          delete byConsumer[consumer];
+          return { key: backend.key, byConsumer };
+        }
+        if (current && current.length === next.length && current.every((id, index) => id === next[index])) {
+          return previous.key === backend.key ? previous : { key: backend.key, byConsumer: base };
+        }
+        return { key: backend.key, byConsumer: { ...base, [consumer]: next } };
+      });
+    },
+    [backend.key]
+  );
+  const requestedKey = useMemo(
+    () => (requests.key === backend.key ? requestedArchiveIds(requests.byConsumer).join("\u0000") : ""),
+    [backend.key, requests]
+  );
+  /**
+   * O histórico fica guardado por `planId@updatedAt`. Arquivar e desarquivar
+   * mexem no `updatedAt` do objetivo, e editar objetivo arquivado é bloqueado:
+   * o carimbo muda exatamente quando a cópia guardada pode ter envelhecido, e
+   * aí ela é relida em vez de ser usada velha.
+   */
+  const wantedArchive = useMemo(() => {
+    const archived = new Map(liveState.plans.filter((plan) => plan.archived).map((plan) => [plan.id, plan]));
+    const ids = new Set(
+      archiveTargets(
+        liveState.plans,
+        focusPlanOf(liveState.plans, liveState.settings.activePlanId, browsePlanId),
+        browsePlanId
+      )
+    );
+    // Um pedido só vale enquanto o objetivo continuar arquivado; se ele reabriu,
+    // quem manda é a assinatura.
+    for (const planId of requestedKey ? requestedKey.split("\u0000") : []) {
+      if (archived.has(planId)) ids.add(planId);
+    }
+    return [...ids]
+      .map((planId) => ({ planId, key: `${planId}@${archived.get(planId)?.updatedAt ?? 0}` }))
+      .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  }, [browsePlanId, liveState.plans, liveState.settings.activePlanId, requestedKey]);
+
+  const heldArchiveKey = useMemo(
+    () => Object.keys(archive.key === backend.key ? archive.slices : {}).sort().join("\u0000"),
+    [archive, backend.key]
+  );
+
+  /**
+   * Lê o histórico que as telas pediram e ainda não está em memória. Uma
+   * leitura por objetivo, guardada enquanto a aba viver: reabrir o mesmo
+   * arquivo não lê de novo.
+   */
+  useEffect(() => {
+    if (!scopeKnown) return;
+    const held = new Set(heldArchiveKey ? heldArchiveKey.split("\u0000") : []);
+    const missing = wantedArchive.filter((entry) => !held.has(entry.key));
+    if (!missing.length) return;
+    let cancelled = false;
+    void (async () => {
+      const loaded = await Promise.all(
+        missing.map(async ({ planId, key }) => {
+          try {
+            const [sessions, reviews, exams] = await Promise.all(
+              SCOPED_COLLECTIONS.map((name) => backend.fetch(name as ScopedCollection, planId))
+            );
+            return [
+              key,
+              {
+                sessions: sessions.map(toSession).sort(bySessionOrder),
+                reviews: reviews.map(toReview).sort(byDueDay),
+                exams: exams.map(toExam).sort(byExamDay),
+              } satisfies ArchiveSlice,
+            ] as const;
+          } catch {
+            // Guarda a tentativa mesmo assim: sem isso o efeito tentaria de
+            // novo a cada render e a tela ficaria carregando para sempre. A
+            // próxima montagem do módulo tenta outra vez.
+            return [key, null] as const;
+          }
+        })
+      );
+      if (cancelled) return;
+      setArchive((previous) => ({
+        key: backend.key,
+        slices: { ...(previous.key === backend.key ? previous.slices : {}), ...Object.fromEntries(loaded) },
+      }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [backend, heldArchiveKey, scopeKnown, wantedArchive]);
+
+  const state = useMemo(() => {
+    const slices = wantedArchive
+      .map((entry) => archive.slices[entry.key])
+      .filter((slice): slice is ArchiveSlice => Boolean(slice));
+    return mergeArchive(liveState, slices);
+  }, [archive.slices, liveState, wantedArchive]);
+
+  // Carregando = alguém pediu um histórico que ainda não foi buscado. Derivar
+  // em vez de guardar evita um estado que pode ficar preso em `true`.
+  const archiveLoading = useMemo(
+    () => wantedArchive.some((entry) => !(entry.key in archive.slices)),
+    [archive.slices, wantedArchive]
+  );
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 60_000);
@@ -406,19 +595,28 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
   const commit = useCallback((writes: StudyWrite[]) => backend.commit(writes), [backend]);
 
-  const relationsLoaded = loaded.key === backend.key && loaded.collections.has("study_sessions") && loaded.collections.has("study_reviews");
+  /**
+   * Apagar revisão por ausência da sessão só é seguro quando as duas coleções
+   * chegaram por snapshot e cobrem o mesmo recorte. Vale em `live` (não em
+   * `loaded`, que inclui cache e assinatura com erro) e só para os objetivos
+   * abertos — o histórico arquivado entra por leitura avulsa, que pode falhar
+   * ou ainda estar a caminho, e "não carregado" não é "não existe".
+   */
+  const relationsLive =
+    live.key === backend.key && live.collections.has("study_sessions") && live.collections.has("study_reviews");
 
   useEffect(() => {
-    if (!relationsLoaded) return;
-    const known = new Set(state.sessions.map((session) => session.id));
+    if (!relationsLive) return;
+    const scoped = new Set(liveState.plans.filter((plan) => !plan.archived).map((plan) => plan.id));
+    if (!scoped.size) return;
+    const known = new Set(liveState.sessions.map((session) => session.id));
     const settled = Date.now() - 120_000;
-    const archivedIds = new Set(state.plans.filter((plan) => plan.archived).map((plan) => plan.id));
-    const orphans = state.reviews.filter(
-      (review) => review.sessionId && !known.has(review.sessionId) && review.createdAt < settled && !archivedIds.has(review.planId)
+    const orphans = liveState.reviews.filter(
+      (review) => review.sessionId && scoped.has(review.planId) && !known.has(review.sessionId) && review.createdAt < settled
     );
     if (!orphans.length) return;
     void commit(orphans.map((review) => ({ kind: "delete" as const, collection: "study_reviews" as const, id: review.id })));
-  }, [relationsLoaded, state.plans, state.sessions, state.reviews, commit]);
+  }, [relationsLive, liveState.plans, liveState.sessions, liveState.reviews, commit]);
 
   const actions = useMemo<StudyActions>(() => {
     const now = () => Date.now();
@@ -823,9 +1021,14 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         const snapshot = current();
         const writes: StudyWrite[] = [{ kind: "delete", collection: "study_plans", id }];
         for (const subject of snapshot.subjects) if (subject.planId === id) writes.push({ kind: "delete", collection: "study_subjects", id: subject.id });
-        for (const session of snapshot.sessions) if (session.planId === id) writes.push({ kind: "delete", collection: "study_sessions", id: session.id });
-        for (const review of snapshot.reviews) if (review.planId === id) writes.push({ kind: "delete", collection: "study_reviews", id: review.id });
-        for (const exam of snapshot.exams) if (exam.planId === id) writes.push({ kind: "delete", collection: "study_exams", id: exam.id });
+        // Registros, revisões e simulados vêm do banco, não do que está em
+        // memória: um objetivo arquivado não é assinado, e apagar pelo estado
+        // deixaria o histórico dele para trás sem dono.
+        for (const name of SCOPED_COLLECTIONS) {
+          for (const entry of await backend.fetch(name, id)) {
+            writes.push({ kind: "delete", collection: name, id: entry.id });
+          }
+        }
         for (const reminder of snapshot.reminders) if (reminder.planId === id) writes.push({ kind: "delete", collection: "study_reminders", id: reminder.id });
         const cycle = cycleOf(id);
         if (cycle) writes.push({ kind: "delete", collection: "study_cycles", id: cycle.id });
@@ -1672,7 +1875,6 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     };
   }, [adapter, backend, commit]);
 
-  const browsePlanId = useStudyUi((store) => store.browsePlanId);
   const accountReadOnly = useEntitlements().readOnly;
   useEffect(() => {
     if (!browsePlanId) return;
@@ -1705,9 +1907,11 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       subjectById: (id) => (id ? subjectIndex.get(id) : undefined),
       topicById: (subjectId, topicId) =>
         subjectId && topicId ? subjectIndex.get(subjectId)?.topics.find((topic) => topic.id === topicId) : undefined,
+      setArchiveRequest,
+      archiveLoading,
       actions,
     };
-  }, [accountReadOnly, actions, browsePlanId, ready, state, today]);
+  }, [accountReadOnly, actions, archiveLoading, browsePlanId, ready, setArchiveRequest, state, today]);
 
   return (
     <StudyContext.Provider value={value}>
@@ -1720,4 +1924,26 @@ export function useStudy(): StudyContextValue {
   const context = useContext(StudyContext);
   if (!context) throw new Error("useStudy precisa estar dentro de <StudyProvider>");
   return context;
+}
+
+/**
+ * Declara que esta tela mostra o histórico destes objetivos arquivados. O
+ * provedor lê cada um uma vez e guarda enquanto a aba viver; objetivo aberto na
+ * lista é ignorado, porque já vem pela assinatura.
+ *
+ * Devolve `true` enquanto a leitura não terminou, para a tela não mostrar zero
+ * no lugar de "carregando".
+ */
+export function useArchivedPlans(planIds: readonly string[]): boolean {
+  const { setArchiveRequest, archiveLoading } = useStudy();
+  const consumer = useId();
+  const key = [...planIds].sort().join("\u0000");
+  useEffect(() => {
+    setArchiveRequest(consumer, key ? key.split("\u0000") : []);
+    // Sair da tela libera o pedido: o que ela mostrava deixa de ser juntado ao
+    // estado a cada snapshot. O que já foi lido fica em memória e não é lido de
+    // novo se a tela voltar.
+    return () => setArchiveRequest(consumer, []);
+  }, [consumer, key, setArchiveRequest]);
+  return archiveLoading;
 }

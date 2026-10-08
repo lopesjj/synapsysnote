@@ -1,10 +1,16 @@
 "use client";
 
-import { Fragment, createElement, useCallback, type ReactNode } from "react";
+import { Fragment, createElement, useCallback, useSyncExternalStore, type ReactNode } from "react";
 import { formatTranslation, pluralFormIndex, useTranslation } from "@/lib/i18n/translations";
 import { intlLocale, splitDuration } from "../format";
 import { pt } from "./pt";
-import { STUDY_DICTIONARIES } from "./dictionaries";
+import {
+  loadStudyDictionary,
+  studyDictionary,
+  studyDictionaryReady,
+  studyDictionaryVersion,
+  subscribeStudyDictionaries,
+} from "./dictionaries";
 
 export type StudyKey = keyof typeof pt;
 export type StudyDictionary = Record<StudyKey, string>;
@@ -15,8 +21,8 @@ export function studyTranslate(
   key: StudyKey,
   params?: Record<string, string | number>
 ): string {
-  const dict = STUDY_DICTIONARIES[language] ?? STUDY_DICTIONARIES.pt;
-  const template = dict[key] || STUDY_DICTIONARIES.pt[key] || key;
+  const dict = studyDictionary(language);
+  const template = dict[key] || pt[key] || key;
   return formatTranslation(template, language, params);
 }
 
@@ -31,8 +37,8 @@ export function studyTranslateParts(
   params: Record<string, string | number>,
   nodes: Record<string, ReactNode>
 ): ReactNode[] {
-  const dict = STUDY_DICTIONARIES[language] ?? STUDY_DICTIONARIES.pt;
-  const template = (dict[key] || STUDY_DICTIONARIES.pt[key] || key).replace(/\{([A-Za-z0-9_]+)\|([^{}]*)\}/g, (match, name: string, forms: string) => {
+  const dict = studyDictionary(language);
+  const template = (dict[key] || pt[key] || key).replace(/\{([A-Za-z0-9_]+)\|([^{}]*)\}/g, (match, name: string, forms: string) => {
     const value = Number(params[name]);
     if (!Number.isFinite(value)) return match;
     const options = forms.split("|");
@@ -54,9 +60,31 @@ export function durationText(seconds: number, st: StudyT): string {
 }
 
 
+/**
+ * `true` quando o dicionário do idioma já está em memória. Antes disso o texto
+ * sai em português, então as telas do módulo esperam por isto.
+ */
+export function useStudyDictionaryReady(): boolean {
+  const { language } = useTranslation();
+  loadStudyDictionary(language);
+  const version = useSyncExternalStore(subscribeStudyDictionaries, studyDictionaryVersion, () => 0);
+  void version;
+  return studyDictionaryReady(language);
+}
+
 export function useStudyT() {
   const { language, textDir } = useTranslation();
-  const st = useCallback<StudyT>((key, params) => studyTranslate(language, key, params), [language]);
+  // Pedir cedo e repintar quando chegar: sem isto o primeiro desenho ficaria
+  // em português para quem usa outro idioma.
+  loadStudyDictionary(language);
+  const version = useSyncExternalStore(subscribeStudyDictionaries, studyDictionaryVersion, () => 0);
+  const st = useCallback<StudyT>(
+    (key, params) => {
+      void version;
+      return studyTranslate(language, key, params);
+    },
+    [language, version]
+  );
   const duration = useCallback((seconds: number) => durationText(seconds, st), [st]);
   return { st, language, textDir, locale: intlLocale(language), duration };
 }
