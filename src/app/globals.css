@@ -118,6 +118,38 @@
   --archive-btn-border: #fcd34d;
   --archive-btn-text: #78350f;
   --archive-btn-hover: #fef3c7;
+  --hl-gray: #e5e7eb;
+  --hl-gray-border: #d1d5db;
+  --hl-brown: #e7d5c5;
+  --hl-brown-border: #d6c1ae;
+  --hl-orange: #fed7aa;
+  --hl-orange-border: #fdba74;
+  --hl-yellow: #fde68a;
+  --hl-yellow-border: #fcd34d;
+  --hl-lime: #d9f99d;
+  --hl-lime-border: #bef264;
+  --hl-green: #bbf7d0;
+  --hl-green-border: #86efac;
+  --hl-teal: #99f6e4;
+  --hl-teal-border: #5eead4;
+  --hl-cyan: #a5f3fc;
+  --hl-cyan-border: #67e8f9;
+  --hl-blue: #bfdbfe;
+  --hl-blue-border: #93c5fd;
+  --hl-indigo: #c7d2fe;
+  --hl-indigo-border: #a5b4fc;
+  --hl-violet: #ddd6fe;
+  --hl-violet-border: #c4b5fd;
+  --hl-purple: #e9d5ff;
+  --hl-purple-border: #d8b4fe;
+  --hl-magenta: #f5d0fe;
+  --hl-magenta-border: #f0abfc;
+  --hl-pink: #fecdd3;
+  --hl-pink-border: #fda4af;
+  --hl-red: #fecaca;
+  --hl-red-border: #fca5a5;
+  --hl-default: #fde68a;
+  --hl-default-border: #fcd34d;
 }
 
 .dark {
@@ -198,6 +230,38 @@
   --archive-btn-border: rgba(217, 119, 6, 0.5);
   --archive-btn-text: #fef3c7;
   --archive-btn-hover: rgba(180, 83, 9, 0.6);
+  --hl-gray: rgba(148, 163, 184, 0.3);
+  --hl-gray-border: rgba(148, 163, 184, 0.45);
+  --hl-brown: rgba(217, 119, 6, 0.32);
+  --hl-brown-border: rgba(217, 119, 6, 0.5);
+  --hl-orange: rgba(251, 146, 60, 0.32);
+  --hl-orange-border: rgba(251, 146, 60, 0.5);
+  --hl-yellow: rgba(250, 204, 21, 0.3);
+  --hl-yellow-border: rgba(250, 204, 21, 0.5);
+  --hl-lime: rgba(163, 230, 53, 0.3);
+  --hl-lime-border: rgba(163, 230, 53, 0.48);
+  --hl-green: rgba(52, 211, 153, 0.3);
+  --hl-green-border: rgba(52, 211, 153, 0.48);
+  --hl-teal: rgba(45, 212, 191, 0.3);
+  --hl-teal-border: rgba(45, 212, 191, 0.48);
+  --hl-cyan: rgba(56, 189, 248, 0.3);
+  --hl-cyan-border: rgba(56, 189, 248, 0.48);
+  --hl-blue: rgba(96, 165, 250, 0.32);
+  --hl-blue-border: rgba(96, 165, 250, 0.5);
+  --hl-indigo: rgba(129, 140, 248, 0.32);
+  --hl-indigo-border: rgba(129, 140, 248, 0.5);
+  --hl-violet: rgba(167, 139, 250, 0.32);
+  --hl-violet-border: rgba(167, 139, 250, 0.5);
+  --hl-purple: rgba(192, 132, 252, 0.32);
+  --hl-purple-border: rgba(192, 132, 252, 0.5);
+  --hl-magenta: rgba(232, 121, 249, 0.32);
+  --hl-magenta-border: rgba(232, 121, 249, 0.5);
+  --hl-pink: rgba(244, 114, 182, 0.32);
+  --hl-pink-border: rgba(244, 114, 182, 0.5);
+  --hl-red: rgba(248, 113, 113, 0.32);
+  --hl-red-border: rgba(248, 113, 113, 0.5);
+  --hl-default: rgba(250, 204, 21, 0.3);
+  --hl-default-border: rgba(250, 204, 21, 0.5);
 }
 
 [data-density="compact"] {
@@ -829,10 +893,12 @@ html[data-reduced-motion="true"] .synapsys-paper {
 }
 
 .synapsys-editor .ProseMirror mark {
-  background: color-mix(in oklab, var(--warning) 32%, transparent);
+  background: var(--hl-default);
   color: inherit;
-  border-radius: 3px;
-  padding: 0 0.15em;
+  border-radius: 4px;
+  padding: 0.1em 0.25em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 .synapsys-editor .ProseMirror .mention {
@@ -1622,116 +1688,142 @@ html[data-reduced-motion="true"] .synapsys-paper {
   color: #f472b6 !important;
 }
 
-.dark .synapsys-editor mark,
-.dark [data-table-block] mark {
+mark,
+.synapsys-editor mark,
+[data-table-block] mark,
+.synapsys-pad mark,
+.reading-surface mark {
+  color: inherit;
+  border-radius: 4px;
+  padding: 0.1em 0.25em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+mark:not([data-color]):not([style*="background"]),
+.synapsys-editor mark:not([data-color]):not([style*="background"]),
+[data-table-block] mark:not([data-color]):not([style*="background"]),
+.synapsys-pad mark:not([data-color]):not([style*="background"]),
+.reading-surface mark:not([data-color]):not([style*="background"]) {
+  background-color: var(--hl-default) !important;
   color: inherit !important;
-  border-radius: 3px;
-  padding-inline: 0.15em;
 }
 
-.dark .synapsys-editor mark[style*="#FDE68A"],
-.dark .synapsys-editor mark[style*="rgb(253, 230, 138)"],
-.dark [data-table-block] mark[style*="#FDE68A"],
-.dark [data-table-block] mark[style*="rgb(253, 230, 138)"] {
-  background-color: rgba(250, 204, 21, 0.28) !important;
+.dark mark,
+.dark .synapsys-editor mark,
+.dark [data-table-block] mark,
+.dark .synapsys-pad mark,
+.dark .reading-surface mark {
+  color: inherit !important;
 }
 
-.dark .synapsys-editor mark[style*="#FED7AA"],
-.dark .synapsys-editor mark[style*="rgb(254, 215, 170)"],
-.dark [data-table-block] mark[style*="#FED7AA"],
-.dark [data-table-block] mark[style*="rgb(254, 215, 170)"] {
-  background-color: rgba(251, 146, 60, 0.28) !important;
+.dark mark[data-color*="#FDE68A" i],
+.dark mark[data-color*="#fef08a" i],
+.dark mark[style*="#FDE68A" i],
+.dark mark[style*="#fef08a" i],
+.dark mark[style*="rgb(253, 230, 138)"],
+.dark mark[style*="rgb(253,230,138)"],
+.dark mark[style*="rgb(254, 240, 138)"],
+.dark mark[style*="rgb(254,240,138)"] {
+  background-color: var(--hl-yellow) !important;
 }
 
-.dark .synapsys-editor mark[style*="#FECACA"],
-.dark .synapsys-editor mark[style*="rgb(254, 202, 202)"],
-.dark [data-table-block] mark[style*="#FECACA"],
-.dark [data-table-block] mark[style*="rgb(254, 202, 202)"] {
-  background-color: rgba(248, 113, 113, 0.28) !important;
+.dark mark[data-color*="#FED7AA" i],
+.dark mark[style*="#FED7AA" i],
+.dark mark[style*="rgb(254, 215, 170)"],
+.dark mark[style*="rgb(254,215,170)"] {
+  background-color: var(--hl-orange) !important;
 }
 
-.dark .synapsys-editor mark[style*="#BFDBFE"],
-.dark .synapsys-editor mark[style*="rgb(191, 219, 254)"],
-.dark [data-table-block] mark[style*="#BFDBFE"],
-.dark [data-table-block] mark[style*="rgb(191, 219, 254)"] {
-  background-color: rgba(96, 165, 250, 0.28) !important;
+.dark mark[data-color*="#FECACA" i],
+.dark mark[style*="#FECACA" i],
+.dark mark[style*="rgb(254, 202, 202)"],
+.dark mark[style*="rgb(254,202,202)"] {
+  background-color: var(--hl-red) !important;
 }
 
-.dark .synapsys-editor mark[style*="#BBF7D0"],
-.dark .synapsys-editor mark[style*="rgb(187, 247, 208)"],
-.dark [data-table-block] mark[style*="#BBF7D0"],
-.dark [data-table-block] mark[style*="rgb(187, 247, 208)"] {
-  background-color: rgba(52, 211, 153, 0.28) !important;
+.dark mark[data-color*="#BFDBFE" i],
+.dark mark[style*="#BFDBFE" i],
+.dark mark[style*="rgb(191, 219, 254)"],
+.dark mark[style*="rgb(191,219,254)"] {
+  background-color: var(--hl-blue) !important;
 }
 
-.dark .synapsys-editor mark[style*="#E9D5FF"],
-.dark .synapsys-editor mark[style*="rgb(233, 213, 255)"],
-.dark [data-table-block] mark[style*="#E9D5FF"],
-.dark [data-table-block] mark[style*="rgb(233, 213, 255)"] {
-  background-color: rgba(192, 132, 252, 0.28) !important;
+.dark mark[data-color*="#BBF7D0" i],
+.dark mark[style*="#BBF7D0" i],
+.dark mark[style*="rgb(187, 247, 208)"],
+.dark mark[style*="rgb(187,247,208)"] {
+  background-color: var(--hl-green) !important;
 }
 
-.dark .synapsys-editor mark[style*="#FECDD3"],
-.dark .synapsys-editor mark[style*="rgb(254, 205, 211)"],
-.dark [data-table-block] mark[style*="#FECDD3"],
-.dark [data-table-block] mark[style*="rgb(254, 205, 211)"] {
-  background-color: rgba(244, 114, 182, 0.28) !important;
+.dark mark[data-color*="#E9D5FF" i],
+.dark mark[style*="#E9D5FF" i],
+.dark mark[style*="rgb(233, 213, 255)"],
+.dark mark[style*="rgb(233,213,255)"] {
+  background-color: var(--hl-purple) !important;
 }
 
-.dark .synapsys-editor mark[style*="#E5E7EB"],
-.dark .synapsys-editor mark[style*="rgb(229, 231, 235)"],
-.dark [data-table-block] mark[style*="#E5E7EB"],
-.dark [data-table-block] mark[style*="rgb(229, 231, 235)"] {
-  background-color: rgba(148, 163, 184, 0.28) !important;
+.dark mark[data-color*="#FECDD3" i],
+.dark mark[style*="#FECDD3" i],
+.dark mark[style*="rgb(254, 205, 211)"],
+.dark mark[style*="rgb(254,205,211)"] {
+  background-color: var(--hl-pink) !important;
 }
 
-.dark .synapsys-editor mark[style*="#A5F3FC"],
-.dark .synapsys-editor mark[style*="rgb(165, 243, 252)"],
-.dark [data-table-block] mark[style*="#A5F3FC"],
-.dark [data-table-block] mark[style*="rgb(165, 243, 252)"] {
-  background-color: rgba(56, 189, 248, 0.28) !important;
+.dark mark[data-color*="#E5E7EB" i],
+.dark mark[style*="#E5E7EB" i],
+.dark mark[style*="rgb(229, 231, 235)"],
+.dark mark[style*="rgb(229,231,235)"] {
+  background-color: var(--hl-gray) !important;
 }
 
-.dark .synapsys-editor mark[style*="#99F6E4"],
-.dark .synapsys-editor mark[style*="rgb(153, 246, 228)"],
-.dark [data-table-block] mark[style*="#99F6E4"],
-.dark [data-table-block] mark[style*="rgb(153, 246, 228)"] {
-  background-color: rgba(45, 212, 191, 0.28) !important;
+.dark mark[data-color*="#A5F3FC" i],
+.dark mark[style*="#A5F3FC" i],
+.dark mark[style*="rgb(165, 243, 252)"],
+.dark mark[style*="rgb(165,243,252)"] {
+  background-color: var(--hl-cyan) !important;
 }
 
-.dark .synapsys-editor mark[style*="#D9F99D"],
-.dark .synapsys-editor mark[style*="rgb(217, 249, 157)"],
-.dark [data-table-block] mark[style*="#D9F99D"],
-.dark [data-table-block] mark[style*="rgb(217, 249, 157)"] {
-  background-color: rgba(163, 230, 53, 0.28) !important;
+.dark mark[data-color*="#99F6E4" i],
+.dark mark[style*="#99F6E4" i],
+.dark mark[style*="rgb(153, 246, 228)"],
+.dark mark[style*="rgb(153,246,228)"] {
+  background-color: var(--hl-teal) !important;
 }
 
-.dark .synapsys-editor mark[style*="#C7D2FE"],
-.dark .synapsys-editor mark[style*="rgb(199, 210, 254)"],
-.dark [data-table-block] mark[style*="#C7D2FE"],
-.dark [data-table-block] mark[style*="rgb(199, 210, 254)"] {
-  background-color: rgba(129, 140, 248, 0.28) !important;
+.dark mark[data-color*="#D9F99D" i],
+.dark mark[style*="#D9F99D" i],
+.dark mark[style*="rgb(217, 249, 157)"],
+.dark mark[style*="rgb(217,249,157)"] {
+  background-color: var(--hl-lime) !important;
 }
 
-.dark .synapsys-editor mark[style*="#DDD6FE"],
-.dark .synapsys-editor mark[style*="rgb(221, 214, 254)"],
-.dark [data-table-block] mark[style*="#DDD6FE"],
-.dark [data-table-block] mark[style*="rgb(221, 214, 254)"] {
-  background-color: rgba(167, 139, 250, 0.28) !important;
+.dark mark[data-color*="#C7D2FE" i],
+.dark mark[style*="#C7D2FE" i],
+.dark mark[style*="rgb(199, 210, 254)"],
+.dark mark[style*="rgb(199,210,254)"] {
+  background-color: var(--hl-indigo) !important;
 }
 
-.dark .synapsys-editor mark[style*="#F5D0FE"],
-.dark .synapsys-editor mark[style*="rgb(245, 208, 254)"],
-.dark [data-table-block] mark[style*="#F5D0FE"],
-.dark [data-table-block] mark[style*="rgb(245, 208, 254)"] {
-  background-color: rgba(232, 121, 249, 0.28) !important;
+.dark mark[data-color*="#DDD6FE" i],
+.dark mark[style*="#DDD6FE" i],
+.dark mark[style*="rgb(221, 214, 254)"],
+.dark mark[style*="rgb(221,214,254)"] {
+  background-color: var(--hl-violet) !important;
 }
 
-.dark .synapsys-editor mark[style*="#E7D5C5"],
-.dark .synapsys-editor mark[style*="rgb(231, 213, 197)"],
-.dark [data-table-block] mark[style*="#E7D5C5"],
-.dark [data-table-block] mark[style*="rgb(231, 213, 197)"] {
-  background-color: rgba(217, 119, 6, 0.28) !important;
+.dark mark[data-color*="#F5D0FE" i],
+.dark mark[style*="#F5D0FE" i],
+.dark mark[style*="rgb(245, 208, 254)"],
+.dark mark[style*="rgb(245,208,254)"] {
+  background-color: var(--hl-magenta) !important;
+}
+
+.dark mark[data-color*="#E7D5C5" i],
+.dark mark[style*="#E7D5C5" i],
+.dark mark[style*="rgb(231, 213, 197)"],
+.dark mark[style*="rgb(231,213,197)"] {
+  background-color: var(--hl-brown) !important;
 }
 
 @font-face {

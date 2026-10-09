@@ -20,22 +20,27 @@ export const TEXT_COLORS = [
 ] as const;
 
 export const HIGHLIGHT_COLORS = [
-  { label: "Sem marca", value: null },
-  { label: "Cinza", value: "#E5E7EB" },
-  { label: "Marrom", value: "#E7D5C5" },
-  { label: "Laranja", value: "#FED7AA" },
-  { label: "Amarelo", value: "#FDE68A" },
-  { label: "Lima", value: "#D9F99D" },
-  { label: "Verde", value: "#BBF7D0" },
-  { label: "Teal", value: "#99F6E4" },
-  { label: "Ciano", value: "#A5F3FC" },
-  { label: "Azul", value: "#BFDBFE" },
-  { label: "Índigo", value: "#C7D2FE" },
-  { label: "Violeta", value: "#DDD6FE" },
-  { label: "Roxo", value: "#E9D5FF" },
-  { label: "Magenta", value: "#F5D0FE" },
-  { label: "Rosa", value: "#FECDD3" },
-  { label: "Vermelho", value: "#FECACA" },
+  { label: "Sem marca", value: null, varName: undefined, borderVarName: undefined },
+  { label: "Cinza", value: "#E5E7EB", varName: "--hl-gray", borderVarName: "--hl-gray-border" },
+  { label: "Marrom", value: "#E7D5C5", varName: "--hl-brown", borderVarName: "--hl-brown-border" },
+  { label: "Laranja", value: "#FED7AA", varName: "--hl-orange", borderVarName: "--hl-orange-border" },
+  { label: "Amarelo", value: "#FDE68A", varName: "--hl-yellow", borderVarName: "--hl-yellow-border" },
+  { label: "Lima", value: "#D9F99D", varName: "--hl-lime", borderVarName: "--hl-lime-border" },
+  { label: "Verde", value: "#BBF7D0", varName: "--hl-green", borderVarName: "--hl-green-border" },
+  { label: "Teal", value: "#99F6E4", varName: "--hl-teal", borderVarName: "--hl-teal-border" },
+  { label: "Ciano", value: "#A5F3FC", varName: "--hl-cyan", borderVarName: "--hl-cyan-border" },
+  { label: "Azul", value: "#BFDBFE", varName: "--hl-blue", borderVarName: "--hl-blue-border" },
+  { label: "Índigo", value: "#C7D2FE", varName: "--hl-indigo", borderVarName: "--hl-indigo-border" },
+  { label: "Violeta", value: "#DDD6FE", varName: "--hl-violet", borderVarName: "--hl-violet-border" },
+  { label: "Roxo", value: "#E9D5FF", varName: "--hl-purple", borderVarName: "--hl-purple-border" },
+  { label: "Magenta", value: "#F5D0FE", varName: "--hl-magenta", borderVarName: "--hl-magenta-border" },
+  { label: "Rosa", value: "#FECDD3", varName: "--hl-pink", borderVarName: "--hl-pink-border" },
+  { label: "Vermelho", value: "#FECACA", varName: "--hl-red", borderVarName: "--hl-red-border" },
 ] as const;
 
-export type PaletteColor = { label: string; value: string | null };
+export type PaletteColor = {
+  label: string;
+  value: string | null;
+  varName?: string;
+  borderVarName?: string;
+};

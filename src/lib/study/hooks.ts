@@ -11,6 +11,7 @@ import {
   coverageOf,
   groupWithExams,
   secondsByDay,
+  secondsOnDay,
   streakInfo,
   studiedDays,
 } from "./metrics";
@@ -131,7 +132,8 @@ function usePlanMetricsValue() {
       weekEnd,
       weekSeconds: week.seconds + weekExamSeconds,
       weekQuestions: week.questions,
-      todaySeconds: planSessions.filter((session) => session.day === today).reduce((sum, session) => sum + session.durationSec, 0),
+      // O tempo de hoje soma os simulados do dia, como o total e a semana.
+      todaySeconds: secondsOnDay(planSessions, planExams, today),
     };
   }, [focusPlan, planExams, planReviews, planSessions, planSubjects, seriesExams, seriesSessions, seriesTotal, settings.studyWeekdays, settings.weekStartsOn, terms, today]);
 }

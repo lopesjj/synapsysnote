@@ -266,11 +266,21 @@ export function EditorToolbar({
             title={t("highlight")}
             onMouseDown={(event) => event.preventDefault()}
             className={cn(
-              "rounded-[var(--radius-xs)] p-1.5 text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink",
+              "relative flex flex-col items-center justify-center rounded-[var(--radius-xs)] p-1.5 text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink",
               editor.isActive("highlight") && "bg-[var(--accent-soft)] text-[var(--accent)]"
             )}
           >
             <Highlighter className="size-3.5" />
+            {editor.isActive("highlight") ? (
+              <span
+                className="absolute inset-x-1 bottom-0.5 h-0.5 rounded-full"
+                style={{
+                  background:
+                    (editor.getAttributes("highlight").color as string | undefined) ||
+                    "var(--hl-default)",
+                }}
+              />
+            ) : null}
           </button>
         </MenuTrigger>
         <MenuContent align="start" className="min-w-0 p-1.5" onCloseAutoFocus={(event) => event.preventDefault()}>
@@ -290,9 +300,26 @@ export function EditorToolbar({
                     ? editor.chain().focus().toggleHighlight({ color: color.value }).run()
                     : editor.chain().focus().unsetHighlight().run();
                 }}
-                className="size-6 rounded-md border border-[var(--border)]"
-                style={{ background: color.value ?? "var(--surface)" }}
-              />
+                className={cn(
+                  "relative flex size-6 items-center justify-center rounded-md border transition hover:scale-105",
+                  color.value === null ? "bg-[var(--surface)] border-[var(--border)]" : ""
+                )}
+                style={
+                  color.varName
+                    ? {
+                        background: `var(${color.varName})`,
+                        borderColor: color.borderVarName ? `var(${color.borderVarName})` : "var(--border)",
+                      }
+                    : {
+                        background: color.value ?? "var(--surface)",
+                        borderColor: "var(--border)",
+                      }
+                }
+              >
+                {color.value === null ? (
+                  <span className="h-0.5 w-3/4 -rotate-45 rounded-full bg-rose-500/70 dark:bg-rose-400/80" />
+                ) : null}
+              </button>
             ))}
           </div>
         </MenuContent>

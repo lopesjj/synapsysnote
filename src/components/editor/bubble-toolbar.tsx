@@ -51,11 +51,26 @@ function SwatchGrid({
           onMouseDown={keepSelection}
           onClick={() => onPick(color.value)}
           className={cn(
-            "size-6 border border-[var(--border)] transition hover:scale-110",
-            round ? "rounded-full" : "rounded-[4px]"
+            "relative flex size-6 items-center justify-center border transition hover:scale-110",
+            round ? "rounded-full" : "rounded-[4px]",
+            color.value === null ? "bg-[var(--surface)] border-[var(--border)]" : ""
           )}
-          style={{ background: color.value ?? (round ? "var(--text)" : "var(--surface)") }}
-        />
+          style={
+            color.varName
+              ? {
+                  background: `var(${color.varName})`,
+                  borderColor: color.borderVarName ? `var(${color.borderVarName})` : "var(--border)",
+                }
+              : {
+                  background: color.value ?? (round ? "var(--text)" : "var(--surface)"),
+                  borderColor: "var(--border)",
+                }
+          }
+        >
+          {color.value === null ? (
+            <span className="h-0.5 w-3/4 -rotate-45 rounded-full bg-rose-500/70 dark:bg-rose-400/80" />
+          ) : null}
+        </button>
       ))}
     </div>
   );
@@ -180,16 +195,26 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
         </button>
         <button
           type="button"
-          title="Destacar"
+          title={t("highlight")}
           onMouseDown={keepSelection}
           onClick={() => togglePanel("highlight")}
           className={cn(
-            "rounded-[var(--radius-xs)] p-1.5 text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink",
+            "relative rounded-[var(--radius-xs)] p-1.5 text-muted transition hover:bg-[var(--surface-hover)] hover:text-ink",
             (panel === "highlight" || editor.isActive("highlight")) &&
               "bg-[var(--accent-soft)] text-[var(--accent)]"
           )}
         >
           <Highlighter className="size-3.5" />
+          {editor.isActive("highlight") ? (
+            <span
+              className="absolute inset-x-1 bottom-0.5 h-0.5 rounded-full"
+              style={{
+                background:
+                  (editor.getAttributes("highlight").color as string | undefined) ||
+                  "var(--hl-default)",
+              }}
+            />
+          ) : null}
         </button>
         <span className="mx-0.5 h-4 w-px bg-[var(--border)]" />
         <button
@@ -298,7 +323,7 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
       {panel === "color" ? (
         <div className="mt-1 border-t border-[var(--border)] pt-1">
           <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-faint">
-            Cor do texto
+            {t("text_color")}
           </p>
           <SwatchGrid
             colors={TEXT_COLORS}
@@ -325,7 +350,7 @@ export function BubbleToolbar({ editor }: { editor: Editor }) {
       {panel === "highlight" ? (
         <div className="mt-1 border-t border-[var(--border)] pt-1">
           <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-faint">
-            Destaque
+            {t("highlight")}
           </p>
           <SwatchGrid
             colors={HIGHLIGHT_COLORS}

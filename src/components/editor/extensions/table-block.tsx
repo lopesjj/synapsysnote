@@ -522,9 +522,26 @@ function EditableCell({
                         applyHighlight(color.value);
                         setColorPicker(null);
                       }}
-                      className="size-5 rounded-[4px] border border-[var(--border)] dark:border-white/20 transition hover:scale-110"
-                      style={{ background: color.value ?? "var(--surface)" }}
-                    />
+                      className={cn(
+                        "relative flex size-5 items-center justify-center rounded-[4px] border transition hover:scale-110",
+                        color.value === null ? "bg-[var(--surface)] border-[var(--border)] dark:border-white/20" : ""
+                      )}
+                      style={
+                        color.varName
+                          ? {
+                              background: `var(${color.varName})`,
+                              borderColor: color.borderVarName ? `var(${color.borderVarName})` : "var(--border)",
+                            }
+                          : {
+                              background: color.value ?? "var(--surface)",
+                              borderColor: "var(--border)",
+                            }
+                      }
+                    >
+                      {color.value === null ? (
+                        <span className="h-0.5 w-3/4 -rotate-45 rounded-full bg-rose-500/70 dark:bg-rose-400/80" />
+                      ) : null}
+                    </button>
                   ))}
                 </div>
               </div>
@@ -1506,9 +1523,26 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
                         handleMultiApplyHighlight(color.value);
                         setMultiColorPicker(null);
                       }}
-                      className="size-5 rounded-[4px] border border-[var(--border)] dark:border-white/20 transition hover:scale-110"
-                      style={{ background: color.value ?? "var(--surface)" }}
-                    />
+                      className={cn(
+                        "relative flex size-5 items-center justify-center rounded-[4px] border transition hover:scale-110",
+                        color.value === null ? "bg-[var(--surface)] border-[var(--border)] dark:border-white/20" : ""
+                      )}
+                      style={
+                        color.varName
+                          ? {
+                              background: `var(${color.varName})`,
+                              borderColor: color.borderVarName ? `var(${color.borderVarName})` : "var(--border)",
+                            }
+                          : {
+                              background: color.value ?? "var(--surface)",
+                              borderColor: "var(--border)",
+                            }
+                      }
+                    >
+                      {color.value === null ? (
+                        <span className="h-0.5 w-3/4 -rotate-45 rounded-full bg-rose-500/70 dark:bg-rose-400/80" />
+                      ) : null}
+                    </button>
                   ))}
                 </div>
               </div>

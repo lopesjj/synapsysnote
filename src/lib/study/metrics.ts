@@ -314,6 +314,18 @@ export function inRange(day: DayKey, from: DayKey | null, to: DayKey | null): bo
   return true;
 }
 
+/** Tempo de um dia: sessões e simulados juntos, como no total e na semana. */
+export function secondsOnDay(
+  sessions: readonly StudySession[],
+  exams: readonly MockExam[],
+  day: DayKey
+): number {
+  let seconds = 0;
+  for (const session of sessions) if (session.day === day) seconds += session.durationSec;
+  for (const exam of exams) if (exam.day === day) seconds += exam.durationSec;
+  return seconds;
+}
+
 export function secondsByDay(
   sessions: readonly StudySession[],
   exams: readonly MockExam[] = []

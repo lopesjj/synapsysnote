@@ -18,6 +18,7 @@ import {
   groupWithExams,
   resolveExamSubjectId,
   pagesPerHour,
+  secondsOnDay,
   performanceBand,
   streakInfo,
   studiedDays,
@@ -400,6 +401,12 @@ const absorbed = absorbExamQuestions(aggregate([]), [mixedExam], examSubjects);
 assert.equal(absorbed.questions, 215);
 assert.equal(absorbed.correct, 150);
 assert.equal(absorbed.accuracy, 150 / 215);
+
+// O tempo de um dia conta os simulados daquele dia, não só as sessões.
+const examDay = session({ id: "mix", day: "2026-10-02", durationSec: 1800 });
+assert.equal(secondsOnDay([examDay], [mixedExam], "2026-10-02"), 1800 + 3600);
+assert.equal(secondsOnDay([], [mixedExam], "2026-10-02"), 3600);
+assert.equal(secondsOnDay([examDay], [mixedExam], "2026-10-01"), 0);
 
 const subject = toSubject({
   id: "a",
