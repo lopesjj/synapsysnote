@@ -328,7 +328,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if ((key === "b" || event.key === "\\") && !isEditingText(event.target)) {
+      if (!event.defaultPrevented && (key === "b" || event.key === "\\") && !isEditingText(event.target)) {
         event.preventDefault();
         if (window.matchMedia("(max-width: 767px)").matches) {
           store.setMobileSidebarOpen(!store.mobileSidebarOpen);
@@ -602,9 +602,17 @@ function DesktopSidebar() {
 }
 
 function isEditingText(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  const tag = target.tagName;
+  if (typeof document !== "undefined" && document.querySelector("[data-multi-table-toolbar]")) {
+    return true;
+  }
+  const active = typeof document !== "undefined" ? document.activeElement : null;
+  const el = target instanceof HTMLElement ? target : active instanceof HTMLElement ? active : null;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  if (el.closest?.("[contenteditable='true']") || el.closest?.(".ProseMirror") || el.closest?.("table")) {
+    return true;
+  }
+  const tag = el.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 

@@ -890,7 +890,7 @@ export const it: StudyStrings = {
   prefs_timezone_hint: "Definisce il cambio di giorno per sessioni, ripassi e focus.",
 
   home_lede_reviews: "{count} {count|ripasso ti aspetta|ripassi ti aspettano}",
-  home_lede_exam: "mancano {count} {count|giorno|giorni} all'esame",
+  home_lede_exam: "{count|manca|mancano} {count} {count|giorno|giorni} all'esame",
   home_study_intro_title: "Studia con metodo, nello stesso posto delle tue note",
   home_study_intro_desc: "Registra sessioni, segui ripassi distanziati, costruisci un ciclo di studio e scopri cosa richiede attenzione.",
   home_study_intro_cta: "Crea un obiettivo di studio",
@@ -905,7 +905,7 @@ export const it: StudyStrings = {
   home_all_reviews_done: "Tutti i ripassi di oggi sono stati completati!",
   home_agenda_reviews: "{count} {count|ripasso|ripassi} di studio",
   home_agenda_cards: "{count} {count|flashcard|flashcard} da studiare",
-  home_brief_exam: "Mancano {count} {count|giorno|giorni} all'esame {goal}.",
+  home_brief_exam: "{count|Manca|Mancano} {count} {count|giorno|giorni} all'esame {goal}.",
   home_brief_exam_today: "L'esame {goal} è oggi.",
   home_week_all_title: "Questa settimana in tutti gli obiettivi",
   home_week_days_studied: "{count} {count|giorno studiato|giorni studiati}",

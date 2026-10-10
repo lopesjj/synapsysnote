@@ -265,6 +265,7 @@ export function FocusOverlay() {
   const running = timer.status === "running";
   const subject = subjectById(timer.subjectId);
   const topic = subject?.topics.find((entry) => entry.id === timer.topicId);
+  const isExam = Boolean(timer.examMode && !subject && !timer.reviewId);
   const topicListRef = useRef<HTMLDivElement>(null);
   const scrollTopicsRef = useRef(false);
   useEffect(() => {
@@ -380,10 +381,10 @@ export function FocusOverlay() {
           <div className="flex flex-1 flex-col items-center justify-center px-5 pb-8 pt-4">
             {planReadOnly ? (
               <span className="flex max-w-[min(32rem,90vw)] items-center gap-2 px-3 py-1.5 text-[13px]">
-                {timer.examMode ? <ExamMark /> : subject ? <SubjectDot color={subject.color} /> : null}
-                <span className={cn("truncate", timer.examMode || subject ? "font-medium text-ink" : "text-muted")}>
-                  {timer.examMode ? st("timer_exam") : subject ? subject.name : st("timer_no_subject")}
-                  {!timer.examMode && topic ? <span className="font-normal text-muted"> · {topic.name}</span> : null}
+                {isExam ? <ExamMark /> : subject ? <SubjectDot color={subject.color} /> : null}
+                <span className={cn("truncate", isExam || subject ? "font-medium text-ink" : "text-muted")}>
+                  {isExam ? st("timer_exam") : subject ? subject.name : st("timer_no_subject")}
+                  {!isExam && topic ? <span className="font-normal text-muted"> · {topic.name}</span> : null}
                 </span>
               </span>
             ) : (
@@ -393,10 +394,10 @@ export function FocusOverlay() {
                   type="button"
                   className="group flex max-w-[min(32rem,90vw)] items-center gap-2 rounded-full px-3 py-1.5 text-[13px] transition hover:bg-[var(--surface-hover)]"
                 >
-                  {timer.examMode ? <ExamMark /> : subject ? <SubjectDot color={subject.color} /> : null}
-                  <span className={cn("truncate", timer.examMode || subject ? "font-medium text-ink" : "text-muted")}>
-                    {timer.examMode ? st("timer_exam") : subject ? subject.name : st("timer_pick_subject")}
-                    {!timer.examMode && topic ? <span className="font-normal text-muted"> · {topic.name}</span> : null}
+                  {isExam ? <ExamMark /> : subject ? <SubjectDot color={subject.color} /> : null}
+                  <span className={cn("truncate", isExam || subject ? "font-medium text-ink" : "text-muted")}>
+                    {isExam ? st("timer_exam") : subject ? subject.name : st("timer_pick_subject")}
+                    {!isExam && topic ? <span className="font-normal text-muted"> · {topic.name}</span> : null}
                   </span>
                   <ChevronDown className="size-3.5 shrink-0 text-faint transition group-data-[state=open]:rotate-180" />
                 </button>
@@ -433,7 +434,7 @@ export function FocusOverlay() {
                     <MenuSeparator />
                     <MenuLabel>{subject.name}</MenuLabel>
                     {subject.topics.map((entry) => (
-                      <MenuItem key={entry.id} className="min-h-11 sm:min-h-0" onSelect={() => useStudyUi.getState().setTimer({ topicId: entry.id, pageId: null })}>
+                      <MenuItem key={entry.id} className="min-h-11 sm:min-h-0" onSelect={() => useStudyUi.getState().setTimer({ topicId: entry.id, pageId: null, examMode: false })}>
                         <span className={cn("size-1.5 rounded-full", entry.id === timer.topicId ? "bg-[var(--accent)]" : "bg-[var(--border-strong)]")} />
                         <span className="truncate">{entry.name}</span>
                       </MenuItem>

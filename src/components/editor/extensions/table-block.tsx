@@ -914,6 +914,9 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
       if (!isMulti) return;
 
       if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         setSelectionStart(null);
         setSelectionEnd(null);
         setMultiToolbarRect(null);
@@ -922,6 +925,8 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
 
       if (e.key === "Backspace" || e.key === "Delete") {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         const coords = getSelectedCoords();
         commit(clearMultiCells(rows, coords));
         setTimeout(updateMultiToolbarPosition, 0);
@@ -931,16 +936,22 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
       const meta = e.metaKey || e.ctrlKey;
       if (meta && e.key.toLowerCase() === "b") {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         const coords = getSelectedCoords();
         commit(toggleMultiAnnotation(rows, coords, "bold"));
         setTimeout(updateMultiToolbarPosition, 0);
       } else if (meta && e.key.toLowerCase() === "i") {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         const coords = getSelectedCoords();
         commit(toggleMultiAnnotation(rows, coords, "italic"));
         setTimeout(updateMultiToolbarPosition, 0);
       } else if (meta && e.key.toLowerCase() === "u") {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         const coords = getSelectedCoords();
         commit(toggleMultiAnnotation(rows, coords, "underline"));
         setTimeout(updateMultiToolbarPosition, 0);
@@ -958,7 +969,7 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
     document.addEventListener("mousedown", handleDocMouseDown);
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("scroll", handleScrollOrResize, true);
     window.addEventListener("resize", handleScrollOrResize);
 
@@ -966,7 +977,7 @@ function TableView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
       document.removeEventListener("mousedown", handleDocMouseDown);
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("scroll", handleScrollOrResize, true);
       window.removeEventListener("resize", handleScrollOrResize);
     };

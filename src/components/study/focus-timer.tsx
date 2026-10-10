@@ -83,14 +83,14 @@ export function finishFocus(settings: StudySettings, message: string) {
   const timer = store.timer;
   const seconds = focusSeconds(timer);
   const started = timer.firstStartedAt ?? Date.now();
-  store.resetTimer({ subjectId: timer.subjectId, topicId: timer.topicId });
+  const wasExam = timer.examMode;
+  store.resetTimer({ subjectId: wasExam ? null : timer.subjectId, topicId: wasExam ? null : timer.topicId, examMode: false });
   store.setTimerOpen(false);
   if (seconds < 60) {
     toast.info(message);
     return;
   }
-  // Simulado não vira sessão: o tempo medido abre direto o novo simulado.
-  if (timer.examMode) {
+  if (wasExam) {
     store.openExam({ durationSec: seconds, day: dayKeyOf(started, settings.timeZone) });
     return;
   }
@@ -284,6 +284,7 @@ export function FocusPill() {
   if (!visible) return null;
   const subject = subjectById(timer.subjectId);
   const topic = subject?.topics.find((entry) => entry.id === timer.topicId);
+  const isExam = Boolean(timer.examMode && !subject && !timer.reviewId);
   const status = armed
     ? st("timer_armed_hint")
     : !running
@@ -336,10 +337,10 @@ export function FocusPill() {
             <span className={cn("min-w-0 truncate text-[12px] font-medium", armed ? "text-[var(--accent)]" : "text-faint")}>{status}</span>
           </span>
           <span className="flex w-full min-w-0 items-center gap-1.5 text-[12px] leading-4 text-muted">
-            {timer.examMode ? <ExamMark /> : subject ? <SubjectDot color={subject.color} /> : null}
+            {isExam ? <ExamMark /> : subject ? <SubjectDot color={subject.color} /> : null}
             <span className="truncate">
-              {timer.examMode ? st("timer_exam") : subject ? subject.name : st("timer_no_subject")}
-              {!timer.examMode && topic ? <span className="text-faint"> · {topic.name}</span> : null}
+              {isExam ? st("timer_exam") : subject ? subject.name : st("timer_no_subject")}
+              {!isExam && topic ? <span className="text-faint"> · {topic.name}</span> : null}
             </span>
           </span>
         </button>
@@ -355,7 +356,7 @@ export function FocusPill() {
         {armed ? (
           <button
             type="button"
-            onClick={() => useStudyUi.getState().resetTimer({ subjectId: null, topicId: null })}
+            onClick={() => useStudyUi.getState().resetTimer({ subjectId: null, topicId: null, examMode: false })}
             className={iconButton}
             aria-label={st("cancel")}
             title={st("cancel")}

@@ -150,7 +150,7 @@ export const pt = {
   usage_group_study: "Estudos",
   usage_state_full: "No limite",
   usage_state_over: "Acima do limite",
-  trial_days_left: "Faltam {days} {days|dia|dias}",
+  trial_days_left: "{days|Falta|Faltam} {days} {days|dia|dias}",
   trial_last_day: "Último dia do teste",
   compare_group_capacity: "Capacidade",
   compare_group_features: "Recursos",

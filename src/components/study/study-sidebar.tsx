@@ -122,6 +122,7 @@ function FocusDock() {
   const armed = isTimerArmed(timer);
   const now = useNow(timer.status === "running", 1000);
   const subject = subjectById(timer.subjectId);
+  const isExam = Boolean(timer.examMode && !subject && !timer.reviewId);
   if (active || armed) {
     return (
       <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--accent)]/35 bg-[var(--accent-soft)]/60 px-2 py-1.5">
@@ -136,11 +137,11 @@ function FocusDock() {
         <button type="button" onClick={() => useStudyUi.getState().setTimerOpen(true)} className="min-w-0 flex-1 text-left">
           <span className="block font-mono text-[13px] font-semibold tabular-nums text-ink">{clockLabel(displaySeconds(timer, settings, now), true)}</span>
           <span className={cn("flex items-center gap-1.5 truncate text-[11px]", armed ? "font-medium text-[var(--accent)]" : "text-muted")}>
-            {timer.examMode && !armed ? <ClipboardCheck className="size-3.5 shrink-0" /> : subject && !armed ? <SubjectDot color={subject.color} /> : null}
+            {isExam && !armed ? <ClipboardCheck className="size-3.5 shrink-0" /> : subject && !armed ? <SubjectDot color={subject.color} /> : null}
             <span className="truncate">
               {armed
                 ? st("timer_armed_hint")
-                : timer.examMode
+                : isExam
                   ? st("timer_exam")
                   : (subject?.name ?? (timer.status === "paused" ? st("sidebar_focus_paused") : st("timer_no_subject")))}
             </span>

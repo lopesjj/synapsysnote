@@ -5,7 +5,7 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   closestCenter,
   useSensor,
@@ -385,11 +385,19 @@ function AwardTile({ award, lifted = false }: { award: Award; lifted?: boolean }
   return (
     <Tooltip label={`${title} · ${detail}`} side="top">
       {award.kind === "subject" ? (
-        <Link href={`/home/study/subjects/${award.subjectId}`} className="group/award rounded-[10px] outline-none focus-visible:bg-[var(--surface-hover)]">
+        <Link
+          href={`/home/study/subjects/${award.subjectId}`}
+          draggable={false}
+          className="group/award select-none rounded-[10px] outline-none focus-visible:bg-[var(--surface-hover)] [-webkit-touch-callout:none]"
+        >
           {body}
         </Link>
       ) : (
-        <span tabIndex={0} className="group/award rounded-[10px] outline-none focus-visible:bg-[var(--surface-hover)]">
+        <span
+          tabIndex={0}
+          draggable={false}
+          className="group/award select-none rounded-[10px] outline-none focus-visible:bg-[var(--surface-hover)] [-webkit-touch-callout:none]"
+        >
           {body}
         </span>
       )}
@@ -412,11 +420,12 @@ function SortableAward({ award, enabled, onClickCapture }: { award: Award; enabl
       style={{
         transform: CSS.Translate.toString(transform),
         transition: isDragging ? undefined : transition || "transform 320ms cubic-bezier(0.16, 1, 0.3, 1)",
+        touchAction: isDragging ? "none" : undefined,
       }}
       className={cn(
-        "relative select-none rounded-[14px]",
-        enabled && "cursor-grab touch-manipulation active:cursor-grabbing",
-        isDragging && "z-10 cursor-grabbing"
+        "relative select-none rounded-[14px] [-webkit-touch-callout:none]",
+        enabled && "cursor-grab active:cursor-grabbing",
+        isDragging && "z-30 cursor-grabbing touch-none"
       )}
       {...attributes}
       {...listeners}
@@ -448,8 +457,8 @@ export function AwardsPanel() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const suppressClick = useRef(false);
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
   const earned = useMemo(() => {
@@ -468,12 +477,17 @@ export function AwardsPanel() {
   const releaseClick = () => {
     window.setTimeout(() => {
       suppressClick.current = false;
-    }, 0);
+    }, 350);
   };
 
   const onDragStart = (event: DragStartEvent) => {
     suppressClick.current = true;
     setDraggingId(String(event.active.id));
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      try {
+        navigator.vibrate(20);
+      } catch {}
+    }
   };
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -565,7 +579,7 @@ export function AwardsPanel() {
           </SortableContext>
           <DragOverlay dropAnimation={{ duration: 320, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }}>
             {dragging ? (
-              <div className="cursor-grabbing">
+              <div className="pointer-events-none z-50 cursor-grabbing select-none [-webkit-touch-callout:none]">
                 <AwardTile award={dragging} lifted />
               </div>
             ) : null}

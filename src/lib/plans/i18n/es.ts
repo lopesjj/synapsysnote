@@ -152,7 +152,7 @@ export const es: PlanStrings = {
   usage_group_study: "Estudios",
   usage_state_full: "En el límite",
   usage_state_over: "Por encima del límite",
-  trial_days_left: "Quedan {days} {days|día|días}",
+  trial_days_left: "{days|Queda|Quedan} {days} {days|día|días}",
   trial_last_day: "Último día de la prueba",
   compare_group_capacity: "Capacidad",
   compare_group_features: "Funciones",

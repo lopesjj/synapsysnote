@@ -888,7 +888,7 @@ export const pt = {
   prefs_timezone_hint: "Define a virada do dia nas sessões, nas revisões e no foco.",
 
   home_lede_reviews: "{count} {count|revisão espera|revisões esperam} por você",
-  home_lede_exam: "faltam {count} {count|dia|dias} para a prova",
+  home_lede_exam: "{count|falta|faltam} {count} {count|dia|dias} para a prova",
   home_study_intro_title: "Estude com método, no mesmo lugar das suas notas",
   home_study_intro_desc: "Registre sessões, acompanhe revisões espaçadas, monte um ciclo de estudos e veja o que precisa de atenção.",
   home_study_intro_cta: "Criar objetivo de estudo",
@@ -903,7 +903,7 @@ export const pt = {
   home_all_reviews_done: "Todas as revisões de hoje foram concluídas!",
   home_agenda_reviews: "{count} {count|revisão|revisões} de estudo",
   home_agenda_cards: "{count} {count|flashcard|flashcards} para estudar",
-  home_brief_exam: "Faltam {count} {count|dia|dias} para a prova {goal}.",
+  home_brief_exam: "{count|Falta|Faltam} {count} {count|dia|dias} para a prova {goal}.",
   home_brief_exam_today: "A prova {goal} é hoje.",
   home_week_all_title: "Esta semana em todos os objetivos",
   home_week_days_studied: "{count} {count|dia estudado|dias estudados}",

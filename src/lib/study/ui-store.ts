@@ -131,25 +131,53 @@ export const useStudyUi = create<StudyUiState>()(
       newGoalDraft: "",
       celebrated: [],
       setModule: (module) => set({ module }),
-      setTimer: (patch) => set({ timer: { ...get().timer, ...patch } }),
-      resetTimer: (keep) =>
+      setTimer: (patch) => {
+        const current = get().timer;
+        const next = { ...current, ...patch };
+        if (next.subjectId || next.topicId || next.reviewId) {
+          if (!patch.examMode) next.examMode = false;
+        }
+        if (patch.examMode) {
+          next.subjectId = null;
+          next.topicId = null;
+          next.pageId = null;
+          next.reviewId = null;
+        }
+        set({ timer: next });
+      },
+      resetTimer: (keep) => {
+        const timer = get().timer;
+        const nextSubjectId = keep && "subjectId" in keep ? (keep.subjectId ?? null) : timer.subjectId;
+        const nextTopicId = keep && "topicId" in keep ? (keep.topicId ?? null) : timer.topicId;
+        const nextReviewId = keep && "reviewId" in keep ? (keep.reviewId ?? null) : null;
+        const nextExamMode = Boolean(keep?.examMode && !nextSubjectId && !nextReviewId);
         set({
           timer: {
             ...IDLE_TIMER,
-            mode: get().timer.mode,
-            countdownMs: get().timer.countdownMs,
-            subjectId: get().timer.subjectId,
-            topicId: get().timer.topicId,
-            examMode: get().timer.examMode,
+            mode: keep?.mode ?? timer.mode,
+            countdownMs: keep?.countdownMs ?? timer.countdownMs,
+            pageId: keep && "pageId" in keep ? (keep.pageId ?? null) : null,
             ...keep,
+            subjectId: nextSubjectId,
+            topicId: nextTopicId,
+            reviewId: nextReviewId,
+            examMode: nextExamMode,
           },
-        }),
+        });
+      },
       setTimerOpen: (open) => set({ timerOpen: open }),
       openLog: (prefill, editId) =>
         set({ logOpen: true, logPrefill: prefill ?? null, logEditId: editId ?? null }),
       closeLog: () => set({ logOpen: false, logPrefill: null, logEditId: null }),
       openExam: (prefill) => set({ examOpen: true, examPrefill: prefill ?? null }),
-      closeExam: () => set({ examOpen: false, examPrefill: null }),
+      closeExam: () => {
+        const store = get();
+        if (store.timer.status === "idle" && store.timer.examMode) {
+          set({ examOpen: false, examPrefill: null, timer: { ...store.timer, examMode: false } });
+        } else {
+          set({ examOpen: false, examPrefill: null });
+        }
+      },
       setPadOpen: (open) => set({ padOpen: open }),
       setScheduleView: (view) => set({ scheduleView: view }),
       setScheduleLayer: (layer, value) => set({ scheduleLayers: { ...get().scheduleLayers, [layer]: value } }),
@@ -161,7 +189,7 @@ export const useStudyUi = create<StudyUiState>()(
     }),
     {
       name: "synapsys.study.ui.v1",
-      version: 5,
+      version: 6,
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
       migrate: (persisted, version) => {
@@ -172,7 +200,11 @@ export const useStudyUi = create<StudyUiState>()(
           state.scheduleLayers = { plan, reviews, tasks };
         }
         if (!Array.isArray(state.celebrated)) state.celebrated = [];
-        if (state.timer && typeof state.timer.examMode !== "boolean") state.timer = { ...state.timer, examMode: false };
+        if (state.timer) {
+          if (typeof state.timer.examMode !== "boolean" || state.timer.subjectId || state.timer.reviewId || version < 6) {
+            state.timer = { ...state.timer, examMode: Boolean(state.timer.examMode && !state.timer.subjectId && !state.timer.reviewId) };
+          }
+        }
         delete state.lastNotesRoute;
         delete state.lastStudyRoute;
         return state as StudyUiState;

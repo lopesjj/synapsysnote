@@ -786,6 +786,7 @@ export function useStartFocus() {
           topicId: topicId ?? null,
           reviewId: reviewId ?? null,
           pageId,
+          examMode: false,
         });
       }
       if (pageId) {

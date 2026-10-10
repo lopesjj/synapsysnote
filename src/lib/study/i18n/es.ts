@@ -890,7 +890,7 @@ export const es: StudyStrings = {
   prefs_timezone_hint: "Define el cambio de día en las sesiones, los repasos y el enfoque.",
 
   home_lede_reviews: "{count} {count|repaso te espera|repasos te esperan}",
-  home_lede_exam: "faltan {count} {count|día|días} para el examen",
+  home_lede_exam: "{count|falta|faltan} {count} {count|día|días} para el examen",
   home_study_intro_title: "Estudia con método, en el mismo lugar que tus notas",
   home_study_intro_desc: "Registra sesiones, sigue repasos espaciados, crea un ciclo de estudio y mira qué necesita atención.",
   home_study_intro_cta: "Crear objetivo de estudio",
@@ -905,7 +905,7 @@ export const es: StudyStrings = {
   home_all_reviews_done: "¡Todos los repasos de hoy están completados!",
   home_agenda_reviews: "{count} {count|repaso|repasos} de estudio",
   home_agenda_cards: "{count} {count|flashcard|flashcards} para estudiar",
-  home_brief_exam: "Faltan {count} {count|día|días} para el examen {goal}.",
+  home_brief_exam: "{count|Falta|Faltan} {count} {count|día|días} para el examen {goal}.",
   home_brief_exam_today: "El examen {goal} es hoy.",
   home_week_all_title: "Esta semana en todos los objetivos",
   home_week_days_studied: "{count} {count|día estudiado|días estudiados}",
